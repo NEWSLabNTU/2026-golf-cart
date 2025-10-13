@@ -3,7 +3,19 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
-AutoSDV is a software-defined autonomous vehicle platform built on ROS 2 and Autoware for research and education. It supports multiple LiDAR configurations (Robin-W, Velodyne 32C, Blickfeld Cube1) and is designed for small-scale autonomous vehicles.
+This is a golf cart autonomous driving system for 華夏科大 campus deployment, based on the AutoSDV platform. The system uses Autoware 2025.02 on AGX Orin (JetPack 6.0) with ROS 2 Humble.
+
+**Key System Configuration:**
+- **LiDAR**: Velodyne VLP-32C only
+- **GNSS**: u-blox (F9R for practice, F9P for production)
+- **IMU**: Tamagawa IMU (replaces MPU9250)
+- **Cameras**: USB cameras (will upgrade to Tier IV cameras later)
+- **Vehicle Interface**: Turing Drive packages (replaces AutoSDV custom PWM interface)
+- **Map**: 華夏科大 campus HDMap (COSS map for practice)
+- **Localization**: Autoware NDT scan matching (GNSS for initialization)
+- **Planning**: Autoware built-in planner (enabled, not manual control)
+
+**Migration Status**: See MIGRATION.md for detailed migration plan from AutoSDV to golf cart system.
 
 ## Essential Commands
 
@@ -47,18 +59,24 @@ After building (`make build`), the `autosdv` command is available:
 - **src/vehicle/autosdv_vehicle_launch/** - Vehicle interface and description
 - **src/sensor_component/external/** - External sensor drivers (submodules)
 
-### Key Submodules (8 total)
+### Key Submodules
+**Golf Cart Migration Notes:**
+- **Retained**: autoware_manual_control, gnss_locator, ros-nmea-reader
+- **To Replace**: ros2_mpu9250_driver → Tamagawa IMU driver (pending)
+- **Camera**: USB cameras (no ZED submodule needed initially)
+- **Vehicle Interface**: Will use Turing Drive packages (to be added)
+
+Submodules:
 - autoware_manual_control - Keyboard control interface
 - autosdv_sensor_kit_launch - Sensor kit configurations
 - gnss_locator - GNSS positioning
-- zed-ros2-wrapper - ZED camera integration
-- ros2_mpu9250_driver - IMU driver
+- ros2_mpu9250_driver - IMU driver (to be replaced with Tamagawa)
 - ros-nmea-reader - NMEA GPS data parser
 
 ### Data Structure
-- **data/COSS-map-planning/** - Default map data
+- **data/COSS-map-planning/** - Practice map (from AutoSDV)
+- **data/huaxia-campus/** - Production map for 華夏科大 campus (to be added)
 - **data/models/** - ML models (YOLOX, CenterPoint, TensorRT)
-- **data/zed-sdk/** - ZED camera SDK and calibration
 
 ### Build Artifacts
 - **build/** - Compiled binaries (gitignored)
@@ -67,11 +85,12 @@ After building (`make build`), the `autosdv` command is available:
 
 ## Development Workflow
 
-### LiDAR Sensor Kits
-The platform supports three main configurations:
-1. **Robin-W Solid-State LiDAR Kit** - Compact solid-state solution
-2. **Velodyne 32C LiDAR Kit** - Traditional spinning LiDAR
-3. **Blickfeld Cube1 + MOXA 5G Kit** - Cube1 LiDAR with 5G connectivity
+### Sensor Configuration
+**Golf Cart Configuration:**
+- **LiDAR**: Velodyne VLP-32C only (no Robin-W or Cube1)
+- **GNSS**: u-blox F9R (practice) → F9P (production)
+- **IMU**: Tamagawa IMU (replaces MPU9250)
+- **Cameras**: USB cameras → Tier IV GMSL cameras (future upgrade)
 
 Sensor configurations are in `src/param/autoware_individual_params/individual_params/config/default/autosdv_sensor_kit/`
 
@@ -79,45 +98,32 @@ Sensor configurations are in `src/param/autoware_individual_params/individual_pa
 - Main launch uses Autoware's standard launch system
 - Vehicle model: `autosdv_vehicle`
 - Sensor model: `autosdv_sensor_kit`
-- Default map: `./data/COSS-map-planning`
+- Default map: `./data/COSS-map-planning` (practice) → `./data/huaxia-campus/` (production)
 
-### Sensor Configuration
-AutoSDV supports flexible sensor configurations through launch parameters:
+### Launch Parameters for Golf Cart
 
-#### LiDAR Models
+#### LiDAR Configuration
 ```bash
-# Robin-W Solid-State LiDAR (default)
-make launch ARGS="lidar_model:=robin-w"
-
-# Velodyne VLP-32C LiDAR
+# Velodyne VLP-32C (golf cart standard)
 make launch ARGS="lidar_model:=vlp32c"
-
-# Blickfeld Cube1 LiDAR
-make launch ARGS="lidar_model:=cube1"
 ```
 
-#### Camera Models
+#### Camera Configuration
 ```bash
-# ZED stereo camera (default)
-make launch ARGS="camera_model:=zedxm"
-
-# USB cameras
+# USB cameras (current)
 make launch ARGS="camera_model:=usb"
+
+# Tier IV GMSL cameras (future)
+make launch ARGS="camera_model:=tier4"
 
 # No camera
 make launch ARGS="camera_model:=none"
 ```
 
-#### GNSS Receivers
+#### GNSS Configuration
 ```bash
-# Garmin GNSS (default)
-make launch ARGS="gnss_receiver:=garmin"
-
-# u-blox GNSS
+# u-blox GNSS (golf cart standard)
 make launch ARGS="gnss_receiver:=ublox"
-
-# Septentrio GNSS
-make launch ARGS="gnss_receiver:=septentrio"
 ```
 
 #### Indoor Operation (No GPS)
@@ -135,8 +141,11 @@ When running indoors:
 
 #### Combined Configuration Example
 ```bash
-# Indoor setup with specific sensors
-make launch ARGS="lidar_model:=robin-w camera_model:=usb use_gnss:=false"
+# Golf cart standard configuration
+make launch ARGS="lidar_model:=vlp32c camera_model:=usb gnss_receiver:=ublox"
+
+# Indoor testing without GNSS
+make launch ARGS="lidar_model:=vlp32c camera_model:=usb use_gnss:=false"
 ```
 
 ### Python Packages
@@ -145,13 +154,40 @@ Python packages follow ROS 2 conventions with:
 - Test files for copyright, flake8, pep257
 - Resource directories for ROS package discovery
 
+## NDT Localization (Golf Cart)
+
+### Overview
+The golf cart uses Autoware's built-in NDT (Normal Distributions Transform) scan matching for localization:
+- **Input Requirements**: LiDAR point cloud, IMU data, speedometer from vehicle interface, GNSS (initialization)
+- **Map**: Point cloud map (PCD format) + Lanelet2 vector map
+- **Practice**: F9R GNSS + COSS map
+- **Production**: F9P GNSS + 華夏科大 map
+
+### Configuration
+NDT parameters may need tuning for golf cart:
+- Located in: `src/param/autoware_individual_params/individual_params/config/default/`
+- Key parameters: resolution, convergence tolerance, iteration limits
+- Adjust based on testing results
+
+### Localization Dependencies
+1. **LiDAR**: Velodyne VLP-32C (Phase #3)
+2. **IMU**: Tamagawa IMU (Phase #5)
+3. **Speedometer**: From Turing Drive vehicle interface (Phase #7)
+4. **GNSS**: u-blox for initialization (Phase #4)
+5. **Map**: Point cloud + Lanelet2 map (Phase #8)
+
+All dependencies must be ready before localization can work.
+
 ## Important Notes
+- **Target Platform**: Advantech Orin computer with JetPack 6.0 (NOT JP6.2 or newer)
+- **Autoware Version**: 2025.02 at `/home/aeon/repos/autoware/2025.02-ws`
 - Always source ROS environment: `source /opt/ros/humble/setup.bash`
 - Requires ROS 2 Humble distribution
-- Built for Ubuntu with NVIDIA GPU support
+- Built for Ubuntu 22.04 with NVIDIA GPU support
 - Uses colcon build system (not catkin)
 - Symlink installs enabled for faster development iteration
 - System monitor available at http://localhost:8080/ when launched
+- **Migration**: See MIGRATION.md for team assignments and phase details
 
 ## System Management
 
@@ -181,31 +217,19 @@ If `journalctl --user` doesn't show logs:
 - This is a known non-critical issue related to AWS Greengrass
 - Can be safely ignored - doesn't affect system functionality
 
-## Seyond Robin-W LiDAR Integration
+## Velodyne VLP-32C LiDAR Integration
 
-### PointXYZIRC Format Support
-The Seyond Robin-W driver has been modified to output Autoware-compatible PointXYZIRC format:
-- Located in: `src/sensor_component/external/seyond_ros_driver/`
-- CMakeLists.txt: `set(POINT_TYPE PointXYZIRC)`
-- Custom point type defined in: `src/driver/point_xyzirc.h`
-- Field mapping:
-  - `x, y, z`: Position (FLOAT32)
-  - `intensity`: Intensity value (FLOAT32)
-  - `return_type`: Return type (UINT8) - 1=strongest/first, 2=last/second
-  - `ring`: Channel/scanning line ID (UINT16)
+### Golf Cart Configuration
+The golf cart uses Velodyne VLP-32C as the sole LiDAR sensor:
+- Driver: Nebula (Autoware's universal LiDAR driver)
+- Launch file: `autosdv_sensor_kit_launch/launch/lidar.launch.xml`
+- Config: `autosdv_sensor_kit_launch/config/VLP32.param.yaml`
+- Network IP: 192.168.7.10 (default, configurable via `vlp32c_device_ip` arg)
 
-### Robin-W Coordinate Transformation
-The Robin-W uses a non-standard coordinate system that needs transformation:
-- Robin-W native: X:up, Y:right, Z:forward
-- ROS standard (REP-103): X:forward, Y:left, Z:up
+### Coordinate System
+- Velodyne follows ROS standard (REP-103): X:forward, Y:left, Z:up
 - Transformation configured in: `sensor_kit_calibration.yaml`
-  - roll: 3.14159 (180°)
-  - pitch: -1.5708 (-90°)
-  - yaw: 0.0
-
-### Network Configuration
-- Robin-W default IP: 172.168.1.10
-- Configure in: `autosdv_sensor_kit_launch/launch/lidar.launch.xml`
+- Adjust roll, pitch, yaw based on physical mounting position
 
 ## TensorRT Model Compilation
 
@@ -231,81 +255,120 @@ For faster startup and LiDAR-only operation, configure in `autosdv.launch.yaml`:
   value: "false"
 ```
 
-## Vehicle Interface Calibration
+## Vehicle Interface
 
-### Motor PWM Control
-- **Stop position**: PWM = 370 (not 340 as previously configured)
-- **Forward motion**: PWM > 370 (e.g., 380, 390, 400+)
-- **Reverse motion**: PWM < 370 (e.g., 360, 350, 340-)
-- **Brake position**: PWM = 340 (used when transitioning from forward to stop/reverse)
+### Turing Drive Integration (Golf Cart)
+The golf cart uses Turing Drive vehicle interface packages (replacing AutoSDV custom PWM interface):
+- **Status**: Pending - specifications and packages to be obtained from Turing Drive
+- **Expected components**:
+  - Vehicle interface node (control command → CAN/vehicle protocol)
+  - Velocity/odometry reporting
+  - Gear status management
+  - Control mode management (manual/autonomous)
+- **Integration files**: `src/vehicle/autosdv_vehicle_launch/autosdv_vehicle_launch/launch/vehicle_interface.launch.xml`
 
-### Steering PWM Control
-- **Center position**: PWM = 400
-- **Left limit**: PWM = 350 (50 units from center)
-- **Right limit**: PWM = 450 (50 units from center)
-- **Range**: Symmetrical ±50 PWM units from center
+### AutoSDV PWM Interface (Reference Only)
+The original AutoSDV system used custom PWM control:
+- Motor PWM: 370 = stop, >370 = forward, <370 = reverse
+- Steering PWM: 400 = center, 350 = left, 450 = right
+- **Note**: This is for reference only. Golf cart will use Turing Drive interface.
 
-### Brake Sequence for Reverse
-When transitioning from forward to reverse:
-1. If moving forward (PWM > 370), set to 340 to engage brake
-2. Return to 370 (stop position)
-3. Then decrease below 370 for reverse motion
+## u-blox GNSS Integration
 
-### Testing Tools
-- `/home/jetson/AutoSDV/motor_pwm_interactive.py` - Interactive PWM control for testing
-- `/home/jetson/AutoSDV/stop_motor.py` - Emergency stop script (sets motor to 370)
-- `/home/jetson/AutoSDV/test_steering_pwm.py` - Steering calibration tool
+### Practice Setup (F9R RTK)
+Learn with F9R from seniors Allan & David:
+- **Device**: u-blox F9R RTK receiver
+- **Purpose**: Practice setup, learn configuration
+- **Map**: Use with COSS map for localization testing
+- **Launch parameter**: `gnss_receiver:=ublox`
 
-## ZED Object Detection Integration
+### Production Setup (F9P)
+Target configuration for golf cart:
+- **Device**: u-blox F9P GNSS receiver (pending hardware)
+- **Map**: Use with 華夏科大 campus map
+- **Configuration files**:
+  - `autosdv_sensor_kit_launch/launch/gnss.launch.xml`
+  - `autosdv_sensor_kit_launch/config/ublox_gnss.param.yaml` (to be created)
+- **Calibration**: Antenna position from base_link in `sensor_kit_calibration.yaml`
 
-### Overview
-ZED camera object detection has been integrated with Autoware's perception pipeline. The system can operate in two modes:
-1. **Normal mode** (default): ZED publishes colored point cloud for visualization
-2. **Object detection mode**: ZED performs object detection and converts to Autoware format
+### Integration with Localization
+- GNSS provides initial position for NDT localization
+- Must work together with map for Autoware localization
+- Coordinate with map preparation team
 
-### Configuration Files
-- **Launch file**: `autosdv_sensor_kit_launch/launch/zed_with_object_detection.launch.xml`
-  - Modular launch structure for ZED camera with optional object detection
-  - Handles both normal and object detection modes
-- **Config file**: `autosdv_sensor_kit_launch/config/zed_object_detection.yaml`
-  - Object detection parameters (model, confidence threshold, tracking)
-  - Point cloud settings to ensure colored point cloud is always published
+## Tamagawa IMU Integration
 
-### Namespace Structure
-- **Important**: camera.launch.xml uses `/camera` namespace (NOT `/sensing/camera`) to avoid double namespacing
-- Topics follow Autoware convention:
-  - ZED objects: `/sensing/camera/zedxm/zed_node/obj_det/objects`
-  - Autoware format: `/perception/object_recognition/detection/camera_objects`
-  - Colored point cloud: `/sensing/camera/zedxm/zed_node/point_cloud/cloud_registered`
+### Golf Cart Configuration
+Replace MPU9250 with Tamagawa IMU (Autoware recommended):
+- **Status**: Pending hardware and driver integration
+- **Driver**: Tamagawa IMU ROS 2 driver (to be obtained)
+- **Launch file**: `autosdv_sensor_kit_launch/launch/imu.launch.xml` (to be updated)
+- **Calibration**: IMU corrector parameters in `sensor_kit_calibration.yaml`
 
-### Usage
-```bash
-# Normal operation with colored point cloud (default)
-make launch
+### AutoSDV MPU9250 (Reference Only)
+Original system used MPU9250:
+- Driver: `ros2_mpu9250_driver` submodule
+- Launch file includes imu_corrector and gyro_bias_estimator
+- **Note**: Golf cart will replace with Tamagawa IMU
 
-# Enable object detection
-make launch ARGS="enable_zed_object_detection:=true"
-```
+## Camera Configuration
 
-### Known Issues
-- Detection box positions may not perfectly align with point cloud coordinates (coordinate transformation issue to be resolved in future update)
+### USB Cameras (Current)
+The golf cart currently uses USB cameras:
+- **Launch file**: `autosdv_sensor_kit_launch/launch/camera.launch.xml`
+- **Camera model parameter**: `camera_model:=usb`
+- USB cameras provide basic vision input for perception
 
-## Recent Updates
-- Calibrated vehicle interface PWM values for motor and steering control
-- Fixed motor stop position from 340 to 370 based on hardware testing
-- Updated steering limits to symmetrical ±50 units from center (400)
-- Created interactive PWM control tools for calibration and testing
-- Fixed ROS2 node discovery in systemd service with Autoware environment variables
-- Added flexible sensor configuration parameters (lidar_model, camera_model, gnss_receiver, use_gnss)
-- Integrated Seyond Robin-W LiDAR with PointXYZIRC format compatibility
-- Fixed Robin-W coordinate transformation for proper pointcloud orientation
-- Optimized perception pipeline for LiDAR-only mode to reduce TensorRT compilation
-- Added data_path parameter to correctly locate ML models in ./data directory
-- Fixed systemd template to use .in file instead of embedded Python string
-- Configured ZED camera to use shared pointcloud_container for zero-copy I/O
-- Updated web monitor to track correct camera topics and removed unused traffic light topics
-- With --symlink-install flag in colcon build, edits on yaml, xml, py source files immediately apply if the file was installed earlier. There is no need to rebuild. In case can you create a new file, you need to run colcon build again to create the symlink in the install/ dir.
-- Added ZED object detection integration with Autoware converter
-- Created modular launch structure for ZED camera with object detection support
-- Fixed namespace structure in camera.launch.xml to prevent double namespacing
-- Configured object detection to preserve colored point cloud functionality
+### Tier IV GMSL Cameras (Future Upgrade)
+Plan to upgrade to Tier IV GMSL cameras:
+- Higher quality and reliability
+- Better integration with Autoware
+- **Camera model parameter**: `camera_model:=tier4` (when available)
+
+### AutoSDV ZED Camera (Reference Only)
+Original AutoSDV used ZED stereo cameras with object detection:
+- ZED object detection integration available in codebase
+- Launch file: `autosdv_sensor_kit_launch/launch/zed_with_object_detection.launch.xml`
+- **Note**: Not used in golf cart configuration
+
+## Golf Cart Migration Plan
+
+**See MIGRATION.md** for comprehensive migration plan with 11 phases and team assignments.
+
+### Key Migration Tasks
+1. **Phase #1**: Advantech Orin computer setup (JP6.0, firmware, dependencies)
+2. **Phase #3**: Velodyne VLP-32C LiDAR integration
+3. **Phase #4**: u-blox GNSS (F9R practice → F9P production)
+4. **Phase #5**: Tamagawa IMU integration
+5. **Phase #6**: USB cameras (upgrade to Tier IV later)
+6. **Phase #7**: Turing Drive vehicle interface integration
+7. **Phase #8**: 華夏科大 campus HDMap (COSS map for practice)
+8. **Phase #9**: NDT localization tuning
+9. **Phase #10**: Planning and control configuration
+10. **Phase #11**: Integration testing and validation
+
+### Team Assignments
+- **Team A (Allan & Liao)**: Sensors (LiDAR, cameras, GNSS focus)
+- **Team B (Vincent & Darren)**: System setup, map preparation, vehicle interface
+- **Coordination**: Both teams work together on GNSS + Map for localization testing
+- **Practice Equipment**: F9R GNSS + COSS map (from seniors Allan & David)
+- **Production Equipment**: F9P GNSS + 華夏科大 map
+
+### Hardware Status
+**Available Now:**
+- Velodyne VLP-32C LiDAR
+- USB cameras
+- u-blox F9R (practice, from Allan & David)
+- COSS map (practice)
+- Orin box (interim testing)
+
+**Pending:**
+- Advantech Orin computer
+- u-blox F9P GNSS (production)
+- Tamagawa IMU
+- 華夏科大 campus map
+- Turing Drive vehicle interface packages
+
+## Recent Updates (AutoSDV Legacy)
+- With --symlink-install flag in colcon build, edits on yaml, xml, py source files immediately apply if the file was installed earlier. There is no need to rebuild. In case you create a new file, you need to run colcon build again to create the symlink in the install/ dir.
+- Original AutoSDV system had PWM interface calibration, Robin-W LiDAR, ZED cameras - see sections above for reference
