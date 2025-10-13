@@ -1,707 +1,375 @@
 # Golf Cart Migration Plan
 
-This document outlines the migration plan from the AutoSDV platform to a golf cart autonomous driving system. The migration is organized into phases with specific work items and file references for educational purposes.
+This document outlines the migration plan from the AutoSDV platform to a golf cart autonomous driving system for 華夏科大 campus deployment.
 
 ## System Overview
 
-### Source System (AutoSDV)
-- Small-scale autonomous vehicle platform
-- Multiple sensor configurations (Robin-W, Velodyne 32C, Blickfeld Cube1)
-- ZED stereo camera with object detection
-- Garmin/Septentrio/u-blox GNSS support
-- MPU9250 IMU
-- Custom vehicle interface with PWM control
+### Target System Configuration
+- **Platform**: Golf cart with AGX Orin (JetPack 6.0)
+- **LiDAR**: Velodyne VLP-32C
+- **GNSS**: u-blox receiver
+- **IMU**: Tamagawa IMU
+- **Cameras**: Multiple USB cameras → Tier IV cameras (future)
+- **Vehicle Interface**: Turing Drive packages
+- **Localization**: Autoware NDT scan matching
+- **Planning**: Autoware built-in planner
+- **Map**: 華夏科大 campus HDMap
 
-### Target System (Golf Cart)
-- Golf cart platform running on AGX Orin with JetPack 6.0
-- Single LiDAR: Velodyne VLP-32C
-- GNSS: u-blox receiver
-- IMU: Tamagawa IMU (Autoware recommended)
-- Cameras: Multiple USB cameras → Tier IV cameras (future)
-- Golf cart vehicle interface (to be developed)
+## Key Changes from AutoSDV
+1. Replace `autosdv_vehicle_interface` with Turing Drive vehicle interface packages
+2. Replace COSS campus map with 華夏科大 campus HDMap
+3. Use Autoware built-in NDT localization (not GNSS-only)
+4. Use Autoware built-in planning (enable launch_planning)
+5. Simplified sensor suite (VLP-32C, u-blox, Tamagawa IMU, USB cameras)
 
-## Migration Phases
+| Component             | AutoSDV                      | Golf Cart            |
+|-----------------------|------------------------------|----------------------|
+| **Platform**          | Custom small vehicle         | Golf cart            |
+| **Compute**           | AGX Orin (JP5.x)             | AGX Orin (JP6.0)     |
+| **LiDAR**             | Robin-W / VLP-32C / Cube1    | VLP-32C only         |
+| **GNSS**              | Garmin / Septentrio / u-blox | u-blox only          |
+| **IMU**               | MPU9250                      | Tamagawa             |
+| **Camera**            | ZED stereo                   | USB → Tier IV        |
+| **Vehicle Interface** | Custom PWM                   | Turing Drive         |
+| **Map**               | COSS campus                  | 華夏科大 campus      |
+| **Localization**      | GNSS or NDT                  | NDT (GNSS for init)  |
+| **Planning**          | Disabled (manual)            | Enabled (autonomous) |
+
+## Team Assignment
+
+### Hardware Availability
+- **Available now**: Velodyne VLP-32C LiDAR, USB cameras, Orin box (for testing), u-blox F9R RTK (from Allan & David), COSS map (for practice)
+- **Waiting for**: u-blox F9P GNSS (production), Tamagawa IMU, Turing Drive packages, 華夏科大 HDMap (production)
+
+**Note**: Use F9R + COSS map for GNSS and localization practice. Production system will use F9P + 華夏科大 map. Teams must coordinate GNSS + Map work since localization requires both.
+
+### Team A: Allan & Liao (Sensor Focus)
+
+**Immediate (Orin box):** #3 LiDAR, #6 Cameras, #2 Sensor verification, #4 GNSS (find Allan & David, learn F9R, test with COSS map)
+**When hardware arrives:** #4 GNSS (switch to F9P + 華夏科大 map), #5 IMU, migrate to Advantech
+**Coordinate with Team B:** GNSS + Map localization testing
+**Shared:** #9 NDT Localization, #11 Integration & Testing
+
+### Team B: Vincent & Darren (System Focus)
+
+**Immediate:** #1 Advantech setup, #8 Map (practice with COSS map), Study #7 TD interface
+**When specs/map arrive:** #7 TD Vehicle Interface, #8 HDMap (華夏科大), #10 Planning & Control
+**Coordinate with Team A:** GNSS + Map localization testing
+**Shared:** #9 NDT Localization, #11 Integration & Testing
 
 ---
 
-## Phase 1: Core System Setup and Infrastructure
+## Phase #1: Advantech Orin Computer Setup
 
-**Objective**: Set up the development environment and verify basic system functionality.
+**Objective**: Prepare Advantech Orin-based computer with correct firmware and development environment.
 
-### Work Items
+**Work Items:**
+- [ ] Flash new firmware on Advantech Orin computer
+- [ ] Confirm system is running JetPack 6.0 (NOT JP6.2 or newer)
+  - Check with: `cat /etc/nv_tegra_release` or `dpkg -l | grep nvidia-jetpack`
+- [ ] Set up testing desk in room B04
+  - Power supply
+  - Network connection
+  - Monitor, keyboard, mouse
+  - Development tools
+- [ ] Run `make setup` to install system dependencies via Ansible
+  - Installs ROS 2 Humble
+  - Installs Autoware dependencies
+  - Configures system settings
+- [ ] Verify Autoware 2025.02 at `/home/aeon/repos/autoware/2025.02-ws`
+- [ ] Clone golf cart project and build: `make prepare && make build`
 
-#### 1.1 Development Environment Setup
-- [ ] Install JetPack 6.0 on AGX Orin
-- [ ] Set up ROS 2 Humble
-- [ ] Clone and build Autoware 2025.02 workspace
-- [ ] Verify Autoware installation
-
-**Files to check:**
+**Key Files:**
 - `Makefile` - Build and setup commands
-- `.github/workflows/` - CI/CD configurations (if any)
-
-#### 1.2 Project Structure Migration
-- [ ] Review and update project documentation
-- [ ] Clean up AutoSDV-specific references
-- [ ] Update CLAUDE.md with golf cart specifics
-- [ ] Set up version control for golf cart project
-
-**Files to check:**
-- `README.md` - Project overview
-- `CLAUDE.md` - Technical documentation
-- `LICENSE.txt` - License information
-
-#### 1.3 Build System Verification
-- [ ] Test `make prepare` command
-- [ ] Test `make build` command
-- [ ] Verify colcon build completes successfully
-- [ ] Check for missing dependencies
-
-**Files to check:**
-- `Makefile` - Build targets
+- `ansible/` - Ansible playbooks for system setup (if available)
 - `src/*/package.xml` - ROS package dependencies
-- `src/*/CMakeLists.txt` - Build configurations
+
+**Expected Result:**
+- JetPack 6.0 confirmed
+- Testing environment ready in room B04
+- Clean build with no errors
+- All system dependencies installed
+
+**Note:** JetPack version is critical - Autoware 2025.02 compatibility must be verified with JP6.0.
 
 ---
 
-## Phase 2: Sensor Integration - LiDAR
+## Phase #2: Sensor Verification
 
-**Objective**: Configure and test Velodyne VLP-32C LiDAR as the primary 3D sensor.
+**Objective**: Verify all sensors are recognized and accessible by the system.
 
-### Work Items
+**Work Items:**
+- [ ] Connect and test Velodyne VLP-32C network connectivity
+- [ ] Connect and test u-blox GNSS serial port
+- [ ] Connect and test Tamagawa IMU (check driver compatibility)
+- [ ] Connect and test USB cameras (check device detection)
+- [ ] Document sensor connection details (ports, IPs, device paths)
 
-#### 2.1 LiDAR Driver Configuration
-- [ ] Review Velodyne VLP-32C configuration in AutoSDV
-- [ ] Update network configuration for VLP-32C
-- [ ] Configure LiDAR IP address and port
-- [ ] Test LiDAR driver standalone
-
-**Files to check:**
-- `src/sensor_kit/autosdv_sensor_kit_launch/autosdv_sensor_kit_launch/launch/lidar.launch.xml` (lines 28-34)
-- `src/sensor_kit/autosdv_sensor_kit_launch/config/VLP32.param.yaml`
-- `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` (line 8-10, default lidar_model)
-
-#### 2.2 LiDAR Calibration
-- [ ] Mount VLP-32C on golf cart
-- [ ] Measure sensor position relative to base_link
-- [ ] Update sensor_kit_calibration.yaml
-- [ ] Verify point cloud coordinate system
-
-**Files to check:**
-- `src/param/autoware_individual_params/individual_params/config/default/autosdv_sensor_kit/sensor_kit_calibration.yaml` (lines 9-15)
-- `src/sensor_kit/autosdv_sensor_kit_launch/autosdv_sensor_kit_description/urdf/sensor_kit.xacro`
-
-#### 2.3 Point Cloud Processing
-- [ ] Test point cloud preprocessing pipeline
-- [ ] Configure filtering parameters
-- [ ] Verify pointcloud_container integration
-- [ ] Test visualization in RViz
-
-**Files to check:**
-- `src/sensor_kit/autosdv_sensor_kit_launch/autosdv_sensor_kit_launch/launch/pointcloud_preprocessor.launch.py`
-- `src/sensor_kit/autosdv_sensor_kit_launch/config/pointcloud_preprocessor.param.yaml`
-
-#### 2.4 Remove Unused LiDAR Support
-- [ ] Remove Robin-W specific code (optional cleanup)
-- [ ] Remove Blickfeld Cube1 specific code (optional cleanup)
-- [ ] Update launch files to default to VLP-32C
-
-**Files to check:**
-- `src/sensor_component/external/seyond_ros_driver/` - Robin-W driver
-- `src/sensor_kit/autosdv_sensor_kit_launch/autosdv_sensor_kit_launch/launch/cube1.launch.py`
-- `src/sensor_kit/autosdv_sensor_kit_launch/autosdv_sensor_kit_launch/launch/seyond_robin_w.launch.xml`
+**Expected Result:** All sensors detected and accessible (may not have drivers configured yet).
 
 ---
 
-## Phase 3: Sensor Integration - GNSS
+## Phase #3: Velodyne VLP-32C LiDAR
 
-**Objective**: Configure u-blox GNSS receiver for outdoor positioning.
+**Objective**: Configure VLP-32C and verify point cloud output.
 
-### Work Items
+**Work Items:**
+- [ ] Configure LiDAR network (check device IP)
+- [ ] Mount LiDAR and measure position from base_link
+- [ ] Update calibration parameters
+- [ ] Test point cloud in RViz
 
-#### 3.1 u-blox Driver Configuration
-- [ ] Review existing u-blox support in AutoSDV
-- [ ] Install u-blox ROS 2 driver dependencies
-- [ ] Configure serial port and baud rate
-- [ ] Test GNSS data reception
+**Key Files:**
+- `src/sensor_kit/autosdv_sensor_kit_launch/autosdv_sensor_kit_launch/launch/lidar.launch.xml` - VLP-32C launch (lines 28-34)
+- `src/sensor_kit/autosdv_sensor_kit_launch/config/VLP32.param.yaml` - LiDAR parameters
+- `src/param/autoware_individual_params/individual_params/config/default/autosdv_sensor_kit/sensor_kit_calibration.yaml` - Calibration (lines 9-15)
+- `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` - Set default `lidar_model:=vlp32c` (line 9)
 
-**Files to check:**
-- `src/sensor_kit/autosdv_sensor_kit_launch/autosdv_sensor_kit_launch/launch/gnss.launch.xml` (lines 14-20)
-- u-blox configuration file: `$(find-pkg-share ublox_gps)/c94_f9p_rover.yaml` (external to project)
-
-#### 3.2 GNSS Calibration
-- [ ] Mount u-blox antenna on golf cart
-- [ ] Measure antenna position relative to base_link
-- [ ] Update sensor_kit_calibration.yaml
-- [ ] Configure GNSS-to-MGRS conversion
-
-**Files to check:**
-- `src/param/autoware_individual_params/individual_params/config/default/autosdv_sensor_kit/sensor_kit_calibration.yaml` (lines 41-47)
-- `src/sensor_kit/autosdv_sensor_kit_launch/autosdv_sensor_kit_launch/launch/gnss.launch.xml` (lines 40-50)
-
-#### 3.3 GNSS Testing
-- [ ] Test static position accuracy
-- [ ] Verify GNSS pose topic publishing
-- [ ] Test GNSS/IMU fusion
-- [ ] Validate coordinate transformations
-
-**Files to check:**
-- `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` (lines 22-25, gnss_receiver parameter)
-
-#### 3.4 Remove Unused GNSS Support
-- [ ] Remove Garmin GNSS code (optional cleanup)
-- [ ] Remove Septentrio GNSS code (optional cleanup)
-- [ ] Update default gnss_receiver parameter to "ublox"
-
-**Files to check:**
-- `src/sensor_kit/autosdv_sensor_kit_launch/autosdv_sensor_kit_launch/launch/gnss.launch.xml` (lines 22-38)
+**Expected Result:** Point cloud visible in RViz with correct orientation and position.
 
 ---
 
-## Phase 4: Sensor Integration - IMU
+## Phase #4: u-blox GNSS
 
-**Objective**: Replace MPU9250 IMU with Tamagawa IMU (Autoware recommended).
+**Objective**: Configure u-blox GNSS for initial position and GNSS pose publishing.
 
-### Work Items
+**Practice Setup (F9R RTK with COSS map):**
+- [ ] Find seniors Allan & David to learn u-blox F9R RTK usage
+- [ ] Configure u-blox serial port and baud rate for F9R
+- [ ] Test GNSS driver with F9R
+- [ ] Learn u-blox driver configuration and Autoware integration
+- [ ] Use COSS map for localization testing (coordinate with Team B on #8)
+- [ ] Test GNSS + Map localization together
 
-#### 4.1 Tamagawa IMU Driver Integration
-- [ ] Research Tamagawa IMU ROS 2 driver
-- [ ] Add Tamagawa driver as dependency
-- [ ] Create launch file for Tamagawa IMU
-- [ ] Configure IMU serial communication
+**Production Setup (F9P with 華夏科大 map):**
+- [ ] Switch to u-blox F9P GNSS receiver
+- [ ] Mount F9P antenna and measure position from base_link
+- [ ] Update calibration parameters for F9P
+- [ ] Test with 華夏科大 map (coordinate with Team B on #8)
+- [ ] Verify GNSS fix and pose topics on production system
 
-**Files to check:**
-- `src/sensor_kit/autosdv_sensor_kit_launch/autosdv_sensor_kit_launch/launch/imu.launch.xml` (entire file - needs major changes)
+**Key Files:**
+- `src/sensor_kit/autosdv_sensor_kit_launch/autosdv_sensor_kit_launch/launch/gnss.launch.xml` - u-blox configuration (lines 14-20)
+- `src/param/autoware_individual_params/individual_params/config/default/autosdv_sensor_kit/sensor_kit_calibration.yaml` - GNSS position (lines 41-47)
+- `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` - Set default `gnss_receiver:=ublox` (line 19)
+- External: `$(find-pkg-share ublox_gps)/c94_f9p_rover.yaml` - u-blox driver params
+
+**Expected Result:** `/sensing/gnss/pose` and `/sensing/gnss/pose_with_covariance` topics publishing with valid fix. Localization works with map.
+
+**Note**: GNSS and Map must work together for localization. Coordinate with Team B. Practice with F9R + COSS map, production with F9P + 華夏科大 map.
+
+---
+
+## Phase #5: Tamagawa IMU
+
+**Objective**: Integrate Tamagawa IMU to replace MPU9250.
+
+**Work Items:**
+- [ ] Obtain Tamagawa IMU ROS 2 driver package/spec
+- [ ] Replace MPU9250 with Tamagawa in imu.launch.xml
+- [ ] Mount IMU and measure position from base_link
+- [ ] Update calibration and corrector parameters
+- [ ] Test IMU data publishing and gyro bias estimation
+
+**Key Files:**
+- `src/sensor_kit/autosdv_sensor_kit_launch/autosdv_sensor_kit_launch/launch/imu.launch.xml` - Replace MPU9250 driver (lines 9-18)
+- `src/param/autoware_individual_params/individual_params/config/default/autosdv_sensor_kit/sensor_kit_calibration.yaml` - IMU position (lines 34-40)
+- `src/param/autoware_individual_params/individual_params/config/default/autosdv_sensor_kit/imu_corrector.param.yaml` - IMU correction params
 - `src/sensor_kit/autosdv_sensor_kit_launch/package.xml` - Add Tamagawa driver dependency
+- Remove: `src/sensor_component/external/ros2_mpu9250_driver/` submodule
 
-#### 4.2 Remove MPU9250 Support
-- [ ] Remove MPU9250 driver references
-- [ ] Remove MPU9250 launch configurations
-- [ ] Update imu.launch.xml for Tamagawa
-- [ ] Remove MPU9250 parameter files
-
-**Files to check:**
-- `src/sensor_component/external/ros2_mpu9250_driver/` - MPU9250 driver (submodule to remove)
-- `src/sensor_kit/autosdv_sensor_kit_launch/autosdv_sensor_kit_launch/launch/imu.launch.xml` (lines 9-18)
-
-#### 4.3 IMU Calibration
-- [ ] Mount Tamagawa IMU on golf cart
-- [ ] Measure IMU position relative to base_link
-- [ ] Update sensor_kit_calibration.yaml
-- [ ] Configure IMU corrector parameters
-
-**Files to check:**
-- `src/param/autoware_individual_params/individual_params/config/default/autosdv_sensor_kit/sensor_kit_calibration.yaml` (lines 34-40)
-- `src/param/autoware_individual_params/individual_params/config/default/autosdv_sensor_kit/imu_corrector.param.yaml`
-
-#### 4.4 IMU Testing
-- [ ] Test IMU data publishing
-- [ ] Verify IMU orientation
-- [ ] Test gyro bias estimation
-- [ ] Validate IMU/GNSS fusion for localization
-
-**Files to check:**
-- `src/sensor_kit/autosdv_sensor_kit_launch/autosdv_sensor_kit_launch/launch/imu.launch.xml` (lines 20-30)
+**Expected Result:** `/sensing/imu/imu_data` topic publishing with correct orientation.
 
 ---
 
-## Phase 5: Sensor Integration - Cameras
+## Phase #6: USB Cameras
 
-**Objective**: Configure USB cameras for perception (with future upgrade path to Tier IV cameras).
+**Objective**: Configure USB cameras for initial testing (upgrade to Tier IV later).
 
-### Work Items
-
-#### 5.1 USB Camera Setup (Initial Phase)
-- [ ] Review existing USB camera configuration
+**Work Items:**
 - [ ] Test USB camera detection on AGX Orin
-- [ ] Configure camera device paths
-- [ ] Set up 4-camera configuration (front, rear, left, right)
+- [ ] Configure device paths for 4 cameras (front/rear/left/right)
+- [ ] Mount cameras and measure positions from base_link
+- [ ] Update calibration parameters
+- [ ] Perform camera calibration (intrinsic & extrinsic)
+- [ ] Test image streaming
 
-**Files to check:**
-- `src/sensor_kit/autosdv_sensor_kit_launch/autosdv_sensor_kit_launch/launch/camera.launch.xml` (lines 35-72)
-- `src/sensor_kit/autosdv_sensor_kit_launch/config/usb_camera_*.yaml`
+**Key Files:**
+- `src/sensor_kit/autosdv_sensor_kit_launch/autosdv_sensor_kit_launch/launch/camera.launch.xml` - USB camera setup (lines 35-72)
+- `src/sensor_kit/autosdv_sensor_kit_launch/config/usb_camera_*.yaml` - Individual camera configs
+- `src/param/autoware_individual_params/individual_params/config/default/autosdv_sensor_kit/sensor_kit_calibration.yaml` - Camera positions (lines 48-75)
+- `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` - Set default `camera_model:=usb` (line 14)
+- Remove: `src/sensor_component/external/zed-ros2-wrapper/` submodule and ZED-related files
 
-#### 5.2 Camera Calibration
-- [ ] Mount cameras on golf cart
-- [ ] Measure camera positions relative to base_link
-- [ ] Update sensor_kit_calibration.yaml
-- [ ] Perform intrinsic calibration for each camera
-- [ ] Perform extrinsic calibration
+**Expected Result:** Camera images publishing to `/sensing/camera/{front,rear,left,right}/image_raw`.
 
-**Files to check:**
-- `src/param/autoware_individual_params/individual_params/config/default/autosdv_sensor_kit/sensor_kit_calibration.yaml` (lines 48-75)
-- `src/launcher/autosdv_launch/launch/camera_calibration.launch.xml`
-
-#### 5.3 USB Camera Testing
-- [ ] Test camera image streaming
-- [ ] Verify camera topics
-- [ ] Test camera visualization in RViz
-- [ ] Validate camera synchronization
-
-**Files to check:**
-- `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` (lines 12-15, camera_model parameter)
-
-#### 5.4 Remove ZED Camera Support
-- [ ] Remove ZED camera dependencies
-- [ ] Remove ZED object detection converter
-- [ ] Update default camera_model to "usb"
-- [ ] Clean up ZED-specific configurations
-
-**Files to check:**
-- `src/sensor_component/external/zed-ros2-wrapper/` - ZED driver (submodule to remove)
-- `src/sensor_kit/autosdv_sensor_kit_launch/autosdv_sensor_kit_launch/launch/zed_with_object_detection.launch.xml`
-- `src/sensor_kit/autosdv_sensor_kit_launch/autosdv_sensor_kit_launch/launch/camera.launch.xml` (lines 20-33)
-- `src/sensor_kit/autosdv_sensor_kit_launch/config/zed_object_detection.yaml`
-- `src/sensor_kit/autosdv_sensor_kit_launch/scripts/zed_to_autoware_converter.py`
-
-#### 5.5 Tier IV Camera Upgrade (Future)
-- [ ] Research Tier IV C1 camera specifications
-- [ ] Plan camera mounting positions
-- [ ] Create Tier IV camera launch configuration
-- [ ] Add Tier IV camera support alongside USB cameras
-
-**Files to prepare:**
-- New launch file: `tier4_camera.launch.xml`
-- New config files for Tier IV cameras
-- Update `camera.launch.xml` to support "tier4" camera_model
+**Future:** Add Tier IV C1 camera support by creating new launch configuration.
 
 ---
 
-## Phase 6: Vehicle Interface Development
+## Phase #7: Turing Drive Vehicle Interface
 
-**Objective**: Develop golf cart-specific vehicle interface to replace AutoSDV interface.
+**Objective**: Replace AutoSDV vehicle interface with Turing Drive packages.
 
-### Work Items
+**Work Items:**
+- [ ] Obtain Turing Drive vehicle interface packages and specifications
+- [ ] Review Turing Drive package structure and topic interfaces
+- [ ] Add Turing Drive packages to `src/vehicle/` directory
+- [ ] Create launch file to integrate Turing Drive interface with Autoware
+- [ ] Verify required topics: `/vehicle/status/velocity_status`, `/vehicle/status/control_mode`, etc.
+- [ ] Test in simulation mode first (if available)
+- [ ] Test on stationary vehicle
+- [ ] Validate control command flow from Autoware to vehicle
 
-#### 6.1 Golf Cart Hardware Analysis
-- [ ] Document golf cart drive-by-wire system
-- [ ] Identify control interfaces (CAN, PWM, etc.)
-- [ ] Determine steering, throttle, brake control methods
-- [ ] Map Autoware control commands to golf cart actuation
+**Key Files:**
+- New: `src/vehicle/turing_drive_*` packages (to be added)
+- Modify: `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` - Update `launch_vehicle` section
+- Modify: `src/vehicle/autosdv_vehicle_launch/autosdv_vehicle_launch/launch/vehicle_interface.launch.xml` - Replace with Turing Drive launch
+- Update: `src/vehicle/autosdv_vehicle_description/config/vehicle_info.param.yaml` - Golf cart dimensions
+- Reference: `src/vehicle/autosdv_vehicle_interface/*` - AutoSDV interface for comparison
 
-**Reference files (AutoSDV interface):**
-- `src/vehicle/autosdv_vehicle_launch/autosdv_vehicle_launch/launch/vehicle_interface.launch.xml`
-- `src/vehicle/autosdv_vehicle_launch/autosdv_vehicle_interface/autosdv_vehicle_interface/actuator.py`
+**Expected Result:**
+- Vehicle control commands accepted from `/control/command/control_cmd`
+- Vehicle status published to `/vehicle/status/*` topics
+- Speedometer data available for NDT localization
 
-#### 6.2 Actuator Node Development
-- [ ] Create golf cart actuator node
-- [ ] Implement steering control
-- [ ] Implement throttle control
-- [ ] Implement brake control
-- [ ] Add safety limits and emergency stop
-
-**Files to create/modify:**
-- `src/vehicle/golfcart_vehicle_interface/golfcart_vehicle_interface/actuator.py` (new)
-- `src/vehicle/golfcart_vehicle_interface/params/actuator.yaml` (new)
-
-**Reference files:**
-- `src/vehicle/autosdv_vehicle_launch/autosdv_vehicle_interface/autosdv_vehicle_interface/actuator.py`
-- `src/vehicle/autosdv_vehicle_launch/autosdv_vehicle_interface/params/actuator.yaml`
-
-#### 6.3 Velocity Report Node
-- [ ] Create velocity report node for golf cart
-- [ ] Implement wheel speed sensor reading
-- [ ] Implement velocity calculation
-- [ ] Publish velocity status to Autoware
-
-**Files to create/modify:**
-- `src/vehicle/golfcart_vehicle_interface/golfcart_vehicle_interface/velocity_report.py` (new)
-
-**Reference files:**
-- `src/vehicle/autosdv_vehicle_launch/autosdv_vehicle_interface/autosdv_vehicle_interface/velocity_report.py`
-- `src/vehicle/autosdv_vehicle_launch/autosdv_vehicle_interface/params/velocity_report.yaml`
-
-#### 6.4 Vehicle Status Nodes
-- [ ] Implement gear manager for golf cart
-- [ ] Implement control mode manager
-- [ ] Implement steering status reporter
-- [ ] Implement signal manager (turn signals, hazards)
-
-**Files to create/modify:**
-- `src/vehicle/golfcart_vehicle_interface/golfcart_vehicle_interface/gear_manager.py` (new)
-- `src/vehicle/golfcart_vehicle_interface/golfcart_vehicle_interface/control_mode_manager.py` (new)
-- `src/vehicle/golfcart_vehicle_interface/golfcart_vehicle_interface/steering_status.py` (new)
-- `src/vehicle/golfcart_vehicle_interface/golfcart_vehicle_interface/signal_manager.py` (new)
-
-**Reference files:**
-- `src/vehicle/autosdv_vehicle_launch/autosdv_vehicle_interface/autosdv_vehicle_interface/gear_manager.py`
-- `src/vehicle/autosdv_vehicle_launch/autosdv_vehicle_interface/autosdv_vehicle_interface/control_mode_manager.py`
-- `src/vehicle/autosdv_vehicle_launch/autosdv_vehicle_interface/autosdv_vehicle_interface/steering_status.py`
-- `src/vehicle/autosdv_vehicle_launch/autosdv_vehicle_interface/autosdv_vehicle_interface/signal_manager.py`
-
-#### 6.5 Vehicle Description
-- [ ] Create golf cart URDF model
-- [ ] Define vehicle dimensions
-- [ ] Define sensor mounting points
-- [ ] Create vehicle visualization meshes (optional)
-
-**Files to create/modify:**
-- `src/vehicle/golfcart_vehicle_description/urdf/golfcart.xacro` (new)
-- `src/vehicle/golfcart_vehicle_description/config/vehicle_info.param.yaml` (new)
-
-**Reference files:**
-- `src/vehicle/autosdv_vehicle_launch/autosdv_vehicle_description/urdf/vehicle.xacro`
-- `src/vehicle/autosdv_vehicle_launch/autosdv_vehicle_description/config/vehicle_info.param.yaml`
-
-#### 6.6 Vehicle Interface Testing
-- [ ] Test vehicle interface in simulation mode (dry_run)
-- [ ] Test on stationary golf cart
-- [ ] Test low-speed manual control
-- [ ] Test emergency stop functionality
-- [ ] Validate Autoware control integration
-
-**Files to check:**
-- `src/vehicle/autosdv_vehicle_launch/autosdv_vehicle_launch/launch/vehicle_interface.launch.xml` (line 5, is_simulation parameter)
-- `src/vehicle/autosdv_vehicle_launch/scripts/*.py` - Testing scripts
+**Note:** Actual integration details depend on Turing Drive package specifications.
 
 ---
 
-## Phase 7: System Integration and Configuration
+## Phase #8: 華夏科大 Campus HDMap
 
-**Objective**: Integrate all components and configure the complete system.
+**Objective**: Integrate HDMap to enable NDT localization and planning.
 
-### Work Items
+**Practice Setup (COSS map):**
+- [ ] Use existing COSS map in `data/COSS-map-planning/` for learning
+- [ ] Study map structure: Lanelet2 vector map + PCD point cloud map
+- [ ] Learn map loading in Autoware
+- [ ] Test map loading in RViz
+- [ ] Coordinate with Team A on #4 for GNSS + Map localization testing
+- [ ] Practice localization with F9R GNSS + COSS map
 
-#### 7.1 Launch System Configuration
-- [ ] Update main launch file for golf cart
-- [ ] Set default sensor parameters
-- [ ] Configure perception pipeline
-- [ ] Configure localization parameters
-- [ ] Configure planning parameters
+**Production Setup (華夏科大 map):**
+- [ ] Obtain 華夏科大 campus HDMap (Lanelet2 format) from Turing Drive
+- [ ] Obtain or create point cloud map for NDT localization
+- [ ] Validate map structure and coordinate system
+- [ ] Place in `data/huaxia-campus/` directory
+- [ ] Update default map path in launch configuration
+- [ ] Test with F9P GNSS (coordinate with Team A on #4)
+- [ ] Verify localization works on production map
 
-**Files to modify:**
-- `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` - Main launch file (entire file)
-- Rename to `golfcart.launch.yaml` (optional)
+**Key Files:**
+- `data/COSS-map-planning/` - Practice map (already available)
+- `data/huaxia-campus/` (new directory) - Production map
+  - `lanelet2_map.osm` - Vector map for planning
+  - `pointcloud_map.pcd` - Point cloud map for NDT localization
+- `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` - Update `map_path` parameter (line 51)
 
-#### 7.2 Parameter Tuning
-- [ ] Create golf cart parameter directory
-- [ ] Copy and adapt AutoSDV parameters
-- [ ] Tune localization parameters (NDT, EKF)
-- [ ] Tune control parameters (MPC, pure pursuit)
-- [ ] Tune perception parameters
+**Expected Result:** Map loads successfully, visible in RViz with correct coordinate frame. GNSS + Map localization works.
 
-**Files to create/modify:**
-- `src/param/autoware_individual_params/individual_params/config/default/golfcart_sensor_kit/` (new directory)
-- `src/param/autoware_individual_params/individual_params/config/default/golfcart_vehicle/` (new directory)
-
-**Reference files:**
-- `src/param/autoware_individual_params/individual_params/config/default/autosdv_sensor_kit/*`
-- `src/param/autoware_individual_params/individual_params/config/default/autosdv_vehicle/*`
-
-#### 7.3 System Monitor Configuration
-- [ ] Update system monitor for golf cart
-- [ ] Configure topic monitoring
-- [ ] Set up health checks
-- [ ] Configure web dashboard
-
-**Files to check:**
-- `src/system/autosdv_system_monitor/` - System monitoring package
-- `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` (lines 123-126)
-
-#### 7.4 RViz Configuration
-- [ ] Create golf cart RViz configuration
-- [ ] Add sensor visualizations
-- [ ] Add planning visualization
-- [ ] Add diagnostic panels
-
-**Files to create/modify:**
-- `src/launcher/autosdv_launch/rviz/golfcart.rviz` (new, or modify autosdv.rviz)
-
-**Reference files:**
-- `src/launcher/autosdv_launch/rviz/autosdv.rviz`
+**Note**: Map and GNSS must work together for localization. Coordinate with Team A. Practice with COSS map, production with 華夏科大 map.
 
 ---
 
-## Phase 8: Mapping and Localization
+## Phase #9: NDT Localization
 
-**Objective**: Create maps and configure localization for the golf cart operating environment.
+**Objective**: Configure Autoware's built-in NDT localization with speedometer, IMU, and GNSS initialization.
 
-### Work Items
+**Work Items:**
+- [ ] Verify speedometer data from Turing Drive vehicle interface
+- [ ] Configure NDT scan matcher parameters for VLP-32C
+- [ ] Configure EKF localizer to fuse NDT + IMU + speedometer
+- [ ] Set GNSS for initial pose estimate only
+- [ ] Tune NDT parameters (resolution, iterations, transformation_epsilon)
+- [ ] Test localization accuracy with stationary vehicle
+- [ ] Test localization while driving
 
-#### 8.1 Mapping
-- [ ] Set up mapping mode
-- [ ] Create vector map (Lanelet2) for operating area
-- [ ] Create point cloud map for localization
-- [ ] Validate map quality
+**Key Files:**
+- `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` - Set `pose_source:=ndt`, `twist_source:=gyro_odom` (lines 108-111)
+- `src/param/autoware_individual_params/individual_params/config/default/autosdv_sensor_kit/ndt_scan_matcher.param.yaml` - NDT tuning
+- `src/param/autoware_individual_params/individual_params/config/default/autosdv_sensor_kit/ekf_localizer.param.yaml` - EKF fusion parameters
+- Autoware reference: `$(find-pkg-share autoware_launch)/config/localization/` - Default NDT parameters
 
-**Files to check:**
-- `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` (line 50-51, map_path parameter)
-- `data/COSS-map-planning/` - Example map structure
+**Expected Result:**
+- Stable localization on HDMap with < 10cm accuracy
+- `/localization/kinematic_state` publishing at stable rate
+- Pose drift < 1m over 100m drive
 
-#### 8.2 Localization Configuration
-- [ ] Configure NDT scan matching parameters
-- [ ] Configure EKF fusion parameters
-- [ ] Tune pose initialization
-- [ ] Test localization accuracy
-
-**Files to check:**
-- `src/param/autoware_individual_params/individual_params/config/default/golfcart_sensor_kit/ndt_scan_matcher.param.yaml` (new)
-- `src/param/autoware_individual_params/individual_params/config/default/golfcart_sensor_kit/ekf_localizer.param.yaml` (new)
-- `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` (lines 107-111, pose_source and twist_source)
-
-#### 8.3 Indoor Operation Support
-- [ ] Test mapless mode for indoor operation
-- [ ] Configure manual pose initialization
-- [ ] Test operation without GNSS
-
-**Files to check:**
-- `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` (lines 28-30, use_mapless_mode)
-- `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` (lines 133-140, static TF publisher)
+**Note:** NDT parameters must be tuned based on point cloud density and map quality. Start with conservative values.
 
 ---
 
-## Phase 9: Perception Configuration
+## Phase #10: Planning and Control
 
-**Objective**: Configure perception pipeline for golf cart environment.
+**Objective**: Enable Autoware's built-in planning component for autonomous navigation.
 
-### Work Items
+**Work Items:**
+- [ ] Enable planning module in launch configuration
+- [ ] Measure golf cart dimensions (wheelbase, width, overhang)
+- [ ] Update vehicle_info.param.yaml with accurate dimensions
+- [ ] Configure MPC controller parameters
+- [ ] Test route planning on HDMap
+- [ ] Test obstacle avoidance with LiDAR perception
+- [ ] Tune control gains for smooth driving
 
-#### 9.1 Object Detection Configuration
-- [ ] Configure LiDAR-based object detection
-- [ ] Test object detection in parking lot environment
-- [ ] Tune detection parameters
-- [ ] Validate detection performance
+**Key Files:**
+- `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` - Set `launch_planning:=true` (line 78)
+- `src/vehicle/autosdv_vehicle_description/config/vehicle_info.param.yaml` - Golf cart dimensions
+- `src/param/autoware_individual_params/individual_params/config/default/autosdv_vehicle/mpc.param.yaml` - MPC tuning
+- Autoware reference: `$(find-pkg-share autoware_launch)/config/planning/` - Default planning parameters
 
-**Files to check:**
-- `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` (lines 83-96, perception parameters)
-- `data/models/lidar_centerpoint/` - ML models
-
-#### 9.2 Camera-Based Perception (Future)
-- [ ] Plan camera-based object detection
-- [ ] Integrate camera detection with LiDAR
-- [ ] Configure sensor fusion
-- [ ] Test multi-sensor perception
-
-**Files to check:**
-- `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` (lines 33-35, enable_zed_object_detection)
-
----
-
-## Phase 10: Control and Planning
-
-**Objective**: Configure control and planning modules for golf cart characteristics.
-
-### Work Items
-
-#### 10.1 Vehicle Model Calibration
-- [ ] Measure golf cart dimensions
-- [ ] Measure wheelbase and track width
-- [ ] Determine steering ratio
-- [ ] Measure weight and center of gravity
-
-**Files to create/modify:**
-- `src/vehicle/golfcart_vehicle_description/config/vehicle_info.param.yaml` (new)
-
-#### 10.2 Control Parameter Tuning
-- [ ] Tune MPC controller parameters
-- [ ] Tune pure pursuit parameters
-- [ ] Tune velocity controller
-- [ ] Test control stability
-
-**Files to create/modify:**
-- `src/param/autoware_individual_params/individual_params/config/default/golfcart_vehicle/mpc.param.yaml` (new)
-- `src/param/autoware_individual_params/individual_params/config/default/golfcart_vehicle/pure_pursuit.param.yaml` (new)
-
-#### 10.3 Planning Configuration
-- [ ] Enable planning module
-- [ ] Configure route planning
-- [ ] Configure behavior planning
-- [ ] Configure obstacle avoidance
-
-**Files to check:**
-- `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` (lines 77-78, launch_planning currently false)
-
-#### 10.4 Safety Configuration
-- [ ] Configure emergency stop conditions
-- [ ] Configure collision detection
-- [ ] Configure safety speed limits
-- [ ] Test safety behaviors
+**Expected Result:**
+- Successful route planning from point A to B
+- Smooth trajectory following
+- Obstacle detection and avoidance
+- Emergency stop when obstacles too close
 
 ---
 
-## Phase 11: Testing and Validation
+## Phase #11: System Integration and Testing
 
-**Objective**: Comprehensive testing and validation of the complete system.
+**Objective**: Integrate all components and validate complete system.
 
-### Work Items
+**Work Items:**
+- [ ] Test complete pipeline: sensors → localization → planning → control → vehicle
+- [ ] Configure perception for campus environment
+- [ ] Set safety parameters (max speed, emergency stop distance)
+- [ ] Test in parking lot at low speed (<5 km/h)
+- [ ] Test waypoint following on campus roads
+- [ ] Validate emergency stop behavior
+- [ ] Monitor system performance and resource usage
 
-#### 11.1 Unit Testing
-- [ ] Test individual sensor drivers
-- [ ] Test vehicle interface nodes
-- [ ] Test localization accuracy
-- [ ] Test perception accuracy
+**Key Files:**
+- `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` - Final system configuration
+- `src/launcher/autosdv_launch/rviz/autosdv.rviz` - Visualization configuration
+- `src/system/autosdv_system_monitor/` - System monitoring
 
-#### 11.2 Integration Testing
-- [ ] Test sensor fusion
-- [ ] Test end-to-end pipeline
-- [ ] Test in various lighting conditions
-- [ ] Test in various weather conditions
-
-#### 11.3 Field Testing
-- [ ] Test in parking lot (low speed)
-- [ ] Test in controlled outdoor environment
-- [ ] Test waypoint following
-- [ ] Test obstacle avoidance
-- [ ] Test emergency stop procedures
-
-#### 11.4 Performance Optimization
-- [ ] Profile system resource usage
-- [ ] Optimize compute-intensive nodes
-- [ ] Reduce latency
-- [ ] Improve real-time performance
+**Expected Result:**
+- Complete autonomous driving capability on 華夏科大 campus
+- Safe operation with proper emergency handling
+- System runs reliably for 30+ minutes
 
 ---
 
-## Phase 12: Documentation and Deployment
+## Important Notes
 
-**Objective**: Finalize documentation and prepare for deployment.
+### File Modification Strategy
+- Files in `src/param/autoware_individual_params/` contain most tunable parameters
+- Launch files in `src/sensor_kit/` and `src/vehicle/` handle hardware integration
+- Main launch file `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` orchestrates everything
+- With `--symlink-install`, editing `.yaml`, `.xml`, and `.py` files takes effect immediately (no rebuild needed for existing files)
 
-### Work Items
-
-#### 12.1 Documentation
-- [ ] Complete technical documentation
-- [ ] Create operator manual
-- [ ] Document calibration procedures
-- [ ] Document troubleshooting guide
-
-#### 12.2 Deployment Preparation
-- [ ] Create installation guide
-- [ ] Set up systemd service for autostart
-- [ ] Configure logging and diagnostics
-- [ ] Prepare backup and recovery procedures
-
-#### 12.3 Training
-- [ ] Train operators on system usage
-- [ ] Train on emergency procedures
-- [ ] Train on basic troubleshooting
-- [ ] Document training materials
-
----
-
-## Key Differences: AutoSDV vs Golf Cart
-
-| Component | AutoSDV | Golf Cart |
-|-----------|---------|-----------|
-| **Platform** | Custom small vehicle | Golf cart |
-| **Compute** | AGX Orin (JP5.x) | AGX Orin (JP6.0) |
-| **LiDAR** | Robin-W / VLP-32C / Cube1 | VLP-32C only |
-| **GNSS** | Garmin / Septentrio / u-blox | u-blox only |
-| **IMU** | MPU9250 | Tamagawa |
-| **Camera** | ZED stereo | USB cameras → Tier IV |
-| **Vehicle Interface** | Custom PWM (370=stop) | TBD (golf cart specific) |
-| **Autoware Version** | 2025.02 | 2025.02 |
-
-## Critical Dependencies
-
-### External ROS 2 Packages Required
-- `velodyne_driver` / `nebula_ros` - VLP-32C driver
-- `ublox_gps` - u-blox GNSS driver
-- Tamagawa IMU driver (to be determined)
-- `usb_cam` or `gscam` - USB camera driver
-- `autoware` - Autoware.universe packages
-
-### Hardware Dependencies
-- Golf cart with drive-by-wire capability
-- CAN bus or PWM interface for vehicle control
-- Velodyne VLP-32C LiDAR
-- u-blox GNSS receiver with antenna
-- Tamagawa IMU
-- USB cameras (4x)
-- AGX Orin with adequate power supply
-
-## Risk Assessment
-
-### High Risk Items
-1. **Vehicle interface compatibility** - Golf cart control system may differ significantly from AutoSDV
-2. **IMU driver availability** - Tamagawa IMU ROS 2 driver may not be readily available
-3. **Real-time performance on JP6.0** - Newer JetPack version may have different performance characteristics
-
-### Medium Risk Items
-1. **Camera calibration quality** - USB cameras may have lower quality than ZED
-2. **GNSS accuracy** - u-blox receiver quality depends on model and antenna placement
-3. **Parameter tuning** - Golf cart dynamics may require extensive tuning
-
-### Mitigation Strategies
-- Start with simulation mode for vehicle interface testing
-- Have fallback IMU options (MPU9250, other supported IMUs)
-- Plan for iterative parameter tuning with extensive field testing
-- Use AutoSDV codebase as reference for all developments
-
-## Success Criteria
-
-### Phase Completion Criteria
-- Each sensor publishes data at expected rate
-- All coordinate transformations are correct
-- Localization achieves < 10cm accuracy (with good GNSS)
-- Object detection identifies obstacles reliably
-- Vehicle responds correctly to control commands
-- System runs reliably for 30+ minutes continuously
-- Emergency stop functions correctly in all scenarios
-
-### System-Level Criteria
-- Complete autonomous waypoint following in test environment
-- Safe obstacle avoidance behavior
-- Graceful degradation when sensors fail
-- System monitoring and logging functional
-- Documentation complete and validated
-
-## Timeline Estimate
-
-| Phase | Estimated Duration | Dependencies |
-|-------|-------------------|--------------|
-| Phase 1: Setup | 1 week | Hardware availability |
-| Phase 2: LiDAR | 1 week | Phase 1 |
-| Phase 3: GNSS | 1 week | Phase 1 |
-| Phase 4: IMU | 1-2 weeks | Phase 1, driver availability |
-| Phase 5: Cameras | 2 weeks | Phase 1 |
-| Phase 6: Vehicle Interface | 3-4 weeks | Golf cart availability |
-| Phase 7: Integration | 2 weeks | Phases 2-6 |
-| Phase 8: Mapping | 1 week | Phase 7 |
-| Phase 9: Perception | 1 week | Phase 7 |
-| Phase 10: Control | 2 weeks | Phase 8 |
-| Phase 11: Testing | 3-4 weeks | Phase 10 |
-| Phase 12: Documentation | 1 week | Phase 11 |
-
-**Total Estimated Duration: 18-22 weeks**
-
-Note: This timeline assumes part-time development (20 hours/week). Full-time development could reduce duration by 50%.
+### Key Topics to Monitor
+- `/sensing/lidar/*/pointcloud` - LiDAR data
+- `/sensing/gnss/pose` - GNSS position
+- `/sensing/imu/imu_data` - IMU data
+- `/localization/kinematic_state` - Vehicle pose from NDT
+- `/planning/scenario_planning/trajectory` - Planned path
+- `/control/command/control_cmd` - Control commands to vehicle
+- `/vehicle/status/velocity_status` - Vehicle speed feedback
 
 ## References
 
-### AutoSDV Resources
-- AutoSDV GitHub: https://github.com/NEWSLabNTU/AutoSDV
-- AutoSDV Book: https://newslabntu.github.io/autosdv-book/
-
-### Autoware Resources
-- Autoware Documentation: https://autowarefoundation.github.io/autoware-documentation/
-- Autoware Universe: https://github.com/autowarefoundation/autoware.universe
-- Autoware Core: https://github.com/autowarefoundation/autoware.core
-
-### Sensor Resources
-- Velodyne VLP-32C: https://velodynelidar.com/products/puck-hi-res/
-- u-blox GNSS: https://www.u-blox.com/
-- ROS 2 Humble: https://docs.ros.org/en/humble/
-
-## Notes for Educational Use
-
-This migration plan is designed to be educational. Each phase includes:
-- Clear objectives
-- Specific work items with checkboxes for tracking
-- File references with line numbers where applicable
-- Comparison between source (AutoSDV) and target (Golf Cart) systems
-
-Students and developers can use this document to:
-1. Understand the structure of an Autoware-based autonomous system
-2. Learn how to adapt a reference platform to new hardware
-3. Identify which files control which system behaviors
-4. Understand dependencies between different system components
-5. Learn proper testing and validation procedures
-
-The file references are provided so that you can:
-- Study how AutoSDV implemented each feature
-- Use AutoSDV code as a reference for your implementation
-- Understand parameter configurations
-- Learn ROS 2 launch file structure
-- See working examples of sensor integration
-
-Remember: Always test in simulation mode first, then on a stationary vehicle, before attempting movement.
+- **AutoSDV**: https://github.com/NEWSLabNTU/AutoSDV
+- **Autoware Documentation**: https://autowarefoundation.github.io/autoware-documentation/
+- **ROS 2 Humble**: https://docs.ros.org/en/humble/
