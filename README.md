@@ -1,98 +1,91 @@
+# Golf Cart Autonomous Driving System
 
-<p align="center">
-  <img src="logo/logo_brand_gray.png" width=""/>
-  <br>
-  <a href="https://newslabntu.github.io/autosdv-book/">
-    <strong>Read the Book »</strong>
-  </a>
-</p>
+This project implements an autonomous driving system for a golf cart, based on the [AutoSDV](https://github.com/NEWSLabNTU/AutoSDV) platform and powered by [Autoware](https://github.com/autowarefoundation/autoware).
 
-AutoSDV project provides a recommended build for a small-scale
-autonomous vehicle, equipped with practical, industry-standard sensors
-and running Autoware, the leading open-source autonomous driving
-platform. Designed for research, development, and education, the
-platform offers an affordable, modular solution that enables realistic
-experimentation and rapid prototyping in autonomous driving
-technologies.
+## Overview
 
-<table align="center" border="0">
-  <tr>
-    <td align="center" valign="bottom">
-      <img src="figures/model_robin-w.webp" alt="Robin-W Solid-State LiDAR Kit" width="80%"/>
-    </td>
-    <td align="center" valign="bottom">
-      <img src="figures/model_velodyne_32c.webp" alt="Velodyne 32C LiDAR Kit" width="80%"/>
-    </td>
-    <td align="center" valign="bottom">
-      <img src="figures/model_cube1_moxa-5g.webp" alt="Blickfeld Cube1 + MOXA 5G Kit" width="80%"/>
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <b>Robin-W Solid-State LiDAR Kit</b>
-    </td>
-    <td align="center">
-      <b>Velodyne 32C LiDAR Kit</b>
-    </td>
-    <td align="center">
-      <b>Cube1 LiDAR + MOXA 5G Kit</b>
-    </td>
-  </tr>
-</table>
+This system provides a complete autonomous driving software stack for golf cart applications, supporting:
+
+- **Navigation**: GPS-based waypoint following and localization
+- **Perception**: LiDAR-based obstacle detection and camera-based vision
+- **Control**: Drive-by-wire interface for steering, throttle, and braking
+- **Mapping**: 3D map-based localization using NDT scan matching
+
+## System Configuration
+
+### Target Platform
+- **Hardware**: NVIDIA AGX Orin Developer Kit
+- **OS**: JetPack 6.0 (Ubuntu 22.04)
+- **ROS**: ROS 2 Humble
+- **Autoware**: Version 2025.02
+
+### Sensor Configuration
+- **LiDAR**: Velodyne VLP-32C
+- **GNSS**: u-blox receiver
+- **IMU**: Tamagawa IMU (Autoware recommended)
+- **Cameras**: Multiple USB cameras (future upgrade to Tier IV cameras)
 
 ## Quick Start
 
-AutoSDV uses [Just](https://just.systems) for command running. Run `just` to see all available commands.
+### Prerequisites
+- JetPack 6.0 installed on AGX Orin
+- Autoware 2025.02 workspace at `/home/aeon/repos/autoware/2025.02-ws`
+
+### Build and Run
 
 ```bash
-just setup    # Interactive setup (first time)
-just build    # Build all packages
-just launch   # Launch AutoSDV system
+# Install dependencies
+make prepare
+
+# Build the workspace
+make build
+
+# Launch the system
+make launch
+
+# Stop the system
+make stop
 ```
 
-See [`.justfile-reference.md`](.justfile-reference.md) for complete command reference.
+### Launch with Specific Configuration
 
-## Releases
+```bash
+# Launch with u-blox GNSS and USB cameras
+make launch ARGS="gnss_receiver:=ublox camera_model:=usb"
 
-AutoSDV uses [Semantic Versioning](https://semver.org/). All version dependencies are defined in [`versions.yaml`](versions.yaml).
-
-| Version                                                             | Autoware | CUDA (x86) | JetPack | Status      |
-|---------------------------------------------------------------------|----------|------------|---------|-------------|
-| [v0.1.0](https://github.com/NEWSLabNTU/AutoSDV/releases/tag/v0.1.0) | 1.5.0 | 12.4 | 6.2 | Stable |
-| [develop](https://github.com/NEWSLabNTU/AutoSDV/tree/develop)       | 1.5.0    | 12.4       | 6.2     | Development |
-
-### Installation
-
-**Stable release:**
-```sh
-git clone -b v0.1.0 --recurse-submodules git@github.com:NEWSLabNTU/AutoSDV.git
+# Indoor testing without GNSS
+make launch ARGS="use_gnss:=false"
 ```
 
-**Development version:**
-```sh
-git clone -b develop --recurse-submodules git@github.com:NEWSLabNTU/AutoSDV.git
+## Development Status
+
+This project is currently in development. See [MIGRATION.md](MIGRATION.md) for the detailed migration plan and progress tracking.
+
+## Project Structure
+
+```
+.
+├── src/
+│   ├── launcher/          # Main launch files
+│   ├── sensor_kit/        # Sensor integration
+│   ├── vehicle/           # Vehicle interface
+│   ├── param/             # Configuration parameters
+│   ├── sensor_component/  # External sensor drivers
+│   └── system/            # System monitoring
+├── data/                  # Maps and ML models
+└── MIGRATION.md          # Migration plan from AutoSDV
 ```
 
-### Legacy Releases
+## Documentation
 
-Previous releases based on Autoware version naming:
-- [2025.02](https://github.com/NEWSLabNTU/F1EIGHTH/tree/2025.02)
-- [2024.11](https://github.com/NEWSLabNTU/F1EIGHTH/tree/2024.11)
-- [2024.02](https://github.com/NEWSLabNTU/F1EIGHTH/tree/2024.02)
+- [MIGRATION.md](MIGRATION.md) - Migration plan from AutoSDV to golf cart
 
 ## License
 
-This project is distributed under Apache 2.0 license in the [license
-file](LICENSE.txt). If you use this project in your work, please cite
-it as follows:
+This project is based on [AutoSDV](https://github.com/NEWSLabNTU/AutoSDV) and inherits its Apache 2.0 license. See [LICENSE.txt](LICENSE.txt) for details.
 
-```latex
-@misc{autosdv150,
-  author = {Hsiang-Jui Lin, Chi-Sheng Shih},
-  title = {AutoSDV: A Software-Defined Vehicle Platform for Research and Education (Autoware 1.5.0)},
-  year = {2026},
-  institution = {National Taiwan University},
-  url = {https://github.com/NEWSLabNTU/AutoSDV},
-  note = {Accessed: 2026-01-22}
-}
-```
+## Acknowledgments
+
+This project is built upon:
+- **AutoSDV**: Software-Defined Vehicle platform by NEWSLab, National Taiwan University
+- **Autoware**: Open-source autonomous driving software by the Autoware Foundation
