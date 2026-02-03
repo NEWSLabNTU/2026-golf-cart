@@ -81,7 +81,7 @@ colcon build --base-paths src --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=
   - Provides web-based system monitor at http://localhost:8080/
   - Main launch file: `autosdv.launch.yaml`
 - **src/param/autoware_individual_params/** - Parameter configurations for different sensor kits
-- **src/sensor_kit/autosdv_sensor_kit_launch/** - Sensor integration and launch files
+- **src/sensor_kit/golfcart_sensor_kit_launch/** - Sensor integration and launch files
 - **src/vehicle/autosdv_vehicle_launch/** - Vehicle interface and description
 - **src/sensor_component/external/** - External sensor drivers (submodules)
 
@@ -94,7 +94,7 @@ colcon build --base-paths src --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=
 
 Submodules:
 - autoware_manual_control - Keyboard control interface
-- autosdv_sensor_kit_launch - Sensor kit configurations
+- golfcart_sensor_kit_launch - Sensor kit configurations
 - gnss_locator - GNSS positioning
 - ros2_mpu9250_driver - IMU driver (to be replaced with Tamagawa)
 - ros-nmea-reader - NMEA GPS data parser
@@ -471,8 +471,8 @@ If `journalctl --user` doesn't show logs:
 ### Golf Cart Configuration
 The golf cart uses Velodyne VLP-32C as the sole LiDAR sensor:
 - Driver: Nebula (Autoware's universal LiDAR driver)
-- Launch file: `autosdv_sensor_kit_launch/launch/lidar.launch.xml`
-- Config: `autosdv_sensor_kit_launch/config/VLP32.param.yaml`
+- Launch file: `golfcart_sensor_kit_launch/launch/lidar.launch.xml`
+- Config: `golfcart_sensor_kit_launch/config/VLP32.param.yaml`
 - Network IP: 192.168.7.10 (default, configurable via `vlp32c_device_ip` arg)
 
 ### Coordinate System
@@ -536,8 +536,8 @@ Target configuration for golf cart:
 - **Device**: u-blox F9P GNSS receiver (pending hardware)
 - **Map**: Use with 華夏科大 campus map
 - **Configuration files**:
-  - `autosdv_sensor_kit_launch/launch/gnss.launch.xml`
-  - `autosdv_sensor_kit_launch/config/ublox_gnss.param.yaml` (to be created)
+  - `golfcart_sensor_kit_launch/launch/gnss.launch.xml`
+  - `golfcart_sensor_kit_launch/config/ublox_gnss.param.yaml` (to be created)
 - **Calibration**: Antenna position from base_link in `sensor_kit_calibration.yaml`
 
 ### Integration with Localization
@@ -551,7 +551,7 @@ Target configuration for golf cart:
 Replace MPU9250 with Tamagawa IMU (Autoware recommended):
 - **Status**: Pending hardware and driver integration
 - **Driver**: Tamagawa IMU ROS 2 driver (to be obtained)
-- **Launch file**: `autosdv_sensor_kit_launch/launch/imu.launch.xml` (to be updated)
+- **Launch file**: `golfcart_sensor_kit_launch/launch/imu.launch.xml` (to be updated)
 - **Calibration**: IMU corrector parameters in `sensor_kit_calibration.yaml`
 
 ### AutoSDV MPU9250 (Reference Only)
@@ -564,7 +564,7 @@ Original system used MPU9250:
 
 ### USB Cameras (Current)
 The golf cart currently uses USB cameras:
-- **Launch file**: `autosdv_sensor_kit_launch/launch/camera.launch.xml`
+- **Launch file**: `golfcart_sensor_kit_launch/launch/camera.launch.xml`
 - **Camera model parameter**: `camera_model:=usb`
 - USB cameras provide basic vision input for perception
 
@@ -577,7 +577,7 @@ Plan to upgrade to Tier IV GMSL cameras:
 ### AutoSDV ZED Camera (Reference Only)
 Original AutoSDV used ZED stereo cameras with object detection:
 - ZED object detection integration available in codebase
-- Launch file: `autosdv_sensor_kit_launch/launch/zed_with_object_detection.launch.xml`
+- Launch file: `golfcart_sensor_kit_launch/launch/zed_with_object_detection.launch.xml`
 - **Note**: Not used in golf cart configuration
 
 ## Golf Cart Migration Plan

@@ -65,8 +65,8 @@ make launch ARGS="enable_zed_object_detection:=true"
 
 ### Configuration Files
 
-- Launch: `autosdv_sensor_kit_launch/launch/zed_with_object_detection.launch.xml`
-- Config: `autosdv_sensor_kit_launch/config/zed_object_detection.yaml`
+- Launch: `golfcart_sensor_kit_launch/launch/zed_with_object_detection.launch.xml`
+- Config: `golfcart_sensor_kit_launch/config/zed_object_detection.yaml`
 
 ## Troubleshooting
 

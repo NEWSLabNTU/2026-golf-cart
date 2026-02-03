@@ -106,7 +106,7 @@ AutoSDV supports RTK positioning for centimeter-level accuracy using NTRIP.
 **Default**: e-GNSS Taiwan VRS (Virtual Reference Station)
 - Server: 210.241.63.193:81
 - Mountpoint: Taiwan
-- Credentials: `src/sensor_kit/autosdv_sensor_kit_launch/launch/ntrip.launch.xml`
+- Credentials: `src/sensor_kit/golfcart_sensor_kit_launch/launch/ntrip.launch.xml`
 
 ### Enable NTRIP
 
@@ -137,8 +137,8 @@ ros2 topic echo /sensing/gnss/ublox/rxmrtcm         # RTCM reception status
 
 ### Configuration Files
 
-- NTRIP client: `src/sensor_kit/autosdv_sensor_kit_launch/launch/ntrip.launch.xml`
-- ZED-F9R config: `src/sensor_kit/autosdv_sensor_kit_launch/config/zed_f9r_rover.yaml`
+- NTRIP client: `src/sensor_kit/golfcart_sensor_kit_launch/launch/ntrip.launch.xml`
+- ZED-F9R config: `src/sensor_kit/golfcart_sensor_kit_launch/config/zed_f9r_rover.yaml`
 
 ### Troubleshooting
 

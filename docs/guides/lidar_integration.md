@@ -47,7 +47,7 @@ Configured in `sensor_kit_calibration.yaml`:
 ### Network Configuration
 
 - Default IP: 172.168.1.10
-- Config: `autosdv_sensor_kit_launch/launch/lidar.launch.xml`
+- Config: `golfcart_sensor_kit_launch/launch/lidar.launch.xml`
 
 ## TensorRT Model Compilation
 

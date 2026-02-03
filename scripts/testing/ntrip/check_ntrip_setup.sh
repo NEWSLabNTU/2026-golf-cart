@@ -48,11 +48,11 @@ done
 # Check 3: AutoSDV Sensor Kit Package
 echo ""
 echo "3. Checking AutoSDV Sensor Kit Configuration..."
-if ros2 pkg list | grep -q autosdv_sensor_kit_launch; then
-    echo -e "   ${GREEN}✓${NC} autosdv_sensor_kit_launch package found"
+if ros2 pkg list | grep -q golfcart_sensor_kit_launch; then
+    echo -e "   ${GREEN}✓${NC} golfcart_sensor_kit_launch package found"
 
     # Check for NTRIP launch file
-    NTRIP_LAUNCH=$(ros2 pkg prefix autosdv_sensor_kit_launch)/share/autosdv_sensor_kit_launch/launch/ntrip.launch.xml
+    NTRIP_LAUNCH=$(ros2 pkg prefix golfcart_sensor_kit_launch)/share/golfcart_sensor_kit_launch/launch/ntrip.launch.xml
     if [ -f "$NTRIP_LAUNCH" ] || [ -L "$NTRIP_LAUNCH" ]; then
         echo -e "   ${GREEN}✓${NC} ntrip.launch.xml found"
     else
@@ -62,7 +62,7 @@ if ros2 pkg list | grep -q autosdv_sensor_kit_launch; then
     fi
 
     # Check for ZED-F9R config
-    F9R_CONFIG=$(ros2 pkg prefix autosdv_sensor_kit_launch)/share/autosdv_sensor_kit_launch/config/zed_f9r_rover.yaml
+    F9R_CONFIG=$(ros2 pkg prefix golfcart_sensor_kit_launch)/share/golfcart_sensor_kit_launch/config/zed_f9r_rover.yaml
     if [ -f "$F9R_CONFIG" ] || [ -L "$F9R_CONFIG" ]; then
         echo -e "   ${GREEN}✓${NC} zed_f9r_rover.yaml found"
     else
@@ -71,7 +71,7 @@ if ros2 pkg list | grep -q autosdv_sensor_kit_launch; then
         exit 1
     fi
 else
-    echo -e "   ${RED}✗${NC} autosdv_sensor_kit_launch NOT found"
+    echo -e "   ${RED}✗${NC} golfcart_sensor_kit_launch NOT found"
     echo "   Run: make build"
     exit 1
 fi

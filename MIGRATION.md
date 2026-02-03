@@ -120,8 +120,8 @@ This document outlines the migration plan from the AutoSDV platform to a golf ca
 - [ ] Test point cloud in RViz
 
 **Key Files:**
-- `src/sensor_kit/autosdv_sensor_kit_launch/autosdv_sensor_kit_launch/launch/lidar.launch.xml` - VLP-32C launch (lines 28-34)
-- `src/sensor_kit/autosdv_sensor_kit_launch/config/VLP32.param.yaml` - LiDAR parameters
+- `src/sensor_kit/golfcart_sensor_kit_launch/golfcart_sensor_kit_launch/launch/lidar.launch.xml` - VLP-32C launch (lines 28-34)
+- `src/sensor_kit/golfcart_sensor_kit_launch/config/VLP32.param.yaml` - LiDAR parameters
 - `src/param/autoware_individual_params/individual_params/config/default/autosdv_sensor_kit/sensor_kit_calibration.yaml` - Calibration (lines 9-15)
 - `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` - Set default `lidar_model:=vlp32c` (line 9)
 
@@ -149,7 +149,7 @@ This document outlines the migration plan from the AutoSDV platform to a golf ca
 - [ ] Verify GNSS fix and pose topics on production system
 
 **Key Files:**
-- `src/sensor_kit/autosdv_sensor_kit_launch/autosdv_sensor_kit_launch/launch/gnss.launch.xml` - u-blox configuration (lines 14-20)
+- `src/sensor_kit/golfcart_sensor_kit_launch/golfcart_sensor_kit_launch/launch/gnss.launch.xml` - u-blox configuration (lines 14-20)
 - `src/param/autoware_individual_params/individual_params/config/default/autosdv_sensor_kit/sensor_kit_calibration.yaml` - GNSS position (lines 41-47)
 - `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` - Set default `gnss_receiver:=ublox` (line 19)
 - External: `$(find-pkg-share ublox_gps)/c94_f9p_rover.yaml` - u-blox driver params
@@ -172,10 +172,10 @@ This document outlines the migration plan from the AutoSDV platform to a golf ca
 - [ ] Test IMU data publishing and gyro bias estimation
 
 **Key Files:**
-- `src/sensor_kit/autosdv_sensor_kit_launch/autosdv_sensor_kit_launch/launch/imu.launch.xml` - Replace MPU9250 driver (lines 9-18)
+- `src/sensor_kit/golfcart_sensor_kit_launch/golfcart_sensor_kit_launch/launch/imu.launch.xml` - Replace MPU9250 driver (lines 9-18)
 - `src/param/autoware_individual_params/individual_params/config/default/autosdv_sensor_kit/sensor_kit_calibration.yaml` - IMU position (lines 34-40)
 - `src/param/autoware_individual_params/individual_params/config/default/autosdv_sensor_kit/imu_corrector.param.yaml` - IMU correction params
-- `src/sensor_kit/autosdv_sensor_kit_launch/package.xml` - Add Tamagawa driver dependency
+- `src/sensor_kit/golfcart_sensor_kit_launch/package.xml` - Add Tamagawa driver dependency
 - Remove: `src/sensor_component/external/ros2_mpu9250_driver/` submodule
 
 **Expected Result:** `/sensing/imu/imu_data` topic publishing with correct orientation.
@@ -195,8 +195,8 @@ This document outlines the migration plan from the AutoSDV platform to a golf ca
 - [ ] Test image streaming
 
 **Key Files:**
-- `src/sensor_kit/autosdv_sensor_kit_launch/autosdv_sensor_kit_launch/launch/camera.launch.xml` - USB camera setup (lines 35-72)
-- `src/sensor_kit/autosdv_sensor_kit_launch/config/usb_camera_*.yaml` - Individual camera configs
+- `src/sensor_kit/golfcart_sensor_kit_launch/golfcart_sensor_kit_launch/launch/camera.launch.xml` - USB camera setup (lines 35-72)
+- `src/sensor_kit/golfcart_sensor_kit_launch/config/usb_camera_*.yaml` - Individual camera configs
 - `src/param/autoware_individual_params/individual_params/config/default/autosdv_sensor_kit/sensor_kit_calibration.yaml` - Camera positions (lines 48-75)
 - `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` - Set default `camera_model:=usb` (line 14)
 - Remove: `src/sensor_component/external/zed-ros2-wrapper/` submodule and ZED-related files
