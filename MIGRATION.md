@@ -225,7 +225,7 @@ This document outlines the migration plan from the AutoSDV platform to a golf ca
 - New: `src/vehicle/turing_drive_*` packages (to be added)
 - Modify: `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` - Update `launch_vehicle` section
 - Modify: `src/vehicle/autosdv_vehicle_launch/autosdv_vehicle_launch/launch/vehicle_interface.launch.xml` - Replace with Turing Drive launch
-- Update: `src/vehicle/autosdv_vehicle_description/config/vehicle_info.param.yaml` - Golf cart dimensions
+- Update: `src/vehicle/golfcart_vehicle_description/config/vehicle_info.param.yaml` - Golf cart dimensions
 - Reference: `src/vehicle/autosdv_vehicle_interface/*` - AutoSDV interface for comparison
 
 **Expected Result:**
@@ -314,7 +314,7 @@ This document outlines the migration plan from the AutoSDV platform to a golf ca
 
 **Key Files:**
 - `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` - Set `launch_planning:=true` (line 78)
-- `src/vehicle/autosdv_vehicle_description/config/vehicle_info.param.yaml` - Golf cart dimensions
+- `src/vehicle/golfcart_vehicle_description/config/vehicle_info.param.yaml` - Golf cart dimensions
 - `src/param/autoware_individual_params/individual_params/config/default/autosdv_vehicle/mpc.param.yaml` - MPC tuning
 - Autoware reference: `$(find-pkg-share autoware_launch)/config/planning/` - Default planning parameters
 
