@@ -75,7 +75,7 @@ launch-sim-planning:
         autoware_launch planning_simulator.launch.xml \
         map_path:={{justfile_directory()}}/data/COSS-map-planning \
         vehicle_model:=autosdv_vehicle \
-        sensor_model:=autosdv_sensor_kit
+        sensor_model:=golfcart_sensor_kit
 
 # Launch logging simulation for rosbag replay testing
 launch-sim-logging ARGS="":
