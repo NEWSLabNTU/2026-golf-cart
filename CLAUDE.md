@@ -82,7 +82,7 @@ colcon build --base-paths src --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=
   - Main launch file: `autosdv.launch.yaml`
 - **src/param/autoware_individual_params/** - Parameter configurations for different sensor kits
 - **src/sensor_kit/golfcart_sensor_kit_launch/** - Sensor integration and launch files
-- **src/vehicle/autosdv_vehicle_launch/** - Vehicle interface and description
+- **src/vehicle/golfcart_vehicle_launch/** - Vehicle interface and description
 - **src/sensor_component/external/** - External sensor drivers (submodules)
 
 ### Key Submodules
@@ -351,7 +351,7 @@ twist_source:=gyro_odom|eagleye            # Override preset twist source
 - Hall effect sensor (KY-003) on GPIO
 - Parameters: `params/velocity_report.yaml`
 
-**Actuator Parameters**: `src/vehicle/autosdv_vehicle_launch/golfcart_vehicle_interface/params/actuator.yaml`
+**Actuator Parameters**: `src/vehicle/golfcart_vehicle_launch/golfcart_vehicle_interface/params/actuator.yaml`
 
 ## Documentation
 
@@ -514,7 +514,7 @@ The golf cart uses Turing Drive vehicle interface packages (replacing AutoSDV cu
   - Velocity/odometry reporting
   - Gear status management
   - Control mode management (manual/autonomous)
-- **Integration files**: `src/vehicle/autosdv_vehicle_launch/autosdv_vehicle_launch/launch/vehicle_interface.launch.xml`
+- **Integration files**: `src/vehicle/golfcart_vehicle_launch/golfcart_vehicle_launch/launch/vehicle_interface.launch.xml`
 
 ### AutoSDV PWM Interface (Reference Only)
 The original AutoSDV system used custom PWM control:

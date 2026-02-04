@@ -224,7 +224,7 @@ This document outlines the migration plan from the AutoSDV platform to a golf ca
 **Key Files:**
 - New: `src/vehicle/turing_drive_*` packages (to be added)
 - Modify: `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` - Update `launch_vehicle` section
-- Modify: `src/vehicle/autosdv_vehicle_launch/autosdv_vehicle_launch/launch/vehicle_interface.launch.xml` - Replace with Turing Drive launch
+- Modify: `src/vehicle/golfcart_vehicle_launch/golfcart_vehicle_launch/launch/vehicle_interface.launch.xml` - Replace with Turing Drive launch
 - Update: `src/vehicle/golfcart_vehicle_description/config/vehicle_info.param.yaml` - Golf cart dimensions
 - Reference: `src/vehicle/golfcart_vehicle_interface/*` - AutoSDV interface for comparison
 

@@ -225,7 +225,7 @@ This topic is crucial for tuning PID parameters.
 
 **Workaround**: Temporarily invert steering commands in controller, or adjust `tire_angle_to_steer_ratio` parameter sign
 
-**Location**: `src/vehicle/autosdv_vehicle_launch/config/actuator.param.yaml`
+**Location**: `src/vehicle/golfcart_vehicle_launch/config/actuator.param.yaml`
 
 ### 2. PID Control Not Working
 **Symptom**: Setting positive speed in `control_cmd` doesn't actuate motor
@@ -295,7 +295,7 @@ ros2 node list | grep velocity
 
 **Check**: GPIO pin configuration
 ```bash
-cat src/vehicle/autosdv_vehicle_launch/config/velocity_report.param.yaml
+cat src/vehicle/golfcart_vehicle_launch/config/velocity_report.param.yaml
 ```
 
 **Test**: Run GPIO monitor script
@@ -346,7 +346,7 @@ make stop
 ## Parameter Tuning
 
 ### PID Gains
-Located in: `src/vehicle/autosdv_vehicle_launch/config/actuator.param.yaml`
+Located in: `src/vehicle/golfcart_vehicle_launch/config/actuator.param.yaml`
 
 **Speed Controller** (outer loop):
 ```yaml
@@ -406,7 +406,7 @@ Direct PWM control for hardware testing and calibration.
 
 ## References
 
-- **Actuator Node**: `src/vehicle/autosdv_vehicle_launch/golfcart_vehicle_interface/golfcart_vehicle_interface/actuator.py`
-- **Configuration**: `src/vehicle/autosdv_vehicle_launch/config/actuator.param.yaml`
-- **Velocity Report**: `src/vehicle/autosdv_vehicle_launch/golfcart_vehicle_interface/golfcart_vehicle_interface/velocity_report.py`
+- **Actuator Node**: `src/vehicle/golfcart_vehicle_launch/golfcart_vehicle_interface/golfcart_vehicle_interface/actuator.py`
+- **Configuration**: `src/vehicle/golfcart_vehicle_launch/config/actuator.param.yaml`
+- **Velocity Report**: `src/vehicle/golfcart_vehicle_launch/golfcart_vehicle_interface/golfcart_vehicle_interface/velocity_report.py`
 - **PWM Calibration**: `CLAUDE.md` - Vehicle Interface Calibration section

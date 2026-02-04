@@ -286,6 +286,6 @@ ros2 topic echo /vehicle/status/velocity_status
 
 ## See Also
 
-- [Vehicle Interface Documentation](../autosdv_vehicle_launch/golfcart_vehicle_interface/README.md)
+- [Vehicle Interface Documentation](../golfcart_vehicle_launch/golfcart_vehicle_interface/README.md)
 - [Control System Testing Guide](../../../docs/control_system_testing.md)
 
