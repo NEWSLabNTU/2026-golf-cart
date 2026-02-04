@@ -406,7 +406,7 @@ Direct PWM control for hardware testing and calibration.
 
 ## References
 
-- **Actuator Node**: `src/vehicle/autosdv_vehicle_launch/autosdv_vehicle_interface/autosdv_vehicle_interface/actuator.py`
+- **Actuator Node**: `src/vehicle/autosdv_vehicle_launch/golfcart_vehicle_interface/golfcart_vehicle_interface/actuator.py`
 - **Configuration**: `src/vehicle/autosdv_vehicle_launch/config/actuator.param.yaml`
-- **Velocity Report**: `src/vehicle/autosdv_vehicle_launch/autosdv_vehicle_interface/autosdv_vehicle_interface/velocity_report.py`
+- **Velocity Report**: `src/vehicle/autosdv_vehicle_launch/golfcart_vehicle_interface/golfcart_vehicle_interface/velocity_report.py`
 - **PWM Calibration**: `CLAUDE.md` - Vehicle Interface Calibration section

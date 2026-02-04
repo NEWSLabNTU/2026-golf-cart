@@ -16,7 +16,7 @@ This document outlines the migration plan from the AutoSDV platform to a golf ca
 - **Map**: 華夏科大 campus HDMap
 
 ## Key Changes from AutoSDV
-1. Replace `autosdv_vehicle_interface` with Turing Drive vehicle interface packages
+1. Replace `golfcart_vehicle_interface` with Turing Drive vehicle interface packages
 2. Replace COSS campus map with 華夏科大 campus HDMap
 3. Use Autoware built-in NDT localization (not GNSS-only)
 4. Use Autoware built-in planning (enable launch_planning)
@@ -226,7 +226,7 @@ This document outlines the migration plan from the AutoSDV platform to a golf ca
 - Modify: `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` - Update `launch_vehicle` section
 - Modify: `src/vehicle/autosdv_vehicle_launch/autosdv_vehicle_launch/launch/vehicle_interface.launch.xml` - Replace with Turing Drive launch
 - Update: `src/vehicle/golfcart_vehicle_description/config/vehicle_info.param.yaml` - Golf cart dimensions
-- Reference: `src/vehicle/autosdv_vehicle_interface/*` - AutoSDV interface for comparison
+- Reference: `src/vehicle/golfcart_vehicle_interface/*` - AutoSDV interface for comparison
 
 **Expected Result:**
 - Vehicle control commands accepted from `/control/command/control_cmd`

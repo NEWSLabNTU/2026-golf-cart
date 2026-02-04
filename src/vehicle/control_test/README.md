@@ -279,13 +279,13 @@ ros2 topic echo /vehicle/status/velocity_status
 
 ## Dependencies
 
-- `autosdv_vehicle_interface`: Vehicle interface nodes
+- `golfcart_vehicle_interface`: Vehicle interface nodes
 - `autoware_control_msgs`: Control message definitions
 - `simple-pid`: Python PID controller library
 - `Adafruit_PCA9685`: PWM driver library
 
 ## See Also
 
-- [Vehicle Interface Documentation](../autosdv_vehicle_launch/autosdv_vehicle_interface/README.md)
+- [Vehicle Interface Documentation](../autosdv_vehicle_launch/golfcart_vehicle_interface/README.md)
 - [Control System Testing Guide](../../../docs/control_system_testing.md)
 

@@ -351,7 +351,7 @@ twist_source:=gyro_odom|eagleye            # Override preset twist source
 - Hall effect sensor (KY-003) on GPIO
 - Parameters: `params/velocity_report.yaml`
 
-**Actuator Parameters**: `src/vehicle/autosdv_vehicle_launch/autosdv_vehicle_interface/params/actuator.yaml`
+**Actuator Parameters**: `src/vehicle/autosdv_vehicle_launch/golfcart_vehicle_interface/params/actuator.yaml`
 
 ## Documentation
 
