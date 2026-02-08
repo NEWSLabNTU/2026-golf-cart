@@ -5,15 +5,16 @@
     <arg name="config_file" value="$(find-pkg-share golfcart_sensor_kit_launch)/config/VLP32.param.yaml"/>
   </include>
 
-  <include file="$(find-pkg-share seyond)/launch/start.py">
+  <include file="$(find-pkg-share seyond)/start.py">
     <arg name="lidar_ip" value="172.168.1.10"/>
   </include>
 
   <node pkg="gscam" exec="gscam_node" name="v4l2_camera">
-    <param name="gscam_config" value="v4l2src device=/dev/v4l/by-id/usb-Ability_GMSL2-USB3.0_Conversion_Kit_C1-Master-video-index0 ! videoconvert ! video/x-raw,format=RGB"/>
+    <param name="gscam_config" value="v4l2src device=/dev/v4l/by-id/usb-Ability_GMSL2-USB3.0_Conversion_Kit_C1-Master-video-index0 ! videoconvert ! videoflip method=rotate-180 ! video/x-raw,format=RGB"/>
     <param name="frame_id" value="camera"/>
   </node>
 
-  <node pkg="rviz2" exec="rviz2" name="rviz2" args="-d velodyne.rviz"/>
-  <node pkg="rviz2" exec="rviz2" name="rviz2" args="-d seyond.rviz"/>
+  <node pkg="rviz2" exec="rviz2" name="rviz2_velodyne" args="-d velodyne.rviz"/>
+  <node pkg="rviz2" exec="rviz2" name="rviz2_seyond" args="-d seyond.rviz"/>
+  <node pkg="rviz2" exec="rviz2" name="rviz2_camera" args="-d camera_c1.rviz"/>
 </launch>
