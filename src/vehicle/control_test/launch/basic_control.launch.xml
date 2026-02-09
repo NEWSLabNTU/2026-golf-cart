@@ -2,95 +2,27 @@
 <launch>
   <!-- Arguments -->
   <arg name="vehicle_id" default="$(env VEHICLE_ID default)"/>
-  <arg name="vehicle_model" default="autosdv_vehicle"/>
-  <arg name="sensor_model" default="autosdv_sensor_kit"/>
-  <arg name="config_dir" default="$(find-pkg-share individual_params)/config/$(var vehicle_id)/autosdv_sensor_kit"/>
+  <arg name="vehicle_model" default="golfcart_vehicle"/>
+  <arg name="sensor_model" default="golfcart_sensor_kit"/>
+  <arg name="config_dir" default="$(find-pkg-share individual_params)/config/$(var vehicle_id)/golfcart_sensor_kit"/>
 
   <!-- Robot Description - publishes TF tree from URDF and calibration files -->
   <node name="robot_state_publisher" pkg="robot_state_publisher" exec="robot_state_publisher">
     <param name="robot_description" value="$(command 'xacro $(find-pkg-share tier4_vehicle_launch)/urdf/vehicle.xacro vehicle_model:=$(var vehicle_model) sensor_model:=$(var sensor_model) config_dir:=$(var config_dir)' 'warn')"/>
   </node>
 
-  <!-- Sensing Group - matches AutoSDV namespace structure -->
+  <!-- Vehicle Interface Stubs -->
   <group>
-    <push-ros-namespace namespace="sensing"/>
+    <push-ros-namespace namespace="golfcart"/>
 
-    <!-- IMU Processing -->
-    <group>
-      <push-ros-namespace namespace="imu"/>
-
-      <arg name="imu_corrector_param_file" default="$(find-pkg-share individual_params)/config/$(var vehicle_id)/autosdv_sensor_kit/imu_corrector.param.yaml"/>
-
-      <!-- IMU Corrector - processes ZED IMU data (ZED 5.1.0: imu/data) -->
-      <include file="$(find-pkg-share autoware_imu_corrector)/launch/imu_corrector.launch.xml">
-        <arg name="input_topic" value="/sensing/camera/zedxm/imu/data"/>
-        <arg name="output_topic" value="imu_data"/>
-        <arg name="param_file" value="$(var imu_corrector_param_file)"/>
-      </include>
-
-      <!-- Gyro Bias Estimator - Disabled for basic control testing -->
-      <!-- Requires /localization/kinematic_state which is not available in minimal setup -->
-      <!--
-      <include file="$(find-pkg-share autoware_imu_corrector)/launch/gyro_bias_estimator.launch.xml">
-        <arg name="input_imu_raw" value="/sensing/camera/zedxm/imu/data"/>
-        <arg name="input_odom" value="/localization/kinematic_state"/>
-        <arg name="imu_corrector_param_file" value="$(var imu_corrector_param_file)"/>
-      </include>
-      -->
-    </group>
-
-  </group>
-
-  <!-- ZED Camera for IMU-only (minimal mode) -->
-  <!-- Python launch adds leading slash, so use relative path -->
-  <include file="$(find-pkg-share zed_wrapper)/launch/zed_camera.launch.py">
-    <arg name="camera_name" value="zedxm"/>
-    <arg name="camera_model" value="zedxm"/>
-    <arg name="namespace" value="sensing/camera/zedxm"/>
-    <arg name="publish_tf" value="true"/>
-    <arg name="publish_imu_tf" value="true"/>
-    <arg name="ros_params_override_path" value="$(find-pkg-share golfcart_sensor_kit_launch)/config/zed_imu_minimal.yaml"/>
-  </include>
-
-  <!-- Vehicle Interface Group - matches AutoSDV namespace structure -->
-  <group>
-    <push-ros-namespace namespace="autosdv"/>
-
-    <!-- Speedometer (Velocity Report Node) -->
     <node pkg="golfcart_vehicle_interface" exec="velocity_report" name="velocity_report_node" output="screen">
       <param from="$(find-pkg-share golfcart_vehicle_interface)/params/velocity_report.yaml"/>
       <remap from="~/output/velocity_status" to="/vehicle/status/velocity_status"/>
     </node>
 
-    <!-- AutoSDV Vehicle Interface (Actuator Node) -->
     <node pkg="golfcart_vehicle_interface" exec="actuator" name="actuator_node" output="screen">
       <param from="$(find-pkg-share golfcart_vehicle_interface)/params/actuator.yaml"/>
       <remap from="~/input/control_cmd" to="/control/command/control_cmd"/>
-      <remap from="~/input/velocity_status" to="/vehicle/status/velocity_status"/>
-    </node>
-
-    <!-- Gear Manager -->
-    <!-- Uses actuator.yaml as single source of truth for motor PWM parameters -->
-    <node pkg="golfcart_vehicle_interface" exec="gear_manager" name="gear_manager_node" output="screen">
-      <param from="$(find-pkg-share golfcart_vehicle_interface)/params/actuator.yaml"/>
-      <param from="$(find-pkg-share golfcart_vehicle_interface)/params/gear_manager.yaml"/>
-    </node>
-
-    <!-- Control Mode Manager -->
-    <node pkg="golfcart_vehicle_interface" exec="control_mode_manager" name="control_mode_manager_node" output="screen">
-      <param from="$(find-pkg-share golfcart_vehicle_interface)/params/control_mode_manager.yaml"/>
-    </node>
-
-    <!-- Steering Status -->
-    <!-- Uses actuator.yaml as single source of truth for max_steering_angle -->
-    <node pkg="golfcart_vehicle_interface" exec="steering_status" name="steering_status_node" output="screen">
-      <param from="$(find-pkg-share golfcart_vehicle_interface)/params/actuator.yaml"/>
-      <param from="$(find-pkg-share golfcart_vehicle_interface)/params/steering_status.yaml"/>
-    </node>
-
-    <!-- Signal Manager -->
-    <node pkg="golfcart_vehicle_interface" exec="signal_manager" name="signal_manager_node" output="screen">
-      <param from="$(find-pkg-share golfcart_vehicle_interface)/params/signal_manager.yaml"/>
     </node>
   </group>
 

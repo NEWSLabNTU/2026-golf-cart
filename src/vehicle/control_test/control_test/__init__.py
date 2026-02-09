@@ -1,1 +1,1 @@
-"""Control test package for AutoSDV."""
+"""Control test package for Golf Cart."""

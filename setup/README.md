@@ -1,4 +1,4 @@
-# AutoSDV Development Environment Setup
+# Golf Cart Development Environment Setup
 
 A lightweight setup system using [just](https://github.com/casey/just) with checkpoint-based resume capability.
 
@@ -67,7 +67,7 @@ The setup runs these steps in order:
 6. **dev-tools** - Install git-lfs, pre-commit, Go, PlotJuggler
 7. **blickfeld** - Install Blickfeld LiDAR SDK
 8. **autoware-debian** - Install Autoware Debian packages
-9. **python-deps** - Install AutoSDV Python dependencies
+9. **python-deps** - Install Golf Cart Python dependencies
 10. **ublox-udev** - Install u-blox GPS udev rules
 
 ### Optional Steps

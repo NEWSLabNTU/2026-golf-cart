@@ -5,7 +5,7 @@
 #   source scripts/version/export-versions.sh
 #
 # Exported variables:
-#   AUTOSDV_VERSION, AUTOSDV_CHANNEL
+#   GOLFCART_VERSION, GOLFCART_CHANNEL
 #   AUTOWARE_VERSION, AUTOWARE_ROSDEBIAN_RELEASE, AUTOWARE_PACKAGE_VERSION
 #   ROS_DISTRO, ROS_INSTALLATION_TYPE, RMW_IMPLEMENTATION
 #   CUDA_VERSION_AMD64, CUDNN_VERSION_AMD64, TENSORRT_VERSION_AMD64
@@ -30,10 +30,10 @@ with open('$VERSIONS_FILE') as f:
     v = yaml.safe_load(f)
 
 exports = [
-    # AutoSDV
-    ('AUTOSDV_VERSION', v['autosdv']['version']),
-    ('AUTOSDV_PRERELEASE', v['autosdv']['prerelease']),
-    ('AUTOSDV_CHANNEL', v['autosdv']['channel']),
+    # Golf Cart
+    ('GOLFCART_VERSION', v['golfcart']['version']),
+    ('GOLFCART_PRERELEASE', v['golfcart']['prerelease']),
+    ('GOLFCART_CHANNEL', v['golfcart']['channel']),
 
     # Autoware
     ('AUTOWARE_VERSION', v['autoware']['version']),

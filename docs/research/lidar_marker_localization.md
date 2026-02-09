@@ -1,4 +1,4 @@
-# LiDAR Marker Localization for AutoSDV
+# LiDAR Marker Localization for Golf Cart
 
 ## Overview
 
@@ -94,10 +94,10 @@ Where:
 **Compatible LiDAR Models** (verified):
 - Velodyne VLP-32C ✓
 - Velodyne HDL-64E ✓
-- Seyond Robin-W ✓ (AutoSDV default)
+- Seyond Robin-W ✓ (Golf Cart default)
 - Other 3D LiDARs with intensity output
 
-**AutoSDV LiDAR Configuration**:
+**Golf Cart LiDAR Configuration**:
 ```yaml
 # Robin-W LiDAR provides:
 - Point format: PointXYZIRC (includes intensity)
@@ -128,7 +128,7 @@ Where:
 
 ### Autoware Packages
 
-**Core Packages** (already included in AutoSDV):
+**Core Packages** (already included in Golf Cart):
 ```
 autoware_lidar_marker_localizer       # Main detection node
 autoware_landmark_based_localizer     # Landmark management
@@ -219,7 +219,7 @@ config/localization/lidar_marker_localizer/
       └── ring_filter.param.yaml
 ```
 
-## Enabling LiDAR Marker Localization in AutoSDV
+## Enabling LiDAR Marker Localization in Golf Cart
 
 ### Method 1: Launch Argument (Recommended)
 
@@ -238,7 +238,7 @@ make launch ARGS="pose_source:=lidar-marker use_gnss:=false"
 
 ### Method 2: Modify Launch File
 
-Edit `src/launcher/autosdv_launch/launch/autosdv.launch.yaml`:
+Edit `src/launcher/golfcart_launch/launch/golfcart.launch.yaml`:
 
 ```yaml
 -
@@ -271,7 +271,7 @@ make launch ARGS="pose_source:=ndt_lidar-marker_yabloc"
 
 Create or edit the configuration file:
 ```
-src/param/autoware_individual_params/individual_params/config/default/autosdv_sensor_kit/lidar_marker_localizer.param.yaml
+src/param/autoware_individual_params/individual_params/config/default/golfcart_sensor_kit/lidar_marker_localizer.param.yaml
 ```
 
 ### Key Parameters
@@ -501,12 +501,12 @@ This saves detected intensity data for offline analysis.
 1. Edit `data/COSS-map-planning/lanelet2_map.osm` (or create new map)
 2. Add marker definitions using surveyed coordinates
 3. Validate map using `autoware_lanelet2_validation`
-4. Test map loading in AutoSDV
+4. Test map loading in Golf Cart
 
 ### Step 4: Configure and Test
 
 1. Configure `lidar_marker_localizer.param.yaml` with marker dimensions
-2. Launch AutoSDV with `pose_source:=lidar-marker`
+2. Launch Golf Cart with `pose_source:=lidar-marker`
 3. Drive to marker location and verify detection
 4. Check debug topics in RViz
 5. Tune parameters as needed
@@ -575,7 +575,7 @@ This saves detected intensity data for offline analysis.
 ### Documentation Links
 - [Autoware LiDAR Marker Localizer](https://github.com/autowarefoundation/autoware.universe/tree/main/localization/autoware_landmark_based_localizer/autoware_lidar_marker_localizer)
 - [Lanelet2 Format Extension](https://github.com/autowarefoundation/autoware_lanelet2_extension/blob/main/autoware_lanelet2_extension/docs/lanelet2_format_extension.md#localization-landmarks)
-- [AutoSDV Repository](https://github.com/aeon-labs/AutoSDV)
+- [Golf Cart Repository](https://github.com/aeon-labs/Golf Cart)
 
 ### Contributors
 - TIER IV

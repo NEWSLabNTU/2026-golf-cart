@@ -1,6 +1,6 @@
 .PHONY: default bootstrap build build-force run run-rocker save clean check-commit
 
-IMAGE_NAME = autosdv
+IMAGE_NAME = golfcart
 # Get the current git commit hash
 COMMIT_HASH = $(shell cd .. && git rev-parse HEAD)
 # Get the short version (prefix) of the commit hash

@@ -1,5 +1,5 @@
-AutoSDV - Autonomous Software-Defined Vehicle Platform
-Copyright 2025 AutoSDV Team
+Golf Cart - Autonomous Software-Defined Vehicle Platform
+Copyright 2025 Golf Cart Team
 
 This product is licensed under the Apache License, Version 2.0 (the "License").
 You may obtain a copy of the License at
@@ -112,7 +112,7 @@ documentation for details:
 ================================================================================
 
 For complete license information, see:
-- AutoSDV: LICENSE file in this repository (Apache 2.0)
+- Golf Cart: LICENSE file in this repository (Apache 2.0)
 - Third-party licenses: See individual project repositories linked above
 - Licensing analysis: docs/LICENSING_ANALYSIS.md
 

@@ -1,42 +1,23 @@
-# AutoSDV Documentation
+# Golf Cart Documentation
 
-## 🔬 Research
+## Research
 
 Background research and technology surveys
 
 - [Indoor Localization Methods](research/indoor_localization.md) - ROS 2 indoor localization solutions survey
 - [NVIDIA Isaac ROS](research/nvidia_isaac_ros.md) - Isaac ROS Visual SLAM analysis
 - [LiDAR Marker Localization](research/lidar_marker_localization.md) - LiDAR-based landmark localization
-- [Robin-W LiDAR FOV](research/robin_w_fov.md) - Robin-W solid-state LiDAR field of view analysis
+- [NDT Parameter Tuning](research/localization/ndt_parameter_tuning_coss_map.md) - NDT tuning for VLP-32C on COSS map
 
-## 🏗️ Design
+## Roadmaps
 
-Architecture and integration design documents
+- [AutoSDV to Golf Cart Rename](roadmaps/autosdv_to_golfcart_rename.md) - Naming cleanup status
 
-- [Isaac VSLAM Integration](design/isaac_vslam_integration.md) - ✅ Complete (Isaac ROS Visual SLAM integration design)
+## Guides
 
-## 📋 Roadmaps
-
-Implementation status and timelines
-
-- [Isaac VSLAM](roadmaps/isaac_vslam.md) - ✅ Complete
-- [AR Tag Integration](roadmaps/ar_tag_integration/) - 🚧 In Progress
-  - [Overview & Architecture](roadmaps/ar_tag_integration/README.md)
-  - [Phase 1: Setup & Preparation](roadmaps/ar_tag_integration/phase_1_setup.md) - 🚧 In Progress
-  - [Phase 2: AR Tag Map Creation](roadmaps/ar_tag_integration/phase_2_map_creation.md) - ⏸️ Pending
-  - [Phase 3: AR Tag Localizer Integration](roadmaps/ar_tag_integration/phase_3_localizer.md) - ⏸️ Pending
-  - [Phase 4: Isaac VSLAM Modification](roadmaps/ar_tag_integration/phase_4_vslam.md) - ⏸️ Pending
-  - [Phase 5: EKF Fusion Configuration](roadmaps/ar_tag_integration/phase_5_fusion.md) - ⏸️ Pending
-  - [Phase 6: Integration Testing](roadmaps/ar_tag_integration/phase_6_testing.md) - ⏸️ Pending
-  - [Phase 7: Documentation & Deployment](roadmaps/ar_tag_integration/phase_7_deployment.md) - ⏸️ Pending
-
-## 📖 Guides
-
-Step-by-step tutorials and testing procedures
-
-- [Control System Testing](guides/control_testing.md) - PID tuning and PlotJuggler integration
-- [Simulation Testing](guides/simulation_testing.md) - Rosbag replay and CARLA simulation
-- [Isaac VSLAM Standalone Testing](guides/isaac_vslam_testing.md) - Standalone Isaac ROS Visual SLAM test setup
+- [MRM Configuration](guides/mrm_configuration.md) - Minimal Risk Maneuver configuration
+- [MRM Troubleshooting](guides/mrm_troubleshooting.md) - MRM diagnostics and troubleshooting
+- [LiDAR Integration](guides/lidar_integration.md) - LiDAR driver setup (Velodyne VLP-32C, Seyond Falcon)
 
 ---
 

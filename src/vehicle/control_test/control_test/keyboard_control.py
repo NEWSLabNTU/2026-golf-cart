@@ -319,7 +319,7 @@ class ControlGUI:
 
         # Create main window
         self.root = tk.Tk()
-        self.root.title("AutoSDV Keyboard Control")
+        self.root.title("Golf Cart Keyboard Control")
         self.root.geometry("600x500")
         self.root.configure(bg='#2b2b2b')
 
@@ -367,7 +367,7 @@ class ControlGUI:
     def create_widgets(self):
         """Create GUI widgets."""
         # Title
-        title = ttk.Label(self.root, text="AutoSDV Keyboard Control",
+        title = ttk.Label(self.root, text="Golf Cart Keyboard Control",
                          style='Title.TLabel')
         title.pack(pady=10)
 

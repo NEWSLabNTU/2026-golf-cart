@@ -1,4 +1,4 @@
-# AutoSDV Development Environment Setup
+# Golf Cart Development Environment Setup
 # Usage: just setup          - Run full setup
 #        just resume         - Resume from last failure
 #        just <step>         - Run specific step
@@ -169,7 +169,7 @@ blickfeld: _init
 autoware-debian: _init ros2
     @just _run autoware-debian "{{scripts_dir}}/install-autoware-debian.sh"
 
-# Install AutoSDV Python dependencies
+# Install Golf Cart Python dependencies
 python-deps: _init
     #!/usr/bin/env bash
     [[ -f "{{marker_dir}}/python-deps" ]] && printf "{{green}}✓{{nc}} python-deps already done\n" && exit 0

@@ -1,6 +1,6 @@
-# AutoSDV Docker Environment
+# Golf Cart Docker Environment
 
-This directory contains Docker configuration files for building and running AutoSDV in a containerized NVIDIA Jetson Linux environment. The setup provides a consistent development and testing environment regardless of the host system.
+This directory contains Docker configuration files for building and running Golf Cart in a containerized NVIDIA Jetson Linux environment. The setup provides a consistent development and testing environment regardless of the host system.
 
 ## Overview
 
@@ -9,7 +9,7 @@ The Docker environment is configured to:
 - Use NVIDIA L4T (Linux for Tegra) as the base image
 - Include TensorRT for deep learning acceleration
 - Configure necessary NVIDIA repositories and dependencies
-- Clone the AutoSDV repository and check out the **exact same commit** as your local repository
+- Clone the Golf Cart repository and check out the **exact same commit** as your local repository
 - Provide a ready-to-use environment that matches your current code state
 
 ## Requirements
@@ -37,20 +37,20 @@ This installs required dependencies like QEMU and configures Docker to handle AR
 
 ### Building the Image
 
-Build the AutoSDV Docker image with:
+Build the Golf Cart Docker image with:
 
 ```bash
 make build
 ```
 
-This creates a Docker image named `autosdv` configured for ARM64 architecture, suitable for Jetson devices. The image will:
+This creates a Docker image named `golfcart` configured for ARM64 architecture, suitable for Jetson devices. The image will:
 
 1. Use the **current commit** of your local repository
 2. Clone the repository and check out that same commit inside the container
 3. Build with all necessary dependencies and artifacts
 4. Create two tags:
-   - `autosdv:<short-hash>` (e.g., `autosdv:a05519`)
-   - `autosdv:<full-hash>` (e.g., `autosdv:a0551926248c75aac9411d53...")
+   - `golfcart:<short-hash>` (e.g., `golfcart:a05519`)
+   - `golfcart:<full-hash>` (e.g., `golfcart:a0551926248c75aac9411d53...")
 
 ### Running the Container
 
@@ -68,7 +68,7 @@ To save the built Docker image as a compressed file for transfer to other system
 make save
 ```
 
-This exports the image to `autosdv-<short-hash>.tar.zstd` using zstd compression.
+This exports the image to `golfcart-<short-hash>.tar.zstd` using zstd compression.
 
 ## Other Commands
 

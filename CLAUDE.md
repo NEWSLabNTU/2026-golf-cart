@@ -3,19 +3,19 @@
 Guidance for Claude Code when working with this repository.
 
 ## Project Overview
-This is a golf cart autonomous driving system for 華夏科大 campus deployment, based on the AutoSDV platform. The system uses Autoware 2025.02 on AGX Orin (JetPack 6.0) with ROS 2 Humble.
+This is a golf cart autonomous driving system for 華夏科大 campus deployment, based on the Golf Cart platform. The system uses Autoware 2025.02 on AGX Orin (JetPack 6.0) with ROS 2 Humble.
 
 **Key System Configuration:**
 - **LiDAR**: Velodyne VLP-32C only
 - **GNSS**: u-blox (F9R for practice, F9P for production)
 - **IMU**: Tamagawa IMU (replaces MPU9250)
 - **Cameras**: USB cameras (will upgrade to Tier IV cameras later)
-- **Vehicle Interface**: Turing Drive packages (replaces AutoSDV custom PWM interface)
+- **Vehicle Interface**: Turing Drive packages (replaces Golf Cart custom PWM interface)
 - **Map**: 華夏科大 campus HDMap (COSS map for practice)
 - **Localization**: Autoware NDT scan matching (GNSS for initialization)
 - **Planning**: Autoware built-in planner (enabled, not manual control)
 
-**Migration Status**: See MIGRATION.md for detailed migration plan from AutoSDV to golf cart system.
+**Migration Status**: See MIGRATION.md for detailed migration plan from Golf Cart to golf cart system.
 
 ## Essential Commands
 
@@ -77,9 +77,9 @@ colcon build --base-paths src --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=
 ## Architecture
 
 ### Core Structure
-- **src/launcher/autosdv_launch/** - Main launch configurations and system monitor
+- **src/launcher/golfcart_launch/** - Main launch configurations and system monitor
   - Provides web-based system monitor at http://localhost:8080/
-  - Main launch file: `autosdv.launch.yaml`
+  - Main launch file: `golfcart.launch.yaml`
 - **src/param/autoware_individual_params/** - Parameter configurations for different sensor kits
 - **src/sensor_kit/golfcart_sensor_kit_launch/** - Sensor integration and launch files
 - **src/vehicle/golfcart_vehicle_launch/** - Vehicle interface and description
@@ -100,7 +100,7 @@ Submodules:
 - ros-nmea-reader - NMEA GPS data parser
 
 ### Data Structure
-- **data/COSS-map-planning/** - Practice map (from AutoSDV)
+- **data/COSS-map-planning/** - Practice map (from Golf Cart)
 - **data/huaxia-campus/** - Production map for 華夏科大 campus (to be added)
 - **data/models/** - ML models (YOLOX, CenterPoint, TensorRT)
 
@@ -118,12 +118,12 @@ Submodules:
 - **IMU**: Tamagawa IMU (replaces MPU9250)
 - **Cameras**: USB cameras → Tier IV GMSL cameras (future upgrade)
 
-Sensor configurations are in `src/param/autoware_individual_params/individual_params/config/default/autosdv_sensor_kit/`
+Sensor configurations are in `src/param/autoware_individual_params/individual_params/config/default/golfcart_sensor_kit/`
 
 ### Launch System
 - Main launch uses Autoware's standard launch system
-- Vehicle model: `autosdv_vehicle`
-- Sensor model: `autosdv_sensor_kit`
+- Vehicle model: `golfcart_vehicle`
+- Sensor model: `golfcart_sensor_kit`
 - Default map: `./data/COSS-map-planning` (practice) → `./data/huaxia-campus/` (production)
 
 ### Launch Parameters for Golf Cart
@@ -214,7 +214,7 @@ The setup system (`setup/`) uses a two-layer design:
 
 ### Preset System
 
-AutoSDV uses a **preset system** (following Autoware's pattern) to manage component-level configurations. Presets group related parameters for common use cases.
+Golf Cart uses a **preset system** (following Autoware's pattern) to manage component-level configurations. Presets group related parameters for common use cases.
 
 #### How Presets Work
 
@@ -235,13 +235,13 @@ launch:
 **Main launch file** includes presets:
 
 ```yaml
-# autosdv.launch.yaml
+# golfcart.launch.yaml
 - arg:
     name: perception_preset
     default: "lidar_only"
 
 - include:
-    file: "$(find-pkg-share autosdv_launch)/config/perception/preset/$(var perception_preset)_preset.yaml"
+    file: "$(find-pkg-share golfcart_launch)/config/perception/preset/$(var perception_preset)_preset.yaml"
 ```
 
 **Benefits**:
@@ -441,11 +441,11 @@ All dependencies must be ready before localization can work.
 ## System Management
 
 ### Systemd Service Integration
-- AutoSDV now runs as a systemd user service for better process management
+- Golf Cart now runs as a systemd user service for better process management
 - Service is automatically installed on first `make launch`
 - Provides clean shutdown with no orphan processes
-- Logs accessible via `autosdv status` or `systemctl --user status autosdv`
-- Service is NOT enabled for automatic startup by default (use `autosdv enable` if needed)
+- Logs accessible via `golfcart status` or `systemctl --user status golfcart`
+- Service is NOT enabled for automatic startup by default (use `golfcart enable` if needed)
 
 ### Process Management
 - The system handles multiple Ctrl-C presses gracefully
@@ -459,7 +459,7 @@ All dependencies must be ready before localization can work.
 If `journalctl --user` doesn't show logs:
 1. Run `sudo ./enable_journal.sh` to enable persistent journal storage
 2. Log out and back in for group changes to take effect
-3. Alternatively, use `systemctl --user status autosdv` to view logs
+3. Alternatively, use `systemctl --user status golfcart` to view logs
 
 #### Network Monitor Error
 - Network monitor may show socket connection errors
@@ -492,7 +492,7 @@ On first launch, TensorRT will compile ONNX models to optimized CUDA engines:
   - Traffic light classifiers (if enabled)
 
 ### Optimized Perception Configuration
-For faster startup and LiDAR-only operation, configure in `autosdv.launch.yaml`:
+For faster startup and LiDAR-only operation, configure in `golfcart.launch.yaml`:
 ```yaml
 - name: perception_mode
   value: "lidar"
@@ -507,7 +507,7 @@ For faster startup and LiDAR-only operation, configure in `autosdv.launch.yaml`:
 ## Vehicle Interface
 
 ### Turing Drive Integration (Golf Cart)
-The golf cart uses Turing Drive vehicle interface packages (replacing AutoSDV custom PWM interface):
+The golf cart uses Turing Drive vehicle interface packages (replacing Golf Cart custom PWM interface):
 - **Status**: Pending - specifications and packages to be obtained from Turing Drive
 - **Expected components**:
   - Vehicle interface node (control command → CAN/vehicle protocol)
@@ -516,8 +516,8 @@ The golf cart uses Turing Drive vehicle interface packages (replacing AutoSDV cu
   - Control mode management (manual/autonomous)
 - **Integration files**: `src/vehicle/golfcart_vehicle_launch/golfcart_vehicle_launch/launch/vehicle_interface.launch.xml`
 
-### AutoSDV PWM Interface (Reference Only)
-The original AutoSDV system used custom PWM control:
+### Golf Cart PWM Interface (Reference Only)
+The original Golf Cart system used custom PWM control:
 - Motor PWM: 370 = stop, >370 = forward, <370 = reverse
 - Steering PWM: 400 = center, 350 = left, 450 = right
 - **Note**: This is for reference only. Golf cart will use Turing Drive interface.
@@ -554,7 +554,7 @@ Replace MPU9250 with Tamagawa IMU (Autoware recommended):
 - **Launch file**: `golfcart_sensor_kit_launch/launch/imu.launch.xml` (to be updated)
 - **Calibration**: IMU corrector parameters in `sensor_kit_calibration.yaml`
 
-### AutoSDV MPU9250 (Reference Only)
+### Golf Cart MPU9250 (Reference Only)
 Original system used MPU9250:
 - Driver: `ros2_mpu9250_driver` submodule
 - Launch file includes imu_corrector and gyro_bias_estimator
@@ -574,8 +574,8 @@ Plan to upgrade to Tier IV GMSL cameras:
 - Better integration with Autoware
 - **Camera model parameter**: `camera_model:=tier4` (when available)
 
-### AutoSDV ZED Camera (Reference Only)
-Original AutoSDV used ZED stereo cameras with object detection:
+### Golf Cart ZED Camera (Reference Only)
+Original Golf Cart used ZED stereo cameras with object detection:
 - ZED object detection integration available in codebase
 - Launch file: `golfcart_sensor_kit_launch/launch/zed_with_object_detection.launch.xml`
 - **Note**: Not used in golf cart configuration
@@ -618,6 +618,6 @@ Original AutoSDV used ZED stereo cameras with object detection:
 - 華夏科大 campus map
 - Turing Drive vehicle interface packages
 
-## Recent Updates (AutoSDV Legacy)
+## Recent Updates (Golf Cart Legacy)
 - With --symlink-install flag in colcon build, edits on yaml, xml, py source files immediately apply if the file was installed earlier. There is no need to rebuild. In case you create a new file, you need to run colcon build again to create the symlink in the install/ dir.
-- Original AutoSDV system had PWM interface calibration, Robin-W LiDAR, ZED cameras - see sections above for reference
+- Original Golf Cart system had PWM interface calibration, Robin-W LiDAR, ZED cameras - see sections above for reference

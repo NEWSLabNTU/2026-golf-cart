@@ -22,7 +22,7 @@ sudo sysctl -w net.ipv4.ipfrag_high_thresh=134217728
 echo "Creating persistent configuration..."
 sudo tee /etc/sysctl.d/10-cyclone-max.conf > /dev/null << 'EOF'
 # CycloneDDS kernel network buffer optimization
-# Configured by AutoSDV setup
+# Configured by Golf Cart setup
 # See: https://autowarefoundation.github.io/autoware-documentation/main/installation/additional-settings-for-developers/network-configuration/dds-settings/
 
 net.core.rmem_max=2147483647
@@ -39,8 +39,8 @@ echo "  sysctl net.core.rmem_max net.ipv4.ipfrag_time net.ipv4.ipfrag_high_thres
 echo ""
 
 # Remove warning marker if it exists (force .envrc to re-check)
-AUTOSDV_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-if [ -f "$AUTOSDV_ROOT/.envrc.sysctl-warned" ]; then
-    rm -f "$AUTOSDV_ROOT/.envrc.sysctl-warned"
+GOLFCART_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+if [ -f "$GOLFCART_ROOT/.envrc.sysctl-warned" ]; then
+    rm -f "$GOLFCART_ROOT/.envrc.sysctl-warned"
     echo "Note: .envrc will re-check configuration on next activation"
 fi

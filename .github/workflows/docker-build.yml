@@ -11,7 +11,7 @@ env:
   REGISTRY: ghcr.io
   # GitHub repository owner in lowercase
   OWNER: ${{ github.repository_owner }}
-  IMAGE_NAME: autosdv
+  IMAGE_NAME: golfcart
 
 jobs:
   build-and-push:

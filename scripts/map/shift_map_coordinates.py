@@ -98,8 +98,8 @@ def shift_coordinates(input_file, output_file, x_offset, y_offset):
 
 if __name__ == "__main__":
     # Configuration
-    input_file = "/home/jetson/AutoSDV/data/COSS-map-planning/lanelet2_map_orig_v4_shifted.osm"
-    output_file = "/home/jetson/AutoSDV/data/COSS-map-planning/lanelet2_map_orig_v4.osm"
+    input_file = "/home/jetson/golfcart/data/COSS-map-planning/lanelet2_map_orig_v4_shifted.osm"
+    output_file = "/home/jetson/golfcart/data/COSS-map-planning/lanelet2_map_orig_v4.osm"
 
     x_offset = - 304731.3793
     y_offset = - 2768113.4495

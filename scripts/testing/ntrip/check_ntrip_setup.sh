@@ -5,7 +5,7 @@
 set -e
 
 echo "========================================="
-echo "AutoSDV NTRIP/RTK Setup Verification"
+echo "Golf Cart NTRIP/RTK Setup Verification"
 echo "========================================="
 echo ""
 
@@ -45,9 +45,9 @@ for pkg in rtcm_msgs nmea_msgs ublox_msgs; do
     fi
 done
 
-# Check 3: AutoSDV Sensor Kit Package
+# Check 3: Golf Cart Sensor Kit Package
 echo ""
-echo "3. Checking AutoSDV Sensor Kit Configuration..."
+echo "3. Checking Golf Cart Sensor Kit Configuration..."
 if ros2 pkg list | grep -q golfcart_sensor_kit_launch; then
     echo -e "   ${GREEN}✓${NC} golfcart_sensor_kit_launch package found"
 

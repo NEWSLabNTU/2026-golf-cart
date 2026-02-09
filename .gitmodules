@@ -4,12 +4,6 @@
 [submodule "src/gnss_locator"]
 	path = src/sensor_component/external/gnss_locator
 	url = https://github.com/NEWSLabNTU/gnss_locator.git
-[submodule "src/zed-ros2-wrapper"]
-	path = src/sensor_component/external/zed-ros2-wrapper
-	url = https://github.com/NEWSLabNTU/zed-ros2-wrapper.git
-[submodule "src/sensor_component/external/ros2_mpu9250_driver"]
-	path = src/sensor_component/external/ros2_mpu9250_driver
-	url = https://github.com/NEWSLabNTU/ros2_mpu9250_driver.git
 [submodule "src/sensor_component/external/ros-nmea-reader"]
 	path = src/sensor_component/external/ros-nmea-reader
 	url = https://github.com/jerry73204/ros-nmea-reader.git
@@ -28,18 +22,9 @@
 [submodule "src/calibration/CalibrationTools"]
 	path = src/calibration/CalibrationTools
 	url = https://github.com/NEWSLabNTU/CalibrationTools.git
-[submodule "src/sensor_component/external/autoware_zed"]
-	path = src/sensor_component/external/autoware_zed
-	url = https://github.com/NEWSLabNTU/autoware_zed.git
-[submodule "src/localization/autoware_isaac_localization"]
-	path = src/localization/autoware_isaac_localization
-	url = https://github.com/NEWSLabNTU/autoware_isaac_localization.git
 [submodule "src/localization/cuda_ndt_matcher"]
 	path = src/localization/cuda_ndt_matcher
 	url = https://github.com/NEWSLabNTU/cuda_ndt_matcher.git
-[submodule "scripts/leodrive-bus-launch"]
-	path = scripts/leodrive-bus-launch
-	url = https://github.com/jerry73204/leodrive-bus-launch.git
 [submodule "src/sensor_kit/golfcart_sensor_kit_launch"]
 	path = src/sensor_kit/golfcart_sensor_kit_launch
 	url = https://github.com/NEWSLabNTU/golfcart_sensor_kit_launch.git

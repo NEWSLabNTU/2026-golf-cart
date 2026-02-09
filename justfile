@@ -1,4 +1,4 @@
-# AutoSDV Development Commands
+# Golf Cart Development Commands
 # Use `just --list` to see all available commands
 
 # ============================================================================
@@ -54,21 +54,21 @@ clean:
 # Launch Commands - Start systems
 # ============================================================================
 
-# Launch AutoSDV system with web UI at http://localhost:8081
+# Launch Golf Cart system with web UI at http://localhost:8081
 launch ARGS="":
     #!/usr/bin/env bash
     if [ -n "$DISPLAY" ]; then \
         play_launch launch \
             --web-addr 0.0.0.0:8081 \
-            autosdv_launch autosdv.launch.yaml {{ARGS}}; \
+            golfcart_launch golfcart.launch.yaml {{ARGS}}; \
     else \
         play_launch launch \
             --web-addr 0.0.0.0:8081 \
-            autosdv_launch autosdv.launch.yaml \
+            golfcart_launch golfcart.launch.yaml \
             rviz:=false {{ARGS}}; \
     fi
 
-# Launch Autoware planning simulator with AutoSDV vehicle
+# Launch Autoware planning simulator with Golf Cart vehicle
 launch-sim-planning:
     play_launch launch \
         --web-addr 0.0.0.0:8081 \
@@ -83,11 +83,11 @@ launch-sim-logging ARGS="":
     if [ -n "$DISPLAY" ]; then \
         play_launch launch \
             --web-addr 0.0.0.0:8081 \
-            autosdv_launch logging_simulation.launch.yaml {{ARGS}}; \
+            golfcart_launch logging_simulation.launch.yaml {{ARGS}}; \
     else \
         play_launch launch \
             --web-addr 0.0.0.0:8081 \
-            autosdv_launch logging_simulation.launch.yaml \
+            golfcart_launch logging_simulation.launch.yaml \
             rviz:=false {{ARGS}}; \
     fi
 
@@ -101,9 +101,9 @@ launch-zed:
 # Tool Commands - Development and monitoring tools
 # ============================================================================
 
-# Launch RViz with AutoSDV configuration
+# Launch RViz with Golf Cart configuration
 tool-rviz:
-    rviz2 -d ./src/launcher/autosdv_launch/rviz/autosdv.rviz
+    rviz2 -d ./src/launcher/golfcart_launch/rviz/golfcart.rviz
 
 # Launch PlotJuggler for data visualization
 tool-plotjuggler:

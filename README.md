@@ -1,6 +1,6 @@
 # Golf Cart Autonomous Driving System
 
-This project implements an autonomous driving system for a golf cart, based on the [AutoSDV](https://github.com/NEWSLabNTU/AutoSDV) platform and powered by [Autoware](https://github.com/autowarefoundation/autoware).
+This project implements an autonomous driving system for a golf cart, based on the [Golf Cart](https://github.com/NEWSLabNTU/Golf Cart) platform and powered by [Autoware](https://github.com/autowarefoundation/autoware).
 
 ## Overview
 
@@ -73,19 +73,19 @@ This project is currently in development. See [MIGRATION.md](MIGRATION.md) for t
 │   ├── sensor_component/  # External sensor drivers
 │   └── system/            # System monitoring
 ├── data/                  # Maps and ML models
-└── MIGRATION.md          # Migration plan from AutoSDV
+└── MIGRATION.md          # Migration plan from Golf Cart
 ```
 
 ## Documentation
 
-- [MIGRATION.md](MIGRATION.md) - Migration plan from AutoSDV to golf cart
+- [MIGRATION.md](MIGRATION.md) - Migration plan from Golf Cart to golf cart
 
 ## License
 
-This project is based on [AutoSDV](https://github.com/NEWSLabNTU/AutoSDV) and inherits its Apache 2.0 license. See [LICENSE.txt](LICENSE.txt) for details.
+This project is based on [Golf Cart](https://github.com/NEWSLabNTU/Golf Cart) and inherits its Apache 2.0 license. See [LICENSE.txt](LICENSE.txt) for details.
 
 ## Acknowledgments
 
 This project is built upon:
-- **AutoSDV**: Software-Defined Vehicle platform by NEWSLab, National Taiwan University
+- **Golf Cart**: Software-Defined Vehicle platform by NEWSLab, National Taiwan University
 - **Autoware**: Open-source autonomous driving software by the Autoware Foundation

@@ -5,7 +5,7 @@
 #   get-version.sh <key> [default]
 #
 # Examples:
-#   get-version.sh autosdv.version           # Returns "1.0.0-dev"
+#   get-version.sh golfcart.version           # Returns "1.0.0-dev"
 #   get-version.sh nvidia_amd64.cuda         # Returns "12.3"
 #   get-version.sh autoware.version          # Returns "2025.02"
 #   get-version.sh missing.key "default"     # Returns "default"
@@ -20,7 +20,7 @@ DEFAULT="${2:-}"
 
 if [[ -z "$KEY" ]]; then
     echo "Usage: get-version.sh <key> [default]" >&2
-    echo "Example: get-version.sh autosdv.version" >&2
+    echo "Example: get-version.sh golfcart.version" >&2
     exit 1
 fi
 

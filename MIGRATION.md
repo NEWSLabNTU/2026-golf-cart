@@ -1,6 +1,6 @@
 # Golf Cart Migration Plan
 
-This document outlines the migration plan from the AutoSDV platform to a golf cart autonomous driving system for 華夏科大 campus deployment.
+This document outlines the migration plan from the Golf Cart platform to a golf cart autonomous driving system for 華夏科大 campus deployment.
 
 ## System Overview
 
@@ -15,14 +15,14 @@ This document outlines the migration plan from the AutoSDV platform to a golf ca
 - **Planning**: Autoware built-in planner
 - **Map**: 華夏科大 campus HDMap
 
-## Key Changes from AutoSDV
+## Key Changes from Golf Cart
 1. Replace `golfcart_vehicle_interface` with Turing Drive vehicle interface packages
 2. Replace COSS campus map with 華夏科大 campus HDMap
 3. Use Autoware built-in NDT localization (not GNSS-only)
 4. Use Autoware built-in planning (enable launch_planning)
 5. Simplified sensor suite (VLP-32C, u-blox, Tamagawa IMU, USB cameras)
 
-| Component             | AutoSDV                      | Golf Cart            |
+| Component             | Golf Cart                      | Golf Cart            |
 |-----------------------|------------------------------|----------------------|
 | **Platform**          | Custom small vehicle         | Golf cart            |
 | **Compute**           | AGX Orin (JP5.x)             | AGX Orin (JP6.0)     |
@@ -122,8 +122,8 @@ This document outlines the migration plan from the AutoSDV platform to a golf ca
 **Key Files:**
 - `src/sensor_kit/golfcart_sensor_kit_launch/golfcart_sensor_kit_launch/launch/lidar.launch.xml` - VLP-32C launch (lines 28-34)
 - `src/sensor_kit/golfcart_sensor_kit_launch/config/VLP32.param.yaml` - LiDAR parameters
-- `src/param/autoware_individual_params/individual_params/config/default/autosdv_sensor_kit/sensor_kit_calibration.yaml` - Calibration (lines 9-15)
-- `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` - Set default `lidar_model:=vlp32c` (line 9)
+- `src/param/autoware_individual_params/individual_params/config/default/golfcart_sensor_kit/sensor_kit_calibration.yaml` - Calibration (lines 9-15)
+- `src/launcher/golfcart_launch/launch/golfcart.launch.yaml` - Set default `lidar_model:=vlp32c` (line 9)
 
 **Expected Result:** Point cloud visible in RViz with correct orientation and position.
 
@@ -150,8 +150,8 @@ This document outlines the migration plan from the AutoSDV platform to a golf ca
 
 **Key Files:**
 - `src/sensor_kit/golfcart_sensor_kit_launch/golfcart_sensor_kit_launch/launch/gnss.launch.xml` - u-blox configuration (lines 14-20)
-- `src/param/autoware_individual_params/individual_params/config/default/autosdv_sensor_kit/sensor_kit_calibration.yaml` - GNSS position (lines 41-47)
-- `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` - Set default `gnss_receiver:=ublox` (line 19)
+- `src/param/autoware_individual_params/individual_params/config/default/golfcart_sensor_kit/sensor_kit_calibration.yaml` - GNSS position (lines 41-47)
+- `src/launcher/golfcart_launch/launch/golfcart.launch.yaml` - Set default `gnss_receiver:=ublox` (line 19)
 - External: `$(find-pkg-share ublox_gps)/c94_f9p_rover.yaml` - u-blox driver params
 
 **Expected Result:** `/sensing/gnss/pose` and `/sensing/gnss/pose_with_covariance` topics publishing with valid fix. Localization works with map.
@@ -173,8 +173,8 @@ This document outlines the migration plan from the AutoSDV platform to a golf ca
 
 **Key Files:**
 - `src/sensor_kit/golfcart_sensor_kit_launch/golfcart_sensor_kit_launch/launch/imu.launch.xml` - Replace MPU9250 driver (lines 9-18)
-- `src/param/autoware_individual_params/individual_params/config/default/autosdv_sensor_kit/sensor_kit_calibration.yaml` - IMU position (lines 34-40)
-- `src/param/autoware_individual_params/individual_params/config/default/autosdv_sensor_kit/imu_corrector.param.yaml` - IMU correction params
+- `src/param/autoware_individual_params/individual_params/config/default/golfcart_sensor_kit/sensor_kit_calibration.yaml` - IMU position (lines 34-40)
+- `src/param/autoware_individual_params/individual_params/config/default/golfcart_sensor_kit/imu_corrector.param.yaml` - IMU correction params
 - `src/sensor_kit/golfcart_sensor_kit_launch/package.xml` - Add Tamagawa driver dependency
 - Remove: `src/sensor_component/external/ros2_mpu9250_driver/` submodule
 
@@ -197,8 +197,8 @@ This document outlines the migration plan from the AutoSDV platform to a golf ca
 **Key Files:**
 - `src/sensor_kit/golfcart_sensor_kit_launch/golfcart_sensor_kit_launch/launch/camera.launch.xml` - USB camera setup (lines 35-72)
 - `src/sensor_kit/golfcart_sensor_kit_launch/config/usb_camera_*.yaml` - Individual camera configs
-- `src/param/autoware_individual_params/individual_params/config/default/autosdv_sensor_kit/sensor_kit_calibration.yaml` - Camera positions (lines 48-75)
-- `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` - Set default `camera_model:=usb` (line 14)
+- `src/param/autoware_individual_params/individual_params/config/default/golfcart_sensor_kit/sensor_kit_calibration.yaml` - Camera positions (lines 48-75)
+- `src/launcher/golfcart_launch/launch/golfcart.launch.yaml` - Set default `camera_model:=usb` (line 14)
 - Remove: `src/sensor_component/external/zed-ros2-wrapper/` submodule and ZED-related files
 
 **Expected Result:** Camera images publishing to `/sensing/camera/{front,rear,left,right}/image_raw`.
@@ -209,7 +209,7 @@ This document outlines the migration plan from the AutoSDV platform to a golf ca
 
 ## Phase #7: Turing Drive Vehicle Interface
 
-**Objective**: Replace AutoSDV vehicle interface with Turing Drive packages.
+**Objective**: Replace Golf Cart vehicle interface with Turing Drive packages.
 
 **Work Items:**
 - [ ] Obtain Turing Drive vehicle interface packages and specifications
@@ -223,10 +223,10 @@ This document outlines the migration plan from the AutoSDV platform to a golf ca
 
 **Key Files:**
 - New: `src/vehicle/turing_drive_*` packages (to be added)
-- Modify: `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` - Update `launch_vehicle` section
+- Modify: `src/launcher/golfcart_launch/launch/golfcart.launch.yaml` - Update `launch_vehicle` section
 - Modify: `src/vehicle/golfcart_vehicle_launch/golfcart_vehicle_launch/launch/vehicle_interface.launch.xml` - Replace with Turing Drive launch
 - Update: `src/vehicle/golfcart_vehicle_description/config/vehicle_info.param.yaml` - Golf cart dimensions
-- Reference: `src/vehicle/golfcart_vehicle_interface/*` - AutoSDV interface for comparison
+- Reference: `src/vehicle/golfcart_vehicle_interface/*` - Golf Cart interface for comparison
 
 **Expected Result:**
 - Vehicle control commands accepted from `/control/command/control_cmd`
@@ -263,7 +263,7 @@ This document outlines the migration plan from the AutoSDV platform to a golf ca
 - `data/huaxia-campus/` (new directory) - Production map
   - `lanelet2_map.osm` - Vector map for planning
   - `pointcloud_map.pcd` - Point cloud map for NDT localization
-- `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` - Update `map_path` parameter (line 51)
+- `src/launcher/golfcart_launch/launch/golfcart.launch.yaml` - Update `map_path` parameter (line 51)
 
 **Expected Result:** Map loads successfully, visible in RViz with correct coordinate frame. GNSS + Map localization works.
 
@@ -285,9 +285,9 @@ This document outlines the migration plan from the AutoSDV platform to a golf ca
 - [ ] Test localization while driving
 
 **Key Files:**
-- `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` - Set `pose_source:=ndt`, `twist_source:=gyro_odom` (lines 108-111)
-- `src/param/autoware_individual_params/individual_params/config/default/autosdv_sensor_kit/ndt_scan_matcher.param.yaml` - NDT tuning
-- `src/param/autoware_individual_params/individual_params/config/default/autosdv_sensor_kit/ekf_localizer.param.yaml` - EKF fusion parameters
+- `src/launcher/golfcart_launch/launch/golfcart.launch.yaml` - Set `pose_source:=ndt`, `twist_source:=gyro_odom` (lines 108-111)
+- `src/param/autoware_individual_params/individual_params/config/default/golfcart_sensor_kit/ndt_scan_matcher.param.yaml` - NDT tuning
+- `src/param/autoware_individual_params/individual_params/config/default/golfcart_sensor_kit/ekf_localizer.param.yaml` - EKF fusion parameters
 - Autoware reference: `$(find-pkg-share autoware_launch)/config/localization/` - Default NDT parameters
 
 **Expected Result:**
@@ -313,9 +313,9 @@ This document outlines the migration plan from the AutoSDV platform to a golf ca
 - [ ] Tune control gains for smooth driving
 
 **Key Files:**
-- `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` - Set `launch_planning:=true` (line 78)
+- `src/launcher/golfcart_launch/launch/golfcart.launch.yaml` - Set `launch_planning:=true` (line 78)
 - `src/vehicle/golfcart_vehicle_description/config/vehicle_info.param.yaml` - Golf cart dimensions
-- `src/param/autoware_individual_params/individual_params/config/default/autosdv_vehicle/mpc.param.yaml` - MPC tuning
+- `src/param/autoware_individual_params/individual_params/config/default/golfcart_vehicle/mpc.param.yaml` - MPC tuning
 - Autoware reference: `$(find-pkg-share autoware_launch)/config/planning/` - Default planning parameters
 
 **Expected Result:**
@@ -340,8 +340,8 @@ This document outlines the migration plan from the AutoSDV platform to a golf ca
 - [ ] Monitor system performance and resource usage
 
 **Key Files:**
-- `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` - Final system configuration
-- `src/launcher/autosdv_launch/rviz/autosdv.rviz` - Visualization configuration
+- `src/launcher/golfcart_launch/launch/golfcart.launch.yaml` - Final system configuration
+- `src/launcher/golfcart_launch/rviz/golfcart.rviz` - Visualization configuration
 - `src/system/autosdv_system_monitor/` - System monitoring
 
 **Expected Result:**
@@ -356,7 +356,7 @@ This document outlines the migration plan from the AutoSDV platform to a golf ca
 ### File Modification Strategy
 - Files in `src/param/autoware_individual_params/` contain most tunable parameters
 - Launch files in `src/sensor_kit/` and `src/vehicle/` handle hardware integration
-- Main launch file `src/launcher/autosdv_launch/launch/autosdv.launch.yaml` orchestrates everything
+- Main launch file `src/launcher/golfcart_launch/launch/golfcart.launch.yaml` orchestrates everything
 - With `--symlink-install`, editing `.yaml`, `.xml`, and `.py` files takes effect immediately (no rebuild needed for existing files)
 
 ### Key Topics to Monitor
@@ -370,6 +370,6 @@ This document outlines the migration plan from the AutoSDV platform to a golf ca
 
 ## References
 
-- **AutoSDV**: https://github.com/NEWSLabNTU/AutoSDV
+- **Golf Cart**: https://github.com/NEWSLabNTU/Golf Cart
 - **Autoware Documentation**: https://autowarefoundation.github.io/autoware-documentation/
 - **ROS 2 Humble**: https://docs.ros.org/en/humble/

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Script to create NetworkManager profile for static IP connection (e.g., LiDAR)
-# Created for AutoSDV project
+# Created for Golf Cart project
 
 set -e
 

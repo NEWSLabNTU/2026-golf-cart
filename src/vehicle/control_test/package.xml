@@ -4,7 +4,7 @@
   <name>control_test</name>
   <version>1.0.0</version>
   <description>Control system testing package with manual control and testing nodes</description>
-  <maintainer email="dev@autosdv.org">AutoSDV Team</maintainer>
+  <maintainer email="dev@golfcart.org">Golf Cart Team</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_python</buildtool_depend>

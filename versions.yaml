@@ -1,10 +1,10 @@
-# versions.yaml - Single source of truth for all AutoSDV versions
+# versions.yaml - Single source of truth for all Golf Cart versions
 # This file is read by setup scripts, CI, and documentation generators.
 
 # =============================================================================
-# AutoSDV Project Version
+# Golf Cart Project Version
 # =============================================================================
-autosdv:
+golfcart:
   version: "0.1.0-dev"
 
 # =============================================================================

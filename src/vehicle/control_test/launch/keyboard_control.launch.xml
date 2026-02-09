@@ -13,7 +13,7 @@
       - /control/gate_mode_cmd
 
     Usage:
-      1. Launch AutoSDV: make launch
+      1. Launch Golf Cart: make launch
       2. Run this: ros2 launch control_test keyboard_control.launch.xml
       3. Select topic mode using radio buttons in GUI
       4. Click on the GUI window to focus it

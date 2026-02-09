@@ -69,7 +69,7 @@ def generate_pcd(output_file: str,
 
 def main():
     # Configuration
-    output_file = "/home/jetson/AutoSDV/data/COSS-map-planning/pointcloud_map_dummy.pcd"
+    output_file = "/home/jetson/golfcart/data/COSS-map-planning/pointcloud_map_dummy.pcd"
 
     # Coordinate ranges (UTM or local coordinates)
     x_min = 304686.60   # Longitudinal min

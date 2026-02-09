@@ -5,7 +5,7 @@
 
 ## Overview
 
-The Minimum Risk Maneuver (MRM) system is Autoware's safety mechanism that triggers emergency stops when autonomous operation becomes unsafe. This guide documents the MRM system behavior, configuration, and AutoSDV-specific modifications to prevent false triggers during outdoor testing.
+The Minimum Risk Maneuver (MRM) system is Autoware's safety mechanism that triggers emergency stops when autonomous operation becomes unsafe. This guide documents the MRM system behavior, configuration, and Golf Cart-specific modifications to prevent false triggers during outdoor testing.
 
 ## Problem: False Emergency Stops During Outdoor Testing
 
@@ -39,7 +39,7 @@ Diagnostic Aggregator
   │   ├─ topic_rate_check/transform
   │   ├─ topic_rate_check/pose_twist_fusion
   │   ├─ scan_matching_status (NDT score)
-  │   ├─ accuracy ← DISABLED IN AUTOSDV
+  │   ├─ accuracy ← DISABLED IN GOLF CART
   │   └─ sensor_fusion_status (EKF)
   └─ Publishes: /autoware/modes/autonomous (availability)
            ↓
@@ -73,11 +73,11 @@ NORMAL → EMERGENCY → RECOVERY → NORMAL
 2. **COMFORTABLE_STOP**: Gentle deceleration -1.0 m/s² (disabled by default)
 3. **EMERGENCY_STOP**: Hard braking -2.5 m/s² (always active)
 
-## AutoSDV Configuration Changes
+## Golf Cart Configuration Changes
 
 ### Change 1: Disable Localization Accuracy Check (IMPLEMENTED)
 
-**File**: `src/launcher/autosdv_launch/config/system/diagnostics/localization.yaml`
+**File**: `src/launcher/golfcart_launch/config/system/diagnostics/localization.yaml`
 
 **Modification:**
 ```yaml
@@ -91,7 +91,7 @@ NORMAL → EMERGENCY → RECOVERY → NORMAL
         - { type: link, link: /autoware/localization/topic_rate_check/transform }
         - { type: link, link: /autoware/localization/topic_rate_check/pose_twist_fusion }
         - { type: link, link: /autoware/localization/scan_matching_status }
-        # AutoSDV: DISABLED to prevent false MRM triggers
+        # Golf Cart: DISABLED to prevent false MRM triggers
         # - { type: link, link: /autoware/localization/accuracy }
         - { type: link, link: /autoware/localization/sensor_fusion_status }
 ```
@@ -122,7 +122,7 @@ NORMAL → EMERGENCY → RECOVERY → NORMAL
 ```
 
 **To implement:**
-1. Copy file to `src/launcher/autosdv_launch/config/localization/`
+1. Copy file to `src/launcher/golfcart_launch/config/localization/`
 2. Update launch file to override default config
 3. Re-enable `/autoware/localization/accuracy` in diagnostics
 
@@ -173,9 +173,9 @@ ros2 topic echo /system/operation_mode/availability | grep autonomous
 
 ## Configuration Files Reference
 
-### AutoSDV Configuration (Our Repo)
+### Golf Cart Configuration (Our Repo)
 ```
-src/launcher/autosdv_launch/config/system/
+src/launcher/golfcart_launch/config/system/
 ├── diagnostics/
 │   ├── localization.yaml           # MODIFIED: Disabled accuracy check
 │   ├── autoware-main.yaml          # Defines autonomous mode requirements
@@ -320,7 +320,7 @@ target_jerk: -1.0                    # Smoother deceleration
 - **MRM Troubleshooting**: `docs/guides/mrm_troubleshooting.md` (if exists)
 - **NDT Parameter Tuning**: `docs/research/localization/ndt_parameter_tuning_coss_map.md`
 - **Control Testing**: `docs/guides/control_testing.md`
-- **Configuration README**: `src/launcher/autosdv_launch/config/README.md`
+- **Configuration README**: `src/launcher/golfcart_launch/config/README.md`
 
 ## References
 

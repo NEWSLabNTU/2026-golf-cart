@@ -22,7 +22,7 @@ NVIDIA Isaac ROS provides GPU-accelerated perception and localization packages o
 5. [Hardware Requirements](#hardware-requirements)
 6. [Camera Compatibility](#camera-compatibility)
 7. [Comparison with Other SLAM Methods](#comparison-with-other-slam-methods)
-8. [AutoSDV Integration Analysis](#autosdv-integration-analysis)
+8. [Golf Cart Integration Analysis](#golfcart-integration-analysis)
 
 ---
 
@@ -489,9 +489,9 @@ sudo apt install ros-humble-realsense2-camera
 
 ---
 
-## AutoSDV Integration Analysis
+## Golf Cart Integration Analysis
 
-### Current AutoSDV Hardware
+### Current Golf Cart Hardware
 
 - **Platform**: NVIDIA Jetson (likely Orin Nano or AGX Orin)
 - **LiDAR**: Seyond Robin-W (120° FOV)
@@ -515,7 +515,7 @@ sudo apt install ros-humble-realsense2-camera
    - Can use Robin-W with nvblox for 3D mapping
    - Use KISS-ICP separately for LiDAR odometry
 
-### Integration Options for AutoSDV
+### Integration Options for Golf Cart
 
 #### **Option 1: Isaac ROS Visual SLAM with ZED** (⭐⭐⭐ HIGHLY RECOMMENDED)
 
@@ -548,7 +548,7 @@ Cons:
   - Requires ZED SDK 5.0 installation
   - NVMe SSD required for Jetson (not microSD)
 
-Recommendation: ⭐⭐⭐ THIS IS NOW THE BEST OPTION for AutoSDV
+Recommendation: ⭐⭐⭐ THIS IS NOW THE BEST OPTION for Golf Cart
 ```
 
 #### **Option 2: Isaac Perceptor Full Stack** (⭐⭐ Advanced)
@@ -599,7 +599,7 @@ Cons:
 Recommendation: Use only if Isaac ROS setup is problematic
 ```
 
-### Performance Comparison for AutoSDV
+### Performance Comparison for Golf Cart
 
 | Solution | FPS | Accuracy | GPU Use | Hardware Cost | Complexity |
 |----------|-----|----------|---------|---------------|------------|
@@ -608,7 +608,7 @@ Recommendation: Use only if Isaac ROS setup is problematic
 | **Isaac Perceptor (full)** | 30+ | Best | 100% | $0 | High |
 | **Current (NDT only)** | 10-20 | Good | Low | $0 | Low |
 
-### Final Recommendation for AutoSDV (REVISED)
+### Final Recommendation for Golf Cart (REVISED)
 
 **Best Option**: ⭐⭐⭐ **Isaac ROS Visual SLAM with ZED Camera**
 
@@ -687,7 +687,7 @@ Avoid Isaac ROS if:
 - ❌ Only have **LiDAR** (use KISS-ICP instead)
 - ⚠️ Prefer simpler setup (RTAB-Map easier to install)
 
-### AutoSDV Specific Recommendation (REVISED)
+### Golf Cart Specific Recommendation (REVISED)
 
 **✅ USE: Isaac ROS Visual SLAM with ZED Camera** ⭐⭐⭐
 
@@ -739,5 +739,5 @@ Avoid Isaac ROS if:
 
 **Document Version**: 1.0
 **Last Updated**: January 2025
-**Author**: AutoSDV Documentation
+**Author**: Golf Cart Documentation
 **Isaac ROS Version**: 3.2

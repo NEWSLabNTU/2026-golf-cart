@@ -1,0 +1,9 @@
+/**:
+  ros__parameters:
+    # Golf Cart: Voxel downsampling before random downsample
+    # Balances point density preservation with computational efficiency
+    # Smaller voxels preserve more detail but increase point count
+    # Larger voxels reduce points but may blur geometric features
+    voxel_size_x: 0.5
+    voxel_size_y: 0.5
+    voxel_size_z: 0.5

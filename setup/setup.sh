@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# AutoSDV Setup Wrapper
+# Golf Cart Setup Wrapper
 # Interactive setup with optional components
 
 set -e
@@ -21,7 +21,7 @@ NC='\033[0m'
 # Show usage
 show_usage() {
     cat << 'EOF'
-AutoSDV Setup Script
+Golf Cart Setup Script
 
 Usage:
   ./setup.sh              Run interactive setup
@@ -131,7 +131,7 @@ ask_yes_no() {
 
 # Interactive setup configuration
 interactive_setup() {
-    printf "\n${BLUE}AutoSDV Setup${NC}\n\n"
+    printf "\n${BLUE}Golf Cart Setup${NC}\n\n"
 
     printf "Core: ROS 2, dev tools, GeographicLib, Python deps\n\n"
 
@@ -200,7 +200,7 @@ interactive_setup() {
     export SKIP_AUTOWARE_DEBIAN="$([[ "$INSTALL_AUTOWARE" == "n" ]] && echo "1" || echo "0")"
     export CONFIGURE_CYCLONEDDS_SYSCTL="$CONFIGURE_CYCLONEDDS_SYSCTL"
     export SKIP_BLICKFELD="$([[ "$INSTALL_BLICKFELD" == "n" ]] && echo "1" || echo "0")"
-    export AUTOSDV_ACCEPT_BLICKFELD_EULA="$ACCEPT_BLICKFELD_EULA"
+    export GOLFCART_ACCEPT_BLICKFELD_EULA="$ACCEPT_BLICKFELD_EULA"
     export INSTALL_ISAAC_ROS="$INSTALL_ISAAC_ROS"
     export INSTALL_TURBOVNC_VIRTUALGL="$INSTALL_TURBOVNC_VIRTUALGL"
 

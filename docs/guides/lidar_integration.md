@@ -1,6 +1,6 @@
 # LiDAR Integration Guide
 
-This guide covers LiDAR sensor integration for AutoSDV.
+This guide covers LiDAR sensor integration for Golf Cart.
 
 ## Supported LiDAR Models
 
@@ -10,7 +10,7 @@ This guide covers LiDAR sensor integration for AutoSDV.
 | Velodyne VLP-32C | Spinning | `lidar_model:=vlp32c` |
 | Blickfeld Cube1 | Solid-state | `lidar_model:=cube1` |
 
-Configuration location: `src/param/autoware_individual_params/individual_params/config/default/autosdv_sensor_kit/`
+Configuration location: `src/param/autoware_individual_params/individual_params/config/default/golfcart_sensor_kit/`
 
 ## Seyond Robin-W Integration
 
@@ -63,7 +63,7 @@ Key models:
 
 ### LiDAR-Only Perception
 
-For faster startup, configure in `autosdv.launch.yaml`:
+For faster startup, configure in `golfcart.launch.yaml`:
 ```yaml
 perception_mode: "lidar"
 use_traffic_light_recognition: "false"

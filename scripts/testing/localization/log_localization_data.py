@@ -183,7 +183,7 @@ def main(args=None):
 
     # Generate output filename with timestamp
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_dir = os.path.expanduser("~/AutoSDV/localization_logs")
+    output_dir = os.path.expanduser("~/golfcart/localization_logs")
     os.makedirs(output_dir, exist_ok=True)
     output_file = os.path.join(output_dir, f"localization_{timestamp}.csv")
 

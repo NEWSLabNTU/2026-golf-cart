@@ -1,6 +1,6 @@
 # MRM (Minimum Risk Maneuver) Troubleshooting Guide
 
-This guide documents common causes of MRM triggers in AutoSDV and how to diagnose them.
+This guide documents common causes of MRM triggers in Golf Cart and how to diagnose them.
 
 ## Overview
 

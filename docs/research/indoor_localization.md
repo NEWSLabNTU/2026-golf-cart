@@ -284,7 +284,7 @@ sudo apt install ros-${ROS_DISTRO}-rtabmap-ros
 **Accuracy**: **Best** for real-time applications (KITTI benchmark leader)
 
 **Use Cases**:
-- ✅ **AutoSDV** (Jetson + ZED camera - perfect match!)
+- ✅ **Golf Cart** (Jetson + ZED camera - perfect match!)
 - Warehouse AMRs
 - NVIDIA ecosystem projects (Nova Carter, Isaac Perceptor)
 - High-performance embedded robotics
@@ -793,9 +793,9 @@ cd ~/ros2_ws && colcon build
 
 ---
 
-## AutoSDV Integration Recommendations
+## Golf Cart Integration Recommendations
 
-**Important Note**: AutoSDV uses the **Seyond Robin-W** solid-state LiDAR, which has **limited field of view (FOV)** - typically ~120° horizontal, NOT 360° like spinning LiDARs. This constraint significantly affects SLAM strategy:
+**Important Note**: Golf Cart uses the **Seyond Robin-W** solid-state LiDAR, which has **limited field of view (FOV)** - typically ~120° horizontal, NOT 360° like spinning LiDARs. This constraint significantly affects SLAM strategy:
 
 - ⚠️ Limited coverage for loop closure detection
 - ⚠️ Blind spots behind and to the sides
@@ -902,7 +902,7 @@ The ROS ecosystem offers a rich variety of indoor localization solutions, from s
 6. **Computational resources**: Embedded (Jetson) vs. desktop PC
 7. **Sensor FOV**: 360° LiDAR vs. limited FOV (affects SLAM algorithm choice)
 
-### **For AutoSDV** (Robin-W 120° FOV + ZED Camera + Jetson)
+### **For Golf Cart** (Robin-W 120° FOV + ZED Camera + Jetson)
 
 **PRIMARY RECOMMENDATION (UPDATED)**: **Isaac ROS Visual SLAM with ZED** ⭐⭐⭐
 
@@ -971,4 +971,4 @@ Lowest computation option:
 
 **Document Version**: 1.0
 **Last Updated**: January 2025
-**Author**: AutoSDV Documentation
+**Author**: Golf Cart Documentation

@@ -502,10 +502,10 @@ The key insights were:
 ---
 
 **Files Modified:**
-- `src/launcher/autosdv_launch/config/localization/ndt_scan_matcher/ndt_scan_matcher.param.yaml`
-- `src/launcher/autosdv_launch/config/localization/ndt_scan_matcher/pointcloud_preprocessor/voxel_grid_filter.param.yaml`
-- `src/launcher/autosdv_launch/config/localization/ndt_scan_matcher/pointcloud_preprocessor/random_downsample_filter.param.yaml`
-- `src/launcher/autosdv_launch/config/localization/ndt_scan_matcher/pointcloud_preprocessor/crop_box_filter_measurement_range.param.yaml`
+- `src/launcher/golfcart_launch/config/localization/ndt_scan_matcher/ndt_scan_matcher.param.yaml`
+- `src/launcher/golfcart_launch/config/localization/ndt_scan_matcher/pointcloud_preprocessor/voxel_grid_filter.param.yaml`
+- `src/launcher/golfcart_launch/config/localization/ndt_scan_matcher/pointcloud_preprocessor/random_downsample_filter.param.yaml`
+- `src/launcher/golfcart_launch/config/localization/ndt_scan_matcher/pointcloud_preprocessor/crop_box_filter_measurement_range.param.yaml`
 
 **Analysis Scripts:**
 - `tmp/analyze_ndt_rosbag.py` - Rosbag analysis tool for NDT metrics extraction

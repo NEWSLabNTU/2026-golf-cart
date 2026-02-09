@@ -1,6 +1,6 @@
 # Control Test Package
 
-This package provides testing utilities for the AutoSDV vehicle control system.
+This package provides testing utilities for the Golf Cart vehicle control system.
 
 ## Overview
 
@@ -169,7 +169,7 @@ Simply select from the dropdown in the GUI and topics will be applied instantly!
 - `/vehicle/status/gear_status` - Current gear
 
 **Workflow:**
-1. Launch AutoSDV system: `make launch`
+1. Launch Golf Cart system: `make launch`
 2. Launch keyboard control: `ros2 launch control_test keyboard_control.launch.xml`
 3. Click on the GUI window to focus it
 4. Press `z` to toggle to EXTERNAL mode
@@ -193,7 +193,7 @@ Direct keyboard control of motor and steering PWM values.
 
 **Usage:**
 ```bash
-# Run from AutoSDV root directory
+# Run from Golf Cart root directory
 ./scripts/control/keyboard_pwm_control.py
 
 # Or with custom step sizes
@@ -273,7 +273,7 @@ ros2 topic echo /vehicle/status/velocity_status
 - **Keyboard controllers** (pid_speed_control) require TTY access and cannot be run in background or systemd services.
 - **keyboard_pwm_control** is now a standalone script in `scripts/control/` (non-ROS).
 - **Service-based control** (control_command_service) is suitable for automated testing and integration with higher-level control systems.
-- **PWM values** are calibrated for AutoSDV hardware:
+- **PWM values** are calibrated for Golf Cart hardware:
   - Motor: 370=stop, 390-395=forward start, 350=reverse start
   - Steering: 400=center, 350=left limit, 450=right limit
 

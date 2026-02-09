@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Script to create NetworkManager profile for WiFi AP
-# Created for AutoSDV project
+# Created for Golf Cart project
 
 set -e
 
@@ -22,7 +22,7 @@ else
   MAC_ADDR="UNKN"
 fi
 
-WIFI_AP_NAME="AutoSDV-AP-${MAC_ADDR}"
+WIFI_AP_NAME="GolfCart-AP-${MAC_ADDR}"
 echo "Setting up WiFi AP NetworkManager profile..."
 
 # Define template directories
@@ -30,7 +30,7 @@ TEMPLATE_DIR="${SCRIPT_DIR}/templates"
 mkdir -p "${TEMPLATE_DIR}"
 
 # Create WiFi AP connection template
-WIFI_AP_TEMPLATE="${TEMPLATE_DIR}/autosdv-ap.nmconnection.in"
+WIFI_AP_TEMPLATE="${TEMPLATE_DIR}/golfcart-ap.nmconnection.in"
 if [ ! -f "${WIFI_AP_TEMPLATE}" ]; then
   echo "WiFi AP template not found at ${WIFI_AP_TEMPLATE}. Please create it first."
   exit 1
@@ -40,14 +40,14 @@ fi
 echo "Generating NetworkManager profile from template..."
 
 # Replace placeholders in WiFi AP template
-sed "s/@WIFI_AP_NAME@/${WIFI_AP_NAME}/g" "${WIFI_AP_TEMPLATE}" > /tmp/autosdv-ap.nmconnection
+sed "s/@WIFI_AP_NAME@/${WIFI_AP_NAME}/g" "${WIFI_AP_TEMPLATE}" > /tmp/golfcart-ap.nmconnection
 
 # Install connection file
 echo "Installing NetworkManager profile..."
-install -m 600 /tmp/autosdv-ap.nmconnection "${CONNECTIONS_DIR}/autosdv-ap.nmconnection"
+install -m 600 /tmp/golfcart-ap.nmconnection "${CONNECTIONS_DIR}/golfcart-ap.nmconnection"
 
 # Clean up temporary file
-rm /tmp/autosdv-ap.nmconnection
+rm /tmp/golfcart-ap.nmconnection
 
 # Reload NetworkManager connections
 echo "Reloading NetworkManager connections..."
