@@ -32,7 +32,7 @@ default:
     @just --list
 
 # Full setup (runs all steps in order)
-setup: _init ros2 ros2-dev-tools gdown geographiclib pacmod dev-tools _setup-blickfeld _setup-autoware-debian _setup-isaac-ros python-deps ublox-udev _setup-cyclonedds-sysctl _setup-turbovnc-virtualgl ros-deps
+setup: _init ros2 ros2-dev-tools gdown geographiclib pacmod dev-tools _setup-autoware-debian _setup-isaac-ros python-deps ublox-udev _setup-cyclonedds-sysctl _setup-turbovnc-virtualgl ros-deps
     @printf "{{green}}✓ Setup complete!{{nc}}\n"
 
 # Conditional Autoware Debian install (based on SKIP_AUTOWARE_DEBIAN env var)
@@ -44,15 +44,6 @@ _setup-autoware-debian:
         just autoware-debian
     fi
 
-# Conditional Blickfeld install (based on SKIP_BLICKFELD env var)
-_setup-blickfeld:
-    #!/usr/bin/env bash
-    if [[ "${SKIP_BLICKFELD:-0}" == "1" ]]; then
-        printf "{{yellow}}⊘{{nc}} blickfeld skipped (user choice)\n"
-    else
-        just blickfeld
-    fi
-
 # Conditional CycloneDDS sysctl configuration (based on CONFIGURE_CYCLONEDDS_SYSCTL env var)
 _setup-cyclonedds-sysctl:
     #!/usr/bin/env bash
@@ -61,15 +52,6 @@ _setup-cyclonedds-sysctl:
     else
         printf "{{yellow}}⊘{{nc}} cyclonedds-sysctl skipped (user choice)\n"
         printf "{{yellow}}Note:{{nc}} Run 'just cyclonedds-sysctl' to configure later\n"
-    fi
-
-# Conditional TurboVNC + VirtualGL install (based on INSTALL_TURBOVNC_VIRTUALGL env var)
-_setup-turbovnc-virtualgl:
-    #!/usr/bin/env bash
-    if [[ "${INSTALL_TURBOVNC_VIRTUALGL}" == "y" ]]; then
-        just turbovnc-virtualgl
-    else
-        printf "{{yellow}}⊘{{nc}} turbovnc-virtualgl skipped (user choice)\n"
     fi
 
 # Conditional Isaac ROS install (based on INSTALL_ISAAC_ROS env var, ARM64 only)
@@ -83,14 +65,19 @@ _setup-isaac-ros:
         printf "{{yellow}}⊘{{nc}} isaac-ros skipped (user choice)\n"
     fi
 
+# Conditional TurboVNC + VirtualGL install (based on INSTALL_TURBOVNC_VIRTUALGL env var)
+_setup-turbovnc-virtualgl:
+    #!/usr/bin/env bash
+    if [[ "${INSTALL_TURBOVNC_VIRTUALGL}" == "y" ]]; then
+        just turbovnc-virtualgl
+    else
+        printf "{{yellow}}⊘{{nc}} turbovnc-virtualgl skipped (user choice)\n"
+    fi
+
 # Alias for setup (resume from where it left off due to markers)
 resume: setup
 
 
-
-# Install ZED SDK (optional, for ZED camera users)
-install-zed-sdk: _init
-    @just _run zed-sdk "{{scripts_dir}}/install-zed-sdk.sh"
 
 # Install TurboVNC + VirtualGL (optional, for hardware-accelerated VNC)
 turbovnc-virtualgl: _init
@@ -161,10 +148,6 @@ dev-tools: _init ros2
     touch "{{marker_dir}}/dev-tools"
     printf "{{green}}✓{{nc}} dev-tools done\n"
 
-# Install Blickfeld scanner library (with EULA acceptance)
-blickfeld: _init
-    @just _run blickfeld "{{scripts_dir}}/install-blickfeld.sh"
-
 # Install Autoware Debian packages
 autoware-debian: _init ros2
     @just _run autoware-debian "{{scripts_dir}}/install-autoware-debian.sh"
@@ -176,8 +159,6 @@ python-deps: _init
     set -e
     printf "{{yellow}}→{{nc}} Installing Python dependencies...\n"
     pip3 install --user \
-        Adafruit-PCA9685==1.0.1 \
-        simple-pid==2.0.1 \
         'play_launch>=0.5.0,<0.6.0'
     touch "{{marker_dir}}/python-deps"
     printf "{{green}}✓{{nc}} python-deps done\n"
@@ -260,7 +241,7 @@ status:
     done
     echo ""
     echo "Optional Components:"
-    for step in autoware-debian blickfeld; do
+    for step in autoware-debian; do
         if [[ -f "{{marker_dir}}/$step" ]]; then
             printf "  {{green}}✓{{nc}} %s\n" "$step"
         else
@@ -289,12 +270,6 @@ status:
         printf "  {{green}}✓{{nc}} ML model artifacts\n"
     else
         printf "  {{yellow}}○{{nc}} ML model artifacts (run: just download-artifacts)\n"
-    fi
-    # Check ZED SDK installation (not supported in setup script)
-    if [[ -d "/usr/local/zed" ]] || command -v ZED_Explorer &> /dev/null; then
-        printf "  {{green}}✓{{nc}} ZED SDK (installed)\n"
-    else
-        printf "  {{yellow}}○{{nc}} ZED SDK (not installed - run: just install-zed-sdk)\n"
     fi
     # Check TurboVNC/VirtualGL installation
     if command -v vglrun &> /dev/null && [[ -d "/opt/TurboVNC" ]]; then

@@ -166,26 +166,6 @@ interactive_setup() {
     fi
     printf "\n"
 
-    # Blickfeld Scanner Library with EULA
-    INSTALL_BLICKFELD="n"
-    ACCEPT_BLICKFELD_EULA="0"
-    printf "${YELLOW}Sensor Drivers:${NC} Blickfeld Scanner Library (for Cube1 LiDAR)\n"
-    printf "License: https://github.com/NEWSLabNTU/blickfeld-scanner-lib\n"
-    printf "This is a modified version maintained by NEWSLab NTU.\n"
-    printf "Original software by Blickfeld GmbH.\n\n"
-    if ask_yes_no "Install Blickfeld Scanner Library?" "y"; then
-        if ask_yes_no "Do you accept the Blickfeld license terms?" "y"; then
-            INSTALL_BLICKFELD="y"
-            ACCEPT_BLICKFELD_EULA="1"
-        else
-            printf "${YELLOW}License not accepted. Skipping Blickfeld installation.${NC}\n"
-            INSTALL_BLICKFELD="n"
-        fi
-    fi
-    printf "\n"
-
-
-
     # TurboVNC + VirtualGL (for hardware-accelerated VNC)
     INSTALL_TURBOVNC_VIRTUALGL="n"
     printf "${YELLOW}Optional:${NC} TurboVNC + VirtualGL (for hardware-accelerated VNC)\n"
@@ -199,8 +179,6 @@ interactive_setup() {
     # Export choices for justfile
     export SKIP_AUTOWARE_DEBIAN="$([[ "$INSTALL_AUTOWARE" == "n" ]] && echo "1" || echo "0")"
     export CONFIGURE_CYCLONEDDS_SYSCTL="$CONFIGURE_CYCLONEDDS_SYSCTL"
-    export SKIP_BLICKFELD="$([[ "$INSTALL_BLICKFELD" == "n" ]] && echo "1" || echo "0")"
-    export GOLFCART_ACCEPT_BLICKFELD_EULA="$ACCEPT_BLICKFELD_EULA"
     export INSTALL_ISAAC_ROS="$INSTALL_ISAAC_ROS"
     export INSTALL_TURBOVNC_VIRTUALGL="$INSTALL_TURBOVNC_VIRTUALGL"
 
@@ -214,9 +192,6 @@ interactive_setup() {
     fi
     if [[ "$CONFIGURE_CYCLONEDDS_SYSCTL" == "y" ]]; then
         printf " + CycloneDDS sysctl"
-    fi
-    if [[ "$INSTALL_BLICKFELD" == "y" ]]; then
-        printf " + Blickfeld"
     fi
     if [[ "$INSTALL_TURBOVNC_VIRTUALGL" == "y" ]]; then
         printf " + TurboVNC/VirtualGL"

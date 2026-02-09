@@ -16,7 +16,7 @@ setup(
         (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
         (os.path.join('share', package_name, 'trajectories'), glob('trajectories/*.yaml')),
     ],
-    install_requires=['setuptools', 'simple-pid'],
+    install_requires=['setuptools'],
     zip_safe=True,
     maintainer='Golf Cart Team',
     maintainer_email='dev@golfcart.org',
