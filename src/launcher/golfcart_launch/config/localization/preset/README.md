@@ -16,7 +16,7 @@ Default localization preset using gyro odometry for twist estimation.
 - When Eagleye is not needed
 
 **Requirements**:
-- IMU sensor (MPU9250 or ZED IMU)
+- IMU sensor (Tamagawa IMU)
 
 **Launch**:
 ```bash

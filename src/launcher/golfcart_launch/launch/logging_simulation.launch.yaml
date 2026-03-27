@@ -11,24 +11,24 @@ launch:
 # Sensor Suite Configuration
 - arg:
     name: sensor_suite
-    default: "vlp32c_zed_imu"
-    description: "Predefined sensor suite: robin_zed, robin_zed_mpu, vlp32c_zed, vlp32c_zed_mpu, vlp32c_zed_imu, cube1_usb, custom"
+    default: "vlp32c"
+    description: "Predefined sensor suite: vlp32c, custom"
 
 # Individual Sensor Parameters (override suite defaults when sensor_suite=custom)
 - arg:
     name: lidar_model
     default: ""
-    description: "LiDAR model (cube1, robin-w, or vlp32c) - empty string uses suite default"
+    description: "LiDAR model (vlp32c) - empty string uses suite default"
 
 - arg:
     name: camera_model
     default: ""
-    description: "Camera model (zedxm, usb, or none) - empty string uses suite default"
+    description: "Camera model (usb or none) - empty string uses suite default"
 
 - arg:
     name: imu_source
     default: ""
-    description: "IMU source (mpu9250, zed) - empty string uses suite default"
+    description: "IMU source (tamagawa) - empty string uses suite default"
 
 - arg:
     name: gnss_receiver
@@ -54,11 +54,6 @@ launch:
     name: pose_source
     default: "ndt"
     description: "Pose estimation source: ndt, cuda_ndt"
-
-- arg:
-    name: enable_zed_object_detection
-    default: ""
-    description: "Enable ZED camera object detection - empty string uses suite default"
 
 # Preset Configuration
 - arg:
@@ -208,9 +203,6 @@ launch:
     -
       name: use_ntrip
       value: $(var use_ntrip)
-    -
-      name: enable_zed_object_detection
-      value: $(var enable_zed_object_detection)
     -
       name: sensor_suite
       value: $(var sensor_suite)

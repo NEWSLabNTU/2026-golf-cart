@@ -4,50 +4,11 @@ This guide covers LiDAR sensor integration for Golf Cart.
 
 ## Supported LiDAR Models
 
-| Model | Type | Configuration |
-|-------|------|---------------|
-| Robin-W | Solid-state | `lidar_model:=robin-w` |
+| Model            | Type     | Configuration         |
+|------------------|----------|-----------------------|
 | Velodyne VLP-32C | Spinning | `lidar_model:=vlp32c` |
-| Blickfeld Cube1 | Solid-state | `lidar_model:=cube1` |
 
 Configuration location: `src/param/autoware_individual_params/individual_params/config/default/golfcart_sensor_kit/`
-
-## Seyond Robin-W Integration
-
-### PointXYZIRC Format Support
-
-The Robin-W driver outputs Autoware-compatible PointXYZIRC format:
-- Location: `src/sensor_component/external/seyond_ros_driver/`
-- CMakeLists.txt: `set(POINT_TYPE PointXYZIRC)`
-- Point type: `src/driver/point_xyzirc.h`
-
-**Field Mapping**:
-| Field | Type | Description |
-|-------|------|-------------|
-| x, y, z | FLOAT32 | Position |
-| intensity | FLOAT32 | Intensity value |
-| return_type | UINT8 | 1=strongest/first, 2=last/second |
-| ring | UINT16 | Channel/scanning line ID |
-
-### Coordinate Transformation
-
-Robin-W uses non-standard coordinates requiring transformation:
-
-| Axis | Robin-W Native | ROS Standard (REP-103) |
-|------|----------------|------------------------|
-| X | Up | Forward |
-| Y | Right | Left |
-| Z | Forward | Up |
-
-Configured in `sensor_kit_calibration.yaml`:
-- roll: 3.14159 (180 deg)
-- pitch: -1.5708 (-90 deg)
-- yaw: 0.0
-
-### Network Configuration
-
-- Default IP: 172.168.1.10
-- Config: `golfcart_sensor_kit_launch/launch/lidar.launch.xml`
 
 ## TensorRT Model Compilation
 

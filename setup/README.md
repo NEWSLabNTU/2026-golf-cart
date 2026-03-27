@@ -75,7 +75,6 @@ The setup runs these steps in order:
 | Command | Description |
 |---------|-------------|
 | `./setup.sh download-artifacts` | Download ML model artifacts (~2GB) |
-| `./setup.sh install-zed-sdk` | Install ZED camera SDK |
 
 ## How Resume Works
 
@@ -97,7 +96,6 @@ scripts/setup/
 │   ├── install-ros2.sh
 │   ├── install-ros2-dev-tools.sh
 │   ├── install-autoware-debian.sh
-│   ├── install-zed-sdk.sh
 │   └── download-artifacts.sh
 └── files/                # Static files
     ├── 99-ublox-gps.rules

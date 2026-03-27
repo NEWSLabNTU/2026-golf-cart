@@ -42,12 +42,12 @@ Uses both camera and LiDAR for enhanced perception. Enables camera-based feature
 - Research on sensor fusion
 
 **Requirements**:
-- Camera sensor must be available (e.g., ZED camera)
+- Camera sensor must be available
 - Higher computational resources required
 
 **Launch**:
 ```bash
-make launch ARGS="perception_preset:=camera_lidar_fusion sensor_suite:=robin_zed"
+just launch perception_preset:=camera_lidar_fusion
 ```
 
 ### `minimal`

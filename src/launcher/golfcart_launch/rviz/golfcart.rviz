@@ -93,19 +93,11 @@ Visualization Manager:
                   Show Axes: false
                   Show Trail: false
                   Value: true
-                cube1:
-                  Alpha: 1
-                  Show Axes: false
-                  Show Trail: false
                 gnss_base_link:
                   Alpha: 1
                   Show Axes: false
                   Show Trail: false
                 imu_link:
-                  Alpha: 1
-                  Show Axes: false
-                  Show Trail: false
-                robin_w:
                   Alpha: 1
                   Show Axes: false
                   Show Trail: false
@@ -150,31 +142,6 @@ Visualization Manager:
                   Show Axes: false
                   Show Trail: false
                 vlp32c:
-                  Alpha: 1
-                  Show Axes: false
-                  Show Trail: false
-                zedxm_camera_center:
-                  Alpha: 1
-                  Show Axes: false
-                  Show Trail: false
-                  Value: true
-                zedxm_camera_link:
-                  Alpha: 1
-                  Show Axes: false
-                  Show Trail: false
-                zedxm_left_camera_frame:
-                  Alpha: 1
-                  Show Axes: false
-                  Show Trail: false
-                zedxm_left_camera_optical_frame:
-                  Alpha: 1
-                  Show Axes: false
-                  Show Trail: false
-                zedxm_right_camera_frame:
-                  Alpha: 1
-                  Show Axes: false
-                  Show Trail: false
-                zedxm_right_camera_optical_frame:
                   Alpha: 1
                   Show Axes: false
                   Show Trail: false

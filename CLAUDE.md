@@ -73,6 +73,7 @@ colcon build --base-paths src --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=
 ```
 
 **Important**: Always use `--base-paths src` and other standard flags from `just build` when running colcon commands manually.
+**Important**: Respect the .gitconfig in the repository when committing. Use Conventional Commits format (`feat`, `fix`, `chore`, `docs`, `refactor`, etc.) for commit messages.
 
 ## Architecture
 
@@ -286,21 +287,19 @@ localization_preset:=default            # Default: gyro_odom
 localization_preset:=eagleye            # GNSS-based odometry (requires GNSS)
 
 # Example: Use camera-lidar fusion
-just launch perception_preset:=camera_lidar_fusion sensor_suite:=robin_zed
+just launch perception_preset:=camera_lidar_fusion
 ```
 
 #### Sensor Configuration
 ```bash
 # Sensor suites (predefined combinations)
-sensor_suite:=robin_zed          # Robin-W + ZED + ZED IMU
-sensor_suite:=vlp32c_zed         # Velodyne + ZED + ZED IMU
-sensor_suite:=vlp32c_zed_imu     # Velodyne + ZED + ZED IMU + MPU9250
+sensor_suite:=vlp32c             # Velodyne VLP-32C
 
 # Individual sensor overrides
-lidar_model:=robin-w|vlp32c|cube1
-camera_model:=zedxm|usb|none
-imu_source:=mpu9250|zed
-gnss_receiver:=garmin|ublox|septentrio
+lidar_model:=vlp32c
+camera_model:=usb|none
+imu_source:=tamagawa
+gnss_receiver:=ublox|septentrio
 ```
 
 #### Localization (pose_source)
@@ -323,7 +322,6 @@ use_ntrip:=true                  # RTK positioning (ublox only)
 use_mapless_mode:=true           # Indoor operation without localization
 
 # Perception
-enable_zed_object_detection:=true  # ZED camera object detection
 launch_perception:=false           # Disable entire perception module
 
 # Advanced: Override preset-defined parameters
@@ -372,7 +370,7 @@ twist_source:=gyro_odom|eagleye            # Override preset twist source
 
 **Key Guides** (in book):
 - **Sensor Integration**: `book/src/guides/sensor-integration/`
-  - Simple usage guide, Robin-W walkthrough, sensor-specific details
+  - Simple usage guide, sensor-specific details
 - **Vehicle Control**: `book/src/guides/vehicle-control/`
   - Overview, hardware, control details, tuning & testing
   - Multi-mode controllers, PCA9685 I2C, hall effect sensor, PID tuning
@@ -382,8 +380,7 @@ twist_source:=gyro_odom|eagleye            # Override preset twist source
 |-------|-------------|
 | [docs/guides/sensor_configuration.md](docs/guides/sensor_configuration.md) | Sensor suites, NTRIP/RTK, localization |
 | [docs/guides/vehicle_calibration.md](docs/guides/vehicle_calibration.md) | PWM control, PID tuning, testing tools |
-| [docs/guides/zed_camera.md](docs/guides/zed_camera.md) | ZED setup, troubleshooting |
-| [docs/guides/lidar_integration.md](docs/guides/lidar_integration.md) | Robin-W, Velodyne, TensorRT |
+| [docs/guides/lidar_integration.md](docs/guides/lidar_integration.md) | Velodyne VLP-32C, TensorRT |
 | [docs/guides/control_testing.md](docs/guides/control_testing.md) | Control system testing procedures |
 | [docs/guides/mrm_configuration.md](docs/guides/mrm_configuration.md) | MRM (emergency stop) configuration |
 | [docs/guides/isaac_vslam_testing.md](docs/guides/isaac_vslam_testing.md) | Isaac SLAM testing |
@@ -394,7 +391,6 @@ twist_source:=gyro_odom|eagleye            # Override preset twist source
 
 - **Steering reversed**: Left/right inverted in manual control
 - **Network monitor errors**: AWS Greengrass socket errors (non-critical, ignore)
-- **ZED in VNC**: Requires TurboVNC with VirtualGL for hardware acceleration
 - **Isaac ROS GXF libraries**: If `pose_source:=visual` or `pose_source:=isaac` fails with "libgxf_*.so not found", the GXF library paths are not in `LD_LIBRARY_PATH`. Re-source the setup files:
   ```bash
   source /opt/ros/humble/setup.bash

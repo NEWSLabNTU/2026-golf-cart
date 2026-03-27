@@ -38,17 +38,22 @@ test:
     colcon test-result --verbose; \
     exit $TEST_EXIT_CODE
 
-# Clean up built binaries (requires confirmation)
-clean:
+# Clean up built binaries (use --yes or --no-confirm to skip prompt)
+clean *FLAGS="":
     #!/usr/bin/env bash
-    while true; do \
-        read -p 'Are you sure to clean up? (yes/no) ' yn; \
-        case $yn in \
-            yes ) rm -rf build install log; break;; \
-            no ) break;; \
-            * ) echo 'Please enter yes or no.';; \
-        esac \
-    done
+    if [[ "{{FLAGS}}" == *"--yes"* ]] || [[ "{{FLAGS}}" == *"--no-confirm"* ]]; then
+        rm -rf build install log
+        echo "Cleaned build artifacts."
+    else
+        while true; do \
+            read -p 'Are you sure to clean up? (yes/no) ' yn; \
+            case $yn in \
+                yes ) rm -rf build install log; break;; \
+                no ) break;; \
+                * ) echo 'Please enter yes or no.';; \
+            esac \
+        done
+    fi
 
 # ============================================================================
 # Launch Commands - Start systems
@@ -90,12 +95,6 @@ launch-sim-logging ARGS="":
             golfcart_launch logging_simulation.launch.yaml \
             rviz:=false {{ARGS}}; \
     fi
-
-# Launch only ZED camera node for testing
-launch-zed:
-    play_launch launch \
-        --web-addr 0.0.0.0:8081 \
-        zed_wrapper zed_camera.launch.py camera_model:=zedxm
 
 # ============================================================================
 # Tool Commands - Development and monitoring tools
