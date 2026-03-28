@@ -10,12 +10,6 @@
 [submodule "src/param/autoware_individual_params"]
 	path = src/param/autoware_individual_params
 	url = https://github.com/NEWSLabNTU/autoware_individual_params.git
-[submodule "src/system/autosdv_runtime"]
-	path = src/system/autosdv_runtime
-	url = https://github.com/NEWSLabNTU/autosdv_runtime.git
-[submodule "src/system/autosdv_system_monitor"]
-	path = src/system/autosdv_system_monitor
-	url = https://github.com/NEWSLabNTU/autosdv_system_monitor.git
 [submodule "src/calibration/CalibrationTools"]
 	path = src/calibration/CalibrationTools
 	url = https://github.com/NEWSLabNTU/CalibrationTools.git
@@ -28,3 +22,9 @@
 [submodule "src/vehicle/golfcart_vehicle_launch"]
 	path = src/vehicle/golfcart_vehicle_launch
 	url = https://github.com/NEWSLabNTU/golfcart_vehicle_launch.git
+[submodule "src/system/golfcart_runtime"]
+	path = src/system/golfcart_runtime
+	url = https://github.com/NEWSLabNTU/golfcart_runtime.git
+[submodule "src/system/golfcart_system_monitor"]
+	path = src/system/golfcart_system_monitor
+	url = https://github.com/NEWSLabNTU/golfcart_system_monitor.git

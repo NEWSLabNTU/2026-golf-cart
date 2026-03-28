@@ -169,10 +169,30 @@ interactive_setup() {
     # TurboVNC + VirtualGL (for hardware-accelerated VNC)
     INSTALL_TURBOVNC_VIRTUALGL="n"
     printf "${YELLOW}Optional:${NC} TurboVNC + VirtualGL (for hardware-accelerated VNC)\n"
-    printf "Required for ZED camera usage in VNC sessions.\n"
+    printf "Enables GPU-accelerated rendering over VNC remote desktop sessions.\n"
     printf "You can skip and install later with: just turbovnc-virtualgl\n\n"
     if ask_yes_no "Install TurboVNC + VirtualGL?" "y"; then
         INSTALL_TURBOVNC_VIRTUALGL="y"
+    fi
+    printf "\n"
+
+    # Tamagawa IMU driver
+    INSTALL_TAMAGAWA_IMU="n"
+    printf "${YELLOW}Optional:${NC} Tamagawa IMU driver (replaces MPU9250)\n"
+    printf "Required for IMU bring-up. Package source TBD — see ROADMAP Phase 1 Track A.\n"
+    printf "You can skip and install later with: just tamagawa-imu\n\n"
+    if ask_yes_no "Install Tamagawa IMU driver?" "n"; then
+        INSTALL_TAMAGAWA_IMU="y"
+    fi
+    printf "\n"
+
+    # TIER IV camera driver
+    INSTALL_TIER4_CAMERA="n"
+    printf "${YELLOW}Optional:${NC} TIER IV C1 camera driver (for Phase 2 camera upgrade)\n"
+    printf "Required when upgrading from USB cameras to TIER IV GMSL cameras.\n"
+    printf "You can skip and install later with: just tier4-camera\n\n"
+    if ask_yes_no "Install TIER IV camera driver?" "n"; then
+        INSTALL_TIER4_CAMERA="y"
     fi
     printf "\n"
 
@@ -181,6 +201,8 @@ interactive_setup() {
     export CONFIGURE_CYCLONEDDS_SYSCTL="$CONFIGURE_CYCLONEDDS_SYSCTL"
     export INSTALL_ISAAC_ROS="$INSTALL_ISAAC_ROS"
     export INSTALL_TURBOVNC_VIRTUALGL="$INSTALL_TURBOVNC_VIRTUALGL"
+    export INSTALL_TAMAGAWA_IMU="$INSTALL_TAMAGAWA_IMU"
+    export INSTALL_TIER4_CAMERA="$INSTALL_TIER4_CAMERA"
 
     # Summary
     printf "Installing: Core"
@@ -195,6 +217,12 @@ interactive_setup() {
     fi
     if [[ "$INSTALL_TURBOVNC_VIRTUALGL" == "y" ]]; then
         printf " + TurboVNC/VirtualGL"
+    fi
+    if [[ "$INSTALL_TAMAGAWA_IMU" == "y" ]]; then
+        printf " + Tamagawa IMU driver"
+    fi
+    if [[ "$INSTALL_TIER4_CAMERA" == "y" ]]; then
+        printf " + TIER IV camera driver"
     fi
     printf "\n\n"
 

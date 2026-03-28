@@ -132,6 +132,7 @@ Both groups work together.
 | `autosdv_system_monitor` submodule | `src/system/autosdv_system_monitor`               | Review — rename or keep                   |
 | Custom PWM vehicle interface       | `golfcart_vehicle_interface/`                     | Replace with Turing Drive DBW             |
 | Lexus mesh                         | `golfcart_vehicle_description/mesh/lexus.dae`     | Replace if golf cart model available      |
+| `vehicle_info.param.yaml`          | `golfcart_vehicle_description/config/`            | TODO: measure golf cart dimensions (wheelbase, tread width, overhang, tire radius) before updating |
 | `launch-zed` justfile recipe       | `justfile` line 95-98                             | Remove                                    |
 | Planning/MRM patches               | `config/control/`, `config/planning/`             | Audit — adapt or revert for golf cart     |
 

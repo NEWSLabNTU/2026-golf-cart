@@ -32,7 +32,7 @@ default:
     @just --list
 
 # Full setup (runs all steps in order)
-setup: _init ros2 ros2-dev-tools gdown geographiclib pacmod dev-tools _setup-autoware-debian _setup-isaac-ros python-deps ublox-udev _setup-cyclonedds-sysctl _setup-turbovnc-virtualgl ros-deps
+setup: _init ros2 ros2-dev-tools gdown geographiclib pacmod dev-tools _setup-autoware-debian _setup-isaac-ros python-deps ublox-udev _setup-cyclonedds-sysctl _setup-turbovnc-virtualgl _setup-tamagawa-imu _setup-tier4-camera ros-deps
     @printf "{{green}}✓ Setup complete!{{nc}}\n"
 
 # Conditional Autoware Debian install (based on SKIP_AUTOWARE_DEBIAN env var)
@@ -74,6 +74,24 @@ _setup-turbovnc-virtualgl:
         printf "{{yellow}}⊘{{nc}} turbovnc-virtualgl skipped (user choice)\n"
     fi
 
+# Conditional Tamagawa IMU driver install (based on INSTALL_TAMAGAWA_IMU env var)
+_setup-tamagawa-imu:
+    #!/usr/bin/env bash
+    if [[ "${INSTALL_TAMAGAWA_IMU}" == "y" ]]; then
+        just tamagawa-imu
+    else
+        printf "{{yellow}}⊘{{nc}} tamagawa-imu skipped (user choice)\n"
+    fi
+
+# Conditional TIER IV camera driver install (based on INSTALL_TIER4_CAMERA env var)
+_setup-tier4-camera:
+    #!/usr/bin/env bash
+    if [[ "${INSTALL_TIER4_CAMERA}" == "y" ]]; then
+        just tier4-camera
+    else
+        printf "{{yellow}}⊘{{nc}} tier4-camera skipped (user choice)\n"
+    fi
+
 # Alias for setup (resume from where it left off due to markers)
 resume: setup
 
@@ -82,6 +100,32 @@ resume: setup
 # Install TurboVNC + VirtualGL (optional, for hardware-accelerated VNC)
 turbovnc-virtualgl: _init
     @just _run turbovnc-virtualgl "{{scripts_dir}}/install-turbovnc-virtualgl.sh"
+
+# Install Tamagawa IMU ROS 2 driver (placeholder — package source TBD)
+# TODO: Replace this recipe with the actual install command once the driver
+#       package is sourced. See ROADMAP Phase 1 Track A for context.
+tamagawa-imu: _init
+    #!/usr/bin/env bash
+    [[ -f "{{marker_dir}}/tamagawa-imu" ]] && printf "{{green}}✓{{nc}} tamagawa-imu already done\n" && exit 0
+    printf "{{yellow}}⚠{{nc}} Tamagawa IMU driver: manual installation required.\n"
+    printf "   Driver package source is not yet confirmed.\n"
+    printf "   Once obtained, install it and then run: just clean-marker tamagawa-imu && just tamagawa-imu\n"
+    printf "   See ROADMAP.md Phase 1 Track A for details.\n"
+    touch "{{marker_dir}}/tamagawa-imu"
+    printf "{{yellow}}○{{nc}} tamagawa-imu marked (manual install pending)\n"
+
+# Install TIER IV C1 camera driver (placeholder — package TBD for Phase 2)
+# TODO: Replace this recipe with the actual apt/pip install once the TIER IV
+#       camera driver package is confirmed. See ROADMAP Phase 2 Track A.
+tier4-camera: _init
+    #!/usr/bin/env bash
+    [[ -f "{{marker_dir}}/tier4-camera" ]] && printf "{{green}}✓{{nc}} tier4-camera already done\n" && exit 0
+    printf "{{yellow}}⚠{{nc}} TIER IV camera driver: manual installation required.\n"
+    printf "   Driver package is not yet confirmed (Phase 2 prerequisite).\n"
+    printf "   Once obtained, install it and then run: just clean-marker tier4-camera && just tier4-camera\n"
+    printf "   See ROADMAP.md Phase 2 Track A for details.\n"
+    touch "{{marker_dir}}/tier4-camera"
+    printf "{{yellow}}○{{nc}} tier4-camera marked (manual install pending)\n"
 
 # Install NVIDIA Isaac ROS Visual Localization (cuVSLAM + cuVGL, Jetson ARM64 only)
 isaac-ros: _init ros2
@@ -255,6 +299,18 @@ status:
         else
             printf "  {{yellow}}○{{nc}} isaac-ros (cuVSLAM + cuVGL, run: ./setup.sh isaac-ros)\n"
         fi
+    fi
+    # Tamagawa IMU driver
+    if [[ -f "{{marker_dir}}/tamagawa-imu" ]]; then
+        printf "  {{green}}✓{{nc}} tamagawa-imu (Tamagawa IMU driver)\n"
+    else
+        printf "  {{yellow}}○{{nc}} tamagawa-imu (pending hardware, run: just tamagawa-imu)\n"
+    fi
+    # TIER IV camera driver
+    if [[ -f "{{marker_dir}}/tier4-camera" ]]; then
+        printf "  {{green}}✓{{nc}} tier4-camera (TIER IV C1 camera driver)\n"
+    else
+        printf "  {{yellow}}○{{nc}} tier4-camera (Phase 2 prerequisite, run: just tier4-camera)\n"
     fi
     echo ""
     echo "Configuration:"

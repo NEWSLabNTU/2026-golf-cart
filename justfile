@@ -143,6 +143,14 @@ control-circle:
     ros2 run control_test trajectory_player --ros-args -p trajectory_file:=circle.yaml
 
 # ============================================================================
+# Check Commands - Sensor health checks
+# ============================================================================
+
+# Run sensor health check (launches VLP-32C point cloud in RViz)
+check-sensors:
+    ./scripts/check/run.sh
+
+# ============================================================================
 # Bag Commands - Rosbag recording and playback
 # ============================================================================
 
