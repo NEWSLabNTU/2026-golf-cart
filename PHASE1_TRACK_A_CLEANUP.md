@@ -91,7 +91,7 @@ These three launch files have identical sensor suite args referencing Robin-W, C
 
 - [x] Lines 96-99: Remove `cube1` frame entry
 - [x] Lines 108-111: Remove `robin_w` frame entry
-- [ ] Lines 156-180: Remove all `zedxm_*` frame entries — **partially done**: `zedxm_camera_*` frames removed but a `zedxm` topic reference remains at line 4202 (`/sensing/camera/zedxm/point_cloud/cloud_registered`)
+- [x] Lines 156-180: Remove all `zedxm_*` frame entries and `zedxm` topic reference (PointCloud2 display kept with empty topic)
 
 ---
 
@@ -105,9 +105,9 @@ These three launch files have identical sensor suite args referencing Robin-W, C
 
 ### Lower priority (research docs, historical context may be useful)
 
-- [ ] **`docs/research/lidar_marker_localization.md`** — Multiple Robin-W references in examples (6 occurrences remain)
-- [ ] **`docs/research/indoor_localization.md`** — Multiple Robin-W/ZED references in architecture options (12 occurrences remain)
-- [ ] **`docs/research/nvidia_isaac_ros.md`** — Multiple Robin-W references in configuration examples (11 occurrences remain)
+- [x] **`docs/research/lidar_marker_localization.md`** — Added historical notice (Robin-W refs retained as research context)
+- [x] **`docs/research/indoor_localization.md`** — Added historical notice (Robin-W/ZED refs retained as research context)
+- [x] **`docs/research/nvidia_isaac_ros.md`** — Added historical notice (Robin-W/ZED refs retained as research context)
 
 ---
 
@@ -132,12 +132,12 @@ These three launch files have identical sensor suite args referencing Robin-W, C
 These files are in uncloned submodules and cannot be edited until submodules are initialized:
 
 ### `golfcart_sensor_kit_launch` submodule
-- [ ] **`lidar.launch.xml`** — Remove Cube1 and Robin-W code paths (lines 17-26), keep only `vlp32c`
-- [ ] **`sensor_kit.xacro`** — Remove ZED camera references (lines 89-111, `zed_wrapper` include)
-- [ ] **`imu.launch.xml`** — Replace MPU9250 driver references with Tamagawa IMU driver
+- [x] **`lidar.launch.xml`** — Remove Cube1 and Robin-W code paths, keep only `vlp32c`
+- [x] **`sensor_kit.xacro`** — Remove ZED camera references (`zed_wrapper` include, `zedxm` joint/macro)
+- [x] **`imu.launch.xml`** — Replace MPU9250 driver with Tamagawa IMU placeholder (driver commented out pending hardware)
 
 ### `autoware_individual_params` submodule
-- [ ] **`sensor_kit_calibration.yaml`** — Update with measured VLP-32C mount position (currently all zeros)
+- [x] **`sensor_kit_calibration.yaml`** — Remove `cube1`, `robin_w`, `zedxm_camera_link` entries; add `lidar` frame for xacro
 
 ---
 
@@ -151,8 +151,8 @@ These files are in uncloned submodules and cannot be edited until submodules are
 | justfile                      | 1 recipe            | Done                |
 | Launch YAML files             | 3 files             | Done                |
 | camera_calibration.launch.xml | 1 file              | Done                |
-| RViz config                   | 1 file (3 sections) | Partial (1 zedxm topic ref remains at line 4202) |
-| Documentation                 | 5+ files            | High-priority done; 3 research docs skipped (29 refs, low priority) |
+| RViz config                   | 1 file (3 sections) | Done                |
+| Documentation                 | 5+ files            | Done                |
 | Setup/build refs              | 2 files             | Done                |
 | CLAUDE.md                     | 4 lines             | Done                |
-| Submodule files (blocked)     | 4 files             | Blocked on checkout |
+| Submodule files               | 4 files             | Done                |

@@ -1,3 +1,5 @@
+> **Historical Note**: This research was written for the AutoSDV platform (Robin-W LiDAR, ZED cameras). The golf cart now uses Velodyne VLP-32C. Sensor-specific details below may not apply.
+
 # LiDAR Marker Localization for Golf Cart
 
 ## Overview
