@@ -1,0 +1,65 @@
+# TIER IV C1 Camera udev rules (GMSL2-USB 3.0 Conversion Kit)
+#
+# Each GMSL2-USB converter appears as a standard UVC device. Since all
+# converters share the same USB vendor/product ID, we distinguish cameras
+# by their physical USB port path (KERNELS), which is stable across reboots
+# as long as you don't move cables between ports.
+#
+# === SETUP INSTRUCTIONS ===
+#
+# 1. Plug in all GMSL2-USB converters and run:
+#
+#      v4l2-ctl --list-devices
+#
+#    This shows device names and /dev/videoN paths. Example output:
+#
+#      UVC Camera (046d:0825) (usb-3530000.xhci-1.2):
+#              /dev/video0
+#      UVC Camera (046d:0825) (usb-3530000.xhci-1.3):
+#              /dev/video2
+#      UVC Camera (046d:0825) (usb-3530000.xhci-1.4):
+#              /dev/video4
+#
+# 2. For each camera, find the USB port path:
+#
+#      udevadm info -q property /dev/video0 | grep ID_PATH=
+#
+#    Look for the value after ID_PATH=, e.g.:
+#      platform-3530000.xhci-usb-0:1.2:1.0
+#
+#    Or find the KERNELS value (physical port):
+#
+#      udevadm info -a /dev/video0 | grep KERNELS | head -3
+#
+#    Look for a line like:  KERNELS=="1-2" or KERNELS=="1-2.3"
+#    This is the physical USB port number.
+#
+# 3. Point each camera at a known direction (e.g., front-left), note which
+#    USB port path corresponds to which camera position.
+#
+# 4. Edit this file: replace the KERNELS values below with your actual
+#    port paths from step 2.
+#
+# 5. Reinstall and reload:
+#
+#      sudo cp this-file /etc/udev/rules.d/99-tier4-camera.rules
+#      sudo udevadm control --reload-rules
+#      sudo udevadm trigger
+#
+# 6. Verify symlinks were created:
+#
+#      ls -la /dev/tier4-cam-*
+#
+# === RULES ===
+#
+# Replace KERNELS=="CHANGE_ME_*" with the actual USB port path for each camera.
+# Example: KERNELS=="1-2" or KERNELS=="1-2.3"
+
+# Front-left camera
+SUBSYSTEM=="video4linux", ATTR{index}=="0", KERNELS=="CHANGE_ME_FRONT_LEFT", SYMLINK+="tier4-cam-front-left", MODE="0666"
+
+# Front-right camera
+SUBSYSTEM=="video4linux", ATTR{index}=="0", KERNELS=="CHANGE_ME_FRONT_RIGHT", SYMLINK+="tier4-cam-front-right", MODE="0666"
+
+# Rear camera
+SUBSYSTEM=="video4linux", ATTR{index}=="0", KERNELS=="CHANGE_ME_REAR", SYMLINK+="tier4-cam-rear", MODE="0666"

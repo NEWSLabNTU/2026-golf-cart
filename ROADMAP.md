@@ -144,7 +144,7 @@ Both groups work together.
 |-----------------------------------|-------------------------------------------------------|----------------------------|
 | Turing Drive DBW package delivery | Phase 2 (DBW integration), Phase 3 (NDT localization) | Track B group to request   |
 | NTU campus maps from Turing Drive | Phase 2 (map audit), Phase 3 (NDT tuning)             | Track B group to request   |
-| Tamagawa IMU driver availability  | Phase 1 (IMU bring-up)                                | Track A group to source    |
+| Tamagawa IMU driver availability  | Phase 1 (IMU bring-up)                                | Request from Turing Drive  |
 | TIER IV camera hardware           | Phase 2 (camera setup)                                | Track A group              |
 | LCTK build & calibration targets  | Phase 3 (LiDAR-camera calibration)                    | Track A group              |
 

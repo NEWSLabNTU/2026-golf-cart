@@ -32,7 +32,7 @@ default:
     @just --list
 
 # Full setup (runs all steps in order)
-setup: _init ros2 ros2-dev-tools gdown geographiclib pacmod dev-tools _setup-autoware-debian _setup-isaac-ros python-deps ublox-udev _setup-cyclonedds-sysctl _setup-turbovnc-virtualgl _setup-tamagawa-imu _setup-tier4-camera ros-deps
+setup: _init ros2 ros2-dev-tools gdown geographiclib pacmod dev-tools _setup-autoware-debian _setup-isaac-ros python-deps nebula-driver ublox-driver ublox-udev usb-cam _setup-cyclonedds-sysctl _setup-turbovnc-virtualgl _setup-tamagawa-imu tier4-camera ros-deps
     @printf "{{green}}✓ Setup complete!{{nc}}\n"
 
 # Conditional Autoware Debian install (based on SKIP_AUTOWARE_DEBIAN env var)
@@ -83,14 +83,6 @@ _setup-tamagawa-imu:
         printf "{{yellow}}⊘{{nc}} tamagawa-imu skipped (user choice)\n"
     fi
 
-# Conditional TIER IV camera driver install (based on INSTALL_TIER4_CAMERA env var)
-_setup-tier4-camera:
-    #!/usr/bin/env bash
-    if [[ "${INSTALL_TIER4_CAMERA}" == "y" ]]; then
-        just tier4-camera
-    else
-        printf "{{yellow}}⊘{{nc}} tier4-camera skipped (user choice)\n"
-    fi
 
 # Alias for setup (resume from where it left off due to markers)
 resume: setup
@@ -114,18 +106,52 @@ tamagawa-imu: _init
     touch "{{marker_dir}}/tamagawa-imu"
     printf "{{yellow}}○{{nc}} tamagawa-imu marked (manual install pending)\n"
 
-# Install TIER IV C1 camera driver (placeholder — package TBD for Phase 2)
-# TODO: Replace this recipe with the actual apt/pip install once the TIER IV
-#       camera driver package is confirmed. See ROADMAP Phase 2 Track A.
-tier4-camera: _init
+# Install USB camera ROS driver (for TIER IV cameras used as V4L USB devices)
+usb-cam: _init ros2
     #!/usr/bin/env bash
-    [[ -f "{{marker_dir}}/tier4-camera" ]] && printf "{{green}}✓{{nc}} tier4-camera already done\n" && exit 0
-    printf "{{yellow}}⚠{{nc}} TIER IV camera driver: manual installation required.\n"
-    printf "   Driver package is not yet confirmed (Phase 2 prerequisite).\n"
-    printf "   Once obtained, install it and then run: just clean-marker tier4-camera && just tier4-camera\n"
-    printf "   See ROADMAP.md Phase 2 Track A for details.\n"
-    touch "{{marker_dir}}/tier4-camera"
-    printf "{{yellow}}○{{nc}} tier4-camera marked (manual install pending)\n"
+    [[ -f "{{marker_dir}}/usb-cam" ]] && printf "{{green}}✓{{nc}} usb-cam already done\n" && exit 0
+    set -e
+    printf "{{yellow}}→{{nc}} Installing USB camera driver...\n"
+    sudo apt-get update
+    sudo apt-get install -y ros-humble-usb-cam
+    touch "{{marker_dir}}/usb-cam"
+    printf "{{green}}✓{{nc}} usb-cam done\n"
+
+# Install TIER IV C1 camera driver (v4l2_camera for GMSL2-USB 3.0 Conversion Kit)
+tier4-camera: _init ros2
+    @just _run tier4-camera "{{scripts_dir}}/install-tier4-camera.sh"
+
+# Install Nebula LiDAR driver (for Velodyne VLP-32C)
+# These are also included in autoware-debian, but this ensures standalone availability.
+nebula-driver: _init ros2
+    #!/usr/bin/env bash
+    [[ -f "{{marker_dir}}/nebula-driver" ]] && printf "{{green}}✓{{nc}} nebula-driver already done\n" && exit 0
+    set -e
+    printf "{{yellow}}→{{nc}} Installing Nebula LiDAR driver...\n"
+    sudo apt-get update
+    sudo apt-get install -y \
+        ros-humble-nebula-ros-1-5-0 \
+        ros-humble-nebula-decoders-1-5-0 \
+        ros-humble-nebula-common-1-5-0 \
+        ros-humble-nebula-hw-interfaces-1-5-0 \
+        ros-humble-nebula-msgs-1-5-0
+    touch "{{marker_dir}}/nebula-driver"
+    printf "{{green}}✓{{nc}} nebula-driver done\n"
+
+# Install u-blox GNSS driver
+# These are also included in autoware-debian, but this ensures standalone availability.
+ublox-driver: _init ros2
+    #!/usr/bin/env bash
+    [[ -f "{{marker_dir}}/ublox-driver" ]] && printf "{{green}}✓{{nc}} ublox-driver already done\n" && exit 0
+    set -e
+    printf "{{yellow}}→{{nc}} Installing u-blox GNSS driver...\n"
+    sudo apt-get update
+    sudo apt-get install -y \
+        ros-humble-ublox-gps \
+        ros-humble-ublox-msgs \
+        ros-humble-ublox-serialization
+    touch "{{marker_dir}}/ublox-driver"
+    printf "{{green}}✓{{nc}} ublox-driver done\n"
 
 # Install NVIDIA Isaac ROS Visual Localization (cuVSLAM + cuVGL, Jetson ARM64 only)
 isaac-ros: _init ros2
@@ -276,7 +302,7 @@ status:
     echo "============="
     echo ""
     echo "Core Components:"
-    for step in ros2 ros2-dev-tools gdown geographiclib pacmod dev-tools python-deps ublox-udev ros-deps; do
+    for step in ros2 ros2-dev-tools gdown geographiclib pacmod dev-tools python-deps nebula-driver ublox-driver ublox-udev usb-cam ros-deps; do
         if [[ -f "{{marker_dir}}/$step" ]]; then
             printf "  {{green}}✓{{nc}} %s\n" "$step"
         else
@@ -305,12 +331,6 @@ status:
         printf "  {{green}}✓{{nc}} tamagawa-imu (Tamagawa IMU driver)\n"
     else
         printf "  {{yellow}}○{{nc}} tamagawa-imu (pending hardware, run: just tamagawa-imu)\n"
-    fi
-    # TIER IV camera driver
-    if [[ -f "{{marker_dir}}/tier4-camera" ]]; then
-        printf "  {{green}}✓{{nc}} tier4-camera (TIER IV C1 camera driver)\n"
-    else
-        printf "  {{yellow}}○{{nc}} tier4-camera (Phase 2 prerequisite, run: just tier4-camera)\n"
     fi
     echo ""
     echo "Configuration:"

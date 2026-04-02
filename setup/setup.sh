@@ -186,23 +186,12 @@ interactive_setup() {
     fi
     printf "\n"
 
-    # TIER IV camera driver
-    INSTALL_TIER4_CAMERA="n"
-    printf "${YELLOW}Optional:${NC} TIER IV C1 camera driver (for Phase 2 camera upgrade)\n"
-    printf "Required when upgrading from USB cameras to TIER IV GMSL cameras.\n"
-    printf "You can skip and install later with: just tier4-camera\n\n"
-    if ask_yes_no "Install TIER IV camera driver?" "n"; then
-        INSTALL_TIER4_CAMERA="y"
-    fi
-    printf "\n"
-
     # Export choices for justfile
     export SKIP_AUTOWARE_DEBIAN="$([[ "$INSTALL_AUTOWARE" == "n" ]] && echo "1" || echo "0")"
     export CONFIGURE_CYCLONEDDS_SYSCTL="$CONFIGURE_CYCLONEDDS_SYSCTL"
     export INSTALL_ISAAC_ROS="$INSTALL_ISAAC_ROS"
     export INSTALL_TURBOVNC_VIRTUALGL="$INSTALL_TURBOVNC_VIRTUALGL"
     export INSTALL_TAMAGAWA_IMU="$INSTALL_TAMAGAWA_IMU"
-    export INSTALL_TIER4_CAMERA="$INSTALL_TIER4_CAMERA"
 
     # Summary
     printf "Installing: Core"
@@ -220,9 +209,6 @@ interactive_setup() {
     fi
     if [[ "$INSTALL_TAMAGAWA_IMU" == "y" ]]; then
         printf " + Tamagawa IMU driver"
-    fi
-    if [[ "$INSTALL_TIER4_CAMERA" == "y" ]]; then
-        printf " + TIER IV camera driver"
     fi
     printf "\n\n"
 
