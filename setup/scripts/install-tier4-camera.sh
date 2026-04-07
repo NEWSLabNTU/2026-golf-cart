@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Install ROS 2 V4L2 camera driver for TIER IV C1 cameras
+# Install camera driver and tools for TIER IV C1 cameras
 # The GMSL2-USB 3.0 Conversion Kit presents the C1 as a standard UVC device,
-# so the standard v4l2_camera ROS 2 driver is used.
+# so the standard usb_cam ROS 2 driver is used (v4l2_camera is unavailable
+# in the Humble arm64 apt repo).
 #
 # Requires: ROS 2 Humble
 
@@ -20,20 +21,20 @@ if [[ ! -f /opt/ros/humble/setup.bash ]]; then
     exit 1
 fi
 
-printf "${YELLOW}→${NC} Installing TIER IV C1 camera driver (v4l2_camera)...\n"
+printf "${YELLOW}→${NC} Installing TIER IV C1 camera driver (usb_cam + v4l-utils)...\n"
 
 sudo apt-get update -qq
 sudo apt-get install -y \
-    ros-humble-v4l2-camera \
+    ros-humble-usb-cam \
     v4l-utils
 
 # Verify installation
 printf "${YELLOW}→${NC} Verifying installation...\n"
 
-if bash -c "source /opt/ros/humble/setup.bash && ros2 pkg list 2>/dev/null | grep -q v4l2_camera"; then
-    printf "${GREEN}✓${NC} v4l2_camera installed\n"
+if bash -c "source /opt/ros/humble/setup.bash && ros2 pkg list 2>/dev/null | grep -q usb_cam"; then
+    printf "${GREEN}✓${NC} usb_cam installed\n"
 else
-    printf "${RED}✗${NC} v4l2_camera not found after installation\n"
+    printf "${RED}✗${NC} usb_cam not found after installation\n"
     exit 1
 fi
 

@@ -146,7 +146,7 @@ control-circle:
 # Check Commands - Sensor health checks
 # ============================================================================
 
-# Run sensor health check (launches VLP-32C point cloud in RViz)
+# Run sensor & interface health check (LiDAR, GNSS, IMU, cameras, CAN, system)
 check-sensors:
     ./scripts/check/run.sh
 

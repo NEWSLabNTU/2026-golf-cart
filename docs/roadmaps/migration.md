@@ -1,4 +1,6 @@
-# Golf Cart Migration Plan
+# Golf Cart Migration Plan (DEPRECATED)
+
+> **DEPRECATED**: This document is superseded by [ROADMAP.md](../../ROADMAP.md) in the project root. Do not use this file for current planning. It is kept for historical reference only.
 
 This document outlines the migration plan from the Golf Cart platform to a golf cart autonomous driving system for 華夏科大 campus deployment.
 

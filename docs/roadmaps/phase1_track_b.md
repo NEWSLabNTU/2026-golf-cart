@@ -2,7 +2,7 @@
 
 Tracks progress on the five Track B tasks from [ROADMAP.md](../../ROADMAP.md#track-b--tooling--infrastructure).
 
-Last updated: 2026-04-02
+Last updated: 2026-04-07 (verified on target machine)
 
 ---
 
@@ -26,36 +26,37 @@ Directory rename done (commit `b073f4d`), but internal package names were not ch
 
 ## 2. Setup script overhaul
 
-**Status: Partial**
+**Status: Mostly done** (verified on target 2026-04-07)
 
 ### Done
 - [x] `play_launch` — installed in `python-deps` recipe (`setup/justfile:206`)
 - [x] Tamagawa IMU — placeholder recipe added (`setup/justfile:104-115`), defaults to skip
-- [x] TIER IV camera — `tier4-camera` recipe installs `ros-humble-v4l2-camera`, `v4l-utils`, and udev rules template (core component, always runs)
-- [x] u-blox udev rules — `ublox-udev` recipe (`setup/justfile:211-223`) installs `/dev/ublox-gps` symlink and `dialout` group
+- [x] TIER IV camera — `tier4-camera` recipe exists (installs `ros-humble-usb-cam`, `v4l-utils`, udev rules template)
+- [x] u-blox udev rules — `ublox-udev` recipe installs `/dev/ublox-gps` symlink and `dialout` group; rules verified on target at `/etc/udev/rules.d/99-ublox-gps.rules`
 - [x] Stale ZED reference in TurboVNC prompt — fixed
+- [x] **Nebula LiDAR driver** — `nebula-driver` recipe installs Nebula 1.5.0 packages from apt; verified installed on target (v0.2.5)
+- [x] **u-blox GNSS ROS driver** — `ublox-driver` recipe installs u-blox packages; verified installed on target (v2.3.0)
+- [x] **Autoware Debian** — `install-autoware-debian.sh` downloads JP6.2 deb; target machine IS JP6.2.1 so this is **correct**. Autoware 1.5.0 verified installed at `/opt/autoware/1.5.0/`.
 
 ### Not done
-- [x] **Nebula LiDAR driver** — `nebula-driver` recipe installs Nebula 1.5.0 packages from apt
-- [x] **u-blox GNSS ROS driver** — `ublox-driver` recipe installs `ros-humble-ublox-gps` and `ros-humble-ublox-msgs` from apt
-- [ ] **Autoware Debian JetPack mismatch** — `install-autoware-debian.sh` downloads a JetPack 6.2 deb on aarch64 (line 22: `"Assuming JetPack 6.2 compatibility"`), but the target system runs JetPack 6.0. See [docs/roadblocks.md](../roadblocks.md).
+- [x] ~~**`ros-humble-v4l2-camera` not installed**~~ — `v4l2-camera` unavailable in Humble arm64 apt repo; switched to `ros-humble-usb-cam` (already installed on target, v0.8.1)
 - [ ] Remove stale AutoSDV-era optional components — not audited
 
 ---
 
 ## 3. Justfile recipes for outdoor ops
 
-**Status: Mostly done**
+**Status: Mostly done** (verified on target 2026-04-07)
 
 ### Done
 - [x] `just check-sensors` recipe added (`justfile:150-151`)
 - [x] `just bag-record` recipe added (`justfile:158-159`), wired to `scripts/rosbag/record_outdoor.sh`
 - [x] `launch-zed` recipe removed (no longer in justfile)
 - [x] `play_launch` is the default runtime (already was)
+- [x] `just check-sensors` pre-build guard — `scripts/check/run.sh` checks for `install/setup.bash` before sourcing, exits with helpful error if missing (verified on target)
 
 ### Not done
 - [ ] `scripts/rosbag/record_outdoor.sh` is a **stub** — exits with error on line 13; topic list on lines 20-47 is commented out and needs verification before activation
-- [ ] `just check-sensors` fails before first build — `scripts/check/run.sh:6` unconditionally sources `install/setup.bash`. See [docs/roadblocks.md](../roadblocks.md).
 
 ---
 
@@ -84,14 +85,15 @@ Directory rename done (commit `b073f4d`), but internal package names were not ch
 
 ## 5. Vehicle description update
 
-**Status: Partial**
+**Status: Mostly done** (verified on target 2026-04-07)
 
 ### Done
-- [x] Golf cart dimensions measured and recorded in `src/vehicle/golfcart_vehicle_launch/golfcart_vehicle_description/config/vehicle_info.param.yaml`:
+- [x] Golf cart dimensions measured and recorded in `vehicle_info.param.yaml`:
   - `wheel_base: 2.061`, `wheel_tread: 1.213`, `front_overhang: 0.406`, `rear_overhang: 0.821`, `vehicle_height: 2.005`, `max_steer_angle: 0.349 rad`
+- [x] `wheel_radius: 0.53` and `wheel_width: 0.14` — values now filled (verified on target)
 
 ### Not done
-- [ ] `wheel_radius` and `wheel_width` are empty (values TBD)
+- [x] ~~**Verify `wheel_radius`**~~ — was `0.53` (diameter), corrected to `0.265` (radius) on 2026-04-07
 - [ ] Lexus mesh (`golfcart_vehicle_description/mesh/lexus.dae`) not replaced — no golf cart 3D model available yet
 
 ---
@@ -100,14 +102,14 @@ Directory rename done (commit `b073f4d`), but internal package names were not ch
 
 | Task | Status | Blocking issues |
 |------|--------|----------------|
-| 1. AutoSDV cleanup | Partial | Internal package names still `autosdv_*` (submodule repos) |
-| 2. Setup script overhaul | Partial | JetPack 6.0/6.2 mismatch; stale AutoSDV components not audited |
-| 3. Justfile recipes | Mostly done | `record_outdoor.sh` stub |
+| 1. AutoSDV cleanup | Partial | Internal package names still `autosdv_*` (submodule repos); confirmed on target |
+| 2. Setup script overhaul | Mostly done | JP6.2 match confirmed; stale AutoSDV components not audited |
+| 3. Justfile recipes | Mostly done | `record_outdoor.sh` stub; `check-sensors` guard fixed |
 | 4. Version control | Partial | No `.gitmodules` branch tracking; no branches created |
-| 5. Vehicle description | Partial | `wheel_radius`/`wheel_width` TBD; Lexus mesh not replaced |
+| 5. Vehicle description | Mostly done | `wheel_radius` fixed (0.265); Lexus mesh not replaced |
 
 **Phase 1 exit criteria check:**
 - [x] No Seyond/Robin-W/Cube1/ZED/MPU9250 code paths remain (Track A — done)
-- [x] `just build` succeeds cleanly (fixed: `COLCON_IGNORE` on duplicate `individual_params`)
-- [ ] LiDAR, GNSS, and IMU publish valid ROS topics (LiDAR & GNSS software ready; IMU blocked on Tamagawa driver)
-- [ ] Submodule branches established (not done)
+- [x] `just build` succeeds cleanly (verified on target: 17 packages built)
+- [ ] LiDAR, GNSS, and IMU publish valid ROS topics — software ready but no sensors physically connected on target (verified 2026-04-07); IMU blocked on Tamagawa driver
+- [ ] Submodule branches established (not done; no `branch =` in `.gitmodules`)

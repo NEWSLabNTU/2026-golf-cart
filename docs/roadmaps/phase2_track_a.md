@@ -2,13 +2,15 @@
 
 Tracks progress on the four Track A tasks from [ROADMAP.md](../../ROADMAP.md#track-a--tier-iv-camera-setup).
 
-Last updated: 2026-04-02
+Last updated: 2026-04-07 (verified on target machine)
 
 ---
 
 ## 1. Mount three TIER IV cameras
 
-**Status: Blocked — requires hardware + golf cart**
+**Status: Blocked — requires hardware + golf cart** (confirmed on target 2026-04-07)
+
+**Target machine note**: No cameras connected. No `/dev/video*` devices. The board has GMSL camera connectors (ZED-X driver probes on I2C bus 8 but no cameras found).
 
 ### Not done
 - [ ] Obtain TIER IV C1 camera hardware
@@ -34,7 +36,7 @@ Last updated: 2026-04-02
 - [x] ZED camera references removed from `sensor_kit.xacro` (done in Phase 1)
 - [ ] **Add three camera frame definitions to `sensor_kit.xacro`** — define `camera_front_left`, `camera_front_right`, `camera_rear` links with placeholder transforms (all zeros)
 - [ ] **Add calibration entries to `sensor_kit_calibration.yaml`** — three camera entries with placeholder values
-- [x] **TIER IV C1 ROS 2 driver package identified** — GMSL2-USB 3.0 Conversion Kit presents C1 as UVC device; uses `ros-humble-v4l2-camera` (installed by `just tier4-camera`)
+- [x] **TIER IV C1 ROS 2 driver package identified** — GMSL2-USB 3.0 Conversion Kit presents C1 as UVC device; uses `ros-humble-usb-cam` (already installed on target, v0.8.1). Note: `ros-humble-v4l2-camera` was originally planned but is unavailable in the Humble arm64 apt repo.
 
 ### Requires real machine
 - [ ] Fill in actual mount position values in `sensor_kit_calibration.yaml` after physical measurement
@@ -55,8 +57,8 @@ Last updated: 2026-04-02
 - [ ] **Rewrite `camera.launch.xml`** to support TIER IV camera launch (three nodes with device path arguments)
 - [ ] **Add `camera_model:=tier4` option** to launch parameter and sensor suite
 - [ ] **Create config YAML templates** for each camera (device path, resolution, frame rate, intrinsics placeholder)
-- [x] **TIER IV driver in `setup/justfile`** — `tier4-camera` recipe installs `ros-humble-v4l2-camera`, `v4l-utils`, and udev rules template (`setup/files/99-tier4-camera.rules`)
-- [ ] **Add TIER IV driver dependency to `package.xml`** — add `v4l2_camera` as exec dependency
+- [x] **TIER IV driver in `setup/justfile`** — `tier4-camera` recipe installs `ros-humble-usb-cam`, `v4l-utils`, and udev rules template (`setup/files/99-tier4-camera.rules`). `usb_cam` already installed on target (v0.8.1).
+- [ ] **Add camera driver dependency to `package.xml`** — add `usb_cam` as exec dependency
 
 ### Requires real machine
 - [ ] Configure udev rules — edit `/etc/udev/rules.d/99-tier4-camera.rules` with actual USB port paths (see `setup/files/99-tier4-camera.rules` for instructions)
@@ -91,7 +93,7 @@ Last updated: 2026-04-02
 
 ### Blockers
 - **TIER IV C1 camera hardware** not yet available
-- ~~TIER IV camera ROS 2 driver package~~ — resolved: `v4l2_camera` via GMSL2-USB kit
+- ~~TIER IV camera ROS 2 driver package~~ — resolved: `usb_cam` via GMSL2-USB kit (`v4l2_camera` unavailable in Humble arm64 repo)
 - Mount positions cannot be measured until cameras are on the golf cart
 
 ### Pre-move preparation checklist

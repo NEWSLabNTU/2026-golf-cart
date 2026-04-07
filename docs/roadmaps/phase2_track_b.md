@@ -2,13 +2,13 @@
 
 Tracks progress on the four Track B tasks from [ROADMAP.md](../../ROADMAP.md#track-b--turing-drive-dbw--map-acquisition).
 
-Last updated: 2026-04-02
+Last updated: 2026-04-07 (verified on target machine)
 
 ---
 
 ## 1. Request Turing Drive DBW package
 
-**Status: Not started — blocker for this entire track**
+**Status: Not started — blocker for this entire track** (confirmed on target 2026-04-07)
 
 ### Current state
 - Vehicle interface (`vehicle_interface.launch.xml`) launches two **stub nodes**:
@@ -16,6 +16,7 @@ Last updated: 2026-04-02
   - `velocity_report.py` — publishes zero-velocity reports (explicit comment: "Will be replaced by Turing Drive DBW interface")
 - No Turing Drive package exists anywhere in the codebase
 - No apt package name, no GitHub repo, no documentation on the DBW protocol
+- **Target machine note**: 2× CAN bus interfaces (`can0`, `can1`) are available but DOWN. These are likely needed for the Turing Drive DBW interface.
 
 ### Not done
 - [ ] **Contact Turing Drive** to request the drive-by-wire interface package
@@ -38,21 +39,21 @@ Last updated: 2026-04-02
 - `vehicle_interface.launch.xml` exists and launches the stub nodes
 - Stub actuator runs at 20 Hz control loop (`actuator.yaml`)
 - Stub velocity report publishes at 20 Hz (`velocity_report.yaml`)
-- `vehicle_info.param.yaml` has most dimensions measured:
+- `vehicle_info.param.yaml` has all dimensions filled (verified on target 2026-04-07):
   ```yaml
   wheel_base:      2.061   # measured
   wheel_tread:     1.213   # measured
   front_overhang:  0.406   # measured
   rear_overhang:   0.821   # measured
   vehicle_height:  2.005   # measured
-  wheel_radius:    ???     # NOT measured
-  wheel_width:     ???     # NOT measured
+  wheel_radius:    0.265   # fixed: was 0.53 (diameter), corrected to radius
+  wheel_width:     0.14    # filled
   max_steer_angle: 0.349   # ~20 degrees
   ```
 - Lexus mesh (`lexus.dae`) still used as 3D model placeholder — no golf cart model
 
 ### Can do before real machine
-- [ ] **Measure wheel radius and wheel width** — update `vehicle_info.param.yaml` (requires access to golf cart but not the computer)
+- [x] **Measure wheel radius and wheel width** — `wheel_radius: 0.265` (corrected from 0.53 diameter), `wheel_width: 0.14` in `vehicle_info.param.yaml` (fixed 2026-04-07).
 - [ ] **Prepare `vehicle_interface.launch.xml` template** for Turing Drive integration once package specs are known
 - [ ] **Document expected Autoware topics** the DBW must publish:
   - `/vehicle/status/velocity_status` (autoware_vehicle_msgs/VelocityReport)
@@ -131,13 +132,13 @@ Last updated: 2026-04-02
 |---------|--------|--------|
 | Turing Drive DBW package not delivered | Blocks vehicle control, velocity feedback, Phase 3 NDT | Request from Turing Drive |
 | 華夏科大 campus maps not obtained | Blocks map audit, Phase 3 NDT tuning | Request from Turing Drive |
-| Wheel radius/width not measured | Affects dead reckoning accuracy | Measure on golf cart |
+| ~~Wheel radius/width not measured~~ | ~~Affects dead reckoning accuracy~~ | Done (`wheel_radius: 0.265`, `wheel_width: 0.14`) |
 
 ### Pre-move preparation checklist
 These items can be completed before transferring to the real golf cart:
 - [ ] Turing Drive DBW package requested (and ideally received)
 - [ ] 華夏科大 campus maps requested (and ideally received)
-- [ ] Wheel radius and wheel width measured and added to `vehicle_info.param.yaml`
+- [x] Wheel radius and wheel width measured and added to `vehicle_info.param.yaml` (verify `wheel_radius: 0.53`)
 - [ ] Expected Autoware topic interfaces documented
 - [ ] COSS map planning simulation tested (`just launch-sim-planning`)
 - [ ] Map audit completed (if maps received)

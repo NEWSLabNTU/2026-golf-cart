@@ -1,9 +1,39 @@
 <launch>
-  <include file="$(find-pkg-share nebula_ros)/launch/velodyne_launch_all_hw.xml">
-    <arg name="sensor_model" value="VLP32"/>
-    <arg name="launch_hw" value="true"/>
-    <arg name="config_file" value="$(find-pkg-share golfcart_sensor_kit_launch)/config/VLP32.param.yaml"/>
-  </include>
+  <!-- Arguments to toggle each sensor -->
+  <arg name="launch_lidar"  default="true"/>
+  <arg name="launch_gnss"   default="true"/>
+  <arg name="launch_camera" default="true"/>
 
-  <node pkg="rviz2" exec="rviz2" name="rviz2_velodyne" args="-d velodyne.rviz"/>
+  <!-- ── Velodyne VLP-32C LiDAR ──────────────────────────────────────────── -->
+  <group if="$(var launch_lidar)">
+    <include file="$(find-pkg-share nebula_ros)/launch/velodyne_launch_all_hw.xml">
+      <arg name="sensor_model" value="VLP32"/>
+      <arg name="launch_hw" value="true"/>
+      <arg name="config_file" value="$(find-pkg-share golfcart_sensor_kit_launch)/config/VLP32.param.yaml"/>
+    </include>
+  </group>
+
+  <!-- ── u-blox GNSS ─────────────────────────────────────────────────────── -->
+  <group if="$(var launch_gnss)">
+    <node pkg="ublox_gps" name="ublox" exec="ublox_gps_node" respawn="true" respawn_delay="1.0">
+      <remap from="~/fix" to="~/nav_sat_fix"/>
+      <param from="$(find-pkg-share ublox_gps)/c94_f9p_rover.yaml"/>
+    </node>
+  </group>
+
+  <!-- ── USB Camera (front) ──────────────────────────────────────────────── -->
+  <group if="$(var launch_camera)">
+    <node pkg="usb_cam" exec="usb_cam_node_exe" name="usb_cam_front" output="screen">
+      <param name="video_device" value="/dev/video0"/>
+      <param name="image_width"  value="640"/>
+      <param name="image_height" value="480"/>
+      <param name="framerate"    value="15.0"/>
+      <param name="pixel_format" value="yuyv"/>
+      <param name="frame_id"     value="usb_camera_front"/>
+      <remap from="image_raw" to="/sensing/camera/front/image_raw"/>
+    </node>
+  </group>
+
+  <!-- ── RViz ────────────────────────────────────────────────────────────── -->
+  <node pkg="rviz2" exec="rviz2" name="rviz2_sensors" args="-d sensors.rviz"/>
 </launch>

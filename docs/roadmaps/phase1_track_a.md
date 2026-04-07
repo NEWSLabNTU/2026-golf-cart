@@ -2,7 +2,7 @@
 
 Tracks progress on the four Track A tasks from [ROADMAP.md](../../ROADMAP.md#track-a--sensor-kit-cleanup--lidar).
 
-Last updated: 2026-04-02
+Last updated: 2026-04-07 (verified on target machine)
 
 ---
 
@@ -54,26 +54,28 @@ All AutoSDV-era sensor references (Seyond/Robin-W, Cube1, ZED, MPU9250) have bee
 
 ## 2. Velodyne VLP-32C bring-up
 
-**Status: Software ready, calibration pending**
+**Status: Software ready, hardware not connected** (verified on target 2026-04-07)
 
 ### Done
 - [x] Launch file correctly invokes Nebula with VLP-32C (`lidar.launch.xml:16-21`)
 - [x] Config file `VLP32.param.yaml` exists with valid parameters:
   - `sensor_ip: 192.168.7.10`, `data_port: 2368`, `rotation_speed: 600`, `return_mode: Dual`
   - Calibration file: `$(find-pkg-share nebula_decoders)/calibration/velodyne/VLP32.yaml`
-- [x] Nebula driver installed via apt:
+- [x] Nebula driver installed via apt (verified on target):
   - `ros-humble-nebula-ros-1-5-0` (v0.2.5)
   - `ros-humble-nebula-decoders-1-5-0` (v0.2.5)
   - `ros-humble-nebula-common-1-5-0` (v0.2.5)
+  - Plus: `nebula-hw-interfaces`, `nebula-msgs`, `nebula-sensor-driver`, `nebula-tests`, `nebula-examples`
 
 ### Not done
-- [ ] **Measure VLP-32C mount position** and update `sensor_kit_calibration.yaml` — currently all zeros:
+- [ ] **Connect VLP-32C to target machine** — 3 spare Ethernet ports available (`enP5p3s0`, `enP5p4s0`, `enP5p5s0`); configure static IP `192.168.7.1/24` on the chosen port
+- [ ] **Verify VLP-32C mount position** in `sensor_kit_calibration.yaml` — values present (x=0.46, y=0.0, z=1.96) but may be from the previous vehicle, not measured on the golf cart:
   ```yaml
   # src/param/autoware_individual_params/.../sensor_kit_calibration.yaml lines 2-8
   vlp32c:
-    x: 0.0
+    x: 0.46
     y: 0.0
-    z: 0.0
+    z: 1.96
     roll: 0.0
     pitch: 0.0
     yaw: 0.0
@@ -84,26 +86,28 @@ All AutoSDV-era sensor references (Seyond/Robin-W, Cube1, ZED, MPU9250) have bee
 
 ## 3. u-blox GNSS bring-up
 
-**Status: Software ready, config and calibration pending**
+**Status: Software ready, hardware not connected** (verified on target 2026-04-07)
 
 ### Done
 - [x] Launch file supports u-blox (`gnss.launch.xml:14-20`): launches `ublox_gps_node` with `c94_f9p_rover.yaml`
-- [x] u-blox driver installed via apt:
+- [x] u-blox driver installed via apt (verified on target):
   - `ros-humble-ublox-gps` (v2.3.0)
   - `ros-humble-ublox-msgs` (v2.3.0)
   - `ros-humble-ublox-serialization` (v2.3.0)
-- [x] udev rules file exists (`setup/files/99-ublox-gps.rules`) — creates `/dev/ublox-gps` symlink
+- [x] udev rules file installed at `/etc/udev/rules.d/99-ublox-gps.rules` — creates `/dev/ublox-gps` symlink (verified on target)
 - [x] `ublox-udev` setup recipe installs rules and adds user to `dialout` group
+- [x] User `ubuntu` is in `dialout` group (verified on target)
+- [x] Default GNSS receiver changed from `garmin` to `ublox` in `gnss.launch.xml:3`
 
 ### Not done
-- [x] Default GNSS receiver changed from `garmin` to `ublox` in `gnss.launch.xml:3`
-- [ ] **Measure GNSS antenna position** and update `sensor_kit_calibration.yaml` — currently placeholder:
+- [ ] **Connect u-blox GNSS to target machine** — no `/dev/ttyACM*` or serial devices detected; UART ports `ttyTHS1`–`ttyTHS3` available
+- [ ] **Verify GNSS antenna position** in `sensor_kit_calibration.yaml` — values present (x=0.83, y=0.0, z=1.69) but may be from the previous vehicle:
   ```yaml
   # sensor_kit_calibration.yaml lines 16-22
   gnss_base_link:
-    x: 0.000000
-    y: 0.000000
-    z: 0.055  # random value
+    x: 0.83
+    y: 0.0
+    z: 1.69
   ```
 - [ ] Test fix quality and verify `/sensing/gnss/pose` topic with live hardware
 
@@ -111,7 +115,7 @@ All AutoSDV-era sensor references (Seyond/Robin-W, Cube1, ZED, MPU9250) have bee
 
 ## 4. IMU bring-up
 
-**Status: Blocked — Tamagawa driver not available**
+**Status: Blocked — Tamagawa driver not available** (confirmed on target 2026-04-07)
 
 ### Done
 - [x] `imu.launch.xml` updated: default topic set to `tamagawa/imu_raw` (line 9-10)
@@ -126,10 +130,11 @@ All AutoSDV-era sensor references (Seyond/Robin-W, Cube1, ZED, MPU9250) have bee
 - [x] MPU9250 driver submodule removed from `.gitmodules` (commit `3cb1ddc`)
 
 ### Not done
-- [ ] **Tamagawa driver not installed** — no apt package, no submodule, no source code in project. `dpkg -l | grep tamagawa` returns nothing.
+- [ ] **Tamagawa driver not installed** — no apt package, no submodule, no source code in project. `dpkg -l | grep tamagawa` returns nothing (verified on target 2026-04-07).
 - [ ] **Driver launch is commented out** in `imu.launch.xml:14-20` — placeholder references `tamagawa_imu_driver` package
-- [ ] **Measure IMU mount position** and update `sensor_kit_calibration.yaml` — mostly zeros except `z: -0.055` (likely placeholder)
+- [ ] **Verify IMU mount position** in `sensor_kit_calibration.yaml` — values present (x=-0.67, y=0.03, z=1.81) but may be from the previous vehicle
 - [ ] Verify `/sensing/imu/imu_data` topic with live hardware
+- **Note**: UART ports `ttyTHS1`–`ttyTHS3` are available on the target for serial IMU connection.
 
 ### Blocker
 Tamagawa IMU driver package source is not confirmed. **Action: request Turing Drive (the company) to provide the Tamagawa IMU driver package.** Listed in [ROADMAP.md Key Dependencies](../../ROADMAP.md#key-dependencies--blockers) as Track A responsibility to source.
@@ -141,8 +146,8 @@ Tamagawa IMU driver package source is not confirmed. **Action: request Turing Dr
 | Task | Status | Remaining work |
 |------|--------|----------------|
 | 1. Sensor cleanup | Done | — |
-| 2. VLP-32C bring-up | Software ready | Measure mount position, verify in RViz |
-| 3. u-blox GNSS bring-up | Software ready | Change default to ublox, measure antenna position, test fix |
+| 2. VLP-32C bring-up | Software ready, no hardware | Connect LiDAR, configure 192.168.7.x interface, measure mount, verify in RViz |
+| 3. u-blox GNSS bring-up | Software ready, no hardware | Connect GNSS, measure antenna position, test fix |
 | 4. Tamagawa IMU bring-up | Blocked | Source and install driver, uncomment launch, measure mount |
 
 ### Phase 1 exit criteria (Track A portion)

@@ -32,7 +32,7 @@ default:
     @just --list
 
 # Full setup (runs all steps in order)
-setup: _init ros2 ros2-dev-tools gdown geographiclib pacmod dev-tools _setup-autoware-debian _setup-isaac-ros python-deps nebula-driver ublox-driver ublox-udev usb-cam _setup-cyclonedds-sysctl _setup-turbovnc-virtualgl _setup-tamagawa-imu tier4-camera ros-deps
+setup: _init ros2 ros2-dev-tools gdown geographiclib pacmod dev-tools _setup-autoware-debian _setup-isaac-ros python-deps nebula-driver ublox-driver ublox-udev tier4-camera _setup-cyclonedds-sysctl _setup-turbovnc-virtualgl _setup-tamagawa-imu ros-deps
     @printf "{{green}}✓ Setup complete!{{nc}}\n"
 
 # Conditional Autoware Debian install (based on SKIP_AUTOWARE_DEBIAN env var)
@@ -106,18 +106,7 @@ tamagawa-imu: _init
     touch "{{marker_dir}}/tamagawa-imu"
     printf "{{yellow}}○{{nc}} tamagawa-imu marked (manual install pending)\n"
 
-# Install USB camera ROS driver (for TIER IV cameras used as V4L USB devices)
-usb-cam: _init ros2
-    #!/usr/bin/env bash
-    [[ -f "{{marker_dir}}/usb-cam" ]] && printf "{{green}}✓{{nc}} usb-cam already done\n" && exit 0
-    set -e
-    printf "{{yellow}}→{{nc}} Installing USB camera driver...\n"
-    sudo apt-get update
-    sudo apt-get install -y ros-humble-usb-cam
-    touch "{{marker_dir}}/usb-cam"
-    printf "{{green}}✓{{nc}} usb-cam done\n"
-
-# Install TIER IV C1 camera driver (v4l2_camera for GMSL2-USB 3.0 Conversion Kit)
+# Install camera driver (usb_cam + v4l-utils + udev rules for TIER IV C1 via GMSL2-USB)
 tier4-camera: _init ros2
     @just _run tier4-camera "{{scripts_dir}}/install-tier4-camera.sh"
 
@@ -302,7 +291,7 @@ status:
     echo "============="
     echo ""
     echo "Core Components:"
-    for step in ros2 ros2-dev-tools gdown geographiclib pacmod dev-tools python-deps nebula-driver ublox-driver ublox-udev usb-cam ros-deps; do
+    for step in ros2 ros2-dev-tools gdown geographiclib pacmod dev-tools python-deps nebula-driver ublox-driver ublox-udev tier4-camera ros-deps; do
         if [[ -f "{{marker_dir}}/$step" ]]; then
             printf "  {{green}}✓{{nc}} %s\n" "$step"
         else
