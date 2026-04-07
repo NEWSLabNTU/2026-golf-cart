@@ -28,7 +28,7 @@
       <param name="image_width"  value="640"/>
       <param name="image_height" value="480"/>
       <param name="framerate"    value="15.0"/>
-      <param name="pixel_format" value="yuyv"/>
+      <param name="pixel_format" value="uyvy"/>
       <param name="frame_id"     value="usb_camera_front"/>
       <remap from="image_raw" to="/sensing/camera/front/image_raw"/>
     </node>

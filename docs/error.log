@@ -1,0 +1,79 @@
+ubuntu@localhost:~/2026-golf-cart/scripts/check$ ros2 launch sensors.launch.xml     "launch_lidar:=true"     "launch_gnss:=false"     "launch_camera:=false"
+[INFO] [launch]: All log files can be found below /home/ubuntu/.ros/log/2026-04-07-18-31-56-249792-localhost.localdomain-15614
+[INFO] [launch]: Default logging verbosity is set to INFO
+[INFO] [velodyne_ros_wrapper_node-1]: process started with pid [15615]
+[INFO] [rviz2-2]: process started with pid [15617]
+[velodyne_ros_wrapper_node-1] [INFO] [1775557916.521264028] [velodyne_ros_wrapper_node]: Sensor Configuration: Velodyne Sensor Configuration:
+[velodyne_ros_wrapper_node-1] Sensor Model: VLP32
+[velodyne_ros_wrapper_node-1] Frame ID: velodyne
+[velodyne_ros_wrapper_node-1] Host IP: 192.168.7.1
+[velodyne_ros_wrapper_node-1] Sensor IP: 192.168.7.10
+[velodyne_ros_wrapper_node-1] Data Port: 2368
+[velodyne_ros_wrapper_node-1] Return Mode: Dual
+[velodyne_ros_wrapper_node-1] Frequency: 0
+[velodyne_ros_wrapper_node-1] MTU: 1500
+[velodyne_ros_wrapper_node-1] Use Sensor Time: 0
+[velodyne_ros_wrapper_node-1] GNSS Port: 2369
+[velodyne_ros_wrapper_node-1] Scan Phase: 0
+[velodyne_ros_wrapper_node-1] Rotation Speed: 600
+[velodyne_ros_wrapper_node-1] FoV Start: 0
+[velodyne_ros_wrapper_node-1] FoV End: 360
+[velodyne_ros_wrapper_node-1] [INFO] [1775557916.521465663] [velodyne_ros_wrapper_node]: UDP-only mode is enabled. Settings checks, synchronization, and diagnostics publishing are disabled.
+[velodyne_ros_wrapper_node-1] [INFO] [1775557916.525808603] [velodyne_ros_wrapper_node.VelodyneDecoder]: Using calibration data from /opt/autoware/1.5.0/share/nebula_decoders/calibration/velodyne/VLP32.yaml
+[velodyne_ros_wrapper_node-1] [INFO] [1775557916.525856155] [velodyne_ros_wrapper_node.VelodyneDecoder]: Starting Decoder
+[velodyne_ros_wrapper_node-1] [INFO] [1775557916.529210602] [velodyne_ros_wrapper_node.VelodyneDecoder]: . Wrapper=OK
+[velodyne_ros_wrapper_node-1] [WARN] [1775557916.629446068] [velodyne_ros_wrapper_node.VelodyneDecoder]: Missed pointcloud output deadline
+[rviz2-2] [INFO] [1775557917.605672561] [rviz2]: Stereo is NOT SUPPORTED
+[rviz2-2] [INFO] [1775557917.605904725] [rviz2]: OpenGl version: 4.6 (GLSL 4.6)
+[rviz2-2] [INFO] [1775557917.652905471] [rviz2]: Stereo is NOT SUPPORTED
+[rviz2-2] [ERROR] [1775557917.780489379] [rviz2]: PluginlibFactory: The plugin for class 'rviz_default_plugins/NavSatFix' failed to load. Error: According to the loaded plugin descriptions the class rviz_default_plugins/NavSatFix with base class type rviz_common::Display does not exist. Declared types are  autoware_mission_details_overlay_rviz_plugin/MissionDetailsDisplay autoware_overlay_rviz_plugin/SignalDisplay autoware_perception_rviz_plugin/DetectedObjects autoware_perception_rviz_plugin/PredictedObjects autoware_perception_rviz_plugin/TrackedObjects autoware_perception_rviz_plugin/TrafficLight autoware_string_stamped_rviz_plugin/StringStampedOverlayDisplay autoware_traffic_light_rviz_plugin/TrafficLightDisplay grid_map_rviz_plugin/GridMap nvblox_rviz_plugin/NvbloxMesh nvblox_rviz_plugin/NvbloxVoxelBlockLayer rviz_default_plugins/AccelStamped rviz_default_plugins/Axes rviz_default_plugins/Camera rviz_default_plugins/DepthCloud rviz_default_plugins/Effort rviz_default_plugins/FluidPressure rviz_default_plugins/Grid rviz_default_plugins/GridCells rviz_default_plugins/Illuminance rviz_default_plugins/Image rviz_default_plugins/InteractiveMarkers rviz_default_plugins/LaserScan rviz_default_plugins/Map rviz_default_plugins/Marker rviz_default_plugins/MarkerArray rviz_default_plugins/Odometry rviz_default_plugins/Path rviz_default_plugins/PointCloud rviz_default_plugins/PointCloud2 rviz_default_plugins/PointStamped rviz_default_plugins/Polygon rviz_default_plugins/Pose rviz_default_plugins/PoseArray rviz_default_plugins/PoseWithCovariance rviz_default_plugins/Range rviz_default_plugins/RelativeHumidity rviz_default_plugins/RobotModel rviz_default_plugins/TF rviz_default_plugins/Temperature rviz_default_plugins/TwistStamped rviz_default_plugins/Wrench rviz_plugins/AccelerationMeter rviz_plugins/CandidateTrajectories rviz_plugins/ConsoleMeter rviz_plugins/MaxVelocity rviz_plugins/Path rviz_plugins/PathWithLaneId rviz_plugins/PolarGridDisplay rviz_plugins/PoseWithUuidStamped rviz_plugins/ScoredCandidateTrajectories rviz_plugins/SteeringAngle rviz_plugins/Trajectory rviz_plugins/TurnSignal rviz_plugins/VelocityHistory rviz_plugins::ColoredPoseWithCovarianceHistory rviz_plugins::PoseHistory rviz_plugins::PoseHistoryFootprint rviz_plugins::PoseWithCovarianceHistory tier4_perception_rviz_plugin/DetectedObjectsWithFeature tier4_planning_factor_rviz_plugin/PlanningFactorRvizPlugin
+[velodyne_ros_wrapper_node-1] [WARN] [1775557917.789214428] [velodyne_ros_wrapper_node]: New subscription discovered on topic '/velodyne_points', requesting incompatible QoS. No messages will be sent to it. Last incompatible policy: RELIABILITY_QOS_POLICY
+[rviz2-2] [INFO] [1775557918.071983362] [rviz2]: Stereo is NOT SUPPORTED
+[velodyne_ros_wrapper_node-1] [WARN] [1775557921.629614388] [velodyne_ros_wrapper_node.VelodyneDecoder]: Missed pointcloud output deadline
+[velodyne_ros_wrapper_node-1] [WARN] [1775557926.629651603] [velodyne_ros_wrapper_node.VelodyneDecoder]: Missed pointcloud output deadline
+[velodyne_ros_wrapper_node-1] [WARN] [1775557931.629660753] [velodyne_ros_wrapper_node.VelodyneDecoder]: Missed pointcloud output deadline
+[velodyne_ros_wrapper_node-1] [WARN] [1775557936.630034036] [velodyne_ros_wrapper_node.VelodyneDecoder]: Missed pointcloud output deadline
+[velodyne_ros_wrapper_node-1] [WARN] [1775557941.729859831] [velodyne_ros_wrapper_node.VelodyneDecoder]: Missed pointcloud output deadline
+[velodyne_ros_wrapper_node-1] [WARN] [1775557946.730251002] [velodyne_ros_wrapper_node.VelodyneDecoder]: Missed pointcloud output deadline
+[velodyne_ros_wrapper_node-1] [WARN] [1775557951.830002620] [velodyne_ros_wrapper_node.VelodyneDecoder]: Missed pointcloud output deadline
+[velodyne_ros_wrapper_node-1] [WARN] [1775557956.830393247] [velodyne_ros_wrapper_node.VelodyneDecoder]: Missed pointcloud output deadline
+^C[WARNING] [launch]: user interrupted with ctrl-c (SIGINT)
+[rviz2-2] [INFO] [1775557958.717927735] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[velodyne_ros_wrapper_node-1] [INFO] [1775557958.717922679] [rclcpp]: signal_handler(SIGINT/SIGTERM)
+[INFO] [velodyne_ros_wrapper_node-1]: process has finished cleanly [pid 15615]
+[INFO] [rviz2-2]: process has finished cleanly [pid 15617]
+
+ubuntu@localhost:~/2026-golf-cart$ ros2 topic info /velodyne_points --verbose
+Type: sensor_msgs/msg/PointCloud2
+
+Publisher count: 1
+
+Node name: velodyne_ros_wrapper_node
+Node namespace: /
+Topic type: sensor_msgs/msg/PointCloud2
+Endpoint type: PUBLISHER
+GID: 01.10.a4.42.3c.bc.eb.36.ab.66.60.2b.00.00.16.03.00.00.00.00.00.00.00.00
+QoS profile:
+  Reliability: BEST_EFFORT
+  History (Depth): KEEP_LAST (10)
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
+
+Subscription count: 1
+
+Node name: rviz2_sensors
+Node namespace: /
+Topic type: sensor_msgs/msg/PointCloud2
+Endpoint type: SUBSCRIPTION
+GID: 01.10.fc.33.8d.7f.b9.3e.76.dc.7a.97.00.00.2c.04.00.00.00.00.00.00.00.00
+QoS profile:
+  Reliability: BEST_EFFORT
+  History (Depth): KEEP_LAST (5)
+  Durability: VOLATILE
+  Lifespan: Infinite
+  Deadline: Infinite
+  Liveliness: AUTOMATIC
+  Liveliness lease duration: Infinite
