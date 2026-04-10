@@ -35,16 +35,13 @@ This system provides a complete autonomous driving software stack for golf cart 
 
 ```bash
 # Install dependencies
-make prepare
+just setup
 
 # Build the workspace
-make build
+just build
 
 # Launch the system
-make launch
-
-# Stop the system
-make stop
+just launch
 ```
 
 ### Launch with Specific Configuration
