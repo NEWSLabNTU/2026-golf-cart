@@ -78,6 +78,15 @@ This project is currently in development. See [ROADMAP.md](ROADMAP.md) for the a
 ## Maps Download
 
 Click the link to download NTU campus map to data/ntu-campus-planning: https://newslabn.csie.ntu.edu.tw/drive/d/s/17udXr7jE0y1uVZuITDKMHFdhprfnH8l/y7cT2BSRT_5RUSI5bp4blXm8MI8qlp-3-iLCA3n5hIg0
+The expected structure will be
+```
+├── data/
+│   └── ntu-campus-planning/             # For NTU campus map
+│       └── r01/                         # Route 01
+│           ├── lanelet2_map.osm         # Lanelet2 map
+│           ├── map_projector_info.yaml  # Map projector information
+│           └── pointcloud_map.pcd.pcd   # Point cloud
+```
 
 
 ## Documentation
