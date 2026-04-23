@@ -188,3 +188,28 @@ sim-coss-park:
         "just launch-sim-logging" \
         "sleep 40 && ros2 bag play data/rosbags/outdoor_20251226_153115/ --clock -l -r 1.0" \
         "sleep 45 && ./scripts/rosbag/record_localization.sh"
+
+# ============================================================================
+# oToBrite Setup - AFE R750 only
+# https://ess-wiki.advantech.com.tw/view/AFE_R750_Development#oToBrite_Camera
+# ============================================================================
+
+advantech-r750-otobrite-setup-and-reboot:
+    #!/usr/bin/env bash
+    if [ -f "$HOME/insmod-otocam.sh" ]; then
+        echo "oToBrite module has set"
+    fi
+    read -p "The device will be rebooted immediately, continue? (y/N)" yyyes
+    yyyes="${yyyes:-n}"
+    case "$yyyes" in 
+        [Yy]*)
+    echo "Start to setup and reboot"
+    cd /usr/local/bin/otocam
+    sudo ./set_otocam_agxorin_64g.sh
+    ;;
+    *)
+    exit 0
+    ;;
+    esac
+
+
