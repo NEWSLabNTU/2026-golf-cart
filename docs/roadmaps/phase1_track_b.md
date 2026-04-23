@@ -2,7 +2,7 @@
 
 Tracks progress on the five Track B tasks from [ROADMAP.md](../../ROADMAP.md#track-b--tooling--infrastructure).
 
-Last updated: 2026-04-07 (verified on target machine)
+Last updated: 2026-04-23 (verified on target machine)
 
 ---
 
@@ -54,6 +54,8 @@ Directory rename done (commit `b073f4d`), but internal package names were not ch
 - [x] `launch-zed` recipe removed (no longer in justfile)
 - [x] `play_launch` is the default runtime (already was)
 - [x] `just check-sensors` pre-build guard — `scripts/check/run.sh` checks for `install/setup.bash` before sourcing, exits with helpful error if missing (verified on target)
+- [x] **`just check-sensors` LiDAR UDP-stream check** — added tcpdump-based probe in `scripts/check/run.sh` that (1) confirms the VLP-32C is emitting UDP on port 2368 and (2) warns when the destination IP is broadcast or mismatched against the host's iface IP (the failure mode that silently broke Nebula on 2026-04-23). Requires `tcpdump`; gracefully skips if unavailable.
+- [x] **oToBrite camera setup recipe** (`justfile:195-215`) — `advantech-r750-otobrite-setup-and-reboot` runs Advantech's `set_otocam_agxorin_64g.sh` for the AFE R750 oToBrite camera kit. Only applicable on the Advantech Orin platform (reference: the [AFE R750 docs](https://ess-wiki.advantech.com.tw/view/AFE_R750_Development#oToBrite_Camera)); not used on the current Jetson AGX Orin Developer Kit target.
 
 ### Not done
 - [ ] `scripts/rosbag/record_outdoor.sh` is a **stub** — exits with error on line 13; topic list on lines 20-47 is commented out and needs verification before activation

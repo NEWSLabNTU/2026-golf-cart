@@ -2,7 +2,7 @@
 
 Tracks progress on the four Track A tasks from [ROADMAP.md](../../ROADMAP.md#track-a--tier-iv-camera-setup).
 
-Last updated: 2026-04-07 (verified on target machine)
+Last updated: 2026-04-23 (verified on target machine)
 
 ---
 
@@ -48,7 +48,7 @@ Last updated: 2026-04-07 (verified on target machine)
 **Status: Not started — can be partially prepared**
 
 ### Current state
-- `camera.launch.xml` launches a single ZED camera via `zed_wrapper` with `zed_camera.launch.py`
+- `camera.launch.xml` launches a single ZED camera via `zed_wrapper` with `zed_camera.launch.py` — **still wired to ZED**, not USB or TIER IV. Tracked as an open roadblock in [docs/roadblocks.md](../roadblocks.md#cameralaunchxml-still-uses-zed-driver-not-usb-camera): passing `camera_model:=usb` currently does nothing useful (the string is forwarded to the ZED wrapper).
 - `camera_model` argument exists in `golfcart.launch.yaml` (line 19-22) with options: `usb`, `none`
 - No TIER IV camera config YAML files exist (no `tier4_camera_*.yaml`)
 - No camera intrinsic calibration files exist

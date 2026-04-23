@@ -2,7 +2,7 @@
 
 Tracks progress on the four Track A tasks from [ROADMAP.md](../../ROADMAP.md#track-a--sensor-kit-cleanup--lidar).
 
-Last updated: 2026-04-07 (verified on target machine)
+Last updated: 2026-04-23 (verified on target machine)
 
 ---
 
@@ -54,7 +54,7 @@ All AutoSDV-era sensor references (Seyond/Robin-W, Cube1, ZED, MPU9250) have bee
 
 ## 2. Velodyne VLP-32C bring-up
 
-**Status: Software ready, hardware not connected** (verified on target 2026-04-07)
+**Status: Hardware connected and streaming** (verified on target 2026-04-23)
 
 ### Done
 - [x] Launch file correctly invokes Nebula with VLP-32C (`lidar.launch.xml:16-21`)
@@ -66,9 +66,13 @@ All AutoSDV-era sensor references (Seyond/Robin-W, Cube1, ZED, MPU9250) have bee
   - `ros-humble-nebula-decoders-1-5-0` (v0.2.5)
   - `ros-humble-nebula-common-1-5-0` (v0.2.5)
   - Plus: `nebula-hw-interfaces`, `nebula-msgs`, `nebula-sensor-driver`, `nebula-tests`, `nebula-examples`
+- [x] **VLP-32C physically connected** to target machine — iface `enP5p4s0` configured with `192.168.7.1/24`; LiDAR reachable at `192.168.7.10`
+- [x] **LiDAR streaming to host** — UDP packets verified `192.168.7.10:2368 → 192.168.7.1:2368` via tcpdump (2026-04-23)
+- [x] **Nebula decoder producing point clouds** — "Missed pointcloud output deadline" warnings resolved after fixing the LiDAR's destination-IP from broadcast (255.255.255.255) to the host unicast IP in the web UI. See [docs/roadblocks.md](../roadblocks.md#nebula-decoder-silent--missed-pointcloud-output-deadline-lidar-broadcasting).
+- [x] **UDP-stream sanity check added** to `scripts/check/run.sh` — uses tcpdump to detect when the LiDAR is broadcasting instead of unicasting to the host's iface IP (requires `tcpdump`, optionally `cap_net_raw` to skip sudo)
+- [x] **RViz config path fix** in `scripts/check/sensors.launch.xml` — `$(dirname)` now captured into `rviz_config` arg before any `<include>` so RViz loads `sensors.rviz` regardless of CWD (prevents the BEST_EFFORT QoS mismatch). See [docs/roadblocks.md](../roadblocks.md#scriptschecksensorslaunchxml--rviz-config-not-loading-from-non-scriptscheck-cwd).
 
 ### Not done
-- [ ] **Connect VLP-32C to target machine** — 3 spare Ethernet ports available (`enP5p3s0`, `enP5p4s0`, `enP5p5s0`); configure static IP `192.168.7.1/24` on the chosen port
 - [ ] **Verify VLP-32C mount position** in `sensor_kit_calibration.yaml` — values present (x=0.46, y=0.0, z=1.96) but may be from the previous vehicle, not measured on the golf cart:
   ```yaml
   # src/param/autoware_individual_params/.../sensor_kit_calibration.yaml lines 2-8
@@ -80,7 +84,7 @@ All AutoSDV-era sensor references (Seyond/Robin-W, Cube1, ZED, MPU9250) have bee
     pitch: 0.0
     yaw: 0.0
   ```
-- [ ] Confirm point cloud in RViz with live hardware
+- [ ] Confirm point cloud quality/coverage in RViz with the LiDAR mounted on the golf cart (current verification was on the benchtop)
 
 ---
 
@@ -146,12 +150,12 @@ Tamagawa IMU driver package source is not confirmed. **Action: request Turing Dr
 | Task | Status | Remaining work |
 |------|--------|----------------|
 | 1. Sensor cleanup | Done | — |
-| 2. VLP-32C bring-up | Software ready, no hardware | Connect LiDAR, configure 192.168.7.x interface, measure mount, verify in RViz |
+| 2. VLP-32C bring-up | Connected and streaming | Verify mount on golf cart, inspect point cloud coverage |
 | 3. u-blox GNSS bring-up | Software ready, no hardware | Connect GNSS, measure antenna position, test fix |
 | 4. Tamagawa IMU bring-up | Blocked | Source and install driver, uncomment launch, measure mount |
 
 ### Phase 1 exit criteria (Track A portion)
 - [x] No Seyond/Robin-W/Cube1/ZED/MPU9250 code paths remain
-- [ ] LiDAR publishes valid point cloud (software ready, needs hardware verification)
+- [x] LiDAR publishes valid point cloud (verified 2026-04-23; mount verification on golf cart still pending)
 - [ ] GNSS publishes valid fix (software ready, needs hardware verification)
 - [ ] IMU publishes valid data (blocked on Tamagawa driver)

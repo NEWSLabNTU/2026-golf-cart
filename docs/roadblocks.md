@@ -26,6 +26,14 @@
 - **Action**: Connect sensors to the Orin DevKit and configure network/serial interfaces.
 
 
+### `camera.launch.xml` still uses ZED driver, not USB camera
+
+- **File**: `src/sensor_kit/golfcart_sensor_kit_launch/golfcart_sensor_kit_launch/launch/camera.launch.xml`
+- **Status**: The launch file still includes `zed_wrapper/launch/zed_camera.launch.py` with `camera_model` defaulting to `zedxm`, left over from the previous Golf Cart system. Per the migration plan, the golf cart uses USB cameras (`camera_model:=usb`) and will later upgrade to TIER IV GMSL.
+- **Impact**: Launching camera with `camera_model:=usb` does nothing useful — it just passes `usb` to the ZED wrapper. USB cameras (via `ros-humble-usb-cam`, already installed on target) are never started.
+- **Action**: Rewrite `camera.launch.xml` to launch `usb_cam` for `camera_model:=usb` (and `none` for no camera). Keep a path for `camera_model:=tier4` when GMSL hardware arrives. Remove the ZED wrapper include.
+
+
 ### Tamagawa IMU driver — Placeholder only
 
 - **Package**: Unknown (driver source not confirmed)
@@ -73,6 +81,26 @@
 ---
 
 ## Resolved
+
+### Nebula decoder silent — "Missed pointcloud output deadline" (LiDAR broadcasting)
+
+- **Symptom**: `ros2 launch sensors.launch.xml launch_lidar:=true ...` produced no point clouds. `velodyne_ros_wrapper_node` logged `Missed pointcloud output deadline` every 5 s. Ping to `192.168.7.10` succeeded and `tcpdump -i enP5p4s0 udp port 2368` showed ~1400 pkt/s from the LiDAR.
+- **Cause**: The VLP-32C's "Host (Destination) IP" was set to `255.255.255.255` (broadcast). Nebula binds its UDP socket to the unicast `host_ip` (`192.168.7.1:2368`, confirmed via `ss -nlup`), so the kernel dropped the broadcast packets before they reached the driver — tcpdump (link layer) still saw them.
+- **Fix**:
+  1. In the LiDAR web UI at `http://192.168.7.10` → *Network*, set destination IP to `192.168.7.1` (the host's iface IP), click **Set** and **Save Configuration**, then power-cycle the sensor. Verified 2026-04-23: packets now `192.168.7.10:2368 → 192.168.7.1:2368`, decoder deadline warnings dropped to zero.
+  2. Added a destination-IP sanity check to `scripts/check/run.sh` (tcpdump-based) that warns when the LiDAR is broadcasting instead of unicasting to the host's iface IP. Requires `tcpdump` (install via `sudo apt install tcpdump`; optional `sudo setcap cap_net_raw,cap_net_admin=eip $(which tcpdump)` to avoid the `sudo` prompt).
+
+### `scripts/check/sensors.launch.xml` — RViz config not loading from non-`scripts/check/` CWD
+
+- **Symptom**: Launching from any CWD other than `scripts/check/` caused RViz to start with an empty config. A PointCloud2 display added by hand then subscribed to `/velodyne_points` with default **RELIABLE** QoS, while Nebula publishes **BEST_EFFORT**, producing: `New subscription discovered on topic '/velodyne_points', requesting incompatible QoS ... RELIABILITY_QOS_POLICY`.
+- **Cause**: The launch used `args="-d sensors.rviz"` (relative path). Fix attempt 1 (`-d $(dirname)/sensors.rviz` inline on the node) also failed: `$(dirname)` is evaluated lazily and, after the `<include>` of `velodyne_launch_all_hw.xml`, resolved to `/opt/autoware/.../nebula_ros/launch/` rather than the top-level file's directory.
+- **Fix**: Capture `$(dirname)` into an `<arg>` declared **before** any `<include>`, then reference via `$(var ...)` on the node:
+  ```xml
+  <arg name="rviz_config" default="$(dirname)/sensors.rviz"/>
+  ...
+  <node pkg="rviz2" exec="rviz2" name="rviz2_sensors" args="-d $(var rviz_config)"/>
+  ```
+  With the saved config loading correctly, the RViz subscription uses BEST_EFFORT and the QoS warning only appears once during RViz startup as a transient probe (benign, does not recur).
 
 ### `just build` / `just test` / `just setup` (ros-deps) — Duplicate `individual_params` package
 

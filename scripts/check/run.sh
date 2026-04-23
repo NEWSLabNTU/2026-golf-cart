@@ -35,15 +35,10 @@ LIDAR_SUBNET="192.168.7."
 
 section "Velodyne VLP-32C LiDAR"
 
-lidar_iface=""
-while IFS= read -r line; do
-    if [[ "$line" == *"$LIDAR_SUBNET"* ]]; then
-        lidar_iface="$line"
-    fi
-done < <(ip -4 addr show 2>/dev/null)
+lidar_iface=$(ip -4 -o addr show 2>/dev/null | awk -v subnet="$LIDAR_SUBNET" '$4 ~ subnet {print $2; exit}')
 
 if [[ -n "$lidar_iface" ]]; then
-    ok "Network interface configured on ${LIDAR_SUBNET}x subnet"
+    ok "Network interface configured on ${LIDAR_SUBNET}x subnet (${lidar_iface})"
 else
     fail "No interface on ${LIDAR_SUBNET}x subnet — configure with: sudo ip addr add 192.168.7.1/24 dev <iface> && sudo ip link set <iface> up"
 fi
@@ -53,6 +48,49 @@ if ping -c 1 -W 1 "$LIDAR_IP" &>/dev/null; then
     lidar_ok=true
 else
     fail "VLP-32C not reachable at $LIDAR_IP (ping failed)"
+fi
+
+# A reachable LiDAR may still be silent if its destination IP (set in the
+# web UI at http://$LIDAR_IP) does not match this host. Sniff port 2368.
+if [[ -n "$lidar_iface" ]] && $lidar_ok; then
+    if ! command -v tcpdump &>/dev/null; then
+        warn "tcpdump not installed — skipping UDP stream check (sudo apt install tcpdump)"
+    else
+        echo "timeout 2 tcpdump -i $lidar_iface -nn -c 1 udp port 2368"
+        tcpdump_cmd=(timeout 2 tcpdump -i "$lidar_iface" -nn -c 1 'udp port 2368')
+        capture_out=$("${tcpdump_cmd[@]}" 2>&1)
+        capture_rc=$?
+        if [[ $capture_rc -ne 0 ]] && echo "$capture_out" | grep -qiE "permission|operation not permitted"; then
+            capture_out=$(sudo -n "${tcpdump_cmd[@]}" 2>&1)
+            capture_rc=$?
+            if echo "$capture_out" | grep -qiE "password is required|sudo:"; then
+                warn "UDP stream check needs root — run: sudo setcap cap_net_raw,cap_net_admin=eip \$(which tcpdump)"
+                capture_rc=-1
+            fi
+        fi
+        case $capture_rc in
+            0)
+                ok "VLP-32C streaming UDP packets on port 2368"
+                # Nebula binds its UDP socket to host_ip (192.168.7.1), so the
+                # kernel only delivers packets whose dst is exactly that IP.
+                # A broadcast dst (255.255.255.255 or 192.168.7.255) is dropped
+                # silently → driver reports "Missed pointcloud output deadline".
+                host_ip=$(ip -4 -o addr show "$lidar_iface" 2>/dev/null | awk '{split($4,a,"/"); print a[1]; exit}')
+                bcast_ip=$(ip -4 -o addr show "$lidar_iface" 2>/dev/null | awk '{print $6; exit}')
+                pkt_dst=$(echo "$capture_out" | grep -oE 'IP [0-9.]+\.[0-9]+ > [0-9.]+\.[0-9]+' | head -1 | awk '{print $4}' | sed 's/\.[0-9]*$//')
+                if [[ -n "$pkt_dst" ]]; then
+                    if [[ "$pkt_dst" == "255.255.255.255" || "$pkt_dst" == "$bcast_ip" ]]; then
+                        warn "LiDAR is broadcasting to ${pkt_dst}; Nebula binds to ${host_ip} and won't receive — set destination IP to ${host_ip} in web UI: http://${LIDAR_IP}"
+                    elif [[ "$pkt_dst" != "$host_ip" ]]; then
+                        warn "LiDAR sending to ${pkt_dst} but host_ip is ${host_ip} — Nebula will not receive packets"
+                    fi
+                fi
+                ;;
+            124) fail "VLP-32C reachable but NOT streaming on port 2368 — set destination IP to this host in web UI: http://${LIDAR_IP}" ;;
+            -1)  ;;  # already warned
+            *)   warn "tcpdump exited $capture_rc: $(echo "$capture_out" | tail -1)" ;;
+        esac
+    fi
 fi
 
 if dpkg -l ros-humble-nebula-ros-1-5-0 &>/dev/null; then
