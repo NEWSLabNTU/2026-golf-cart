@@ -13,6 +13,14 @@
     </include>
   </group>
 
+    <!-- ── Seyond Falcon LiDAR ──────────────────────────────────────────── -->
+    <group if="$(var launch_lidar)">
+    <!-- <include file="$(find-pkg-share seyond)/start_with_config.py"> -->
+    <include file="$(find-pkg-share golfcart_sensor_kit_launch)/launch/seyond_start.py">
+      <!-- <arg name="config_path" value="$(find-pkg-share golfcart_sensor_kit_launch)/config/seyond.param.yaml"/> -->
+    </include>
+  </group>
+
   <!-- ── u-blox GNSS ─────────────────────────────────────────────────────── -->
   <group if="$(var launch_gnss)">
     <node pkg="ublox_gps" name="ublox" exec="ublox_gps_node" respawn="true" respawn_delay="1.0">

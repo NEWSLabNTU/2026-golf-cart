@@ -18,13 +18,19 @@ setup:
     ./setup.sh
 
 # Build this project
-build:
+build: build_seyond
     #!/usr/bin/env bash
     source /opt/ros/humble/setup.bash && \
     colcon build \
         --base-paths src \
         --symlink-install \
         --cmake-args -DCMAKE_BUILD_TYPE=Release
+
+build_seyond:
+    #!/usr/bin/env bash
+    source /opt/ros/humble/setup.bash
+    cd src/sensor_component/external/seyond_ros_driver
+    ./build.bash
 
 # Run tests for packages in src/ directory
 test:

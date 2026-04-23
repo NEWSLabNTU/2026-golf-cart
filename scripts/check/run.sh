@@ -62,6 +62,36 @@ else
     lidar_ok=false
 fi
 
+
+# ── 1. Seyond Falcon LiDAR ───────────────────────────────────────────────
+LIDAR_IP="172.168.1.10"
+LIDAR_SUBNET="172.168.1."
+LIDAR_PORT="8010"
+
+section "Seyond Falcon LiDAR"
+
+lidar_iface=$(ip -4 -o addr show 2>/dev/null | awk -v subnet="$LIDAR_SUBNET" '$4 ~ subnet {print $2; exit}')
+
+if [[ -n "$lidar_iface" ]]; then
+    ok "Network interface configured on ${LIDAR_SUBNET}x subnet (${lidar_iface})"
+else
+    fail "No interface on ${LIDAR_SUBNET}x subnet — configure with: sudo ip addr add 192.168.7.1/24 dev <iface> && sudo ip link set <iface> up"
+fi
+
+if ping -c 1 -W 1 "$LIDAR_IP" &>/dev/null; then
+    ok "Falcon reachable at $LIDAR_IP"
+    lidar_ok=true
+else
+    fail "Falcon not reachable at $LIDAR_IP (ping failed)"
+fi
+
+if ros2 pkg list | grep -q "^seyond$"; then
+    ok "Seyond ROS2 package found"
+else
+    fail "Seyond ROS2 package not found"
+    lidar_ok=false
+fi
+
 # ── 2. u-blox GNSS ──────────────────────────────────────────────────────────
 section "u-blox GNSS"
 
