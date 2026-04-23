@@ -28,3 +28,6 @@
 [submodule "src/system/golfcart_system_monitor"]
 	path = src/system/golfcart_system_monitor
 	url = https://github.com/NEWSLabNTU/golfcart_system_monitor.git
+[submodule "src/sensor_component/external/seyond_ros_driver"]
+	path = src/sensor_component/external/seyond_ros_driver
+	url = https://github.com/NEWSLabNTU/seyond_ros_driver.git
