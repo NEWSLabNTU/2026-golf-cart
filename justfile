@@ -84,7 +84,7 @@ launch-sim-planning:
     play_launch launch \
         --web-addr 0.0.0.0:8081 \
         autoware_launch planning_simulator.launch.xml \
-        map_path:={{justfile_directory()}}/data/ntu-map-planning/r01 \
+        map_path:={{justfile_directory()}}/data/ntu-campus-planning/r01 \
         vehicle_model:=golfcart_vehicle \
         sensor_model:=golfcart_sensor_kit
 

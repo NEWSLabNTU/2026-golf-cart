@@ -7,6 +7,11 @@
 
 ## Open Issues
 
+### Car size should be fix
+- src/vehicle/golfcart_vehicle_launch/golfcart_vehicle_description/urdf/vehicle.xacro
+
+
+
 
 ### No sensors physically connected (verified 2026-04-07)
 
