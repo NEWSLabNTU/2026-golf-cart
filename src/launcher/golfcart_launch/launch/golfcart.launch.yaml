@@ -190,8 +190,8 @@ launch:
           to: /perception/object_recognition/objects
 
 # System Monitor
-- include:
-    file: "$(find-pkg-share golfcart_system_monitor)/launch/golfcart_system_monitor.launch.yaml"
+# - include:
+#     file: "$(find-pkg-share autosdv_system_monitor)/launch/autosdv_system_monitor.launch.yaml"
 
 # # RQT Runtime Monitor
 # - node:
