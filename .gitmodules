@@ -21,7 +21,7 @@
 	url = https://github.com/NEWSLabNTU/golfcart_sensor_kit_launch.git
 [submodule "src/vehicle/golfcart_vehicle_launch"]
 	path = src/vehicle/golfcart_vehicle_launch
-	url = https://github.com/NEWSLabNTU/golfcart_vehicle_launch.git
+	url = https://github.com/NEWSLabNTU/golfcart_vehicle_launch-private.git
 [submodule "src/system/golfcart_runtime"]
 	path = src/system/golfcart_runtime
 	url = https://github.com/NEWSLabNTU/golfcart_runtime.git
