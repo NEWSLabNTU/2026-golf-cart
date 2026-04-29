@@ -423,6 +423,10 @@ NDT parameters may need tuning for golf cart:
 
 All dependencies must be ready before localization can work.
 
+## Tooling Preferences
+- Prefer `rg` (ripgrep) over `grep -r` / `find … -exec grep` for codebase searches — it's faster, respects `.gitignore`, and the flags compose more cleanly (e.g. `rg -nE 'pattern' path`, `rg -l 'pattern'`, `rg -tyaml 'pattern'`).
+- Prefer `just <recipe>` over `cargo` or raw `sh` scripts.
+
 ## Important Notes
 - **Target Platform**: Advantech Orin computer with JetPack 6.0 (NOT JP6.2 or newer)
 - **Autoware Version**: 2025.02 at `/home/aeon/repos/autoware/2025.02-ws`
