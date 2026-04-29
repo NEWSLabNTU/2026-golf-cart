@@ -1,8 +1,8 @@
 <launch>
   <!-- Arguments to toggle each sensor -->
-  <arg name="launch_lidar"  default="true"/>
-  <arg name="launch_gnss"   default="true"/>
-  <arg name="launch_camera" default="true"/>
+  <arg name="launch_lidar"  default="false"/>
+  <arg name="launch_gnss"   default="false"/>
+  <arg name="launch_camera" default="false"/>
 
   <!-- Capture this launch file's directory before any <include> shifts $(dirname). -->
   <arg name="rviz_config" default="$(dirname)/sensors.rviz"/>
