@@ -29,6 +29,7 @@ Completed or superseded planning documents.
 - [AutoSDV to Golf Cart Rename](roadmaps/0-autosdv-to-golfcart-rename.md) — Naming cleanup status (completed)
 - [Vehicle Interface Hardening](roadmaps/2-vehicle-interface-hardening.md) — golfcart_vehicle_interface fixes vs Autoware pacmod_interface reference
 - [Vehicle Interface Fault Handling](roadmaps/2-vehicle-interface-fault-handling.md) — ROS-sub / CAN-msg drop handling
+- [Xsens Driver Hardening](roadmaps/2-xsens-driver-hardening.md) — IMU CAN driver UB fixes, socket reopen, diagnostics
 
 ---
 
