@@ -23,10 +23,12 @@ Background research and technology surveys (some carry historical AutoSDV-era co
 
 Completed or superseded planning documents.
 
-- [Migration Plan](roadmaps/migration.md) — Original 11-phase migration from AutoSDV/Golf Cart to golf cart (superseded by [ROADMAP.md](../ROADMAP.md))
-- [Phase 1 Track A Cleanup](roadmaps/phase1_track_a.md) — Sensor cleanup (done), VLP-32C & u-blox (software ready), Tamagawa IMU (blocked)
-- [Phase 1 Track B Status](roadmaps/phase1_track_b.md) — Tooling & infrastructure progress (setup, justfile, version control, vehicle description)
-- [AutoSDV to Golf Cart Rename](roadmaps/autosdv_to_golfcart_rename.md) — Naming cleanup status (completed)
+- [Migration Plan](roadmaps/0-migration.md) — Original 11-phase migration from AutoSDV/Golf Cart to golf cart (superseded by [ROADMAP.md](../ROADMAP.md))
+- [Phase 1 Track A Cleanup](roadmaps/1-track-a.md) — Sensor cleanup (done), VLP-32C & u-blox (software ready), Tamagawa IMU (blocked)
+- [Phase 1 Track B Status](roadmaps/1-track-b.md) — Tooling & infrastructure progress (setup, justfile, version control, vehicle description)
+- [AutoSDV to Golf Cart Rename](roadmaps/0-autosdv-to-golfcart-rename.md) — Naming cleanup status (completed)
+- [Vehicle Interface Hardening](roadmaps/2-vehicle-interface-hardening.md) — golfcart_vehicle_interface fixes vs Autoware pacmod_interface reference
+- [Vehicle Interface Fault Handling](roadmaps/2-vehicle-interface-fault-handling.md) — ROS-sub / CAN-msg drop handling
 
 ---
 

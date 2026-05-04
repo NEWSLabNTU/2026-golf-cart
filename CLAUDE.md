@@ -15,7 +15,7 @@ This is a golf cart autonomous driving system for 華夏科大 campus deployment
 - **Localization**: Autoware NDT scan matching (GNSS for initialization)
 - **Planning**: Autoware built-in planner (enabled, not manual control)
 
-**Migration Status**: See [docs/roadmaps/migration.md](docs/roadmaps/migration.md) for detailed migration plan from Golf Cart to golf cart system.
+**Migration Status**: See [docs/roadmaps/0-migration.md](docs/roadmaps/0-migration.md) for detailed migration plan from Golf Cart to golf cart system.
 
 ## Essential Commands
 
@@ -436,7 +436,7 @@ All dependencies must be ready before localization can work.
 - Uses colcon build system (not catkin)
 - Symlink installs enabled for faster development iteration
 - System monitor available at http://localhost:8080/ when launched
-- **Migration**: See [docs/roadmaps/migration.md](docs/roadmaps/migration.md) for team assignments and phase details
+- **Migration**: See [docs/roadmaps/0-migration.md](docs/roadmaps/0-migration.md) for team assignments and phase details
 
 ## System Management
 
@@ -582,7 +582,7 @@ Original Golf Cart used ZED stereo cameras with object detection:
 
 ## Golf Cart Migration Plan
 
-**See [docs/roadmaps/migration.md](docs/roadmaps/migration.md)** for comprehensive migration plan with 11 phases and team assignments.
+**See [docs/roadmaps/0-migration.md](docs/roadmaps/0-migration.md)** for comprehensive migration plan with 11 phases and team assignments.
 
 ### Key Migration Tasks
 1. **Phase #1**: Advantech Orin computer setup (JP6.0, firmware, dependencies)

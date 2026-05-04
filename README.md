@@ -110,10 +110,12 @@ The expected structure will be
 - [docs/research/lidar_marker_localization.md](docs/research/lidar_marker_localization.md) — LiDAR-based landmark localization research (historical, AutoSDV era)
 
 ### Archived Roadmaps
-- [docs/roadmaps/migration.md](docs/roadmaps/migration.md) — Original 11-phase migration plan from AutoSDV/Golf Cart to golf cart (superseded by ROADMAP.md)
-- [docs/roadmaps/phase1_track_a.md](docs/roadmaps/phase1_track_a.md) — Sensor cleanup (done), VLP-32C & u-blox (software ready), Tamagawa IMU (blocked)
-- [docs/roadmaps/phase1_track_b.md](docs/roadmaps/phase1_track_b.md) — Phase 1 Track B tooling & infrastructure progress (partial: setup gaps, no submodule branch tracking)
-- [docs/roadmaps/autosdv_to_golfcart_rename.md](docs/roadmaps/autosdv_to_golfcart_rename.md) — AutoSDV→golfcart naming rename status (completed)
+- [docs/roadmaps/0-migration.md](docs/roadmaps/0-migration.md) — Original 11-phase migration plan from AutoSDV/Golf Cart to golf cart (superseded by ROADMAP.md)
+- [docs/roadmaps/1-track-a.md](docs/roadmaps/1-track-a.md) — Sensor cleanup (done), VLP-32C & u-blox (software ready), Tamagawa IMU (blocked)
+- [docs/roadmaps/1-track-b.md](docs/roadmaps/1-track-b.md) — Phase 1 Track B tooling & infrastructure progress (partial: setup gaps, no submodule branch tracking)
+- [docs/roadmaps/0-autosdv-to-golfcart-rename.md](docs/roadmaps/0-autosdv-to-golfcart-rename.md) — AutoSDV→golfcart naming rename status (completed)
+- [docs/roadmaps/2-vehicle-interface-hardening.md](docs/roadmaps/2-vehicle-interface-hardening.md) — golfcart_vehicle_interface fixes vs Autoware pacmod_interface reference
+- [docs/roadmaps/2-vehicle-interface-fault-handling.md](docs/roadmaps/2-vehicle-interface-fault-handling.md) — ROS-sub / CAN-msg drop handling
 
 ## License
 
