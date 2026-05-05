@@ -18,12 +18,12 @@ Last updated: 2026-05-05
 Highest leverage. Most fault-handling scenarios become reproducible once
 this is in place. Runs on a virtual CAN interface (`vcan0`); CI-friendly.
 
-- [ ] **T-1 vcan0 bring-up script** — `scripts/can/up-vcan0.sh`. `modprobe vcan` + `ip link add vcan0 type vcan` + `ip link set up`. Idempotent, prints status. Counterpart `down-vcan0.sh`.
-- [ ] **T-2 mock_vcu** — Standalone binary that subscribes to `ADS_VCU_*` on a CAN interface and emits plausible `VCU_ADS_*` echoes (Speed integrates Target_Speed, Tire_Angle tracks Target_Tire_Angle with a first-order lag, etc.). Configurable knobs: e-stop assert, error-code assert, frame-drop probability, response delay. Implementation: Rust bin in the vehicle_interface crate so the dbc-codegen output is shared (same wire format guaranteed). Tests: vcan0 loopback against the real `vehicle_interface`.
-- [ ] **T-3 mock_vcu fault injection CLI** — `mock_vcu --estop` / `--err mtr` / `--drop-mtr` / `--bus-down`. Used by scenario tests below to drive the interface through fault states without real hardware.
-- [ ] **T-4 candump-style monitor** — `scripts/can/monitor_can.py`. python-can subscribe to all 8 protocol IDs; print decoded field values with color highlight on state changes. Replaces ad-hoc `candump | grep` workflow during bringup.
-- [ ] **T-5 Static-frame test** — `scripts/can/static_can_test.py`. Sends constant `ADS_VCU_*` (engaged, gear=D, all setpoints zero) for N seconds. Bringup smoke for first vehicle connect. Mirrors AutoSDV's `static_pwm_test`.
-- [ ] **T-6 Sweep tests** — `sweep_speed.py`, `sweep_steer.py`, `sweep_brake.py`. Ramp the named setpoint, log VCU echo to CSV. For step-response characterization once on the real cart.
+- [x] **T-1 vcan0 bring-up script** — `scripts/can/up-vcan0.sh` + `down-vcan0.sh`. Idempotent, root-required, prints `ip -details link show` after bring-up.
+- [x] **T-2 mock_vcu** — Rust bin (`src/bin/mock_vcu.rs`) sharing dbc-codegen via `#[path = "../dbc.rs"] mod dbc;`. Two-thread RX/TX, first-order physics on speed (τ=0.5s) and tire angle (τ=0.2s), gear mirror, VCU_ADS_* emit at 50 Hz. Built as `mock_vcu` exec alongside `golfcart_vehicle_interface`.
+- [x] **T-3 mock_vcu fault injection CLI** — flags wired: `--estop`, `--err-{sys,mtr,eps,brk}`, `--drop-{mtr,eps,brk,veh}`, `--manual`, `--rate`, `--interface`. `--help` prints usage.
+- [x] **T-4 candump-style monitor** — `scripts/can/monitor_can.py`. Pure stdlib SocketCAN (no python-can dep). ANSI-color decoded view of all 8 protocol IDs; highlights age and field changes; configurable render rate.
+- [x] **T-5 Static-frame test** — `scripts/can/static_can_test.py`. Heartbeat sender for bringup smoke. CLI: `--seconds`, `--rate`, `--gear`, `--speed`. Args mirror AutoSDV's `static_pwm_test` ergonomics.
+- [x] **T-6 Sweep tests** — `sweep_speed.py`, `sweep_steer.py`, `sweep_brake.py`. Triangle-wave setpoint with concurrent RX thread reading the matching VCU_ADS_* echo; CSV output for `(t, target, measured)`. Share `static_can_test.py` build helpers via sys.path insert.
 
 ## Tier 2: ROS-level test tools (port from AutoSDV)
 
