@@ -6,20 +6,21 @@
     GUI includes topic mode selection - no need for separate launch files!
 
     Topic Modes (selectable in GUI):
-      - External: /external/selected/* (default, standard Autoware workflow)
-      - Direct: /control/command/* (bypasses external selector, for testing)
+      - Direct: /control/command/* (default, drives golfcart_vehicle_interface)
+      - Custom: user-supplied topic names
 
     Always publishes:
-      - /control/gate_mode_cmd
+      - /control/gate_mode_cmd  (kept for vehicle_cmd_gate compatibility,
+        ignored by golfcart_vehicle_interface)
 
     Usage:
-      1. Launch Golf Cart: make launch
+      1. Launch Golf Cart: just launch
       2. Run this: ros2 launch control_test keyboard_control.launch.xml
-      3. Select topic mode using radio buttons in GUI
-      4. Click on the GUI window to focus it
-      5. Press 'z' to toggle to EXTERNAL mode (if using External topic mode)
-      6. Press 'x' for DRIVE gear
-      7. Use arrow keys to control
+      3. Click on the GUI window to focus it
+      4. Engage autonomous via /control/control_mode_request service
+         (or use the drive TUI: just tool-tui)
+      5. Press 'x' for DRIVE gear
+      6. Use arrow keys to control
 
     ⚠️ Requires GUI: Needs X11 display (DISPLAY environment variable)
   -->

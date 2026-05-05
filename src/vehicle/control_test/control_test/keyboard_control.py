@@ -92,9 +92,11 @@ class KeyboardControlGUI(Node):
         self.current_gear_type = GearReport.PARK
         self.current_velocity = 0.0
 
-        # Topic configuration
-        self.control_cmd_topic = '/external/selected/control_cmd'
-        self.gear_cmd_topic = '/external/selected/gear_cmd'
+        # Topic configuration. Golf Cart drives planner output straight into
+        # golfcart_vehicle_interface — no `vehicle_cmd_gate` external selector
+        # in the chain — so the direct topics are the right default.
+        self.control_cmd_topic = '/control/command/control_cmd'
+        self.gear_cmd_topic = '/control/command/gear_cmd'
 
         # Publishers (will be recreated when topics change)
         self.pub_gate_mode = self.create_publisher(
@@ -340,13 +342,12 @@ class ControlGUI:
         # Status update flag
         self.status_data = {}
 
-        # Topic presets (must be defined before create_widgets)
+        # Topic presets (must be defined before create_widgets). Golf Cart
+        # has no external-selector gate in the control chain, so the AutoSDV
+        # "External (Standard)" preset is dropped — it would publish to a
+        # topic with no subscriber.
         self.topic_presets = {
-            'External (Standard)': {
-                'control': '/external/selected/control_cmd',
-                'gear': '/external/selected/gear_cmd'
-            },
-            'Direct (Bypass)': {
+            'Direct': {
                 'control': '/control/command/control_cmd',
                 'gear': '/control/command/gear_cmd'
             },
@@ -356,9 +357,9 @@ class ControlGUI:
             }
         }
 
-        self.preset_var = tk.StringVar(value='External (Standard)')
-        self.custom_control_var = tk.StringVar(value='/external/selected/control_cmd')
-        self.custom_gear_var = tk.StringVar(value='/external/selected/gear_cmd')
+        self.preset_var = tk.StringVar(value='Direct')
+        self.custom_control_var = tk.StringVar(value='/control/command/control_cmd')
+        self.custom_gear_var = tk.StringVar(value='/control/command/gear_cmd')
 
         # Create widgets and bind keys
         self.create_widgets()
@@ -445,7 +446,7 @@ class ControlGUI:
         # Current topics display
         self.topic_info_label = ttk.Label(
             topic_frame,
-            text="Publishing to: /external/selected/*",
+            text="Publishing to: /control/command/*",
             style='Topic.TLabel')
         self.topic_info_label.pack(anchor='w', padx=10, pady=5)
 

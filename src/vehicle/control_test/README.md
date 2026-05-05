@@ -1,291 +1,144 @@
-# Control Test Package
+# control_test
 
-This package provides testing utilities for the Golf Cart vehicle control system.
-
-## Overview
-
-The `control_test` package contains nodes and launch files for testing various aspects of vehicle control:
-
-- **Static PWM Test**: Direct hardware PWM control for basic testing
-- **PID Speed Control**: PID-based speed controller with keyboard input
-- **Control Command Service**: Service-based control command publisher
-- **Speedometer Test**: Velocity measurement testing
+Test utilities for the Golf Cart vehicle control chain. Drives
+`golfcart_vehicle_interface` (Turing Drive CAN) via Autoware command
+topics. Ported from AutoSDV; PCA9685 PWM-specific tools dropped (Golf
+Cart uses CAN, not PCA9685).
 
 ## Nodes
 
-### 1. `static_pwm_test`
-Sets constant PWM values for motor and steering hardware testing.
+### `keyboard_control` — Tkinter GUI manual control
 
-**Usage:**
+Arrow-key publish to `Control` and `GearCommand`. Subscribes to
+`/vehicle/status/*` for live readout.
+
+**Requires**: X11 display (`$DISPLAY`).
+
 ```bash
-ros2 launch control_test static_pwm_test.launch.xml
-ros2 launch control_test static_pwm_test.launch.xml motor_pwm:=380 steering_pwm:=410
-```
-
-**Parameters:**
-- `motor_pwm`: Motor PWM value (370=stop, >370=forward, <370=reverse)
-- `steering_pwm`: Steering PWM value (400=center, 350=left, 450=right)
-- `update_rate`: Update rate in Hz (default: 10.0)
-
-### 2. `pid_speed_control`
-PID-based speed controller with keyboard input for target speed adjustment.
-
-**⚠️ Requires TTY**: Must be run in a terminal, not through systemd or background process.
-
-**Usage:**
-```bash
-ros2 launch control_test pid_tuning.launch.xml
-ros2 launch control_test pid_tuning.launch.xml kp:=2.0 ki:=0.2 kd:=0.3
-```
-
-**Keyboard Controls:**
-- `w/s`: Increase/Decrease target speed
-- `x`: Emergency stop (target = 0)
-- `a/d`: Left/Right steering
-- `c`: Center steering
-- `q`: Quit
-- `h`: Show help
-
-**Parameters:**
-- `kp`: Proportional gain
-- `ki`: Integral gain
-- `kd`: Derivative gain
-- `speed_step`: Speed increment per keypress in m/s
-- `steering_pwm_step`: Steering PWM increment per keypress
-
-### 3. `control_command_service`
-Service-based control command publisher. Accepts target speed/steering via parameters and publishes to `/control/command/control_cmd` when enabled.
-
-**Usage:**
-```bash
-# Launch with default values (speed=0, steering=0)
-ros2 launch control_test control_command_service.launch.xml
-
-# Launch with specific target values
-ros2 launch control_test control_command_service.launch.xml target_speed:=1.5 target_steering:=0.1
-
-# Enable publishing
-ros2 service call /control_command_service_node/enable example_interfaces/srv/SetBool "{data: true}"
-
-# Disable publishing
-ros2 service call /control_command_service_node/enable example_interfaces/srv/SetBool "{data: false}"
-```
-
-**Parameters:**
-- `target_speed`: Target longitudinal speed in m/s
-- `target_steering`: Target steering angle in rad
-- `target_acceleration`: Target acceleration in m/s²
-- `publish_rate`: Control command publish rate in Hz
-
-**Services:**
-- `~/enable` (example_interfaces/srv/SetBool): Enable/disable command publishing
-
-### 4. `keyboard_control` (Autoware Manual Control with GUI)
-Keyboard-based manual control for Autoware using arrow keys with a GUI.
-
-This is a Python re-implementation of the `autoware_manual_control` package with:
-- Arrow key support for intuitive control
-- **Tkinter GUI** for status display and keyboard input
-- **Launch-friendly** - works without TTY
-
-**⚠️ Requires**: X11 display (DISPLAY environment variable)
-
-**Usage:**
-```bash
-# Run standalone
-ros2 run control_test keyboard_control
-
-# Launch with GUI (uses config file)
 ros2 launch control_test keyboard_control.launch.xml
 ```
 
-**Configuration:**
+**Output topic presets** (selectable in GUI):
 
-Edit `config/keyboard_control.yaml` to customize:
+| Preset | control_cmd topic | gear_cmd topic | Use |
+|---|---|---|---|
+| `Direct` (default) | `/control/command/control_cmd` | `/control/command/gear_cmd` | Standard Golf Cart path — feeds `golfcart_vehicle_interface` directly. |
+| `Custom` | user-defined | user-defined | Ad-hoc / custom pipelines. |
+
+**Controls**:
+
+| Key | Action |
+|---|---|
+| ↑ / ↓ | Increase / decrease speed (`speed_step_ms`) |
+| ← / → | Steer left / right (`steering_step_deg`) |
+| Space | Stop (speed = 0) |
+| Enter | Center steering |
+| `x` / `c` / `v` | Gear DRIVE / REVERSE / PARK |
+| `s` | Status print |
+| `h` | Help |
+| `q` | Quit |
+
+**Config** (`config/keyboard_control.yaml`):
 ```yaml
-speed_step_ms: 0.5       # Speed increment (m/s)
-steering_step_deg: 1.0   # Steering increment (degrees)
-max_speed_ms: 10.0       # Maximum speed (m/s)
-max_steer_deg: 22.5      # Maximum steering angle (degrees)
-publish_rate: 30.0       # Command publishing rate (Hz)
+speed_step_ms: 0.5
+steering_step_deg: 1.0
+max_speed_ms: 10.0
+max_steer_deg: 22.5
+publish_rate: 30.0
 ```
 
-**Output Topic Selection (GUI Feature):**
+**Engage workflow** (Golf Cart has no `vehicle_cmd_gate` external selector):
 
-The GUI includes a dropdown to select output topic presets or define custom topics:
+1. Launch system: `just launch`
+2. Launch keyboard_control: `ros2 launch control_test keyboard_control.launch.xml`
+3. Engage autonomous via service or TUI:
+   ```bash
+   ros2 service call /control/control_mode_request \
+     autoware_vehicle_msgs/srv/ControlModeCommand "{mode: 1}"
+   # or use: just tool-tui
+   ```
+4. Set gear (`x` for DRIVE), then drive with arrow keys.
 
-**Presets:**
+### `control_command_service` — service-driven publisher
 
-1. **External (Standard)** - Default
-   - Control: `/external/selected/control_cmd`
-   - Gear: `/external/selected/gear_cmd`
-   - Standard Autoware external control workflow
-   - Requires toggling to EXTERNAL gate mode with 'z' key
+Param-driven setpoints; `~/enable` SetBool gates publishing. Suitable
+for scripted / automated tests.
 
-2. **Direct (Bypass)**
-   - Control: `/control/command/control_cmd`
-   - Gear: `/control/command/gear_cmd`
-   - Direct vehicle control, bypasses external control selector
-   - Useful for testing and debugging
-
-3. **Custom**
-   - Allows you to specify custom topic names
-   - Text entry fields appear when selected
-   - Enter your desired topics and click "Apply Custom Topics"
-   - Useful for integration with custom control pipelines
-
-Simply select from the dropdown in the GUI and topics will be applied instantly!
-
-**Controls:**
-- **Mode Control:**
-  - `z`: Toggle AUTO/EXTERNAL mode
-  - `x`: Set gear to DRIVE
-  - `c`: Set gear to REVERSE
-  - `v`: Set gear to PARK
-- **Speed Control:**
-  - `↑`: Increase speed (1 m/s steps, configurable)
-  - `↓`: Decrease speed (1 m/s steps, configurable)
-  - `Space`: Stop (set speed to 0)
-  - Range: -10.0 to +10.0 m/s (configurable)
-- **Steering Control:**
-  - `←`: Turn left (1° steps, configurable)
-  - `→`: Turn right (1° steps, configurable)
-  - `Enter`: Center steering (angle = 0)
-  - Range: ±22.5° (configurable)
-- **Other:**
-  - `s`: Show current status
-  - `h`: Show help
-  - `q`: Quit
-
-**Topics Published:**
-- `/control/gate_mode_cmd` - Switch between AUTO/EXTERNAL modes
-- `/external/selected/control_cmd` - Control commands (velocity, acceleration, steering)
-- `/external/selected/gear_cmd` - Gear commands (PARK/REVERSE/DRIVE)
-
-**Topics Subscribed:**
-- `/control/current_gate_mode` - Current gate mode
-- `/api/autoware/get/engage` - Engage status
-- `/vehicle/status/velocity_status` - Current velocity
-- `/vehicle/status/gear_status` - Current gear
-
-**Workflow:**
-1. Launch Golf Cart system: `make launch`
-2. Launch keyboard control: `ros2 launch control_test keyboard_control.launch.xml`
-3. Click on the GUI window to focus it
-4. Press `z` to toggle to EXTERNAL mode
-5. Press `x` to set gear to DRIVE
-6. Use arrow keys (↑/↓/←/→) to control speed and steering
-
-**GUI Features:**
-- Real-time status display (engage, mode, gear, speed, angle)
-- **Output topic presets** - Choose from External, Direct, or Custom topics
-- **Custom topic entry** - Define your own control/gear topics
-- Color-coded interface for easy reading
-- Built-in help text and controls reference
-- No TTY required - works with launch files
-
-### 5. `keyboard_pwm_control` (Non-ROS Script)
-Direct keyboard control of motor and steering PWM values.
-
-**⚠️ Moved to scripts/**: This tool has been converted to a standalone non-ROS script.
-
-**Location:** `/scripts/control/keyboard_pwm_control.py`
-
-**Usage:**
 ```bash
-# Run from Golf Cart root directory
-./scripts/control/keyboard_pwm_control.py
-
-# Or with custom step sizes
-./scripts/control/keyboard_pwm_control.py 5 5  # motor_step steering_step
+ros2 launch control_test control_command_service.launch.xml \
+    target_speed:=1.5 target_steering:=0.1
+ros2 service call /control_command_service_node/enable \
+    example_interfaces/srv/SetBool "{data: true}"
 ```
 
-**Keyboard Controls:**
-- `w/s`: Increase/Decrease motor PWM
-- `x`: Emergency stop (motor PWM = 370)
-- `a/d`: Left/Right steering
-- `c`: Center steering
-- `q`: Quit
-- `h`: Show help
+**Parameters**: `target_speed` (m/s), `target_steering` (rad),
+`target_acceleration` (m/s²), `publish_rate` (Hz).
 
-## Launch Files
+### `trajectory_player` — open-loop trajectory replay
 
-### `control_test.launch.xml`
-Full vehicle interface stack for control testing, including:
-- ZED IMU sensor
-- Velocity report (speedometer)
-- Actuator node
-- Gear manager
-- Control mode manager
-- Steering status
-- Signal manager
-- Vehicle velocity converter
+Plays a YAML trajectory of `(t, speed, steering)` tuples.
 
-**Usage:**
 ```bash
-ros2 launch control_test control_test.launch.xml
+ros2 run control_test trajectory_player --ros-args -p trajectory_file:=straight_10m.yaml
+ros2 run control_test trajectory_player --ros-args -p trajectory_file:=circle.yaml
 ```
 
-### `speedometer.launch.xml`
-Standalone velocity report node for testing wheel speed sensor.
+Trajectory files in `trajectories/`. Add new ones following the same
+schema.
 
-**Usage:**
+## Launch files
+
+| File | Purpose |
+|---|---|
+| `basic_control.launch.xml` | Minimal vehicle stack: `robot_state_publisher`, `golfcart_vehicle_interface`, `vehicle_velocity_converter`. Used as a thin shim for control testing. Configurable `can_interface` (default `can0`). |
+| `keyboard_control.launch.xml` | GUI manual control (above). |
+| `control_command_service.launch.xml` | Service publisher (above). |
+| `trajectory_player.launch.xml` | Trajectory replay (above). |
+
+## Workflow examples
+
+**Bench (vcan0) smoke**:
 ```bash
-ros2 launch control_test speedometer.launch.xml
+sudo modprobe vcan && sudo ip link add vcan0 type vcan && sudo ip link set up vcan0
+ros2 launch control_test basic_control.launch.xml can_interface:=vcan0
+# then in another terminal:
+ros2 launch control_test keyboard_control.launch.xml
 ```
 
-## Workflow Examples
-
-### Testing Hardware PWM
+**Trajectory regression**:
 ```bash
-# Set motor to forward at PWM 380, steering centered
-ros2 launch control_test static_pwm_test.launch.xml motor_pwm:=380 steering_pwm:=400
-```
-
-### PID Tuning
-```bash
-# Launch full vehicle stack
-ros2 launch control_test control_test.launch.xml
-
-# In another terminal, launch PID controller with keyboard input
-ros2 launch control_test pid_tuning.launch.xml kp:=1.5 ki:=0.1 kd:=0.2
-
-# Use keyboard to adjust target speed and observe response
-```
-
-### Autonomous Control Testing
-```bash
-# Launch full vehicle stack
-ros2 launch control_test control_test.launch.xml
-
-# Launch control command service with target speed
-ros2 launch control_test control_command_service.launch.xml target_speed:=1.0
-
-# Enable publishing
-ros2 service call /control_command_service_node/enable example_interfaces/srv/SetBool "{data: true}"
-
-# Monitor velocity
+just launch
+ros2 launch control_test trajectory_player.launch.xml \
+    trajectory_file:=straight_10m.yaml
 ros2 topic echo /vehicle/status/velocity_status
+```
+
+**Manual override**:
+```bash
+ros2 launch control_test keyboard_control.launch.xml
+# preset already on `Direct` — drives /control/command/* into
+# golfcart_vehicle_interface.
 ```
 
 ## Notes
 
-- **Keyboard controllers** (pid_speed_control) require TTY access and cannot be run in background or systemd services.
-- **keyboard_pwm_control** is now a standalone script in `scripts/control/` (non-ROS).
-- **Service-based control** (control_command_service) is suitable for automated testing and integration with higher-level control systems.
-- **PWM values** are calibrated for Golf Cart hardware:
-  - Motor: 370=stop, 390-395=forward start, 350=reverse start
-  - Steering: 400=center, 350=left limit, 450=right limit
+- **GUI requires X11**. Not runnable headless.
+- **Service-based control** (`control_command_service`) is the right
+  pick for automated / CI tests — TTY-free.
+- **No PCA9685 tools**: Golf Cart drives Turing Drive over SocketCAN.
+  AutoSDV's `static_pwm_test`, `pid_speed_control`,
+  `keyboard_pwm_control.py` are not ported.
+- **Engage path**: `/control/control_mode_request` service
+  (`AUTONOMOUS` to engage, `MANUAL` / `NO_COMMAND` to disengage —
+  partial-autonomy modes rejected).
 
 ## Dependencies
 
-- `golfcart_vehicle_interface`: Vehicle interface nodes
-- `autoware_control_msgs`: Control message definitions
-- `simple-pid`: Python PID controller library
-- `Adafruit_PCA9685`: PWM driver library
+- `golfcart_vehicle_interface`: Vehicle interface node (Rust).
+- `autoware_control_msgs`, `autoware_vehicle_msgs`,
+  `tier4_control_msgs`, `tier4_external_api_msgs`: command messages.
 
-## See Also
+## See also
 
-- [Vehicle Interface Documentation](../golfcart_vehicle_launch/golfcart_vehicle_interface/README.md)
-- [Control System Testing Guide](../../../docs/control_system_testing.md)
-
+- [Vehicle interface README](../golfcart_vehicle_launch/golfcart_vehicle_interface/README.md) — protocol, FSM, topics, parameters.
+- [`docs/roadmaps/2-vehicle-interface-testing.md`](../../../docs/roadmaps/2-vehicle-interface-testing.md) — test phase doc covering CAN-level + ROS-level tools.

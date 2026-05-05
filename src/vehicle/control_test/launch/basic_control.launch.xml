@@ -1,32 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
-  <!-- Arguments -->
+  <!-- Minimal vehicle stack for control_test work — brings up the Turing
+       Drive CAN interface and the velocity converter Autoware downstream
+       expects. Works against either real (`can0`) or virtual (`vcan0`)
+       SocketCAN. -->
   <arg name="vehicle_id" default="$(env VEHICLE_ID default)"/>
   <arg name="vehicle_model" default="golfcart_vehicle"/>
   <arg name="sensor_model" default="golfcart_sensor_kit"/>
-  <arg name="config_dir" default="$(find-pkg-share individual_params)/config/$(var vehicle_id)/golfcart_sensor_kit"/>
+  <arg name="can_interface" default="can0"/>
 
-  <!-- Robot Description - publishes TF tree from URDF and calibration files -->
+  <!-- Robot description (URDF + sensor_kit calibration) for TF tree. -->
   <node name="robot_state_publisher" pkg="robot_state_publisher" exec="robot_state_publisher">
-    <param name="robot_description" value="$(command 'xacro $(find-pkg-share tier4_vehicle_launch)/urdf/vehicle.xacro vehicle_model:=$(var vehicle_model) sensor_model:=$(var sensor_model) config_dir:=$(var config_dir)' 'warn')"/>
+    <param name="robot_description"
+           value="$(command 'xacro $(find-pkg-share tier4_vehicle_launch)/urdf/vehicle.xacro vehicle_model:=$(var vehicle_model) sensor_model:=$(var sensor_model)' 'warn')"/>
   </node>
 
-  <!-- Vehicle Interface Stubs -->
-  <group>
-    <push-ros-namespace namespace="golfcart"/>
+  <!-- Vehicle interface (Rust, Turing Drive CAN protocol). Topic remaps
+       are defined in golfcart_vehicle_launch/launch/vehicle_interface.launch.xml,
+       which we include here so this launch stays a thin shim. -->
+  <include file="$(find-pkg-share golfcart_vehicle_launch)/launch/vehicle_interface.launch.xml">
+    <arg name="can_interface" value="$(var can_interface)"/>
+  </include>
 
-    <node pkg="golfcart_vehicle_interface" exec="velocity_report" name="velocity_report_node" output="screen">
-      <param from="$(find-pkg-share golfcart_vehicle_interface)/params/velocity_report.yaml"/>
-      <remap from="~/output/velocity_status" to="/vehicle/status/velocity_status"/>
-    </node>
-
-    <node pkg="golfcart_vehicle_interface" exec="actuator" name="actuator_node" output="screen">
-      <param from="$(find-pkg-share golfcart_vehicle_interface)/params/actuator.yaml"/>
-      <remap from="~/input/control_cmd" to="/control/command/control_cmd"/>
-    </node>
-  </group>
-
-  <!-- Vehicle Velocity Converter - required for Autoware integration -->
+  <!-- Vehicle velocity converter — required by Autoware localization /
+       planning chain. -->
   <group>
     <push-ros-namespace namespace="sensing"/>
     <include file="$(find-pkg-share autoware_vehicle_velocity_converter)/launch/vehicle_velocity_converter.launch.xml">
