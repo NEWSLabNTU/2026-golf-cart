@@ -1,0 +1,7 @@
+[Match]
+Name=can1
+
+[CAN]
+BitRate=500000
+SamplePoint=0.825
+RestartSec=50ms

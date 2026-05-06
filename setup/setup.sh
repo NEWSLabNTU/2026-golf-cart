@@ -100,10 +100,12 @@ start_sudo_loop() {
 # Ask yes/no question
 ask_yes_no() {
     local question="$1"
-    local default="${2:-y}"
+    local default="${2-y}"
     local prompt
 
-    if [[ "$default" == "y" ]]; then
+    if [[ -z "$default" ]]; then
+        prompt="[y/n/q]"
+    elif [[ "$default" == "y" ]]; then
         prompt="[Y/n/q]"
     else
         prompt="[y/N/q]"
@@ -176,13 +178,26 @@ interactive_setup() {
     fi
     printf "\n"
 
-    # Tamagawa IMU driver
-    INSTALL_TAMAGAWA_IMU="n"
-    printf "${YELLOW}Optional:${NC} Tamagawa IMU driver (replaces MPU9250)\n"
-    printf "Required for IMU bring-up. Package source TBD — see ROADMAP Phase 1 Track A.\n"
-    printf "You can skip and install later with: just tamagawa-imu\n\n"
-    if ask_yes_no "Install Tamagawa IMU driver?" "n"; then
-        INSTALL_TAMAGAWA_IMU="y"
+    # Hardware-specific system configuration (CAN modules + LiDAR network profiles)
+    INSTALL_HARDWARE_CONFIG="n"
+    printf "${YELLOW}System Configuration:${NC} Hardware-specific configs (CAN + LiDAR network)\n"
+    printf "Installs: /etc/modules-load.d/can.conf, /etc/systemd/network/80-can*.network,\n"
+    printf "          /etc/NetworkManager/system-connections/{velodyne,seyond}*.nmconnection\n"
+    printf "Run only on the actual vehicle computer with matching hardware MAC addresses.\n"
+    if ask_yes_no "Install hardware-specific system configs?" ""; then
+        INSTALL_HARDWARE_CONFIG="y"
+    fi
+    printf "\n"
+
+    # OTOCAM GMSL camera kernel modules + boot config
+    INSTALL_OTOCAM="n"
+    printf "${YELLOW}System Configuration:${NC} OTOCAM GMSL camera kmods (IMX390 + MAX9296)\n"
+    printf "Requires vendor blob at /usr/local/bin/otocam/ and matching kernel 5.15.148-tegra.\n"
+    printf "Installs: kmod symlinks into /lib/modules/<ver>/extra/otocam, /etc/modules-load.d,\n"
+    printf "          /etc/modprobe.d/otocam.conf, and patches /boot/extlinux/extlinux.conf.\n"
+    printf "Reboot required after install.\n"
+    if ask_yes_no "Install OTOCAM camera kmods + boot config?" ""; then
+        INSTALL_OTOCAM="y"
     fi
     printf "\n"
 
@@ -191,7 +206,8 @@ interactive_setup() {
     export CONFIGURE_CYCLONEDDS_SYSCTL="$CONFIGURE_CYCLONEDDS_SYSCTL"
     export INSTALL_ISAAC_ROS="$INSTALL_ISAAC_ROS"
     export INSTALL_TURBOVNC_VIRTUALGL="$INSTALL_TURBOVNC_VIRTUALGL"
-    export INSTALL_TAMAGAWA_IMU="$INSTALL_TAMAGAWA_IMU"
+    export INSTALL_HARDWARE_CONFIG="$INSTALL_HARDWARE_CONFIG"
+    export INSTALL_OTOCAM="$INSTALL_OTOCAM"
 
     # Summary
     printf "Installing: Core"
@@ -207,8 +223,11 @@ interactive_setup() {
     if [[ "$INSTALL_TURBOVNC_VIRTUALGL" == "y" ]]; then
         printf " + TurboVNC/VirtualGL"
     fi
-    if [[ "$INSTALL_TAMAGAWA_IMU" == "y" ]]; then
-        printf " + Tamagawa IMU driver"
+    if [[ "$INSTALL_HARDWARE_CONFIG" == "y" ]]; then
+        printf " + Hardware configs (CAN + LiDAR net)"
+    fi
+    if [[ "$INSTALL_OTOCAM" == "y" ]]; then
+        printf " + OTOCAM kmods"
     fi
     printf "\n\n"
 

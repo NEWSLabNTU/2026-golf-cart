@@ -1,0 +1,17 @@
+[connection]
+id=Seyond Falcon L LiDAR
+type=ethernet
+
+[ethernet]
+mac-address=74:FE:48:B3:B1:14
+
+[ipv4]
+address1=172.168.1.1/24
+method=manual
+never-default=true
+
+[ipv6]
+addr-gen-mode=stable-privacy
+method=auto
+
+[proxy]

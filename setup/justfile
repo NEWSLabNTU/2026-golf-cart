@@ -13,6 +13,7 @@ marker_dir := root_dir / ".markers"
 scripts_dir := root_dir / "scripts"
 files_dir := root_dir / "files"
 data_dir := root_dir / ".." / "data"
+hardware_dir := root_dir / ".." / "scripts" / "hardware"
 
 # Architecture detection
 arch := `uname -m`
@@ -32,7 +33,7 @@ default:
     @just --list
 
 # Full setup (runs all steps in order)
-setup: _init ros2 ros2-dev-tools gdown geographiclib pacmod dev-tools _setup-autoware-debian _setup-isaac-ros python-deps nebula-driver ublox-driver ublox-udev tier4-camera _setup-cyclonedds-sysctl _setup-turbovnc-virtualgl _setup-tamagawa-imu ros-deps
+setup: _init ros2 ros2-dev-tools gdown geographiclib pacmod dev-tools _setup-autoware-debian _setup-isaac-ros python-deps nebula-driver ublox-driver ublox-udev tier4-camera _setup-cyclonedds-sysctl _setup-turbovnc-virtualgl _setup-hardware-config _setup-otocam ros-deps
     @printf "{{green}}✓ Setup complete!{{nc}}\n"
 
 # Conditional Autoware Debian install (based on SKIP_AUTOWARE_DEBIAN env var)
@@ -74,14 +75,48 @@ _setup-turbovnc-virtualgl:
         printf "{{yellow}}⊘{{nc}} turbovnc-virtualgl skipped (user choice)\n"
     fi
 
-# Conditional Tamagawa IMU driver install (based on INSTALL_TAMAGAWA_IMU env var)
-_setup-tamagawa-imu:
+# Conditional hardware-specific config install (based on INSTALL_HARDWARE_CONFIG env var)
+_setup-hardware-config:
     #!/usr/bin/env bash
-    if [[ "${INSTALL_TAMAGAWA_IMU}" == "y" ]]; then
-        just tamagawa-imu
+    if [[ "${INSTALL_HARDWARE_CONFIG}" == "y" ]]; then
+        just hardware-config
     else
-        printf "{{yellow}}⊘{{nc}} tamagawa-imu skipped (user choice)\n"
+        printf "{{yellow}}⊘{{nc}} hardware-config skipped (user choice)\n"
+        printf "{{yellow}}Note:{{nc}} Run 'just hardware-config' to install later\n"
     fi
+
+# Install hardware-specific system configs (CAN module autoload + LiDAR NM profiles)
+hardware-config: _init
+    #!/usr/bin/env bash
+    [[ -f "{{marker_dir}}/hardware-config" ]] && printf "{{green}}✓{{nc}} hardware-config already done\n" && exit 0
+    set -e
+    printf "{{yellow}}→{{nc}} Installing CAN module + interface configs...\n"
+    sudo bash "{{hardware_dir}}/can/setup-can.sh"
+    printf "{{yellow}}→{{nc}} Installing LiDAR NetworkManager profiles...\n"
+    sudo bash "{{hardware_dir}}/lidar-network/setup-lidar-network.sh"
+    touch "{{marker_dir}}/hardware-config"
+    printf "{{green}}✓{{nc}} hardware-config done\n"
+
+# Conditional OTOCAM kmod install (based on INSTALL_OTOCAM env var)
+_setup-otocam:
+    #!/usr/bin/env bash
+    if [[ "${INSTALL_OTOCAM}" == "y" ]]; then
+        just otocam
+    else
+        printf "{{yellow}}⊘{{nc}} otocam skipped (user choice)\n"
+        printf "{{yellow}}Note:{{nc}} Run 'just otocam' to install later\n"
+    fi
+
+# Install OTOCAM GMSL camera kernel modules + boot config (IMX390 + MAX9296)
+otocam: _init
+    #!/usr/bin/env bash
+    [[ -f "{{marker_dir}}/otocam" ]] && printf "{{green}}✓{{nc}} otocam already done\n" && exit 0
+    set -e
+    printf "{{yellow}}→{{nc}} Installing OTOCAM kmods + boot config...\n"
+    sudo bash "{{hardware_dir}}/otocam/setup-otocam.sh"
+    touch "{{marker_dir}}/otocam"
+    printf "{{green}}✓{{nc}} otocam done\n"
+    printf "{{yellow}}Note:{{nc}} Reboot required for DTB overlay to take effect.\n"
 
 
 # Alias for setup (resume from where it left off due to markers)
@@ -92,19 +127,6 @@ resume: setup
 # Install TurboVNC + VirtualGL (optional, for hardware-accelerated VNC)
 turbovnc-virtualgl: _init
     @just _run turbovnc-virtualgl "{{scripts_dir}}/install-turbovnc-virtualgl.sh"
-
-# Install Tamagawa IMU ROS 2 driver (placeholder — package source TBD)
-# TODO: Replace this recipe with the actual install command once the driver
-#       package is sourced. See ROADMAP Phase 1 Track A for context.
-tamagawa-imu: _init
-    #!/usr/bin/env bash
-    [[ -f "{{marker_dir}}/tamagawa-imu" ]] && printf "{{green}}✓{{nc}} tamagawa-imu already done\n" && exit 0
-    printf "{{yellow}}⚠{{nc}} Tamagawa IMU driver: manual installation required.\n"
-    printf "   Driver package source is not yet confirmed.\n"
-    printf "   Once obtained, install it and then run: just clean-marker tamagawa-imu && just tamagawa-imu\n"
-    printf "   See ROADMAP.md Phase 1 Track A for details.\n"
-    touch "{{marker_dir}}/tamagawa-imu"
-    printf "{{yellow}}○{{nc}} tamagawa-imu marked (manual install pending)\n"
 
 # Install camera driver (usb_cam + v4l-utils + udev rules for TIER IV C1 via GMSL2-USB)
 tier4-camera: _init ros2
@@ -315,18 +337,22 @@ status:
             printf "  {{yellow}}○{{nc}} isaac-ros (cuVSLAM + cuVGL, run: ./setup.sh isaac-ros)\n"
         fi
     fi
-    # Tamagawa IMU driver
-    if [[ -f "{{marker_dir}}/tamagawa-imu" ]]; then
-        printf "  {{green}}✓{{nc}} tamagawa-imu (Tamagawa IMU driver)\n"
-    else
-        printf "  {{yellow}}○{{nc}} tamagawa-imu (pending hardware, run: just tamagawa-imu)\n"
-    fi
     echo ""
     echo "Configuration:"
     if [[ -f "{{marker_dir}}/cyclonedds-sysctl" ]]; then
         printf "  {{green}}✓{{nc}} cyclonedds-sysctl\n"
     else
         printf "  {{red}}○{{nc}} cyclonedds-sysctl\n"
+    fi
+    if [[ -f "{{marker_dir}}/hardware-config" ]]; then
+        printf "  {{green}}✓{{nc}} hardware-config (CAN + LiDAR network)\n"
+    else
+        printf "  {{yellow}}○{{nc}} hardware-config (run: just hardware-config)\n"
+    fi
+    if [[ -f "{{marker_dir}}/otocam" ]]; then
+        printf "  {{green}}✓{{nc}} otocam (GMSL camera kmods)\n"
+    else
+        printf "  {{yellow}}○{{nc}} otocam (run: just otocam)\n"
     fi
     echo ""
     echo "Optional Downloads:"
