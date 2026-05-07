@@ -33,7 +33,7 @@ default:
     @just --list
 
 # Full setup (runs all steps in order)
-setup: _init ros2 ros2-dev-tools gdown geographiclib pacmod dev-tools _setup-autoware-debian _setup-isaac-ros python-deps nebula-driver ublox-driver ublox-udev tier4-camera _setup-cyclonedds-sysctl _setup-turbovnc-virtualgl _setup-hardware-config _setup-otocam ros-deps
+setup: _init ros2 ros2-dev-tools gdown geographiclib pacmod dev-tools _setup-autoware-debian _setup-isaac-ros python-deps nebula-driver ublox-driver ublox-udev tier4-camera _setup-cyclonedds-sysctl _setup-turbovnc-virtualgl _setup-hardware-config _setup-otocam _setup-linuxptp ros-deps
     @printf "{{green}}✓ Setup complete!{{nc}}\n"
 
 # Conditional Autoware Debian install (based on SKIP_AUTOWARE_DEBIAN env var)
@@ -117,6 +117,20 @@ otocam: _init
     touch "{{marker_dir}}/otocam"
     printf "{{green}}✓{{nc}} otocam done\n"
     printf "{{yellow}}Note:{{nc}} Reboot required for DTB overlay to take effect.\n"
+
+# Conditional linuxptp install (based on INSTALL_LINUXPTP env var)
+_setup-linuxptp:
+    #!/usr/bin/env bash
+    if [[ "${INSTALL_LINUXPTP}" == "y" ]]; then
+        just linuxptp
+    else
+        printf "{{yellow}}⊘{{nc}} linuxptp skipped (user choice)\n"
+        printf "{{yellow}}Note:{{nc}} Run 'just linuxptp' to install later\n"
+    fi
+
+# Install linuxptp + ptp4l/phc2sys systemd units + ptp4l.conf
+linuxptp: _init
+    @just _run linuxptp "{{scripts_dir}}/install-linuxptp.sh"
 
 
 # Alias for setup (resume from where it left off due to markers)
@@ -353,6 +367,11 @@ status:
         printf "  {{green}}✓{{nc}} otocam (GMSL camera kmods)\n"
     else
         printf "  {{yellow}}○{{nc}} otocam (run: just otocam)\n"
+    fi
+    if [[ -f "{{marker_dir}}/linuxptp" ]]; then
+        printf "  {{green}}✓{{nc}} linuxptp (ptp4l + phc2sys)\n"
+    else
+        printf "  {{yellow}}○{{nc}} linuxptp (run: just linuxptp)\n"
     fi
     echo ""
     echo "Optional Downloads:"

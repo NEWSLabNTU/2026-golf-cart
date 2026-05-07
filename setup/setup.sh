@@ -201,6 +201,17 @@ interactive_setup() {
     fi
     printf "\n"
 
+    # linuxptp (ptp4l + phc2sys) for PTP time sync (e.g. Falcon Seyond LiDAR)
+    INSTALL_LINUXPTP="n"
+    printf "${YELLOW}System Configuration:${NC} linuxptp (ptp4l + phc2sys)\n"
+    printf "Installs apt package 'linuxptp', /etc/linuxptp/ptp4l.conf, and systemd units\n"
+    printf "/etc/systemd/system/{ptp4l,phc2sys}.service. Hardcoded to interface enP5p5s0\n"
+    printf "(Falcon Seyond LiDAR PTP iface). Edit unit ExecStart -i flag if iface differs.\n"
+    if ask_yes_no "Install linuxptp + ptp4l/phc2sys services?" ""; then
+        INSTALL_LINUXPTP="y"
+    fi
+    printf "\n"
+
     # Export choices for justfile
     export SKIP_AUTOWARE_DEBIAN="$([[ "$INSTALL_AUTOWARE" == "n" ]] && echo "1" || echo "0")"
     export CONFIGURE_CYCLONEDDS_SYSCTL="$CONFIGURE_CYCLONEDDS_SYSCTL"
@@ -208,6 +219,7 @@ interactive_setup() {
     export INSTALL_TURBOVNC_VIRTUALGL="$INSTALL_TURBOVNC_VIRTUALGL"
     export INSTALL_HARDWARE_CONFIG="$INSTALL_HARDWARE_CONFIG"
     export INSTALL_OTOCAM="$INSTALL_OTOCAM"
+    export INSTALL_LINUXPTP="$INSTALL_LINUXPTP"
 
     # Summary
     printf "Installing: Core"
@@ -228,6 +240,9 @@ interactive_setup() {
     fi
     if [[ "$INSTALL_OTOCAM" == "y" ]]; then
         printf " + OTOCAM kmods"
+    fi
+    if [[ "$INSTALL_LINUXPTP" == "y" ]]; then
+        printf " + linuxptp"
     fi
     printf "\n\n"
 
