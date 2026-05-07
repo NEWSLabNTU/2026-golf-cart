@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 # Replay a candump -L log onto a (v)CAN interface.
-# Usage: ./scripts/can/replay_can.sh <log> [target_iface]
+# Usage: ./scripts/can/replay_can.sh [--loop] <log> [target_iface]
 set -euo pipefail
+
+LOOP=0
+if [[ "${1:-}" == "--loop" || "${1:-}" == "-l" ]]; then
+    LOOP=1
+    shift
+fi
 
 LOG="${1:?log file required}"
 TGT="${2:-vcan0}"
@@ -22,5 +28,10 @@ if [[ -z "$SRC_IFACE" ]]; then
     exit 1
 fi
 
-echo "Replaying $LOG ($SRC_IFACE -> $TGT)"
-exec canplayer -I "$LOG" "${TGT}=${SRC_IFACE}"
+if (( LOOP )); then
+    echo "Replaying $LOG ($SRC_IFACE -> $TGT) [loop]"
+    exec canplayer -I "$LOG" -l i "${TGT}=${SRC_IFACE}"
+else
+    echo "Replaying $LOG ($SRC_IFACE -> $TGT)"
+    exec canplayer -I "$LOG" "${TGT}=${SRC_IFACE}"
+fi

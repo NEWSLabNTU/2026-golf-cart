@@ -176,13 +176,26 @@ can-play LOG="":
     ./scripts/can/replay_can.sh "$F" vcan0
 
 # Offline vehicle interface test: vcan0 + vehicle_interface_test launch + replay log
-can-test LOG="":
+# Loops the replay by default so topics keep flowing; pass LOOP=0 to play once.
+can-test LOG="" LOOP="1":
     #!/usr/bin/env bash
     set -euo pipefail
-    sudo ./scripts/can/up-vcan0.sh vcan0
+    if ! ip link show vcan0 >/dev/null 2>&1; then
+        sudo ./scripts/can/up-vcan0.sh vcan0
+    fi
+    if [ -n "{{LOG}}" ]; then
+        F="{{LOG}}"
+    else
+        F=$(ls -t rosbags/can/*.log 2>/dev/null | head -1 || true)
+        [ -n "$F" ] || { echo "No logs in rosbags/can/"; exit 1; }
+    fi
+    LOOP_FLAG=""
+    if [ "{{LOOP}}" = "1" ] || [ "{{LOOP}}" = "true" ]; then
+        LOOP_FLAG="--loop"
+    fi
     parallel --line-buffer ::: \
       "ros2 launch golfcart_vehicle_launch vehicle_interface_test.launch.xml can_interface:=vcan0" \
-      "sleep 3 && just can-play {{LOG}}"
+      "sleep 3 && ./scripts/can/replay_can.sh $LOOP_FLAG \"$F\" vcan0"
 
 # ============================================================================
 # Simulation Commands - Full simulation scenarios

@@ -13,6 +13,12 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATES="${SCRIPT_DIR}/templates"
 
+if ! command -v candump >/dev/null 2>&1 || ! command -v canplayer >/dev/null 2>&1; then
+  echo "Installing can-utils (candump/canplayer/cansend)..."
+  apt-get update
+  apt-get install -y can-utils
+fi
+
 install -m 0644 "${TEMPLATES}/can.conf"        /etc/modules-load.d/can.conf
 install -m 0644 "${TEMPLATES}/80-can0.network" /etc/systemd/network/80-can0.network
 install -m 0644 "${TEMPLATES}/80-can1.network" /etc/systemd/network/80-can1.network
