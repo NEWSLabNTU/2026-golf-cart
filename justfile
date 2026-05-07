@@ -17,25 +17,19 @@ checkout:
 setup:
     ./setup.sh
 
-# Build this project
+# Build this project. ROS / Autoware env is sourced via .envrc (direnv).
 build: build_seyond
-    #!/usr/bin/env bash
-    source /opt/ros/humble/setup.bash && \
     colcon build \
         --base-paths src \
         --symlink-install \
         --cmake-args -DCMAKE_BUILD_TYPE=Release
 
 build_seyond:
-    #!/usr/bin/env bash
-    source /opt/ros/humble/setup.bash
-    cd src/sensor_component/external/seyond_ros_driver
-    ./build.bash
+    cd src/sensor_component/external/seyond_ros_driver && ./build.bash
 
 # Run tests for packages in src/ directory
 test:
     #!/usr/bin/env bash
-    source /opt/ros/humble/setup.bash && \
     colcon test \
         --base-paths src \
         --return-code-on-test-failure; \
@@ -112,20 +106,14 @@ tool-rviz:
 
 # Launch PlotJuggler for data visualization
 tool-plotjuggler:
-    #!/usr/bin/env bash
-    source install/setup.bash && \
     ros2 run plotjuggler plotjuggler
 
 # Launch manual keyboard control
 tool-controller:
-    #!/usr/bin/env bash
-    source install/setup.bash && \
     ros2 run control_test keyboard_control
 
 # Launch drive monitor TUI (shows pose, speed, component states)
 tool-tui:
-    #!/usr/bin/env bash
-    source install/setup.bash && \
     python3 ./scripts/testing/drive/run.py
 
 # ============================================================================
@@ -138,14 +126,10 @@ control-basic:
 
 # Run trajectory player with straight_10m.yaml (10m straight line)
 control-straight:
-    #!/usr/bin/env bash
-    source install/setup.bash && \
     ros2 run control_test trajectory_player --ros-args -p trajectory_file:=straight_10m.yaml
 
 # Run trajectory player with circle.yaml (circular path)
 control-circle:
-    #!/usr/bin/env bash
-    source install/setup.bash && \
     ros2 run control_test trajectory_player --ros-args -p trajectory_file:=circle.yaml
 
 # ============================================================================
@@ -183,7 +167,6 @@ bag-play:
 # Requires: rosbag data from NTU COSS Park (run ./scripts/rosbag/download-test-rosbag.sh)
 sim-coss-park:
     #!/usr/bin/env bash
-    source install/setup.bash && \
     parallel --line-buffer ::: \
         "just launch-sim-logging" \
         "sleep 40 && ros2 bag play data/rosbags/outdoor_20251226_153115/ --clock -l -r 1.0" \
