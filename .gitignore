@@ -21,5 +21,8 @@ tmp/
 # play records
 play_log/
 
+# rosbags + raw CAN logs
+rosbags/
+
 # downloaded datasets
 data/leodrive-busood/
