@@ -159,6 +159,31 @@ bag-play:
     echo "Playing: $LATEST"; \
     ros2 bag play "$LATEST" --clock
 
+# Record raw CAN frames (candump -L format) to rosbags/can/
+can-record IFACE="can0":
+    ./scripts/can/record_can.sh {{IFACE}}
+
+# Replay a CAN log onto vcan0. Defaults to most recent log in rosbags/can/.
+can-play LOG="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "{{LOG}}" ]; then
+        F="{{LOG}}"
+    else
+        F=$(ls -t rosbags/can/*.log 2>/dev/null | head -1 || true)
+        [ -n "$F" ] || { echo "No logs in rosbags/can/"; exit 1; }
+    fi
+    ./scripts/can/replay_can.sh "$F" vcan0
+
+# Offline vehicle interface test: vcan0 + vehicle_interface_test launch + replay log
+can-test LOG="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    sudo ./scripts/can/up-vcan0.sh vcan0
+    parallel --line-buffer ::: \
+      "ros2 launch golfcart_vehicle_launch vehicle_interface_test.launch.xml can_interface:=vcan0" \
+      "sleep 3 && just can-play {{LOG}}"
+
 # ============================================================================
 # Simulation Commands - Full simulation scenarios
 # ============================================================================
