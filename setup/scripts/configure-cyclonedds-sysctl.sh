@@ -7,10 +7,14 @@ set -e
 echo "Configuring CycloneDDS kernel network buffers (system-wide)..."
 echo ""
 echo "Settings to be applied:"
+echo "  ip link set lo multicast on"
 echo "  net.core.rmem_max=2147483647"
 echo "  net.ipv4.ipfrag_time=3"
 echo "  net.ipv4.ipfrag_high_thresh=134217728"
 echo ""
+
+echo "Enable lo multicast"
+sudo ip link set lo multicast on
 
 # Apply immediately
 echo "Applying sysctl settings..."
