@@ -27,14 +27,14 @@ Last updated: 2026-04-29
 **Status: Not started — can be partially prepared**
 
 ### Current state
-- `sensor_kit.xacro` defines three camera frames (`usb_camera_{left,right,rear}_optical_link`) via a small macro; transforms come from `sensor_kit_calibration.yaml` (currently all zeros)
+- `sensor_kit.xacro` defines three camera frames (`camera_{left,right,rear}_optical_link`) via a small macro; transforms come from `sensor_kit_calibration.yaml` (currently all zeros)
 - `sensor_kit_calibration.yaml` has placeholder (zeros) entries for the three USB cameras; ZED entry remains commented
 - Camera launch file (`camera.launch.xml`) has been rewritten to drive USB cameras via `gscam` (left/right active, rear node currently commented out); ZED references removed
 - `package.xml` lists `usb_cam` as dependency but no TIER IV driver dependency
 
 ### Can do before real machine
 - [x] ZED camera references removed from `sensor_kit.xacro` (done in Phase 1)
-- [x] **Add three camera frame definitions to `sensor_kit.xacro`** — `usb_camera_{left,right,rear}_optical_link` links added via macro with placeholder (zero) transforms
+- [x] **Add three camera frame definitions to `sensor_kit.xacro`** — `camera_{left,right,rear}_optical_link` links added via macro with placeholder (zero) transforms
 - [x] **Add calibration entries to `sensor_kit_calibration.yaml`** — three camera entries with placeholder values
 - [x] **TIER IV C1 ROS 2 driver package identified** — GMSL2-USB 3.0 Conversion Kit presents C1 as UVC device; driven via `gscam` (GStreamer + `nvvidconv` hardware acceleration on Jetson). Note: `ros-humble-usb-cam` and `ros-humble-v4l2-camera` were earlier candidates; `gscam` was chosen for the Jetson hardware pipeline (`v4l2src ! UYVY ! nvvidconv ! RGBA ! videoconvert ! RGB`).
 
@@ -50,8 +50,8 @@ Last updated: 2026-04-29
 ### Current state
 - `camera.launch.xml` has been rewritten to launch three `gscam_node` instances (one per camera) using the GMSL2-USB pipeline. Left and right are active; the rear node is currently commented out pending verification. ZED references removed — the roadblock in [docs/roadblocks.md](../roadblocks.md#cameralaunchxml-still-uses-zed-driver-not-usb-camera) is resolved.
 - `camera_model` argument exists in `golfcart.launch.yaml` (line 19-22) with options: `usb`, `none`
-- Three TIER IV camera config YAMLs exist: `usb_camera_{left,rear,right}.yaml`, each pinned to a `/dev/v4l/by-path/...` symlink (left=`2.2`, rear=`2.3`, right=`2.4`). Pipeline + device-path rationale in [`config/gscam.md`](../../src/sensor_kit/golfcart_sensor_kit_launch/golfcart_sensor_kit_launch/config/gscam.md).
-- Dummy `usb_camera_{left,rear,right}_calibration.yaml` files exist as intrinsics placeholders
+- Three TIER IV camera config YAMLs exist: `camera_{left,rear,right}.yaml`, each pinned to a `/dev/v4l/by-path/...` symlink (left=`2.2`, rear=`2.3`, right=`2.4`). Pipeline + device-path rationale in [`config/gscam.md`](../../src/sensor_kit/golfcart_sensor_kit_launch/golfcart_sensor_kit_launch/config/gscam.md).
+- Dummy `camera_{left,rear,right}_calibration.yaml` files exist as intrinsics placeholders
 
 ### Can do before real machine
 - [x] **Rewrite `camera.launch.xml`** to support TIER IV camera launch (three nodes with device path arguments)

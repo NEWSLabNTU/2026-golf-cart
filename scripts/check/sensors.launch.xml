@@ -35,17 +35,36 @@
     </node>
   </group>
 
-  <!-- ── USB Camera (front) ──────────────────────────────────────────────── -->
+  <!-- ── GMSL Cameras (gscam, Jetson HW-accelerated via tegra-capture-vi) ── -->
   <group if="$(var launch_camera)">
-    <node pkg="usb_cam" exec="usb_cam_node_exe" name="usb_cam_front" output="screen">
-      <param name="video_device" value="/dev/video0"/>
-      <param name="image_width"  value="640"/>
-      <param name="image_height" value="480"/>
-      <param name="framerate"    value="15.0"/>
-      <param name="pixel_format" value="uyvy"/>
-      <param name="frame_id"     value="usb_camera_front"/>
-      <remap from="image_raw" to="/sensing/camera/front/image_raw"/>
-    </node>
+    <push-ros-namespace namespace="sensing/camera"/>
+
+    <group>
+      <push-ros-namespace namespace="left"/>
+      <node pkg="gscam" exec="gscam_node" name="camera_left" output="screen">
+        <param from="$(find-pkg-share golfcart_sensor_kit_launch)/config/camera_left.yaml"/>
+        <remap from="camera/image_raw" to="image_raw"/>
+        <remap from="camera/camera_info" to="camera_info"/>
+      </node>
+    </group>
+
+    <group>
+      <push-ros-namespace namespace="right"/>
+      <node pkg="gscam" exec="gscam_node" name="camera_right" output="screen">
+        <param from="$(find-pkg-share golfcart_sensor_kit_launch)/config/camera_right.yaml"/>
+        <remap from="camera/image_raw" to="image_raw"/>
+        <remap from="camera/camera_info" to="camera_info"/>
+      </node>
+    </group>
+
+    <group>
+      <push-ros-namespace namespace="rear"/>
+      <node pkg="gscam" exec="gscam_node" name="camera_rear" output="screen">
+        <param from="$(find-pkg-share golfcart_sensor_kit_launch)/config/camera_rear.yaml"/>
+        <remap from="camera/image_raw" to="image_raw"/>
+        <remap from="camera/camera_info" to="camera_info"/>
+      </node>
+    </group>
   </group>
 
 </launch>

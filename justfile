@@ -17,12 +17,19 @@ checkout:
 setup:
     ./setup.sh
 
-# Build this project. ROS / Autoware env is sourced via .envrc (direnv).
-build: build_seyond
+# Build this project. Pass --clean to wipe caches first. ROS / Autoware env via .envrc.
+build *FLAGS="":
+    #!/usr/bin/env bash
+    set -e
+    if [[ "{{FLAGS}}" == *"--clean"* ]]; then
+        just clean --yes
+    fi
+    just build_seyond
     colcon build \
         --base-paths src \
         --symlink-install \
-        --cmake-args -DCMAKE_BUILD_TYPE=Release
+        --cmake-args -DCMAKE_BUILD_TYPE=Release \
+        --cargo-args --release
 
 build_seyond:
     cd src/sensor_component/external/seyond_ros_driver && ./build.bash
@@ -41,14 +48,22 @@ test:
 # Clean up built binaries (use --yes or --no-confirm to skip prompt)
 clean *FLAGS="":
     #!/usr/bin/env bash
-    if [[ "{{FLAGS}}" == *"--yes"* ]] || [[ "{{FLAGS}}" == *"--no-confirm"* ]]; then
+    do_clean() {
         rm -rf build install log
-        echo "Cleaned build artifacts."
+        while IFS= read -r -d '' pkg; do
+            [[ -f "$pkg/Cargo.toml" ]] && (cd "$pkg" && cargo clean)
+        done < <(find src -name package.xml -printf '%h\0')
+        SEYOND_DIR=src/sensor_component/external/seyond_ros_driver
+        rm -rf "$SEYOND_DIR"/build "$SEYOND_DIR"/install "$SEYOND_DIR"/devel "$SEYOND_DIR"/log "$SEYOND_DIR"/src/CMakeLists.txt
+        echo "Cleaned build artifacts (cargo target/, seyond build dirs included)."
+    }
+    if [[ "{{FLAGS}}" == *"--yes"* ]] || [[ "{{FLAGS}}" == *"--no-confirm"* ]]; then
+        do_clean
     else
         while true; do \
             read -p 'Are you sure to clean up? (yes/no) ' yn; \
             case $yn in \
-                yes ) rm -rf build install log; break;; \
+                yes ) do_clean; break;; \
                 no ) break;; \
                 * ) echo 'Please enter yes or no.';; \
             esac \

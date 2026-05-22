@@ -198,7 +198,7 @@ This document outlines the migration plan from the Golf Cart platform to a golf 
 
 **Key Files:**
 - `src/sensor_kit/golfcart_sensor_kit_launch/golfcart_sensor_kit_launch/launch/camera.launch.xml` - USB camera setup (lines 35-72)
-- `src/sensor_kit/golfcart_sensor_kit_launch/config/usb_camera_*.yaml` - Individual camera configs
+- `src/sensor_kit/golfcart_sensor_kit_launch/config/camera_*.yaml` - Individual camera configs
 - `src/param/autoware_individual_params/individual_params/config/default/golfcart_sensor_kit/sensor_kit_calibration.yaml` - Camera positions (lines 48-75)
 - `src/launcher/golfcart_launch/launch/golfcart.launch.yaml` - Set default `camera_model:=usb` (line 14)
 - Remove: `src/sensor_component/external/zed-ros2-wrapper/` submodule and ZED-related files
