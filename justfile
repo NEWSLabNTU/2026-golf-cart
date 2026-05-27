@@ -147,6 +147,31 @@ control-straight:
 control-circle:
     ros2 run control_test trajectory_player --ros-args -p trajectory_file:=circle.yaml
 
+# Launch keyboard control GUI (requires X11/DISPLAY; use after `just launch`)
+control-keyboard:
+    ros2 launch control_test keyboard_control.launch.xml
+
+# Launch bare vehicle interface node in read-only mode (CAN RX only, tx disabled)
+# Safe bench test — populates /vehicle/status/* without commanding motion
+# Override interface: just control-vehicle-test CAN=can0
+control-vehicle-test CAN="vcan0":
+    ros2 launch golfcart_vehicle_launch vehicle_interface_test.launch.xml \
+        can_interface:={{CAN}} tx_enabled:=false
+
+# Launch teleop GUI + vehicle interface on real CAN bus (tx enabled — DRIVES THE CART)
+# ⚠️  Requires X11 display. Requires can0 up. Commands actual motor/steering.
+# Override interface: just control-teleop-real CAN=can0
+control-teleop-real CAN="can0":
+    ros2 launch golfcart_vehicle_launch teleop_bench.launch.xml \
+        can_interface:={{CAN}} tx_enabled:=true
+
+# Decode live CAN frames using vehicle DBC (CAX_ADS_CAN.dbc)
+# Usage: just can-decode          (defaults to can0)
+#        just can-decode can1
+can-decode IFACE="can0":
+    candump {{IFACE}} | cantools decode \
+        src/vehicle/golfcart_vehicle_launch/golfcart_vehicle_interface/CAX_ADS_CAN.dbc
+
 # ============================================================================
 # Check Commands - Sensor health checks
 # ============================================================================
