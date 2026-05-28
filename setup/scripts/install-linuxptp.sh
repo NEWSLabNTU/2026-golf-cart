@@ -14,9 +14,9 @@ GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 NC='\033[0m'
 
-printf "${YELLOW}→${NC} Installing linuxptp apt package...\n"
-sudo apt-get update
-sudo apt-get install -y linuxptp
+#printf "${YELLOW}→${NC} Installing linuxptp apt package...\n"
+#sudo apt-get update
+#sudo apt-get install -y linuxptp
 
 printf "${YELLOW}→${NC} Installing /etc/linuxptp/ptp4l.conf...\n"
 sudo install -d -m 0755 /etc/linuxptp

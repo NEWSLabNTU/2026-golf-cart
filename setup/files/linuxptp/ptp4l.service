@@ -1,10 +1,12 @@
 [Unit]
 Description=Precision Time Protocol (PTP) service for %I
 Documentation=man:ptp4l
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
+# enP5p5s0 is seyond Lidar
 ExecStart=/usr/sbin/ptp4l -f /etc/linuxptp/ptp4l.conf -i enP5p5s0 -m
 ExecStartPost=/bin/sh -c 'sleep 3; /usr/sbin/pmc -u -b 0 "SET GRANDMASTER_SETTINGS_NP clockClass 6 clockAccuracy 0x21 offsetScaledLogVariance 0x4e5d currentUtcOffset 37 leap61 0 leap59 0 currentUtcOffsetValid 1 ptpTimescale 1 timeTraceable 1 frequencyTraceable 1 timeSource 0x20"'
 
