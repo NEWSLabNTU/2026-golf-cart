@@ -1,8 +1,8 @@
 [Unit]
 Description=Precision Time Protocol (PTP) service for %I
 Documentation=man:ptp4l
-After=network-online.target
-Wants=network-online.target
+After=network.target
+Wants=network.target
 
 [Service]
 Type=simple
