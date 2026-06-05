@@ -110,13 +110,7 @@ _setup-otocam:
 # Install OTOCAM GMSL camera kernel modules + boot config (IMX390 + MAX9296)
 otocam: _init
     #!/usr/bin/env bash
-    [[ -f "{{marker_dir}}/otocam" ]] && printf "{{green}}✓{{nc}} otocam already done\n" && exit 0
-    set -e
-    printf "{{yellow}}→{{nc}} Installing OTOCAM kmods + boot config...\n"
-    sudo bash "{{hardware_dir}}/otocam/setup-otocam.sh"
-    touch "{{marker_dir}}/otocam"
-    printf "{{green}}✓{{nc}} otocam done\n"
-    printf "{{yellow}}Note:{{nc}} Reboot required for DTB overlay to take effect.\n"
+    echo "TODO: otocam module might not be able to function on boot, need to study which service to hook"
 
 # Conditional linuxptp install (based on INSTALL_LINUXPTP env var)
 _setup-linuxptp:
