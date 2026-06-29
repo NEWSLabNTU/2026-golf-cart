@@ -43,7 +43,7 @@ echo "  sysctl net.core.rmem_max net.ipv4.ipfrag_time net.ipv4.ipfrag_high_thres
 echo ""
 
 # Remove warning marker if it exists (force .envrc to re-check)
-GOLFCART_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+GOLFCART_ROOT="$(cd "$(dirname "$0")/../.." && pwd)" || { echo "Error: cannot resolve repo root"; exit 1; }
 if [ -f "$GOLFCART_ROOT/.envrc.sysctl-warned" ]; then
     rm -f "$GOLFCART_ROOT/.envrc.sysctl-warned"
     echo "Note: .envrc will re-check configuration on next activation"

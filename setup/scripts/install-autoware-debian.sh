@@ -18,7 +18,7 @@ if [[ "$ARCH" == "x86_64" ]]; then
     DEB_FILE="autoware-localrepo-1-5-0_1.5.0-1ubuntu2204_all.deb"
     SHA256SUM="${SHA256SUM_UBUNTU2204}"
 elif [[ "$ARCH" == "aarch64" ]]; then
-    echo "  Detected architecture: arm64 (aarch64) - Assuming JetPack 6.2 compatibility"
+    echo "  Detected architecture: arm64 (aarch64) - JetPack 6.2 target (Advantech Orin)"
     DEB_FILE="autoware-localrepo-1-5-0_1.5.0-1jetpack62_all.deb"
     SHA256SUM="${SHA256SUM_JETPACK62}"
 else
@@ -108,7 +108,7 @@ else
     DOWNLOAD_REQUIRED=true
 fi
 
-if "$DOWNLOAD_REQUIRED"; then
+if [[ "$DOWNLOAD_REQUIRED" == "true" ]]; then
     download_deb "${DOWNLOAD_URL}" "${DEB_DOWNLOAD_DIR}" "${DEB_FILE}" "${SHA256SUM}"
 else
     echo "  Using existing file: ${TEMP_DEB}"
