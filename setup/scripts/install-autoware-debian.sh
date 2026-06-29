@@ -34,12 +34,50 @@ mkdir -p "${DEB_DOWNLOAD_DIR}"
 DOWNLOAD_URL="${REPO_URL_BASE}/${DEB_FILE}"
 TEMP_DEB="${DEB_DOWNLOAD_DIR}/${DEB_FILE}"
 
-# Install aria2c if not already installed
-if ! command -v aria2c &> /dev/null; then
-    echo "  Installing aria2c for parallel downloads..."
-    sudo apt update
-    sudo apt install -y aria2
-fi
+# Download helper: prefer aria2c (parallel download + inline checksum), then
+# fall back to wget, then curl. aria2c is only a speed optimisation, so its
+# absence — or failure — is not fatal as long as one fetcher is available.
+download_deb() {
+    local url="$1" dir="$2" out="$3" sha="$4"
+    local dest="${dir}/${out}"
+
+    if command -v aria2c &> /dev/null; then
+        echo "  Downloading with aria2c (parallel)..."
+        local args=(--dir="$dir" --out="$out" -x 10 -s 10 -k 1M)
+        [[ -n "$sha" ]] && args+=(--checksum=sha-256="$sha")
+        if aria2c "$url" "${args[@]}"; then
+            return 0  # aria2c verified the checksum inline
+        fi
+        echo "  aria2c download failed; falling back to wget/curl..."
+        rm -f "$dest"
+    fi
+
+    if command -v wget &> /dev/null; then
+        echo "  Downloading with wget..."
+        wget -O "$dest" "$url" || { echo "  wget failed."; rm -f "$dest"; return 1; }
+    elif command -v curl &> /dev/null; then
+        echo "  Downloading with curl..."
+        curl -fL -o "$dest" "$url" || { echo "  curl failed."; rm -f "$dest"; return 1; }
+    else
+        echo "Error: need aria2c, wget, or curl to download ${out}, none found."
+        return 1
+    fi
+
+    # aria2c checks the hash during transfer; the wget/curl path verifies after.
+    if [[ -n "$sha" ]]; then
+        echo "  Verifying checksum..."
+        local actual
+        actual=$(sha256sum "$dest" | awk '{print $1}')
+        if [[ "$actual" != "$sha" ]]; then
+            echo "  ERROR: checksum mismatch for ${dest}"
+            echo "  Expected: ${sha}"
+            echo "  Actual:   ${actual}"
+            rm -f "$dest"
+            return 1
+        fi
+        echo "  Checksum matches."
+    fi
+}
 
 echo "  Downloading ${DOWNLOAD_URL} to ${DEB_DOWNLOAD_DIR}..."
 
@@ -71,11 +109,7 @@ else
 fi
 
 if "$DOWNLOAD_REQUIRED"; then
-    if [[ -n "$SHA256SUM" ]]; then
-        aria2c "${DOWNLOAD_URL}" --dir="${DEB_DOWNLOAD_DIR}" --out="${DEB_FILE}" --checksum=sha-256="${SHA256SUM}" -x 10 -s 10 -k 1M
-    else
-        aria2c "${DOWNLOAD_URL}" --dir="${DEB_DOWNLOAD_DIR}" --out="${DEB_FILE}" -x 10 -s 10 -k 1M
-    fi
+    download_deb "${DOWNLOAD_URL}" "${DEB_DOWNLOAD_DIR}" "${DEB_FILE}" "${SHA256SUM}"
 else
     echo "  Using existing file: ${TEMP_DEB}"
 fi
