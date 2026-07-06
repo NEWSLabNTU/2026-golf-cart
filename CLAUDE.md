@@ -3,7 +3,7 @@
 Guidance for Claude Code when working with this repository.
 
 ## Project Overview
-This is a golf cart autonomous driving system for 華夏科大 campus deployment, based on the Golf Cart platform. The system uses Autoware 2025.02 on AGX Orin (JetPack 6.0) with ROS 2 Humble.
+This is a golf cart autonomous driving system for 華夏科大 campus deployment, based on the Golf Cart platform. The system uses Autoware 2025.02 on AGX Orin (JetPack 6.2) with ROS 2 Humble.
 
 **Key System Configuration:**
 - **LiDAR**: Velodyne VLP-32C only
@@ -428,7 +428,7 @@ All dependencies must be ready before localization can work.
 - Prefer `just <recipe>` over `cargo` or raw `sh` scripts.
 
 ## Important Notes
-- **Target Platform**: Advantech Orin computer with JetPack 6.0 (NOT JP6.2 or newer)
+- **Target Platform**: Advantech Orin computer with JetPack 6.2
 - **Autoware Version**: 2025.02 at `/home/aeon/repos/autoware/2025.02-ws`
 - Always source ROS environment: `source /opt/ros/humble/setup.bash`
 - Requires ROS 2 Humble distribution
@@ -585,7 +585,7 @@ Original Golf Cart used ZED stereo cameras with object detection:
 **See [docs/roadmaps/0-migration.md](docs/roadmaps/0-migration.md)** for comprehensive migration plan with 11 phases and team assignments.
 
 ### Key Migration Tasks
-1. **Phase #1**: Advantech Orin computer setup (JP6.0, firmware, dependencies)
+1. **Phase #1**: Advantech Orin computer setup (JP6.2, firmware, dependencies)
 2. **Phase #3**: Velodyne VLP-32C LiDAR integration
 3. **Phase #4**: u-blox GNSS (F9R practice → F9P production)
 4. **Phase #5**: Tamagawa IMU integration
