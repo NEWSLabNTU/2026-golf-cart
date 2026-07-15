@@ -386,6 +386,8 @@ twist_source:=gyro_odom|eagleye            # Override preset twist source
 | [docs/guides/isaac_vslam_testing.md](docs/guides/isaac_vslam_testing.md) | Isaac SLAM testing |
 | [docs/design/isaac_vslam_integration.md](docs/design/isaac_vslam_integration.md) | Isaac SLAM architecture |
 | [docs/research/localization/ndt_parameter_tuning_coss_map.md](docs/research/localization/ndt_parameter_tuning_coss_map.md) | NDT tuning research |
+| [docs/research/safety/assurance-2.0-for-autoware-llm.md](docs/research/safety/assurance-2.0-for-autoware-llm.md) | Assurance 2.0 survey: formal safety case for Autoware + LM integration tiers |
+| [docs/design/lm_driving_tuning_workflow.md](docs/design/lm_driving_tuning_workflow.md) | LM driving integration: BEV-token input, zone-mask output, verifier-gated tuning workflow |
 
 ## Known Issues
 
