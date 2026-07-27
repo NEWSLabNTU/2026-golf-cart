@@ -75,6 +75,10 @@ Strip out AutoSDV leftovers and establish the golf cart baseline. Both groups wo
 3. **Parameter tuning** — Adjust NDT resolution, convergence criteria, and EKF fusion weights in `ndt_scan_matcher.param.yaml` / `ekf_localizer.param.yaml`. Target <10cm accuracy.
 4. **Document tuning results** — Record parameter sets and performance metrics.
 
+### Track C — Indoor AR-Tag Localization (new)
+
+Replaces GNSS with camera-detected AR tags for GNSS-denied indoor operation, keeping NDT primary. Four sub-phases (calibration, indoor mapping, tag map building, runtime integration). See [docs/roadmaps/3-indoor-localization.md](docs/roadmaps/3-indoor-localization.md) and the [design spec](docs/superpowers/specs/2026-07-27-indoor-artag-localization-design.md).
+
 **Phase 3 exit criteria**: Calibration extrinsics verified with projection overlay. NDT localization tracks within 10cm on NTU campus with DBW velocity/steering feedback.
 
 ---
