@@ -80,7 +80,7 @@ A and B are independent and can proceed in parallel.
 
 ### A — Camera calibration (contract for D)
 
-Current state is a hard blocker. `usb_camera_left_calibration.yaml` and its
+Current state is a hard blocker. `camera_left_calibration.yaml` and its
 siblings contain placeholders, not calibration:
 
 ```yaml
@@ -104,10 +104,11 @@ identity intrinsics, tag-derived poses are not degraded — they are meaningless
 - Correct optical-frame convention (z forward, x right, y down) with the
   body→optical rotation explicit, not folded into a yaw guess.
 
-This overlaps [ROADMAP.md](../../ROADMAP.md) Phase 3 Track A (LCTK LiDAR-camera
-calibration). Reuse that work; do not duplicate it. Note that Phase 3 Track A
-targets TIER IV cameras — if the indoor work runs on the current USB/GMSL
-cameras, calibration must be done for those specific units.
+This is the same calibration work as [ROADMAP.md](../../ROADMAP.md) Phase 3
+Track A (LCTK LiDAR-camera calibration): the three cameras in scope are the
+TIER IV GMSL units that track targets. Do it once there. What this design adds
+is the AR-tag-specific requirements above — numeric acceptance criteria, optical
+frame convention, and fixed-exposure profiles.
 
 ### B — Indoor mapping (contract for D)
 
@@ -364,7 +365,8 @@ constrains both lateral and longitudinal position well. A front camera sees wall
 tags nearly edge-on at poor geometry, and sees end-of-corridor tags head-on where
 range is weakly observable.
 
-Current camera config, from `usb_camera_left.yaml`:
+Cameras are TIER IV GMSL units (gscam over `tegra-capture-vi`, `nvjpegenc`).
+Current config, from `camera_left.yaml`:
 
 ```yaml
 image_width: 1920

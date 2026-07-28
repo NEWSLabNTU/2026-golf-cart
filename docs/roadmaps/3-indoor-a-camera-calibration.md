@@ -16,8 +16,8 @@ current values, tag-derived poses are not degraded — they are meaningless.
 
 ### Current state
 
-`golfcart_sensor_kit_launch/config/usb_camera_left_calibration.yaml` (and the
-`_right`, `_rear` siblings) contain placeholders, not calibration:
+`golfcart_sensor_kit_launch/config/camera_left_calibration.yaml` (and the
+`camera_right`, `camera_rear` siblings) contain placeholders, not calibration:
 
 ```yaml
 camera_matrix:
@@ -30,7 +30,7 @@ distortion_coefficients:
 camera extrinsics are round-number guesses that document themselves as such:
 
 ```yaml
-usb_camera_left:
+camera_left:
   x: 0.0      # centered front-back
   y: 0.4      # 40cm to the left
   z: 0.3      # 30cm up
@@ -43,13 +43,23 @@ Roll and pitch are hard-zeroed. The orientation looks like a body-frame yaw
 rather than a ROS camera optical frame (z forward, x right, y down) — the
 body→optical rotation appears to be missing entirely, not just uncalibrated.
 
+Note the contrast within the same file: `vlp32c` and `falcon` now carry real
+calibrated values (`yaw: -0.05`, `pitch: -1.7707963`). The camera entries do not.
+
 ### Cameras in scope
 
-Three, from `camera.launch.xml`: `usb_camera_left`, `usb_camera_right`,
-`usb_camera_rear`. No front camera node exists. All 1920×1280 @ 30 Hz via gscam.
+Three: `camera_left`, `camera_right`, `camera_rear`. All 1920×1280 @ 30 Hz via
+gscam. These are TIER IV GMSL cameras, not USB — the gscam pipeline reads
+`tegra-capture-vi` and encodes with `nvjpegenc`:
+
+```yaml
+# camera_left.yaml:15
+gscam_config: "v4l2src device=/dev/v4l/by-path/platform-tegra-capture-vi-video-index0 io-mode=4 ! ..."
+```
 
 `sensor_kit_calibration.yaml` also lists a `usb_camera_front` entry with no
-corresponding launch node — dead config, resolve during this sub-phase.
+corresponding launch node — leftover from the USB camera era, resolve during
+this sub-phase.
 
 ---
 
@@ -57,11 +67,8 @@ corresponding launch node — dead config, resolve during this sub-phase.
 
 ### Not done
 
-- [ ] **Confirm which physical cameras the indoor work runs on** — current
-      USB/GMSL units, or the TIER IV cameras from ROADMAP Phase 2 Track A.
-      Calibration is per-unit and does not transfer.
 - [ ] **Intrinsic calibration, per camera** — checkerboard, `plumb_bob` model.
-      Write real values into `usb_camera_{left,right,rear}_calibration.yaml`.
+      Write real values into `camera_{left,right,rear}_calibration.yaml`.
 - [ ] **Extrinsic calibration, camera→base_link, per camera** — including the
       body→optical frame convention, stated explicitly rather than folded into
       a yaw value.
@@ -104,6 +111,8 @@ here saves debugging in D.
 ## Overlap with existing roadmap
 
 [ROADMAP.md](../../ROADMAP.md) Phase 3 Track A already covers LiDAR-camera
-calibration via LCTK, targeting TIER IV cameras. Reuse that work rather than
-duplicating it. If the indoor work runs on the current USB cameras instead,
-calibration must be repeated for those specific units.
+calibration via LCTK, targeting TIER IV cameras. The three cameras in scope here
+**are** those TIER IV GMSL units, so this is the same calibration work — do it
+once, in Track A, and this sub-phase consumes the result. What this doc adds on
+top is the AR-tag-specific requirements: the numeric acceptance criteria below,
+the optical-frame convention, and the fixed-exposure profiles.
