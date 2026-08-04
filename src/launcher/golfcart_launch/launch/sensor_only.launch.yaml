@@ -1,4 +1,21 @@
 launch:
+# Multi-machine Host Profile
+# master -> everything except the Falcon LiDAR driver
+# orin   -> Falcon LiDAR driver only
+# all    -> single-machine operation (default, unchanged behaviour)
+- arg:
+    name: host
+    default: "all"
+    description: "Host profile: master, orin, or all"
+
+- let:
+    name: is_master
+    value: $(eval "'$(var host)' in ('master', 'all')")
+
+- let:
+    name: is_orin
+    value: $(eval "'$(var host)' in ('orin', 'all')")
+
 - arg:
     name: is_simulation
     default: "false"
@@ -77,6 +94,7 @@ launch:
 
 - include:
     file: "$(find-pkg-share golfcart_launch)/launch/golfcart_autoware.launch.xml"
+    if: $(var is_master)
     arg:
     -
       name: vehicle_model
@@ -178,20 +196,30 @@ launch:
 # Publish empty objects when perception is disabled
 # This unblocks behavior_path_planner which waits for /perception/object_recognition/objects
 - group:
-    unless: $(var launch_perception)
+    if: $(var is_master)
     children:
-    - node:
-        pkg: autoware_dummy_perception_publisher
-        exec: empty_objects_publisher
-        name: empty_objects_publisher
-        namespace: perception/object_recognition
-        remap:
-        - from: ~/output/objects
-          to: /perception/object_recognition/objects
+    - group:
+        unless: $(var launch_perception)
+        children:
+        - node:
+            pkg: autoware_dummy_perception_publisher
+            exec: empty_objects_publisher
+            name: empty_objects_publisher
+            namespace: perception/object_recognition
+            remap:
+            - from: ~/output/objects
+              to: /perception/object_recognition/objects
 
-# System Monitor
-- include:
-    file: "$(find-pkg-share golfcart_system_monitor)/launch/golfcart_system_monitor.launch.yaml"
+    # System Monitor
+    - include:
+        file: "$(find-pkg-share golfcart_system_monitor)/launch/golfcart_system_monitor.launch.yaml"
+
+# Falcon (Seyond) LiDAR - runs on the orin host
+- group:
+    if: $(var is_orin)
+    children:
+    - include:
+        file: "$(find-pkg-share golfcart_launch)/launch/falcon.launch.xml"
 
 # # RQT Runtime Monitor
 # - node:

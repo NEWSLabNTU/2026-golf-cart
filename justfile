@@ -88,6 +88,14 @@ launch ARGS="":
             rviz:=false {{ARGS}}; \
     fi
 
+# Launch the master host profile (everything except the Falcon LiDAR)
+launch-master ARGS="":
+    just launch ARGS="host:=master {{ARGS}}"
+
+# Launch the orin host profile (Falcon LiDAR driver only)
+launch-orin ARGS="":
+    just launch ARGS="host:=orin {{ARGS}}"
+
 # Launch Autoware planning simulator with Golf Cart vehicle
 launch-sim-planning:
     play_launch launch \
