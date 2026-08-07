@@ -48,10 +48,10 @@ just launch
 
 ```bash
 # Launch with u-blox GNSS and USB cameras
-make launch ARGS="gnss_receiver:=ublox camera_model:=usb"
+just launch "gnss_receiver:=ublox camera_model:=usb"
 
 # Indoor testing without GNSS
-make launch ARGS="use_gnss:=false"
+just launch "use_gnss:=false"
 ```
 
 ## Development Status

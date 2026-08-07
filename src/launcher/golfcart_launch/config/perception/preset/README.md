@@ -21,9 +21,9 @@ Default preset for Golf Cart. Uses only LiDAR for perception.
 
 **Launch**:
 ```bash
-make launch ARGS="perception_preset:=lidar_only"
+just launch "perception_preset:=lidar_only"
 # Or omit (it's the default)
-make launch
+just launch
 ```
 
 ### `camera_lidar_fusion`
@@ -67,7 +67,7 @@ Minimal perception configuration for development and debugging.
 
 **Launch**:
 ```bash
-make launch ARGS="perception_preset:=minimal"
+just launch "perception_preset:=minimal"
 ```
 
 ## Usage
@@ -76,7 +76,7 @@ Specify the preset when launching Golf Cart:
 
 ```bash
 # Real hardware mode
-make launch ARGS="perception_preset:=<preset_name>"
+just launch "perception_preset:=<preset_name>"
 
 # Logging simulation mode
 ros2 launch golfcart_launch logging_simulation.launch.yaml perception_preset:=<preset_name>

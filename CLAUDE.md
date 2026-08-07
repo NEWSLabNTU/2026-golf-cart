@@ -26,7 +26,7 @@ This is a golf cart autonomous driving system for 華夏科大 campus deployment
 just build              # Build all packages
 just test               # Run tests
 just launch             # Launch system (web UI: http://localhost:8081)
-just launch ARGS="..."  # Launch with parameters
+just launch "..."  # Launch with parameters
 just clean              # Remove build artifacts
 just checkout           # Update git submodules
 just --list             # Show all available commands
@@ -132,43 +132,43 @@ Sensor configurations are in `src/param/autoware_individual_params/individual_pa
 #### LiDAR Configuration
 ```bash
 # Velodyne VLP-32C (golf cart standard)
-make launch ARGS="lidar_model:=vlp32c"
+just launch "lidar_model:=vlp32c"
 ```
 
 #### Camera Configuration
 ```bash
 # USB cameras (current)
-make launch ARGS="camera_model:=usb"
+just launch "camera_model:=usb"
 
 # Tier IV GMSL cameras (future)
-make launch ARGS="camera_model:=tier4"
+just launch "camera_model:=tier4"
 
 # No camera
-make launch ARGS="camera_model:=none"
+just launch "camera_model:=none"
 ```
 
 #### GNSS Configuration
 ```bash
 # u-blox GNSS (golf cart standard)
-make launch ARGS="gnss_receiver:=ublox"
+just launch "gnss_receiver:=ublox"
 ```
 
 **Usage:**
 ```bash
 # Full visual localization (requires visual map)
-just launch pose_source:=visual visual_map_dir:=/path/to/visual_map
+just launch "pose_source:=visual visual_map_dir:=/path/to/visual_map"
 
 # Visual odometry only (no global init, manual pose required)
-just launch pose_source:=isaac
+just launch "pose_source:=isaac"
 ```
 
 **Creating Visual Maps:**
 ```bash
 # Golf cart standard configuration
-make launch ARGS="lidar_model:=vlp32c camera_model:=usb gnss_receiver:=ublox"
+just launch "lidar_model:=vlp32c camera_model:=usb gnss_receiver:=ublox"
 
 # Indoor testing without GNSS
-make launch ARGS="lidar_model:=vlp32c camera_model:=usb use_gnss:=false"
+just launch "lidar_model:=vlp32c camera_model:=usb use_gnss:=false"
 ```
 
 ### Python Packages
@@ -446,7 +446,7 @@ All dependencies must be ready before localization can work.
 
 ### Systemd Service Integration
 - Golf Cart now runs as a systemd user service for better process management
-- Service is automatically installed on first `make launch`
+- Service is automatically installed on first `just launch`
 - Provides clean shutdown with no orphan processes
 - Logs accessible via `golfcart status` or `systemctl --user status golfcart`
 - Service is NOT enabled for automatic startup by default (use `golfcart enable` if needed)

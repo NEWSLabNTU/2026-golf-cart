@@ -96,13 +96,16 @@ launch ARGS="":
             rviz:=false {{ARGS}}; \
     fi
 
-# Launch the master host profile (everything except the Falcon LiDAR)
+# Launch the master host profile (everything except the ZED camera)
+# NOTE: the argument is positional. `just launch ARGS="..."` does NOT work -
+# just has no NAME=value syntax for recipe parameters, so the whole token is
+# passed through as a launch argument and host silently stays at its default.
 launch-master ARGS="":
-    just launch ARGS="host:=master {{ARGS}}"
+    just launch "host:=master {{ARGS}}"
 
-# Launch the orin host profile (Falcon LiDAR driver only)
+# Launch the orin host profile (ZED X camera only)
 launch-orin ARGS="":
-    just launch ARGS="host:=orin {{ARGS}}"
+    just launch "host:=orin {{ARGS}}"
 
 # Launch Autoware planning simulator with Golf Cart vehicle
 launch-sim-planning:
