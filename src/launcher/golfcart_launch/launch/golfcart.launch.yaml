@@ -1,12 +1,16 @@
 launch:
 # Multi-machine Host Profile
-# master -> everything except the Falcon LiDAR driver
-# orin   -> Falcon LiDAR driver only
+# master -> everything except the ZED camera (includes the Falcon LiDAR)
+# orin   -> ZED camera only
 # all    -> single-machine operation (default, unchanged behaviour)
 - arg:
     name: host
     default: "all"
     description: "Host profile: master, orin, or all"
+    choice:
+    - value: "master"
+    - value: "orin"
+    - value: "all"
 
 - let:
     name: is_master
@@ -210,12 +214,12 @@ launch:
             - from: ~/output/objects
               to: /perception/object_recognition/objects
 
-# Falcon (Seyond) LiDAR - runs on the orin host
+# ZED X camera - runs on the orin (slave) host
 - group:
     if: $(var is_orin)
     children:
     - include:
-        file: "$(find-pkg-share golfcart_launch)/launch/falcon.launch.xml"
+        file: "$(find-pkg-share golfcart_launch)/launch/zed.launch.xml"
 
 # System Monitor
 # - include:

@@ -1,0 +1,71 @@
+<launch>
+  <!--
+    Standalone ZED X camera driver - runs on the orin (slave) host.
+
+    Replaces the Falcon (Seyond) LiDAR as the orin payload; the Falcon runs on
+    the master, launched by the sensor kit as usual.
+
+    zed_camera.launch.py is deliberately NOT included: it computes its
+    LoadComposableNodes target as an absolute string before any namespace push is
+    applied, while the container action itself IS pushed, so the two disagree and
+    the component silently never loads. We build the container and load the
+    component ourselves instead, landing topics at /sensing/camera/zed/*.
+
+    For the same reason there is no push-ros-namespace here: both namespaces below
+    are absolute. With a push, the LoadComposableNodes action sits in a nested
+    scope and its wait for the container's load_node service never completes when
+    this file is included from a conditional group (as golfcart.launch.yaml does).
+
+    Operational notes:
+      * The ZED node needs OpenGL hardware acceleration - plain VNC breaks it.
+      * If the GMSL link wedges ("ZEDX#0#0#FROZEN"), recover with
+        `sudo service zed_x_daemon restart; sleep 25`. Restarting nvargus-daemon
+        alone is not sufficient.
+  -->
+  <!--
+    Deliberately NOT named `camera_name`/`camera_model`: golfcart.launch.yaml
+    already declares a top-level `camera_model` (usb|none, selecting the sensor
+    kit's cameras) which would leak into this include and override the default
+    with an empty string.
+  -->
+  <arg name="zed_camera_name" default="zed" description="Camera name (topic/node namespace)"/>
+  <arg name="zed_camera_model" default="zedx" description="ZED model: zedx, zedxm, zed2i, ..."/>
+  <arg name="camera_ns" default="/sensing/camera" description="Absolute parent namespace"/>
+
+  <let name="zed_common_config" value="$(find-pkg-share zed_wrapper)/config/common_stereo.yaml"/>
+  <let name="zed_camera_config" value="$(find-pkg-share zed_wrapper)/config/$(var zed_camera_model).yaml"/>
+
+  <group>
+    <node_container pkg="rclcpp_components" exec="component_container_isolated"
+                    name="zed_container" namespace="$(var camera_ns)/$(var zed_camera_name)">
+      <param name="use_multi_threaded_executor" value="true"/>
+    </node_container>
+
+    <load_composable_node target="$(var camera_ns)/$(var zed_camera_name)/zed_container">
+      <composable_node pkg="zed_components" plugin="stereolabs::ZedCamera"
+                       name="$(var zed_camera_name)" namespace="$(var camera_ns)">
+        <param from="$(var zed_common_config)"/>
+        <param from="$(var zed_camera_config)"/>
+        <param name="general.camera_name" value="$(var zed_camera_name)"/>
+        <param name="general.camera_model" value="$(var zed_camera_model)"/>
+
+        <!--
+          TF must stay off. Autoware owns map -> odom (NDT/EKF) and
+          odom -> base_link; the wrapper defaults publish both map -> odom and
+          odom -> camera_link, which would fight the master's TF tree once the
+          two hosts share a DDS graph. Re-enable only after ZED extrinsics are
+          calibrated and a base_link -> zed_camera_link entry exists.
+        -->
+        <param name="pos_tracking.pos_tracking_enabled" value="false"/>
+        <param name="pos_tracking.publish_tf" value="false"/>
+        <param name="pos_tracking.publish_map_tf" value="false"/>
+        <param name="sensors.publish_imu_tf" value="false"/>
+
+        <!-- Depth off by default: costs GPU here and WiFi bandwidth later. -->
+        <param name="depth.depth_mode" value="NONE"/>
+
+        <extra_arg name="use_intra_process_comms" value="true"/>
+      </composable_node>
+    </load_composable_node>
+  </group>
+</launch>

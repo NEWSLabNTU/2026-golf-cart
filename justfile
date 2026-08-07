@@ -25,11 +25,19 @@ build *FLAGS="":
         just clean --yes
     fi
     just build_seyond
+    # The ZED packages need the ZED SDK headers/libs; the master has no SDK, so
+    # skip them there instead of failing the whole build.
+    ZED_IGNORE=()
+    if [[ ! -d /usr/local/zed ]]; then
+        echo "→ ZED SDK not found at /usr/local/zed — skipping ZED packages"
+        ZED_IGNORE=(--packages-ignore zed_components zed_wrapper zed_ros2 zed_debug)
+    fi
     colcon build \
         --base-paths src \
         --symlink-install \
         --cmake-args -DCMAKE_BUILD_TYPE=Release \
-        --cargo-args --release
+        --cargo-args --release \
+        "${ZED_IGNORE[@]}"
 
 build_seyond:
     cd src/sensor_component/external/seyond_ros_driver && ./build.bash
