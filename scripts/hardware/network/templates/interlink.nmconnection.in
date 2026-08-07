@@ -1,0 +1,22 @@
+[connection]
+id=@ID@
+type=ethernet
+interface-name=@IFACE@
+autoconnect=true
+autoconnect-priority=10
+
+[ethernet]
+
+[ipv4]
+address1=@ADDRESS@/24
+method=manual
+# Point-to-point segment with no router on it: never let this link supply a
+# default route or DNS, or it will shadow the working uplink.
+never-default=true
+ignore-auto-dns=true
+
+[ipv6]
+addr-gen-mode=stable-privacy
+method=link-local
+
+[proxy]

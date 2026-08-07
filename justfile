@@ -100,12 +100,16 @@ launch ARGS="":
 # NOTE: the argument is positional. `just launch ARGS="..."` does NOT work -
 # just has no NAME=value syntax for recipe parameters, so the whole token is
 # passed through as a launch argument and host silently stays at its default.
+# CYCLONEDDS_URI is set here rather than left to .envrc so the recipe works
+# without direnv; the default loopback profile would isolate the two hosts.
 launch-master ARGS="":
-    just launch "host:=master {{ARGS}}"
+    CYCLONEDDS_URI="file://{{justfile_directory()}}/config/cyclonedds/master.xml" \
+        just launch "host:=master {{ARGS}}"
 
 # Launch the orin host profile (ZED X camera only)
 launch-orin ARGS="":
-    just launch "host:=orin {{ARGS}}"
+    CYCLONEDDS_URI="file://{{justfile_directory()}}/config/cyclonedds/orin.xml" \
+        just launch "host:=orin {{ARGS}}"
 
 # Launch Autoware planning simulator with Golf Cart vehicle
 launch-sim-planning:
