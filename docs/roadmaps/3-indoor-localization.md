@@ -1,54 +1,63 @@
-# Phase 3 — Indoor AR-Tag + NDT Localization (master)
+# Phase 3 — ArUco Indoor Localization (master)
 
-Replaces GNSS with camera-detected AR tags for indoor operation, keeping NDT as
-the primary pose estimator.
+ArUco boards with hand-measured poses are the **sole** pose source indoors.
+NDT is not used. No point cloud map, no scan matching, no GNSS.
 
-Design spec: [2026-07-27-indoor-artag-localization-design.md](../superpowers/specs/2026-07-27-indoor-artag-localization-design.md)
+Design spec: **[2026-08-10-aruco-indoor-localizer-design.md](../superpowers/specs/2026-08-10-aruco-indoor-localizer-design.md)**
 
 Last updated: 2026-08-13 (E implemented, B tooling done; A, C, D still design-phase)
 
 ---
 
-## Why
+## Scope change, 2026-08-10
 
-GNSS performs three separate jobs in this stack. Indoors, all three disappear at
-once, and they need three different replacements:
+This phase was previously "AR tags correct a primary NDT estimator." It is now
+"ArUco boards *are* the estimator." Two decisions drove it: board poses are
+**measured by hand and supplied as data**, and **NDT is dropped entirely**.
 
-1. **Cold-start pose** for `autoware_pose_initializer`
-2. **Absolute correction** bounding NDT drift, via the EKF pose input
-3. **NDT regularization** along geometrically degenerate axes
+### What that deleted
 
-Item 3 is the one that matters most indoors and is easiest to miss. Autoware's
-NDT already ships a `regularization` input whose documented purpose is fixing
-longitudinal degeneracy **in tunnels, using GNSS**. An indoor corridor is the
-same geometry problem. It is currently disabled:
+| Sub-phase | Status |
+|---|---|
+| **A — camera calibration** | **Unchanged. Now the only prerequisite sub-phase.** |
+| **B — indoor mapping** | **Deleted.** No point cloud map is needed. |
+| **C — tag map building** | **Deleted.** Poses are measured by hand, not bootstrapped from an NDT drive. |
+| **D — runtime integration** | **Rewritten.** See the spec; the phase doc's task list is stale. |
 
-```yaml
-# config/localization/ndt_scan_matcher/ndt_scan_matcher.param.yaml:44
-regularization:
-  enable: false
-```
+Also deleted: NDT regularization and its feedback-loop hazard, the
+`golfcart_pose_merger`, the separate initializer node, tag-map staleness
+handling, and the covariance inflation that existed because the map used to be
+NDT-derived.
+
+The critical path shortened a great deal. `B` was the item blocked on Turing
+Drive DBW, and it is gone — DBW still gates the *fused* EKF output, since the
+filter needs real twist, but the localizer's raw pose can be validated against
+ground truth with no vehicle interface at all.
+
+### What it made harder
+
+Removing NDT removed the fallback. Three consequences, all covered in the spec:
+
+1. **Coverage is safety-critical.** No boards visible means dead reckoning on
+   gyro and wheel odometry, whose error grows without bound — not "degrade to
+   NDT." The spec defines `NOMINAL` / `DEGRADED` / `DEAD_RECKONING` / `FAULT`
+   states with a time budget and an MRM hook.
+2. **Heading has no other absolute source.** A single board's orientation is
+   unusable — 11.7° measured jitter — so **two well-spread boards must be
+   visible often enough to bound gyro drift**. This is an availability
+   requirement, not an accuracy target.
+3. **A wrong map entry is uncontradicted.** The spec adds integrity monitoring:
+   per-ID residuals across the session, flag and exclude, structured after GNSS
+   RAIM.
 
 ---
 
-## Sub-phase structure
+## Work remaining
 
-```
-A. Camera calibration          intrinsics + camera→base_link extrinsics
-      │                        BLOCKS EVERYTHING DOWNSTREAM
-      ├──────────────┐
-B. Indoor mapping    │         LiDAR SLAM → PCD + Lanelet2, NDT validated
-   (independent of A)│         indoors with no GNSS in the pipeline
-      └──────┬───────┘
-             ▼
-C. Tag map building            tag polygons into Lanelet2, in map frame,
-                               without a total station
-             ▼
-D. Runtime integration         3× ar_tag_based_localizer + pose merger +
-                               tag init path + launch wiring + tuning
-```
+### Sub-phase A — camera calibration (prerequisite, unchanged)
 
-A and B are independent — two people can run them in parallel.
+See [3-indoor-a-camera-calibration.md](3-indoor-a-camera-calibration.md).
+Hard blockers it must clear:
 
 | Sub-phase | Doc | Status |
 |-----------|-----|--------|
@@ -57,6 +66,50 @@ A and B are independent — two people can run them in parallel.
 | C — Tag map building | [3-indoor-c-tag-map-building.md](3-indoor-c-tag-map-building.md) | Not started |
 | D — Runtime integration | [3-indoor-d-runtime-integration.md](3-indoor-d-runtime-integration.md) | Design complete, not started |
 | E — Board pose initializer | [3-indoor-e-board-initializer.md](3-indoor-e-board-initializer.md) | Implemented, passing in simulation; replay validation blocked by B |
+
+- **No `*_optical_link` frames exist in the URDF.** PnP returns optical-convention
+  poses; composing through the body-frame links rotates every observation ~90°.
+- **All three camera calibration files are one file copied three times**, declaring
+  `rational_polynomial` and internally inconsistent with the 1920×1280 stream.
+
+### Board production and mounting
+
+- Generate single-ID boards (LCTK, `num_squares_per_side = 1`)
+- **Walk the route with a camera first** and produce the coverage survey — how
+  many boards are visible where, and at what incidence. This sizes the job and
+  is much cheaper than discovering the answer after mounting.
+- Mount: ≥2 visible everywhere, ≥5 where accuracy matters, yawed ~30° off the
+  wall, spread normals and depths.
+
+### Survey
+
+- Measure board poses. The **survey accuracy is now the system's accuracy
+  ceiling**, so instrument and technique matter more than anything in software.
+- Prefer the four-corner form over pose + quaternion — it is what a manual
+  survey produces and it carries no frame convention to get wrong.
+
+### Sub-phase D — implementation
+
+Broken into seven phase docs, indexed at
+**[3-indoor-d-runtime-integration.md](3-indoor-d-runtime-integration.md)**.
+Infrastructure and the launch switch first, then the algorithm, then a
+simulation smoke test; rosbag collection runs in parallel from day one.
+
+| Phase | Doc | Can start |
+|---|---|---|
+| D1 | [Infrastructure](3-indoor-d1-infrastructure.md) — msgs, package skeletons, tag map loader | **now** |
+| D2 | [Launch switch](3-indoor-d2-launch-switch.md) — `pose_source:=aruco`, stubs are fine | after D1 skeletons |
+| D3 | [Synthetic detection source](3-indoor-d3-sim-detection-source.md) — the ground-truth harness | after D1 |
+| D4 | [Localizer algorithm](3-indoor-d4-localizer.md) — the solve, integrity, states | after D3 |
+| D5 | [Detector](3-indoor-d5-detector.md) — LCTK extension | **now**, separate repo |
+| D6 | [Simulation smoke test](3-indoor-d6-sim-smoke-test.md) | after D4 |
+| D7 | [Rosbag collection](3-indoor-d7-rosbag-collection.md) | **now** |
+
+The ordering hinges on one decoupling: **the localizer does not need the
+detector.** D3's synthetic source produces `ArucoDetectionArray` from a known
+pose and the tag map, so the entire solve can be built and validated against
+exact ground truth before a real image is processed — and against faults that
+can be dialled in, which no rosbag provides.
 
 ### E — Board pose initializer, added 2026-08-12
 
@@ -74,59 +127,13 @@ route, so bounding drift remains the tags' job.
 
 ---
 
-## Deployment model
+## Three things that can start today, with no hardware
 
-Tags are **placed per session** at roughly repeatable positions and removed
-afterwards. This drives two decisions that shape the whole design:
-
-- Per-deployment total-station survey is not viable → sub-phase C builds the tag
-  map by **NDT bootstrap** (drive the route, detect tags, back out tag poses from
-  the NDT trajectory).
-- Tag poses are therefore bootstrap-derived, not survey truth → sub-phase D
-  inflates tag covariance so tags **bound drift** rather than dominating NDT.
-
-Reusing a stale tag map from a previous session is the sharpest foot-gun in this
-design: the system would localize confidently to the wrong place. Tag map files
-carry a session stamp and D warns when the loaded map is stale.
-
----
-
-## Blockers
-
-| Blocker | Blocks | Owner |
-|---------|--------|-------|
-| **Turing Drive DBW package** — `velocity_report.py` still a stub publishing zeros | B, C, D — NDT cannot be validated without wheel velocity | Phase 2 Track B (pre-existing, see [2-track-b.md](2-track-b.md)) |
-| Camera intrinsics are placeholders (`camera_matrix: [1,0,960, 0,1,640, 0,0,1]`) | C, D | Sub-phase A |
-| No indoor PCD map exists | C, D | Sub-phase B |
-| Indoor site not yet fixed | B (mapping run scheduling) | — |
-
-The DBW blocker is inherited, not introduced by this work. It is on the critical
-path for the entire phase and should be escalated rather than discovered during
-integration.
-
----
-
-## Exit criteria
-
-- Cold start with no GNSS and no manual RViz input succeeds in ≥90% of trials, within 30 s.
-- Longitudinal drift over the longest corridor is materially bounded relative to
-  NDT-only, demonstrated on a corridor where NDT-only measurably degrades.
-- No pose discontinuity above 0.3 m attributable to tag acquisition.
-- Clean degradation to NDT-only when tags are absent, with correct diagnostics.
-
----
-
-## Related work already in the repo
-
-- [docs/research/lidar_marker_localization.md](../research/lidar_marker_localization.md) —
-  Autoware reflector-marker writeup (LiDAR modality, deferred; see design §10)
-- [docs/research/indoor_localization.md](../research/indoor_localization.md) —
-  broad survey (SLAM, UWB, mocap, AprilTag, WiFi)
-
-Both carry AutoSDV-era historical notes; sensor specifics are stale, method
-content is not.
-
-All required Autoware packages are already installed at `/opt/autoware/1.5.0/share`:
-`autoware_ar_tag_based_localizer`, `autoware_landmark_manager`,
-`autoware_lidar_marker_localizer`, `autoware_pose_estimator_arbiter`. No upstream
-package needs adding or forking.
+- **D5's `corner_sigma_px` measurement.** Park in front of a board, record ~1000
+  frames, take the standard deviation of corner positions. The whole covariance
+  model scales on this constant and it is currently inferred from other people's
+  data. Needs only a camera and a board.
+- **D7's bench bags.** Four or five boards in a room, tape-measured.
+- **The route coverage walk.** Sizes the board count and tells you whether the
+  ≥2-visible-everywhere rule is satisfiable here, before anything is printed or
+  drilled.

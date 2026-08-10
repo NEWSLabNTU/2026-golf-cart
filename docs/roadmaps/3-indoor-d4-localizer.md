@@ -1,0 +1,190 @@
+# Phase 3D-4 — Localizer algorithm
+
+Part of [Phase 3D](3-indoor-d-runtime-integration.md).
+Spec: [design](../superpowers/specs/2026-08-10-aruco-indoor-localizer-design.md) §2, §5, §6
+
+**Depends on**: D1, D3.
+**Blocks**: D6.
+
+---
+
+## Goal
+
+`golfcart_aruco_localizer`: detections from every camera in, one vehicle pose
+with an honest covariance out, plus a localization state and integrity verdict.
+
+The largest phase. It has a natural split — **get poses publishing first, then
+add integrity and states.** Stage 1 is the solve; stage 2 is everything that
+makes it safe to be the only pose source.
+
+---
+
+## Stage 1 — the solve
+
+### Windowing
+
+- [ ] Buffer detections from all cameras over a window, default one frame period
+      (~33 ms).
+- [ ] Motion-compensate each detection to a common reference stamp using EKF
+      twist. Switchable off.
+- [ ] Output stamped with the **sensor** stamp, not receive time.
+
+Compensation is cheap to build now and its absence shows up later as a
+speed-dependent bias, which is miserable to diagnose after the fact.
+
+### Candidate generation and flip consensus
+
+- [ ] For each detected marker and each of its two IPPE solutions, form a
+      candidate `T_map→base`. N markers gives 2N candidates.
+- [ ] Cluster the candidates in SE(3).
+- [ ] Largest cluster is the consensus; membership assigns each marker's flip.
+- [ ] Markers with neither solution in the cluster are flagged, not silently kept.
+- [ ] Seed the solve from the cluster mean.
+- [ ] Tie between two equal clusters → publish nothing that window, WARN.
+      **A tie is the expected outcome for coplanar boards**, whose flips agree
+      with each other as well as the correct solutions do (spec §2.4). Detecting
+      it is not an edge case, it is the safety net for a mounting mistake — so
+      the WARN should say *coplanar boards* rather than just "ambiguous".
+
+**Never pick the branch nearest the prior.** With ≥2 markers this needs no prior
+at all, and choosing by proximity to the prior is precisely how the upstream
+node produces a measurement biased toward confirming what the filter already
+believes.
+
+### Joint solve
+
+- [ ] Levenberg–Marquardt over `T_map→base` (6 parameters), analytic Jacobian.
+- [ ] Residuals are reprojection errors of every corner of every marker of every
+      camera. Cameras differ only in `T_base→cam` and `K`.
+- [ ] Huber kernel applied **per marker** — all four corners of a marker share
+      one robust weight, because a wrong board makes all four wrong together.
+      Rejecting at corner granularity lets three bad corners hide behind the fourth.
+- [ ] Per-tag weight from `position_stddev` in the map.
+- [ ] Small dense problem — hand-rolled, no Ceres dependency, and direct access
+      to `JᵀJ` for covariance and conditioning.
+
+### Covariance
+
+- [ ] `Σ = σ̂²(JᵀJ)⁻¹`, `σ̂²` from residuals at `dof = 2N − 6`.
+- [ ] **Eigendecompose and invert per eigendirection, saturating unobservable
+      directions at a large variance cap.** Never `try_inverse()` unguarded —
+      `JᵀJ` is routinely near-singular and that is a *result*, not an error.
+- [ ] **Never emit a zero variance.** Downstream reads it as exact.
+- [ ] Build the covariance in the **camera frame and rotate it into map**, not
+      axis-aligned in the vehicle frame. Depth error leaks laterally off-axis as
+      `tanθ·σ_Z`, which dominates at the edge of a wide field of view.
+      `lidar_marker_localizer.cpp:308` has the rotation helper to borrow.
+
+One mechanism covers three situations that look different and are not: a single
+ambiguous marker, a coplanar cluster at one depth, and healthy geometry. All
+three are the same near-null direction of `JᵀJ`.
+
+### Observability and DoF selection
+
+- [ ] Compute per solve: marker count and IDs, **angular spread of marker
+      normals** (max pairwise, using `|dot|` so a flipped normal does not read as
+      180° of spread), depth range, `cond(JᵀJ)`, reprojection RMS overall and per
+      marker, `err₁/err₂` per marker.
+- [ ] Select DoF per window:
+
+| Observability | Solve | Orientation |
+|---|---|---|
+| ≥2 markers in consensus, spread above threshold | full 6-DoF | estimated |
+| ≥2 markers, coplanar or narrow spread | 6-DoF, eigen-saturated | estimated, weak axis saturated |
+| 1 marker, `err₁/err₂ ≤ 0.2`, outside the ±25° cone | 3-DoF position | clamped to prior |
+| 1 marker, ambiguous or inside the cone | reject | — |
+
+One code path with a mask on the parameter vector, not three implementations.
+
+**Do not rank on reprojection RMSE.** LCTK measured it inverting — degenerate
+captures scored better than usable ones. Report it; rank on normal spread, which
+was the only statistic that separated cleanly on real data and the only one that
+tells an operator what to physically change.
+
+### Output
+
+- [ ] `PoseWithCovarianceStamped` on
+      `/localization/pose_estimator/pose_with_covariance`, `frame_id = "map"`.
+- [ ] Debug `MarkerArray`s for mapped boards and boards used this solve.
+
+---
+
+## Stage 2 — integrity and states
+
+### Integrity monitoring
+
+The redundancy is *between boards*. With ≥2 visible, the solve is
+over-determined and each marker's post-solve residual is a consistency check.
+Structurally this is the GNSS RAIM problem — N redundant measurements, detect
+and exclude the faulty one — and that literature is where to look rather than
+inventing a scheme.
+
+- [ ] Per-ID normalized residual, EWMA across the session.
+- [ ] Persistent exceedance → flag, exclude from the solve, name the board in
+      diagnostics. **The message should say which physical board to go and look
+      at**, because this is a maintenance event, not a tuning problem.
+- [ ] Track and publish whether a fix was **checked** or **unchecked**. With
+      exactly two markers, excluding one leaves an unchecked solve; with one
+      there is no check at all. An unchecked fix is a different thing from a
+      checked one even when both look fine.
+- [ ] Unmapped detected IDs: count and WARN listing them. **Never synthesize a
+      pose.** The upstream node returns a default-constructed zero pose with
+      `q.w = 0` in this case, which a large map's distance gate happens to
+      swallow — an indoor map near the origin does not.
+
+### State machine
+
+- [ ] `NOMINAL` — ≥2 markers in consensus, spread above threshold.
+- [ ] `DEGRADED` — 1 usable marker, or ≥2 with poor spread. Time-limited.
+- [ ] `DEAD_RECKONING` — 0 usable markers. Hard time budget.
+- [ ] `FAULT` — budget expired, or integrity check failed. Requests MRM.
+- [ ] Publish on `~/status` and to `/diagnostics`. Diagnostics is the machine
+      path to MRM; `~/status` is the human and TUI path.
+- [ ] Recovery from every state except `FAULT` when boards are reacquired.
+
+The dead-reckoning budget is a configured duration derived from **measured** IMU
+drift and odometry error against an allowable position error. It must not be
+guessed — that number is what stands between a coverage gap and the vehicle
+driving on a stale estimate.
+
+### Initialization mode
+
+- [ ] Gates from spec §4.3: `min_markers: 2`, minimum normal spread,
+      `max_range: 8.0`, `max_view_angle: 50.0`, 5 consecutive solves agreeing
+      within 0.5 m, `max_condition_number`, republish cooldown.
+- [ ] Publish `/initialpose3d` (or via `pose_initializer` — decided in D2).
+- [ ] Never seed from a single ambiguous marker.
+
+---
+
+## Tests
+
+All of these run against D3's synthetic source, no hardware.
+
+- [ ] **Zero-noise round trip** — recovers ground truth to numerical tolerance.
+      This is the whole geometry chain: map convention, corner order, TF
+      composition, optical frame, solve direction.
+- [ ] **Degeneracy sweep** — one marker, coplanar cluster, well-spread. Assert
+      reported covariance grows in the directions that are genuinely
+      unobservable, and does not in the others.
+- [ ] **Singular `JᵀJ`** — covariance saturates rather than throwing or
+      returning zeros.
+- [ ] **Noise scaling** — covariance tracks `corner_sigma_px`.
+- [ ] **Flip consensus** — with ≥2 markers, resolves correctly with no prior;
+      with a deliberate tie, publishes nothing.
+- [ ] **Integrity** — one displaced board is flagged and excluded, its neighbours
+      are not, and the fix is reported as unchecked when redundancy runs out.
+- [ ] **State machine** — every transition, including budget expiry to `FAULT`
+      and the MRM request, driven by D3's blackout injection.
+- [ ] **Stamp handling** — future stamps and out-of-order arrivals rejected.
+
+---
+
+## Sequencing note
+
+Stage 1 is publishable and demonstrable on its own: a pose tracking a scripted
+trajectory in simulation is a real milestone and worth landing before stage 2
+starts. But **stage 2 is not optional polish.** With one pose source and no
+cross-check, the state machine and integrity monitor are what make the system
+safe to drive behind. Do not let stage 1 working well be mistaken for the phase
+being finished.

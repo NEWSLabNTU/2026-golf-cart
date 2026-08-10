@@ -1,8 +1,19 @@
 # Indoor AR-Tag + NDT Localization — Design
 
-**Status**: Sections 1–2 approved; Sections 3–10 written, pending review
+**Status**: Sections 1–2 approved and current. **Sections 3–10 superseded** by
+[2026-08-10-aruco-indoor-localizer-design.md](2026-08-10-aruco-indoor-localizer-design.md).
 **Date**: 2026-07-27
 **Phase docs**: [3-indoor-localization.md](../../roadmaps/3-indoor-localization.md)
+
+> **Read this first.** Sections 3–10 below were written on the assumption that
+> `autoware_ar_tag_based_localizer` could be reused unmodified. Reading that
+> node's source showed it cannot: it selects a single best tag rather than
+> fusing all of them, hard-codes zero distortion, reads tag poses only from
+> Lanelet2 with a hard-coded subtype, and supports one camera. The replacement
+> design keeps Sections 1–2 of this document verbatim and rewrites the rest.
+> Section 4.1's `golfcart_pose_merger` is also deferred there — the premise
+> that it was *required* does not hold, since upstream's own multi-localizer
+> mode has several estimators publish onto one EKF pose topic.
 
 ---
 

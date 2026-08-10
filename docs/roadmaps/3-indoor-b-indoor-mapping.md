@@ -1,5 +1,16 @@
 # Phase 3B — Indoor Mapping
 
+> **SUPERSEDED 2026-08-10 — this sub-phase is deleted.**
+>
+> Board poses are now measured by hand and supplied as data, and NDT is not used
+> at all, so neither the point cloud map nor the NDT-bootstrapped tag map is
+> needed. See [3-indoor-localization.md](3-indoor-localization.md) and the
+> [current spec](../superpowers/specs/2026-08-10-aruco-indoor-localizer-design.md).
+> Kept for history only — do not plan work from the content below.
+
+---
+
+
 Prerequisite for [Phase 3 indoor localization](3-indoor-localization.md).
 Design spec: [§2 B](../superpowers/specs/2026-07-27-indoor-artag-localization-design.md#b--indoor-mapping-contract-for-d)
 Mapping method: [indoor_pcd_mapping_reflector_anchor.md](../design/indoor_pcd_mapping_reflector_anchor.md)

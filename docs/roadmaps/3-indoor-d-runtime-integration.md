@@ -1,194 +1,88 @@
-# Phase 3D — Runtime Integration
+# Phase 3D — Implementation (index)
 
 Part of [Phase 3 indoor localization](3-indoor-localization.md).
-Full design spec: [2026-07-27-indoor-artag-localization-design.md](../superpowers/specs/2026-07-27-indoor-artag-localization-design.md)
+Design spec: **[2026-08-10-aruco-indoor-localizer-design.md](../superpowers/specs/2026-08-10-aruco-indoor-localizer-design.md)**
+Node architecture: [aruco-node-architecture.typ](../design/aruco-node-architecture.typ)
 
-**Status: Design complete, implementation not started — blocked by sub-phase C**
-
-Last updated: 2026-07-27
+Last updated: 2026-08-10
 
 ---
 
-## Goal
+## Build order
 
-Wire AR tags into the running localization stack at three injection points, so
-that tags replace all three functions GNSS performs.
+Infrastructure and the launch switch first, then the algorithm, then a
+simulation smoke test. Rosbag collection runs in parallel from day one.
 
 ```
-                 ┌──────────────────────────────────────────────┐
-  cameras  ─────▶│ ar_tag_based_localizer × 3 (left/right/rear) │
-  (L/R/rear)     │  ArUco detect → PnP → ego pose in map frame  │
-                 └───────┬──────────────────────────────┬───────┘
-                         │ pose_with_covariance ×3      │ detections
-                         ▼                              ▼
-                 ┌───────────────┐            ┌──────────────────────┐
-                 │ pose_merger   │            │ ar_tag_pose_init     │ ① COLD START
-                 │  (NEW)        │            │  (NEW)               │
-                 └──┬────────┬───┘            └──────────┬───────────┘
-   NDT pose ───────▶│        │                           │ /initialpose
-                    │        │ ② EKF measurement         ▼
-                    │        └────────▶ ekf_localizer ◀── autoware_pose_initializer
-                    │                         │             (NDT-refines the seed)
-                    │ ③ NDT regularization    ▼
-                    └────▶ ndt / cuda_ndt   /localization/kinematic_state
+D1 infrastructure ──┬─▶ D2 launch switch ────────────┐
+  msgs, skeletons,  │     pose_source:=aruco,        │
+  tag map loader    │     stubs are fine here        │
+                    │                                ├─▶ D6 simulation
+                    ├─▶ D3 synthetic detection ──┐   │      smoke test
+                    │     ground-truth harness   │   │
+                    │                            ▼   │
+                    │                    D4 localizer ┘
+                    │                       the solve
+                    │
+                    └─▶ D5 detector  (LCTK, independent of D3/D4)
+
+D7 rosbag collection — parallel, starts now, no dependency on any of the above
 ```
 
----
-
-## Current state
-
-**Already wired, standard-NDT branch.**
-`config/localization/ar_tag_based_localizer.param.yaml` exists and is already
-forwarded at `tier4_localization_component.launch.xml:78`, alongside the
-`lidar_marker_localizer/` config directory at lines 70–75. Someone stubbed this
-plumbing. Wiring cost on that branch is near zero.
-
-**Not wired, cuda_ndt branch.** The `cuda_ndt` group at
-`tier4_localization_component.launch.xml:12` bypasses `tier4_localization_launch`
-entirely and has none of the landmark plumbing.
-
-**All upstream packages installed** at `/opt/autoware/1.5.0/share`:
-`autoware_ar_tag_based_localizer`, `autoware_landmark_manager`,
-`autoware_pose_estimator_arbiter`. Nothing to add or fork.
-
-**NDT regularization is off and pointed at GNSS:**
-```yaml
-# ndt_scan_matcher.param.yaml:44
-regularization:
-  enable: false
-  scale_factor: 0.01
-```
-```xml
-<!-- cuda_ndt_matcher_launch/launch/autoware_localization.launch.xml:39 -->
-<arg name="input_regularization_pose_topic" value="/sensing/gnss/pose_with_covariance"/>
-```
+| Phase | Doc | Depends on | Can start |
+|---|---|---|---|
+| D1 | [Infrastructure](3-indoor-d1-infrastructure.md) | — | **now** |
+| D2 | [Launch switch](3-indoor-d2-launch-switch.md) | D1 (package names only) | after D1 skeletons |
+| D3 | [Synthetic detection source](3-indoor-d3-sim-detection-source.md) | D1 | after D1 |
+| D4 | [Localizer algorithm](3-indoor-d4-localizer.md) | D1, D3 | after D3 |
+| D5 | [Detector](3-indoor-d5-detector.md) | D1 | **now**, in LCTK |
+| D6 | [Simulation smoke test](3-indoor-d6-sim-smoke-test.md) | D1–D4 | after D4 |
+| D7 | [Rosbag collection](3-indoor-d7-rosbag-collection.md) | — | **now** |
 
 ---
 
-## Two constraints that force new code
+## The decoupling that shapes this order
 
-**1. `ekf_localizer` accepts exactly one pose topic.**
-```xml
-<arg name="input_pose_with_cov_name" default="in_pose_with_covariance"/>
-```
-Not a list. Two sources correcting continuously cannot both be wired to it.
-`pose_estimator_arbiter` *switches* between sources rather than fusing them, so
-it does not meet the requirement. → `golfcart_pose_merger`.
+**The localizer does not need the detector.** It consumes
+`ArucoDetectionArray`, and D3's synthetic source produces that message from a
+known vehicle pose and the tag map. So the entire solve — consensus, covariance,
+integrity, state machine, EKF wiring — can be built and validated against exact
+ground truth before a single real image is processed.
 
-**2. `ar_tag_based_localizer` cannot self-initialize.** It gates its own output
-against the EKF pose:
-```yaml
-ekf_time_tolerance: 5.0      # [s]
-ekf_position_tolerance: 10.0 # [m]
-```
-With no EKF pose yet, it publishes nothing. This mirrors upstream, where
-`yabloc_pose_initializer` is a separate package from the yabloc corrector.
-→ `golfcart_ar_tag_pose_initializer`.
+That is why D3 comes before D4 rather than after: it is the localizer's test
+fixture, not an afterthought. It also gives something no rosbag can, which is
+**ground truth you can dial** — displace one board to test integrity, force
+coplanar-only visibility to test covariance saturation, black out all boards to
+test the dead-reckoning budget and the MRM hook.
+
+D5 sits on a separate track in a separate repo and blocks nothing until D6.
 
 ---
 
-## Tasks
+## What "done" means for phase D
 
-### New nodes
+- `pose_source:=aruco` brings up the localization stack with no scan matcher,
+  no pointcloud map loader, and no NDT preprocessing anywhere in the node list.
+- The localizer tracks a scripted trajectory in simulation within the error
+  budget, with correct state transitions under injected faults.
+- The detector produces corners from recorded real images, with the rectify
+  contract tests passing.
+- `corner_sigma_px` is a measured number, not a literature-anchored guess.
 
-- [ ] **`golfcart_pose_merger`** — N pose inputs → EKF's single pose input.
-      Per-source covariance scaling, staleness rejection, monotonic-stamp
-      enforcement, future-stamp rejection, per-source diagnostics.
-- [ ] **Acquisition ramp in the merger** — inflate a source's covariance ×10 on
-      resume, decaying over ~1 s. Targets the documented upstream failure:
-      *"the timing of when each AR tag begins to be detected can cause significant
-      changes in estimation."*
-- [ ] **`golfcart_ar_tag_pose_initializer`** — tag detections + landmark
-      `tf_static` → `/initialpose`. Publishing to `/initialpose` means **zero
-      forking** of `autoware_pose_initializer` — it is the same entry point
-      RViz "2D Pose Estimate" uses.
-- [ ] **Initializer quality gates** — min image area, max range (8 m, tighter
-      than the 13 m detection limit), max view angle, 5 consecutive agreeing
-      frames within 0.5 m, unique-ID requirement, republish cooldown.
-      One bad init is worse than none: NDT will converge to a wrong local
-      minimum and report confident nonsense.
-- [ ] **Unit tests for both nodes** — pure functions of message streams, fully
-      testable without hardware.
-
-### Wiring
-
-- [ ] **Three `ar_tag_based_localizer` instances** — left, right, rear. Per-camera
-      params, `camera_info` topics, frame IDs.
-- [ ] **`pose_source:=ndt_artag` and `cuda_ndt_artag`** in **both** branches of
-      `tier4_localization_component.launch.xml`.
-- [ ] **`config/localization/preset/indoor_artag_preset.yaml`**.
-- [ ] **Enable NDT regularization** — `regularization.enable: true`, input
-      repointed off `/sensing/gnss/pose_with_covariance`.
-- [ ] **Disable GNSS end to end** — `gnss_enabled: false` in
-      `pose_initializer.param.yaml`, `use_gnss:=false` throughout.
-- [ ] **Expand `target_tag_ids`** past the current `['0'...'6']` to match the
-      sub-phase C ID scheme.
-- [ ] **Tag map staleness warning** — warn loudly when the loaded tag map's
-      session stamp is older than the current session.
-
-### Tuning
-
-- [ ] **Covariance policy** — NDT at scale 1.0, tags at scale 4.0. Tags bound
-      drift; they must never dominate NDT, because a stale tag map would
-      otherwise drag the vehicle off the real trajectory with high confidence.
-- [ ] **EKF tuning with heterogeneous measurement cadence** — `pose_smoothing_steps: 5`
-      and the delay compensation assume regular cadence; interleaved irregular tag
-      measurements are valid but change the tuning.
-- [ ] **Measure CPU cost** of three ArUco detectors at 1920×1280 × 30 Hz on the
-      Orin. Fallbacks if needed: reduced detection rate, `DM_FAST` mode,
-      downscaled detection input.
+Vehicle integration and on-site tuning are **not** in phase D — they need the
+boards mounted and surveyed, and the DBW velocity stub replaced.
 
 ---
 
-## Correctness trap to avoid
+## Standing constraints
 
-Injection ③ must be fed **tag poses only**, never the merged NDT+tag stream.
-Feeding the EKF's own input back into NDT, whose output then re-enters the EKF,
-creates a feedback loop that will look like slow drift or oscillation rather
-than an obvious bug. Recorded here so it is designed around, not discovered.
+These apply to every phase below and are not repeated in each doc.
 
----
-
-## Acceptance criteria
-
-- Cold start with no GNSS and no manual RViz input succeeds in ≥90% of ≥20
-  trials from varied starting positions, within 30 s.
-- Longitudinal drift over the longest corridor materially flatter than NDT-only,
-  demonstrated on a corridor where NDT-only measurably degrades.
-- No pose discontinuity above 0.3 m attributable to tag acquisition.
-- Clean degradation to NDT-only when tags are absent, with correct diagnostics
-  and no estimator instability — verified by deliberately occluding cameras
-  mid-run.
-- Per-source diagnostics accurate.
-
-### Metrics to record
-
-- Lateral and longitudinal error vs the sub-phase B reference trajectory, for
-  NDT-only / NDT+② / NDT+②+③.
-- Drift growth over corridor length. **This is the headline number** — the whole
-  design exists to flatten this curve.
-- Cold-start success rate and time-to-initialized.
-- Tag detection rate per camera; fraction of route with ≥1 tag visible.
-- Count of EKF-gate-rejected tag measurements. A high count means the tag map or
-  calibration is wrong — not that the gate is doing a good job.
-
----
-
-## Expected accuracy
-
-0.6 m tag, 1920×1280, correct calibration:
-
-| Range | Position error | Yaw error |
-|-------|----------------|-----------|
-| ~5 m | a few cm | several degrees |
-| ~13 m (`distance_threshold`) | ~10–30 cm | large |
-
-Yaw is unusable at every range — hence upstream's `consider_orientation: false`.
-**Tags correct position; NDT + IMU carry heading.** The pairing is complementary:
-in a featureless corridor NDT is degenerate longitudinally, which is exactly the
-axis side-wall tags constrain well, while tags say nothing about heading, which
-NDT and the IMU handle fine.
-
-Sub-10 cm *absolute* indoor accuracy is not achievable from this design — it is
-capped by tag-map accuracy, which is capped by mapping-pass NDT. Bounded drift
-is achievable, and that is what indoor autonomy needs.
+- **Build**: `colcon build --base-paths src --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release`, or `just build`.
+- **Commits**: Conventional Commits (`feat`, `fix`, `chore`, `docs`, `refactor`).
+- **Thresholds**: warn before rejecting until a threshold is justified by measured
+  data. LCTK's `C-04` is the cautionary tale — a gate set below the noise floor
+  silently published empty detections for months. The exceptions are the safety
+  gates in D4 (dead-reckoning budget, integrity exclusion), which must reject.
+- **Never emit a zero covariance.** Downstream reads it as *exact*, and with one
+  pose source there is nothing to contradict it.
