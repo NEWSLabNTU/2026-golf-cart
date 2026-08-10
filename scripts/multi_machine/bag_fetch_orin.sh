@@ -79,17 +79,76 @@ else
     PROGRESS=()
 fi
 
+# Verify a fetched bag really arrived intact.
+#
+# `ros2 bag info` is NOT sufficient: it reads metadata.yaml and never opens the
+# database, so a truncated .db3 reports full message counts and looks healthy. A
+# fetch that ran while the destination filesystem was full produced exactly that,
+# and the corruption only surfaced later in `ros2 bag convert`:
+#   database disk image is malformed
+verify_bag() {
+    local bag="$1"
+    local remote_size local_size
+
+    remote_size=$(ssh "${SSH_OPTS[@]}" "${ORIN}" "du -sb ${REMOTE_DIR}/${bag} | cut -f1" 2>/dev/null)
+    local_size=$(du -sb "${LOCAL_DIR}/${bag}" 2>/dev/null | cut -f1)
+
+    if [ -n "${remote_size}" ] && [ "${remote_size}" != "${local_size}" ]; then
+        echo "    FAILED: size mismatch - remote ${remote_size}B, local ${local_size}B" >&2
+        return 1
+    fi
+
+    # No sqlite3 CLI on these hosts; python3's stdlib module does the same job.
+    local db
+    for db in "${LOCAL_DIR}/${bag}"/*.db3; do
+        [ -e "${db}" ] || continue
+        if ! python3 - "${db}" <<'PY'
+import sqlite3, sys
+try:
+    con = sqlite3.connect(f"file:{sys.argv[1]}?mode=ro", uri=True)
+    result = con.execute("PRAGMA quick_check").fetchone()[0]
+    con.close()
+except Exception as exc:
+    print(f"    FAILED: {exc}", file=sys.stderr)
+    sys.exit(1)
+if result != "ok":
+    print(f"    FAILED: quick_check said {result}", file=sys.stderr)
+    sys.exit(1)
+PY
+        then
+            return 1
+        fi
+    done
+
+    echo "    verified: size matches, database intact"
+    return 0
+}
+
+FAILED=()
+
 for bag in "${SELECTED[@]}"; do
     echo
     echo "==> ${bag}"
     # -a preserves timestamps, which the bags' metadata is compared against;
     # --partial keeps a half-copied file so a re-run resumes instead of restarting.
-    rsync -ah --partial "${PROGRESS[@]}" \
+    if ! rsync -ah --partial "${PROGRESS[@]}" \
         -e "ssh ${SSH_OPTS[*]}" \
         "${ORIN}:${REMOTE_DIR}/${bag}/" \
-        "${LOCAL_DIR}/${bag}/"
+        "${LOCAL_DIR}/${bag}/"; then
+        echo "    FAILED: rsync error" >&2
+        FAILED+=("${bag}")
+        continue
+    fi
+    verify_bag "${bag}" || FAILED+=("${bag}")
 done
 
 echo
+if (( ${#FAILED[@]} > 0 )); then
+    echo "FAILED to fetch ${#FAILED[@]} bag(s) intact:" >&2
+    printf '  %s\n' "${FAILED[@]}" >&2
+    echo "The originals on the orin are untouched - re-run to resume." >&2
+    exit 1
+fi
+
 echo "Done. Fetched into ${LOCAL_DIR}/"
 echo "Nothing was deleted on the orin; remove the originals there once verified."

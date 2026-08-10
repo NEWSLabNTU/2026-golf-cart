@@ -246,6 +246,10 @@ bag-play:
 bag-fetch-orin ARGS="":
     ./scripts/multi_machine/bag_fetch_orin.sh {{ARGS}}
 
+# Merge per-host bags into one. ARGS: [-o OUTPUT] <bag> <bag> [bag ...]
+bag-merge ARGS="":
+    ./scripts/multi_machine/bag_merge.sh {{ARGS}}
+
 # Record raw CAN frames (candump -L format) to rosbags/can/
 can-record IFACE="can0":
     ./scripts/can/record_can.sh {{IFACE}}

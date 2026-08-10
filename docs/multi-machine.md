@@ -96,6 +96,34 @@ transfer. Delete the originals there yourself once you have checked the copies.
 Expect roughly 11 MB/s, which saturates the 100 Mb/s link: a 45s ZED recording is
 ~300 MB and takes ~26s to pull. Do not fetch while a run is in progress.
 
+Every fetched bag is checked afterwards — total size against the orin's copy, and
+a SQLite `quick_check` on each `.db3`. This is not paranoia: a fetch that ran
+while the destination filesystem was full produced a bag that `ros2 bag info`
+reported as perfectly healthy, because info reads `metadata.yaml` and never opens
+the database. The corruption only appeared later, during a merge.
+
+## Merging the two hosts' bags into one
+
+```bash
+just bag-merge "master_20260810_123019 orin_20260810_122949"
+just bag-merge "-o /mnt/external/rosbags/session1 <bag> <bag>"
+```
+
+Bare names are resolved under `GOLFCART_BAG_DIR`; paths work too. The inputs are
+left untouched. Messages interleave by timestamp, which is only meaningful
+because chrony holds the two clocks within tens of microseconds — see *Time
+sync*. Without that the halves would be stitched together wrong, and nothing in
+the output would say so.
+
+The merged bag is roughly the sum of its inputs, so it needs real space: a 2.3 GB
+master bag plus a 334 MB orin bag gives 3.5 GB. The script refuses to start if
+the destination cannot hold the result, because filling a disk mid-write is what
+corrupts bags in the first place.
+
+Under the hood this is `ros2 bag convert` with repeated `-i` arguments. Note the
+explicit `sqlite3` storage id per input: bags recovered with `ros2 bag reindex`
+carry an empty `storage_id` in their metadata, and convert will not infer it.
+
 To drive the orin by hand:
 
 ```bash
