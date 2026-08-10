@@ -1,7 +1,195 @@
 # Known Roadblocks
 
 **Target machine**: NVIDIA Jetson AGX Orin Developer Kit, JetPack 6.2.1 (L4T R36.4, Ubuntu 22.04).
-**Verified**: 2026-04-07 — no external sensors physically connected yet; software stack installed and workspace builds.
+**Verified**: 2026-08-10 — see *Sensor status* below. The 2026-04-07 survey further down is superseded.
+
+---
+
+## Sensor status (observed 2026-08-10)
+
+Measured from a live two-host run of `just launch-master "record:=true"` and the
+resulting 150s bag. Counts are messages recorded; rates are `ros2 topic hz` over
+~10s while the stack ran.
+
+| Sensor | Topic | Status | Evidence |
+|---|---|---|---|
+| Velodyne VLP-32C | `/sensing/lidar/vlp32/velodyne_points` | **working** | 1290 msgs / 150s |
+| Falcon (Seyond) | `/sensing/lidar/falcon/iv_points` | **working** | 1546 msgs / 150s, 9.8 Hz |
+| Fused cloud | `/sensing/lidar/concatenated/pointcloud` | **working** | 792 msgs / 150s, 3.5 Hz |
+| ZED X (orin) | `/sensing/camera/zed/rgb/color/rect/image/compressed` | **working** | 5554 frames / 186s ≈ 30 Hz |
+| Otobrite GMSL cameras | `/sensing/camera/{left,right,rear}/image_raw/compressed` | **not working** | topics exist, 0 messages, no `/dev/video*` |
+| GNSS (Xsens MTi) | `/sensing/gnss/mti/fix`, `/sensing/gnss/fixed` | **no data** | topics exist, 0 messages recorded |
+| IMU (Xsens) | `/sensing/imu/xsens/imu_raw`, `/sensing/imu/imu_data` | **no data** | topics exist, 0 messages recorded |
+| Vehicle interface | `/vehicle/status/control_mode` | **partial** | 8045 msgs; velocity, steering, gear, actuation and turn/hazard all recorded 0 |
+| TF | `/tf` | **empty** | 0 dynamic transforms recorded; only 2–3 `tf_static` messages |
+
+The GNSS/IMU/vehicle gaps were **not investigated** — they were noticed while
+auditing the recorder's topic list and are recorded here as observations, not
+diagnoses. The cause could be unplugged hardware, an unstarted driver, or a wrong
+topic name, and nothing here distinguishes those.
+
+Two rate observations worth a look, also uninvestigated:
+
+- The Velodyne measured **6.8 Hz** live and averages ~8.6 Hz across the bag,
+  against a nominal 10 Hz. Some of that is `ros2 topic hz` competing with a
+  loaded system, but not obviously all of it.
+- The fused cloud runs at **3.5 Hz**, well below either input. Expected behaviour
+  for a synchroniser waiting on the slower source is roughly the slower input
+  rate, not a third of it.
+
+### Otobrite GMSL cameras — not enumerating
+
+The cameras are physically attached but produce nothing. The ROS topics exist
+only because `camera.launch.xml` starts gscam unconditionally; gscam is pointed at
+`/dev/v4l/by-path/platform-tegra-capture-vi-video-index{0,10,12}`, which do not
+exist, so every recording shows `Count: 0`.
+
+State as found on 2026-08-10:
+
+| Check | Result |
+|---|---|
+| `/dev/video*` | none |
+| `lsmod` for `max9296` / `nv_imx390` | not loaded |
+| `/lib/modules/5.15.148-tegra/extra/otocam/` | does not exist — vendor `.ko` never staged |
+| `/etc/modules-load.d/otocam.conf`, `/etc/modprobe.d/otocam.conf` | neither installed |
+| Vendor blob `/usr/local/bin/otocam/` | **present** (`max9296.ko`, `nv_imx390.ko`, `agxorin/oto.dtbo`) |
+| Kernel | `5.15.148-tegra` — matches the `.ko` ABI requirement |
+| `/boot/extlinux/extlinux.conf` | `OVERLAYS .../oto.dtbo` **is** on the default `primary` label |
+| Live device tree cameras | `imx274_bottom_A6V26`, `imx274_top_A6V26`, … |
+
+That last row is the decisive one: the six camera modules registered in the
+running device tree are **imx274**, the devkit's stock configuration, not the
+otobrite IMX390s. No `imx390` or `max9296` node exists anywhere in
+`/proc/device-tree`. So the overlay is configured but the running kernel booted
+without it.
+
+Read together: `setup-otocam.sh` steps 3 and 4 (module staging, modprobe configs)
+have never run, and there has been no reboot since the `extlinux.conf` overlay
+line was added. Whether a reboot alone fixes it is **unknown and untested** — the
+overlay may also be failing to apply for its own reasons, which this evidence
+cannot distinguish.
+
+Next step, both needing root:
+
+```bash
+sudo ./scripts/hardware/otocam/setup-otocam.sh
+sudo reboot
+# then:
+ls /dev/video*
+lsmod | grep -E 'max9296|imx390'
+cat /proc/device-tree/tegra-camera-platform/modules/module0/badge   # want imx390, not imx274
+```
+
+**Before running it**, note that `scripts/hardware/otocam/setup-otocam.sh` has
+uncommitted local edits: `exit 1` changed to `exit 2` on the vendor-blob check,
+and `? possible to be the problem` comments on exactly steps 3 and 4. Someone was
+mid-debug. Those steps never executed at all, so the comments mark untested
+suspicion rather than observed failure. Decide whether the edits are a fix or
+scratch marks before relying on the script.
+
+### ZED extrinsics uncalibrated
+
+`zed.launch.xml` disables all TF publishing from the wrapper
+(`pos_tracking.publish_tf`, `publish_map_tf`, `sensors.publish_imu_tf` all false).
+The wrapper's defaults broadcast `map -> odom` and `odom -> camera_link`, which
+would fight Autoware's localization once both hosts share a DDS graph.
+
+Consequence: the ZED image is recordable and viewable but cannot feed perception,
+because nothing relates `zed_left_camera_frame_optical` to `base_link`. Re-enable
+only after the extrinsics are measured and a `base_link -> zed_camera_link` entry
+exists in the sensor kit calibration.
+
+---
+
+## Tooling issues found while building the two-machine deployment
+
+These are defects in the tools, not the vehicle. Each is worked around; none is
+fixed at the source.
+
+### play_launch does not finalize large bags
+
+Recording through play_launch leaves a complete `.db3` and a **0-byte
+`metadata.yaml`** when the bag is large; `ros2 bag info` then reports
+`invalid node; first invalid key: "version"`. Reproduced at 2.2 GB and 2.5 GB.
+
+Recovery is lossless:
+
+```bash
+rm -f <bag>/metadata.yaml && ros2 bag reindex <bag>
+```
+
+Cause is play_launch's shutdown grace being shorter than a multi-gigabyte flush
+needs — **not** disk speed: the failure is identical writing to the eMMC and to
+the far faster external SSD. The orin side is unaffected, because systemd stops
+its recorder with `KillSignal=SIGINT` and `TimeoutStopSec=30`.
+
+Unfixed. Options not yet tried: `--max-bag-size` to force rollover into smaller
+files, or a longer grace period from play_launch.
+
+### play_launch drops `executable:` launch entries
+
+`ros2 launch` runs them; play_launch runs them during its *dump* phase, waits for
+them to exit, and then omits them from `record.json` entirely, so replay spawns
+nothing. A long-lived `executable:` entry therefore hangs the launch forever.
+
+Worked around by making the recorders package executables launched as `node:`
+entries, and by driving the orin orchestrator from the justfile rather than the
+launch file. See the Amendments section of
+`docs/design/multi_machine_deployment.md`.
+
+### rosbag2 does not replay `tf_static` usefully
+
+Only 2–3 `tf_static` messages are recorded, and rosbag2 does not republish them
+with the transient-local QoS that subscribers expect. Verified three ways —
+subscribing with matching QoS, subscribing before playback started, and with an
+explicit message type — all received nothing.
+
+Consequence: a bag alone cannot place `velodyne`- or `seyond`-stamped clouds.
+`just bag-replay` works around it by running `robot_state_publisher` from the
+vehicle description, which is arguably better anyway since it reflects current
+calibration rather than the calibration of the recording day.
+
+### RViz Image display ignores the compressed transport hint
+
+With `Transport Hint: compressed` set on the display, the compressed topic showed
+**0 subscribers**. Worked around in `bag_replay.launch.xml` by decoding with
+`image_transport republish` onto `/replay/zed/image`. Root cause not investigated.
+
+### The ZED SDK silently breaks CycloneDDS
+
+The SDK installs `/etc/sysctl.d/60-zed-buffers.conf` with
+`net.core.rmem_max=1048576`, which sorts after our settings file and undercuts it.
+Our DDS profiles require a 10 MB minimum, so CycloneDDS then refuses to create a
+domain **on every profile, loopback included** — presenting as
+`rmw_create_node: failed to create domain`, which points at the network rather
+than at a sysctl.
+
+Fixed by numbering our file `99-cyclonedds-max.conf`, but **it will recur on any
+ZED SDK reinstall**. Re-run `./setup/scripts/configure-cyclonedds-sysctl.sh`
+afterwards.
+
+### Master root filesystem is nearly full
+
+`/` is a 54 GB eMMC sitting at ~93% with ~3.9 GB free. Recording runs at roughly
+15 MB/s, so an unattended recording fills it in about four minutes — and a full
+disk during a bag write is what corrupts bags.
+
+`.envrc` now points `GOLFCART_BAG_DIR` at the 916 GB SSD (`/mnt/external`, ~861 GB
+free) when it is mounted, which removes the pressure for recordings started from
+a direnv shell. It does **not** help a recording started from a bare shell or a
+systemd unit, where the default is still `~/rosbags` on the eMMC.
+
+### A truncated bag reports itself as healthy
+
+An rsync that ran while the destination filesystem was full produced a bag that
+`ros2 bag info` showed with full message counts and no error, because info reads
+`metadata.yaml` and never opens the database. The corruption surfaced only much
+later, in `ros2 bag convert`:
+`database disk image is malformed`.
+
+`bag_fetch_orin.sh` now verifies size and runs a SQLite `quick_check` after every
+fetch, and `bag_merge.sh` refuses to start when the destination cannot hold the
+result. Neither guard exists for bags written by the recorder itself.
 
 ---
 
@@ -13,7 +201,11 @@
 
 
 
-### No sensors physically connected (verified 2026-04-07)
+### ~~No sensors physically connected~~ (2026-04-07) — superseded
+
+Kept for history. As of 2026-08-10 both LiDARs, the Xsens and the ZED X are wired
+and the first three enumerate; see *Sensor status* at the top of this file for
+what actually produces data.
 
 - **Status**: The target machine has all software dependencies installed but zero external sensors are attached.
 - **Hardware available on the board**:
