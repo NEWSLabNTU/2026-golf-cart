@@ -33,6 +33,51 @@ just launch                         # host:=all, loopback DDS, nothing remote
 GOLFCART_USE_ORIN=0 just launch-master   # master alone, without touching the orin
 ```
 
+## Time sync
+
+The two hosts record separate bags, so their clocks have to agree before a LiDAR
+sweep can be lined up against a camera frame. Left alone, each host tracks
+internet NTP pools over 4G independently, with error bounds of 150–430 ms — two
+bags could be half a second apart with nothing to reveal it.
+
+The master therefore serves time and the orin follows it:
+
+```bash
+# On the master:
+cd setup && just chrony-master
+
+# On the orin:
+cd setup && just chrony-orin
+```
+
+Verify from the orin — the master should be the selected source (`^*`):
+
+```bash
+chronyc sources     # ^* 192.168.125.100 ... +12us
+chronyc tracking    # Reference ID : C0A87D64 (192.168.125.100)
+```
+
+Measured after setup: **+12 µs** last sample, 2.8 µs system time offset, 327 µs
+RMS. Expect the RMS to fall further once chrony has been locked for more than a
+few minutes.
+
+Two deliberate choices in the config:
+
+- The master carries `local stratum 10`, so it keeps serving from its own clock
+  when the 4G uplink is down — which on a vehicle is most of the time, and
+  exactly when recordings happen. Without it chronyd refuses to answer clients
+  while unsynchronised, and the hosts drift apart at the worst moment.
+- The orin *prefers* the master rather than dropping its own pools, so an
+  unreachable master degrades to coarse internet time instead of no time at all.
+
+`chronyc clients` on the master needs root; checking the orin's `^*` selection is
+the easier confirmation that the master is answering.
+
+**PTP:** the master also runs `phc2sys -s CLOCK_REALTIME -c enP5p5s0`, pushing the
+system clock out to the Falcon LiDAR's NIC. Chrony disciplines `CLOCK_REALTIME`,
+so the two compose — chrony sets the system clock, phc2sys propagates it to the
+LiDAR. Do not reverse phc2sys's direction while chrony is running.
+
 ## Collecting the bags
 
 Each host records to its own disk, so a session leaves two bags on two machines.
@@ -80,11 +125,13 @@ launches its ZED with no master to talk to is just a warm camera.
 cd ~/2026-golf-cart
 ./setup/scripts/install-orin-host.sh      # systemd user units + lingering
 ./setup/scripts/configure-cyclonedds-sysctl.sh
+(cd setup && just chrony-orin)            # follow the master's clock
 colcon build --base-paths src --symlink-install \
     --cmake-args -DCMAKE_BUILD_TYPE=Release
 
 # On the master, once:
 ssh-copy-id jetson@192.168.125.101
+(cd setup && just chrony-master)          # serve time to the orin
 ```
 
 Key-based ssh is required, not optional: the orchestrator runs non-interactively
@@ -129,3 +176,12 @@ shell falls back to `.envrc`, which defaults to `loopback`. Set
 | `GOLFCART_MASTER_IP` | `192.168.125.100` | what the orin's watchdog pings |
 | `GOLFCART_BAG_DIR` | `~/rosbags` | where each host writes its bags |
 | `GOLFCART_WORKSPACE` | `~/2026-golf-cart` | workspace the orin's unit launches from |
+
+## Two bags whose timestamps do not line up
+
+Check `chronyc tracking` on the orin. If `Reference ID` is anything other than
+`192.168.125.100`, it has fallen back to the internet pools and the two bags may
+be hundreds of milliseconds apart. Causes, in order of likelihood: the master's
+chrony is not running, `/etc/chrony/conf.d/golfcart-master.conf` is missing there,
+or the LAN was down when the orin last polled. Re-running
+`cd setup && just chrony-orin` on the orin forces a re-select.
