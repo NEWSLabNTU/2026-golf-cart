@@ -1,0 +1,12 @@
+[Unit]
+Description=Golf Cart orin watchdog (stops the stack when the master disappears)
+# PartOf makes systemd stop the watchdog whenever golfcart-orin.service stops, so
+# a normal shutdown does not leave it pinging a master that is legitimately gone.
+PartOf=golfcart-orin.service
+After=golfcart-orin.service
+
+[Service]
+Type=simple
+ExecStart=%h/2026-golf-cart/scripts/multi_machine/orin_watchdog.sh
+Restart=on-failure
+RestartSec=5

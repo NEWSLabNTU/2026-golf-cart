@@ -103,8 +103,22 @@ launch ARGS="":
 # CYCLONEDDS_URI is set here rather than left to .envrc so the recipe works
 # without direnv; the default loopback profile would isolate the two hosts.
 launch-master ARGS="":
-    CYCLONEDDS_URI="file://{{justfile_directory()}}/config/cyclonedds/master.xml" \
-        just launch "host:=master {{ARGS}}"
+    #!/usr/bin/env bash
+    set -uo pipefail
+    export CYCLONEDDS_URI="file://{{justfile_directory()}}/config/cyclonedds/master.xml"
+    REMOTE="{{justfile_directory()}}/scripts/multi_machine/orin_remote.sh"
+    # The orchestrator runs here rather than as a launch entry: play_launch drops
+    # `executable:` actions from its replay. Set GOLFCART_USE_ORIN=0 to run the
+    # master alone.
+    if [[ "${GOLFCART_USE_ORIN:-1}" == "1" ]]; then
+        RECORD=false
+        [[ "{{ARGS}}" == *"record:=true"* ]] && RECORD=true
+        # A missing orin must not block the master, so failure here is ignored;
+        # the trap is still armed, since a half-started unit needs stopping too.
+        "$REMOTE" start "$RECORD" || true
+        trap '"$REMOTE" stop' EXIT
+    fi
+    just launch "host:=master {{ARGS}}"
 
 # Launch the orin host profile (ZED X camera only)
 launch-orin ARGS="":
