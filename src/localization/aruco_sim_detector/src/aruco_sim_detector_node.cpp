@@ -27,6 +27,7 @@
 #include <opencv2/core.hpp>
 
 #include <tf2_eigen/tf2_eigen.hpp>
+#include <tf2_ros/static_transform_broadcaster.h>
 
 #include <algorithm>
 #include <memory>
@@ -175,6 +176,25 @@ private:
         "~/output/detections/" + name, rclcpp::QoS(10));
       cameras_.push_back(cam);
     }
+
+    // Broadcast the extrinsics we just built. The localizer looks up
+    // base_link <- camera_*_optical through TF, so without this the loop does
+    // not close: detections flow, every lookup fails, and the node reports
+    // DEAD_RECKONING while the bench looks like it is running fine.
+    //
+    // Broadcast from the same values used to project, rather than duplicating
+    // them in the launch file, so the fixture cannot disagree with itself about
+    // where its own cameras are.
+    static_tf_ = std::make_unique<tf2_ros::StaticTransformBroadcaster>(*this);
+    std::vector<geometry_msgs::msg::TransformStamped> transforms;
+    for (const auto & cam : cameras_) {
+      auto tf = tf2::eigenToTransform(cam.base_to_cam);
+      tf.header.stamp = now();
+      tf.header.frame_id = "base_link";
+      tf.child_frame_id = cam.optical_frame;
+      transforms.push_back(tf);
+    }
+    static_tf_->sendTransform(transforms);
   }
 
   /// Where a board actually is, which is not necessarily where the map says.
@@ -283,6 +303,7 @@ private:
   std::string tag_map_path_;
   TagMap map_;
   std::vector<SimCamera> cameras_;
+  std::unique_ptr<tf2_ros::StaticTransformBroadcaster> static_tf_;
   std::map<std::string,
     rclcpp::Publisher<aruco_detection_msgs::msg::ArucoDetectionArray>::SharedPtr> publishers_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr ground_truth_sub_;

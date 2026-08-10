@@ -12,17 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// Phase 3D-1 skeleton. Declares and validates the full parameter set, loads and
-// validates the tag map, and publishes it for RViz. No detections are consumed
-// and no pose is produced -- that is phase 3D-4.
+// Detections from every camera in, one vehicle pose out. Phase 3D-4.
 
+#include <golfcart_aruco_localizer/health.hpp>
+#include <golfcart_aruco_localizer/solver.hpp>
 #include <golfcart_aruco_localizer/tag_map.hpp>
 
 #include <rclcpp/rclcpp.hpp>
+#include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
+#include <nav_msgs/msg/odometry.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
+#include <aruco_detection_msgs/msg/aruco_detection_array.hpp>
+#include <aruco_detection_msgs/msg/aruco_localizer_status.hpp>
 
-#include <Eigen/Geometry>
+#include <tf2_eigen/tf2_eigen.hpp>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
 
+#include <algorithm>
+#include <deque>
+#include <optional>
+#include <set>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -30,232 +41,514 @@
 namespace golfcart::aruco_localizer
 {
 
+using aruco_detection_msgs::msg::ArucoDetectionArray;
+using aruco_detection_msgs::msg::ArucoLocalizerStatus;
+
 class ArucoLocalizerNode : public rclcpp::Node
 {
 public:
   explicit ArucoLocalizerNode(const rclcpp::NodeOptions & options)
-  : rclcpp::Node("aruco_localizer", options)
+  : rclcpp::Node("aruco_localizer", options),
+    tf_buffer_(get_clock()),
+    tf_listener_(tf_buffer_)
   {
     declareParameters();
-    logConfiguration();
-
-    // Latched, so RViz shows the map whenever it connects rather than only if
-    // it happened to be listening at startup.
-    map_publisher_ = create_publisher<visualization_msgs::msg::MarkerArray>(
-      "~/debug/mapped_tags", rclcpp::QoS(1).transient_local().reliable());
-
     loadTagMap();
 
+    map_publisher_ = create_publisher<visualization_msgs::msg::MarkerArray>(
+      "~/debug/mapped_tags", rclcpp::QoS(1).transient_local().reliable());
+    pose_publisher_ = create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>(
+      "~/output/pose_with_covariance", rclcpp::QoS(10));
+    initial_pose_publisher_ = create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>(
+      "~/output/initialpose", rclcpp::QoS(1));
+    status_publisher_ = create_publisher<ArucoLocalizerStatus>("~/status", rclcpp::QoS(10));
+
+    for (const auto & name : camera_names_) {
+      detection_subs_.push_back(
+        create_subscription<ArucoDetectionArray>(
+          "~/input/detections/" + name, rclcpp::SensorDataQoS(),
+          [this](ArucoDetectionArray::ConstSharedPtr msg) {onDetections(*msg);}));
+    }
+    kinematic_sub_ = create_subscription<nav_msgs::msg::Odometry>(
+      "~/input/kinematic_state", rclcpp::QoS(10),
+      [this](nav_msgs::msg::Odometry::ConstSharedPtr msg) {latest_odom_ = *msg;});
+
+    window_timer_ = create_wall_timer(
+      std::chrono::duration<double>(window_duration_), [this]() {processWindow();});
+
+    map_publisher_->publish(buildMapMarkers());
     RCLCPP_INFO(
-      get_logger(),
-      "phase 3D-1 skeleton: tag map loaded and published, no solve running yet");
+      get_logger(), "%zu boards, %zu cameras, %.0f ms window",
+      map_.tags.size(), camera_names_.size(), window_duration_ * 1000.0);
   }
 
 private:
-  struct Parameters
-  {
-    std::string tag_map_path;
-    TagMapOptions map_options;
-    std::vector<std::string> camera_names;
-    double corner_sigma_px{};
-    double corner_sigma_px_moving{};
-    double window_duration{};
-    bool motion_compensation{};
-    double max_future_stamp{};
-    double max_range{};
-    double min_view_angle_deg{};
-    double max_view_angle_deg{};
-    double ambiguity_ratio_max{};
-    double consensus_position_tolerance{};
-    double consensus_rotation_tolerance_deg{};
-    int min_markers_for_6dof{};
-    double min_normal_spread_deg{};
-    double max_condition_number{};
-    double huber_delta_px{};
-    int max_iterations{};
-    double convergence_tolerance{};
-    double max_position_variance{};
-    double max_rotation_variance{};
-    double residual_ewma_alpha{};
-    double residual_flag_sigma{};
-    int residual_flag_count{};
-    double degraded_budget_s{};
-    double dead_reckoning_budget_s{};
-  };
+  // ── configuration ─────────────────────────────────────────────────────────
 
-  /// Every parameter is declared and range-checked here, at startup, so a
-  /// misconfiguration fails immediately and by name. The alternative -- finding
-  /// out at the first solve, or worse, not finding out -- is how a threshold
-  /// set below the sensor noise floor can sit unnoticed for months.
   void declareParameters()
   {
-    params_.tag_map_path = declare_parameter<std::string>("tag_map_path", "");
+    const std::string path = declare_parameter<std::string>("tag_map_path", "");
+    if (path.empty()) {
+      throw std::runtime_error(
+        "tag_map_path is not set. This localizer is the sole pose source, so it "
+        "refuses to start without a map rather than run silently.");
+    }
+    tag_map_path_ = path;
 
-    params_.map_options.coplanarity_tolerance =
-      requirePositive("coplanarity_tolerance", declare_parameter<double>("coplanarity_tolerance", 0.01));
-    params_.map_options.proximity_warn =
-      requirePositive("proximity_warn", declare_parameter<double>("proximity_warn", 0.10));
-    params_.map_options.size_mismatch_warn =
-      requirePositive("size_mismatch_warn", declare_parameter<double>("size_mismatch_warn", 0.05));
+    map_options_.coplanarity_tolerance = declare_parameter<double>("coplanarity_tolerance", 0.01);
+    map_options_.proximity_warn = declare_parameter<double>("proximity_warn", 0.10);
+    map_options_.size_mismatch_warn = declare_parameter<double>("size_mismatch_warn", 0.05);
 
-    params_.camera_names =
-      declare_parameter<std::vector<std::string>>("camera_names", {"left", "right", "rear"});
-    if (params_.camera_names.empty()) {
+    camera_names_ = declare_parameter<std::vector<std::string>>(
+      "camera_names", std::vector<std::string>{"left", "right", "rear"});
+    if (camera_names_.empty()) {
       throw std::runtime_error("camera_names is empty: the localizer would have no input");
     }
 
-    params_.corner_sigma_px =
-      requirePositive("corner_sigma_px", declare_parameter<double>("corner_sigma_px", 0.3));
-    params_.corner_sigma_px_moving = requirePositive(
-      "corner_sigma_px_moving", declare_parameter<double>("corner_sigma_px_moving", 0.6));
+    solve_options_.corner_sigma_px = require("corner_sigma_px", 0.3);
+    corner_sigma_px_moving_ = require("corner_sigma_px_moving", 0.6);
+    window_duration_ = require("window_duration", 0.033);
+    motion_compensation_ = declare_parameter<bool>("motion_compensation", true);
+    max_future_stamp_ = require("max_future_stamp", 0.1);
 
-    params_.window_duration =
-      requirePositive("window_duration", declare_parameter<double>("window_duration", 0.033));
-    params_.motion_compensation = declare_parameter<bool>("motion_compensation", true);
-    params_.max_future_stamp =
-      requirePositive("max_future_stamp", declare_parameter<double>("max_future_stamp", 0.1));
-
-    params_.max_range = requirePositive("max_range", declare_parameter<double>("max_range", 13.0));
-    params_.min_view_angle_deg = declare_parameter<double>("min_view_angle_deg", 25.0);
-    params_.max_view_angle_deg = declare_parameter<double>("max_view_angle_deg", 75.0);
-    if (params_.min_view_angle_deg >= params_.max_view_angle_deg) {
+    max_range_ = require("max_range", 8.0);
+    // The limit is set by where the ambiguity gate stops keeping flipped boards
+    // out, not by where the detector stops seeing them. Measured for a 0.384 m
+    // board at f=900 under 0.3 px corner noise, the share of gate-passing boards
+    // that are still flipped is 0 % out to 7 m, 2.3 % at 9 m and 24 % at 13 m.
+    // Past that a board is likelier to supply a confident wrong pose than a
+    // missing one.
+    if (max_range_ > 8.0) {
+      RCLCPP_WARN(
+        get_logger(),
+        "max_range %.1f m is beyond where the ambiguity gate was measured to hold (8 m); "
+        "expect flipped boards to reach consensus. Raise it only against a measurement "
+        "for this board size, focal length and corner noise.",
+        max_range_);
+    }
+    min_view_angle_deg_ = declare_parameter<double>("min_view_angle_deg", 25.0);
+    max_view_angle_deg_ = declare_parameter<double>("max_view_angle_deg", 75.0);
+    if (min_view_angle_deg_ >= max_view_angle_deg_) {
       throw std::runtime_error(
-        "min_view_angle_deg must be below max_view_angle_deg: the usable window is bounded "
-        "below by pose ambiguity and above by detection failure");
+        "min_view_angle_deg must be below max_view_angle_deg: the usable window is "
+        "bounded below by pose ambiguity and above by detection failure");
     }
 
-    params_.ambiguity_ratio_max =
+    consensus_options_.ambiguity_ratio_max =
       declare_parameter<double>("ambiguity_ratio_max", 0.2);
-    if (params_.ambiguity_ratio_max <= 0.0 || params_.ambiguity_ratio_max > 1.0) {
+    if (consensus_options_.ambiguity_ratio_max <= 0.0 ||
+      consensus_options_.ambiguity_ratio_max > 1.0)
+    {
       throw std::runtime_error(
         "ambiguity_ratio_max must be in (0, 1]: it is error_1 / error_2 with "
         "error_1 <= error_2, so it cannot exceed 1");
     }
+    consensus_options_.position_tolerance = require("consensus_position_tolerance", 0.5);
+    consensus_options_.rotation_tolerance_deg = require("consensus_rotation_tolerance_deg", 10.0);
 
-    params_.consensus_position_tolerance = requirePositive(
-      "consensus_position_tolerance", declare_parameter<double>("consensus_position_tolerance", 0.5));
-    params_.consensus_rotation_tolerance_deg = requirePositive(
-      "consensus_rotation_tolerance_deg",
-      declare_parameter<double>("consensus_rotation_tolerance_deg", 10.0));
+    state_options_.min_boards_nominal = declare_parameter<int>("min_markers_for_6dof", 2);
+    state_options_.min_normal_spread_deg = require("min_normal_spread_deg", 20.0);
+    state_options_.degraded_budget_s = require("degraded_budget_s", 10.0);
+    state_options_.dead_reckoning_budget_s = require("dead_reckoning_budget_s", 3.0);
 
-    params_.min_markers_for_6dof = declare_parameter<int>("min_markers_for_6dof", 2);
-    if (params_.min_markers_for_6dof < 2) {
-      throw std::runtime_error(
-        "min_markers_for_6dof must be at least 2: a single board cannot resolve its own "
-        "flip, and its orientation carries roughly 12 degrees of jitter");
-    }
+    solve_options_.huber_delta_px = require("huber_delta_px", 2.0);
+    solve_options_.max_iterations = declare_parameter<int>("max_iterations", 30);
+    solve_options_.convergence_tolerance = require("convergence_tolerance", 1.0e-8);
+    solve_options_.max_position_variance = require("max_position_variance", 100.0);
+    solve_options_.max_rotation_variance = require("max_rotation_variance", 1.0);
+    max_condition_number_ = require("max_condition_number", 1.0e4);
 
-    params_.min_normal_spread_deg = requirePositive(
-      "min_normal_spread_deg", declare_parameter<double>("min_normal_spread_deg", 20.0));
-    params_.max_condition_number = requirePositive(
-      "max_condition_number", declare_parameter<double>("max_condition_number", 1.0e4));
+    integrity_options_.ewma_alpha = declare_parameter<double>("residual_ewma_alpha", 0.2);
+    integrity_options_.flag_ratio = require("residual_flag_sigma", 4.0);
+    integrity_options_.flag_count = declare_parameter<int>("residual_flag_count", 10);
+    integrity_options_.flag_margin_px =
+      declare_parameter<double>("residual_flag_margin_px", 1.5);
+    integrity_options_.max_excluded = static_cast<std::size_t>(
+      std::max<int64_t>(0, declare_parameter<int>("residual_max_excluded", 2)));
 
-    params_.huber_delta_px =
-      requirePositive("huber_delta_px", declare_parameter<double>("huber_delta_px", 2.0));
-    params_.max_iterations = declare_parameter<int>("max_iterations", 30);
-    if (params_.max_iterations < 1) {
-      throw std::runtime_error("max_iterations must be at least 1");
-    }
-    params_.convergence_tolerance = requirePositive(
-      "convergence_tolerance", declare_parameter<double>("convergence_tolerance", 1.0e-8));
+    init_min_boards_ = declare_parameter<int>("initialization.min_markers", 2);
+    init_min_spread_deg_ = declare_parameter<double>("initialization.min_normal_spread_deg", 20.0);
+    init_max_range_ = declare_parameter<double>("initialization.max_range", 8.0);
+    init_consecutive_ = declare_parameter<int>("initialization.consecutive_solves", 5);
+    init_agreement_radius_ = declare_parameter<double>("initialization.agreement_radius", 0.5);
+    init_max_condition_ = declare_parameter<double>("initialization.max_condition_number", 1.0e4);
+    init_cooldown_s_ = declare_parameter<double>("initialization.republish_cooldown", 10.0);
 
-    params_.max_position_variance = requirePositive(
-      "max_position_variance", declare_parameter<double>("max_position_variance", 100.0));
-    params_.max_rotation_variance = requirePositive(
-      "max_rotation_variance", declare_parameter<double>("max_rotation_variance", 1.0));
-
-    params_.residual_ewma_alpha = declare_parameter<double>("residual_ewma_alpha", 0.1);
-    if (params_.residual_ewma_alpha <= 0.0 || params_.residual_ewma_alpha > 1.0) {
-      throw std::runtime_error("residual_ewma_alpha must be in (0, 1]");
-    }
-    params_.residual_flag_sigma =
-      requirePositive("residual_flag_sigma", declare_parameter<double>("residual_flag_sigma", 3.0));
-    params_.residual_flag_count = declare_parameter<int>("residual_flag_count", 10);
-    if (params_.residual_flag_count < 1) {
-      throw std::runtime_error("residual_flag_count must be at least 1");
-    }
-
-    params_.degraded_budget_s =
-      requirePositive("degraded_budget_s", declare_parameter<double>("degraded_budget_s", 10.0));
-    params_.dead_reckoning_budget_s = requirePositive(
-      "dead_reckoning_budget_s", declare_parameter<double>("dead_reckoning_budget_s", 3.0));
-
-    // Initialization gates, declared now so the full contract is visible even
-    // though 3D-1 does not act on them.
-    declare_parameter<int>("initialization.min_markers", 2);
-    declare_parameter<double>("initialization.min_normal_spread_deg", 20.0);
-    declare_parameter<double>("initialization.max_range", 8.0);
-    declare_parameter<double>("initialization.max_view_angle_deg", 50.0);
-    declare_parameter<int>("initialization.consecutive_solves", 5);
-    declare_parameter<double>("initialization.agreement_radius", 0.5);
-    declare_parameter<double>("initialization.max_condition_number", 1.0e4);
-    declare_parameter<double>("initialization.republish_cooldown", 10.0);
+    integrity_ = IntegrityMonitor(integrity_options_);
+    state_machine_ = LocalizationStateMachine(state_options_);
   }
 
-  double requirePositive(const std::string & name, const double value) const
+  double require(const std::string & name, double fallback)
   {
+    const double value = declare_parameter<double>(name, fallback);
     if (!(value > 0.0)) {
       throw std::runtime_error(name + " must be positive, got " + std::to_string(value));
     }
     return value;
   }
 
-  void logConfiguration() const
-  {
-    RCLCPP_INFO(get_logger(), "ArUco localizer configuration:");
-    RCLCPP_INFO(get_logger(), "  tag_map_path            : %s", params_.tag_map_path.c_str());
-    RCLCPP_INFO(get_logger(), "  cameras                 : %zu", params_.camera_names.size());
-    RCLCPP_INFO(get_logger(), "  corner_sigma_px         : %.3f  (INFERRED, not measured)",
-      params_.corner_sigma_px);
-    RCLCPP_INFO(get_logger(), "  window_duration         : %.3f s", params_.window_duration);
-    RCLCPP_INFO(get_logger(), "  motion_compensation     : %s",
-      params_.motion_compensation ? "on" : "off");
-    RCLCPP_INFO(get_logger(), "  usable view angle       : %.1f .. %.1f deg off the board normal",
-      params_.min_view_angle_deg, params_.max_view_angle_deg);
-    RCLCPP_INFO(get_logger(), "  ambiguity_ratio_max     : %.2f", params_.ambiguity_ratio_max);
-    RCLCPP_INFO(get_logger(), "  min_markers_for_6dof    : %d", params_.min_markers_for_6dof);
-    RCLCPP_INFO(get_logger(), "  dead_reckoning_budget_s : %.1f s  (PLACEHOLDER, must be measured)",
-      params_.dead_reckoning_budget_s);
-  }
-
   void loadTagMap()
   {
-    if (params_.tag_map_path.empty()) {
-      throw std::runtime_error(
-        "tag_map_path is not set. This localizer is the sole pose source, so it "
-        "refuses to start without a map rather than run silently.");
-    }
-
-    const TagMapLoadResult loaded =
-      loadTagMapFromFile(params_.tag_map_path, params_.map_options);
+    const auto loaded = loadTagMapFromFile(tag_map_path_, map_options_);
     map_ = loaded.map;
-
     for (const auto & warning : loaded.warnings) {
       RCLCPP_WARN(get_logger(), "tag map: %s", warning.c_str());
     }
-
-    RCLCPP_INFO(
-      get_logger(), "tag map: %zu boards in frame '%s', dictionary '%s'", map_.tags.size(),
-      map_.frame_id.c_str(), map_.dictionary.c_str());
     RCLCPP_INFO(
       get_logger(),
-      "tag map: survey %s by '%s', stated accuracy %.3f m -- this is the ceiling on the "
-      "accuracy of everything downstream",
-      map_.survey.date.empty() ? "(undated)" : map_.survey.date.c_str(),
-      map_.survey.method.empty() ? "(unspecified)" : map_.survey.method.c_str(),
-      map_.survey.stated_accuracy);
+      "tag map: %zu boards, survey accuracy %.3f m — the ceiling on everything downstream",
+      map_.tags.size(), map_.survey.stated_accuracy);
+  }
 
-    map_publisher_->publish(buildMapMarkers());
+  // ── windowing ─────────────────────────────────────────────────────────────
+
+  void onDetections(const ArucoDetectionArray & msg)
+  {
+    const rclcpp::Time stamp(msg.header.stamp);
+    // Clock skew, not physics. A stamp from the future cannot be
+    // motion-compensated sensibly, so drop it rather than guess.
+    if ((stamp - now()).seconds() > max_future_stamp_) {
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 5000, "dropped a detection stamped %.3f s in the future",
+        (stamp - now()).seconds());
+      return;
+    }
+    pending_.push_back(msg);
+  }
+
+  void processWindow()
+  {
+    if (pending_.empty()) {
+      report(WindowOutcome{}, SolveResult{}, IntegrityReport{});
+      return;
+    }
+
+    std::vector<ArucoDetectionArray> window;
+    window.swap(pending_);
+
+    // Reference stamp for the window: the latest capture in it. Everything else
+    // is rolled forward to here.
+    rclcpp::Time reference(window.front().header.stamp);
+    for (const auto & msg : window) {
+      const rclcpp::Time t(msg.header.stamp);
+      if (t > reference) {
+        reference = t;
+      }
+    }
+
+    std::vector<BoardObservation> boards;
+    for (const auto & msg : window) {
+      appendObservations(msg, reference, &boards);
+    }
+
+    if (boards.empty()) {
+      report(WindowOutcome{}, SolveResult{}, IntegrityReport{});
+      return;
+    }
+
+    // Boards already excluded by integrity monitoring stay out.
+    boards.erase(
+      std::remove_if(
+        boards.begin(), boards.end(),
+        [this](const BoardObservation & b) {return integrity_.isFlagged(b.id);}),
+      boards.end());
+
+    solveAndPublish(boards, reference);
+  }
+
+  void appendObservations(
+    const ArucoDetectionArray & msg, const rclcpp::Time & reference,
+    std::vector<BoardObservation> * out)
+  {
+    Eigen::Isometry3d base_to_cam;
+    try {
+      const auto tf = tf_buffer_.lookupTransform(
+        "base_link", msg.header.frame_id, tf2::TimePointZero);
+      base_to_cam = tf2::transformToEigen(tf);
+    } catch (const tf2::TransformException & e) {
+      // Named, not swallowed. The vehicle URDF is currently missing the
+      // camera optical frames entirely, so this is the failure a fresh
+      // deployment hits first.
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 5000,
+        "no transform base_link <- %s, dropping its detections: %s",
+        msg.header.frame_id.c_str(), e.what());
+      return;
+    }
+
+    // Motion compensation: fold the vehicle's movement between this capture
+    // and the window reference into the extrinsic, so every residual is
+    // expressed against one pose.
+    if (motion_compensation_ && latest_odom_) {
+      const double dt = (reference - rclcpp::Time(msg.header.stamp)).seconds();
+      base_to_cam = motionDelta(dt).inverse() * base_to_cam;
+    }
+
+    Eigen::Matrix3d k;
+    k << msg.k[0], msg.k[1], msg.k[2], msg.k[3], msg.k[4], msg.k[5],
+      msg.k[6], msg.k[7], msg.k[8];
+
+    for (const auto & detection : msg.detections) {
+      const auto entry = map_.tags.find(detection.id);
+      if (entry == map_.tags.end()) {
+        unmapped_.insert(detection.id);
+        continue;  // never synthesize a pose for a board we do not know
+      }
+
+      BoardObservation board;
+      board.id = detection.id;
+      board.camera = msg.header.frame_id;
+      board.map_to_tag = entry->second.pose;
+      board.marker_size = entry->second.marker_size;
+      board.position_stddev = entry->second.position_stddev;
+      board.base_to_cam = base_to_cam;
+      board.k = k;
+      for (std::size_t c = 0; c < kNumCorners; ++c) {
+        board.pixels[c] = Eigen::Vector2d{
+          detection.corners_rectified[2 * c], detection.corners_rectified[2 * c + 1]};
+      }
+      tf2::fromMsg(detection.pose_1, board.cam_to_tag_1);
+      tf2::fromMsg(detection.pose_2, board.cam_to_tag_2);
+      board.error_1 = detection.reprojection_error_1;
+      board.error_2 = detection.reprojection_error_2;
+
+      if (board.range() > max_range_) {
+        continue;
+      }
+      out->push_back(board);
+    }
+  }
+
+  Eigen::Isometry3d motionDelta(double dt) const
+  {
+    Eigen::Isometry3d delta = Eigen::Isometry3d::Identity();
+    if (!latest_odom_) {
+      return delta;
+    }
+    const auto & twist = latest_odom_->twist.twist;
+    delta.translation() = Eigen::Vector3d{twist.linear.x * dt, twist.linear.y * dt, 0.0};
+    delta.linear() =
+      Eigen::AngleAxisd(twist.angular.z * dt, Eigen::Vector3d::UnitZ()).toRotationMatrix();
+    return delta;
+  }
+
+  // ── solve ─────────────────────────────────────────────────────────────────
+
+  void solveAndPublish(
+    const std::vector<BoardObservation> & boards, const rclcpp::Time & stamp)
+  {
+    const ConsensusResult consensus = resolveFlips(boards, consensus_options_);
+    if (!consensus.ok) {
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 2000, "no fix: %s", consensus.reason.c_str());
+      report(WindowOutcome{}, SolveResult{}, IntegrityReport{});
+      return;
+    }
+
+    SolveOptions options = solve_options_;
+    if (isMoving()) {
+      options.corner_sigma_px = corner_sigma_px_moving_;
+    }
+    // One board cannot be believed on orientation: about 12 degrees of jitter.
+    // Hold the prior's heading and solve position only.
+    options.dof = (consensus.members.size() >= 2) ? 6 : 3;
+
+    SolveResult result = solvePose(boards, consensus.members, consensus.seed, options);
+    if (!result.ok) {
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 2000, "solve failed: %s", result.reason.c_str());
+      report(WindowOutcome{}, result, IntegrityReport{});
+      return;
+    }
+
+    // The number the integrity monitor actually judges. Worth having at hand:
+    // "board N excluded" is not diagnosable without knowing what its residual
+    // was and what its neighbours' were.
+    {
+      std::string line;
+      for (const auto & [id, r] : result.board_residual_px) {
+        line += " " + std::to_string(id) + "=" + std::to_string(r);
+      }
+      RCLCPP_DEBUG(get_logger(), "per-board residual px:%s", line.c_str());
+    }
+    const IntegrityReport integrity = integrity_.update(result.board_residual_px);
+    for (const auto id : integrity.flagged) {
+      if (announced_.insert(id).second) {
+        RCLCPP_ERROR(
+          get_logger(),
+          "board %u is persistently inconsistent with its neighbours and has been "
+          "excluded. Go and inspect that physical board: it has probably moved, or "
+          "its map entry is wrong.", id);
+      }
+    }
+
+    WindowOutcome outcome;
+    outcome.solved = true;
+    outcome.boards_used = result.observability.boards;
+    outcome.normal_spread_deg = result.observability.normal_spread_deg;
+    outcome.integrity_checked = integrity.checked;
+    // Not `!flagged.empty()`. A flagged board has already been dropped from the
+    // solve, and the fix continues without it -- that is redundancy working.
+    // Faulting on it would stop the vehicle the first time the monitor
+    // succeeded. What warrants a stop is being unable to isolate the problem.
+    outcome.integrity_failed = integrity.isolation_failed;
+
+    if (result.observability.condition_number > max_condition_number_) {
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 2000,
+        "constellation ill-conditioned (%.1e); publishing with saturated covariance",
+        result.observability.condition_number);
+    }
+
+    publishPose(result, stamp);
+    maybeInitialize(result, stamp);
+    report(outcome, result, integrity);
+  }
+
+  bool isMoving() const
+  {
+    if (!latest_odom_) {
+      return false;
+    }
+    return std::abs(latest_odom_->twist.twist.linear.x) > 0.1;
+  }
+
+  void publishPose(const SolveResult & result, const rclcpp::Time & stamp)
+  {
+    geometry_msgs::msg::PoseWithCovarianceStamped msg;
+    msg.header.stamp = stamp;   // the SENSOR stamp, not now()
+    msg.header.frame_id = map_.frame_id;
+    msg.pose.pose = tf2::toMsg(result.pose);
+    for (int r = 0; r < 6; ++r) {
+      for (int c = 0; c < 6; ++c) {
+        msg.pose.covariance[6 * r + c] = result.covariance(r, c);
+      }
+    }
+    pose_publisher_->publish(msg);
+  }
+
+  /// Cold start. Nothing NDT-refines the seed any more, so the first
+  /// well-conditioned solve is the answer — but the gates are strict, because
+  /// one bad initialization is worse than none.
+  void maybeInitialize(const SolveResult & result, const rclcpp::Time & stamp)
+  {
+    if (initialized_) {
+      return;
+    }
+    const bool eligible =
+      result.observability.boards >= static_cast<std::size_t>(init_min_boards_) &&
+      result.observability.normal_spread_deg >= init_min_spread_deg_ &&
+      result.observability.condition_number <= init_max_condition_;
+    if (!eligible) {
+      init_agreeing_.clear();
+      return;
+    }
+
+    init_agreeing_.push_back(result.pose.translation());
+    if (static_cast<int>(init_agreeing_.size()) < init_consecutive_) {
+      return;
+    }
+    while (static_cast<int>(init_agreeing_.size()) > init_consecutive_) {
+      init_agreeing_.pop_front();
+    }
+
+    // Multi-frame agreement is the important gate: a single well-conditioned
+    // solve can still be wrong, several in a row landing in the same place is
+    // much harder to fake.
+    Eigen::Vector3d mean = Eigen::Vector3d::Zero();
+    for (const auto & p : init_agreeing_) {
+      mean += p;
+    }
+    mean /= static_cast<double>(init_agreeing_.size());
+    for (const auto & p : init_agreeing_) {
+      if ((p - mean).norm() > init_agreement_radius_) {
+        return;
+      }
+    }
+
+    if (last_init_publish_ && (stamp - *last_init_publish_).seconds() < init_cooldown_s_) {
+      return;
+    }
+
+    geometry_msgs::msg::PoseWithCovarianceStamped msg;
+    msg.header.stamp = stamp;
+    msg.header.frame_id = map_.frame_id;
+    msg.pose.pose = tf2::toMsg(result.pose);
+    msg.pose.covariance[0] = 1.0;   // honest and coarse
+    msg.pose.covariance[7] = 1.0;
+    msg.pose.covariance[35] = 0.1;
+    initial_pose_publisher_->publish(msg);
+    last_init_publish_ = stamp;
+    initialized_ = true;
+    RCLCPP_INFO(
+      get_logger(), "initialized from %zu boards, %.1f deg normal spread",
+      result.observability.boards, result.observability.normal_spread_deg);
+  }
+
+  // ── reporting ─────────────────────────────────────────────────────────────
+
+  void report(
+    const WindowOutcome & outcome, const SolveResult & result,
+    const IntegrityReport & integrity)
+  {
+    const StateReport state = state_machine_.update(now().seconds(), outcome);
+
+    // A window can be empty simply because the timer ticked between camera
+    // frames, and the state machine holds the previous state through that. If
+    // we published zeroed metrics alongside a held NOMINAL, the status would
+    // contradict itself -- "all good, zero boards, zero spread". Carry the last
+    // real measurements instead, so the numbers always describe the fix the
+    // state is talking about.
+    const SolveResult & shown = outcome.solved ? result : last_result_;
+    const IntegrityReport & shown_integrity = outcome.solved ? integrity : last_integrity_;
+    if (outcome.solved) {
+      last_result_ = result;
+      last_integrity_ = integrity;
+    }
+
+    if (state.state != last_state_) {
+      if (state.state == LocalizationState::Nominal) {
+        RCLCPP_INFO(
+          get_logger(), "localization %s: %s",
+          toString(state.state).c_str(), state.reason.c_str());
+      } else {
+        RCLCPP_WARN(
+          get_logger(), "localization %s: %s",
+          toString(state.state).c_str(), state.reason.c_str());
+      }
+      last_state_ = state.state;
+    }
+    if (state.request_mrm && !mrm_requested_) {
+      RCLCPP_ERROR(get_logger(), "requesting MRM stop: %s", state.reason.c_str());
+      mrm_requested_ = true;
+    }
+
+    ArucoLocalizerStatus status;
+    status.header.stamp = now();
+    status.header.frame_id = map_.frame_id;
+    status.state = static_cast<std::uint8_t>(state.state);
+    status.dof_solved = shown.ok ? (shown.observability.boards >= 2 ? 6 : 3) : 0;
+    status.integrity_checked = shown_integrity.checked;
+    for (const auto & [id, residual] : shown.board_residual_px) {
+      status.markers_used.push_back(id);
+    }
+    status.markers_flagged = shown_integrity.flagged;
+    status.markers_unmapped.assign(unmapped_.begin(), unmapped_.end());
+    status.normal_spread_deg = shown.observability.normal_spread_deg;
+    status.depth_range_m = shown.observability.depth_range_m;
+    status.condition_number = shown.observability.condition_number;
+    status.reprojection_rms_px = shown.observability.reprojection_rms_px;
+    status.dead_reckoning_elapsed_s = state.elapsed_s;
+    status.dead_reckoning_budget_s = state.budget_s;
+    status_publisher_->publish(status);
   }
 
   visualization_msgs::msg::MarkerArray buildMapMarkers() const
   {
     visualization_msgs::msg::MarkerArray array;
     int id = 0;
-
     for (const auto & [tag_id, tag] : map_.tags) {
       const auto corners = tagCornersInMap(tag.pose, tag.marker_size);
-
       visualization_msgs::msg::Marker outline;
       outline.header.frame_id = map_.frame_id;
       outline.ns = "aruco_boards";
@@ -264,9 +557,8 @@ private:
       outline.action = visualization_msgs::msg::Marker::ADD;
       outline.pose.orientation.w = 1.0;
       outline.scale.x = 0.02;
-      outline.color.r = 0.05;
-      outline.color.g = 0.49;
-      outline.color.b = 0.53;
+      outline.color.g = 0.6;
+      outline.color.b = 0.6;
       outline.color.a = 1.0;
       for (std::size_t i = 0; i <= kNumCorners; ++i) {
         geometry_msgs::msg::Point p;
@@ -277,32 +569,64 @@ private:
         outline.points.push_back(p);
       }
       array.markers.push_back(outline);
-
-      visualization_msgs::msg::Marker label;
-      label.header.frame_id = map_.frame_id;
-      label.ns = "aruco_board_ids";
-      label.id = id++;
-      label.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
-      label.action = visualization_msgs::msg::Marker::ADD;
-      label.pose.position.x = tag.pose.translation().x();
-      label.pose.position.y = tag.pose.translation().y();
-      label.pose.position.z = tag.pose.translation().z() + 0.5 * tag.marker_size + 0.08;
-      label.pose.orientation.w = 1.0;
-      label.scale.z = 0.15;
-      label.color.r = 1.0;
-      label.color.g = 1.0;
-      label.color.b = 1.0;
-      label.color.a = 1.0;
-      label.text = std::to_string(tag_id);
-      array.markers.push_back(label);
     }
-
     return array;
   }
 
-  Parameters params_;
+  // ── state ─────────────────────────────────────────────────────────────────
+
+  std::string tag_map_path_;
   TagMap map_;
+  TagMapOptions map_options_;
+  std::vector<std::string> camera_names_;
+
+  SolveOptions solve_options_;
+  ConsensusOptions consensus_options_;
+  IntegrityOptions integrity_options_;
+  StateOptions state_options_;
+
+  double corner_sigma_px_moving_{};
+  double window_duration_{};
+  bool motion_compensation_{true};
+  double max_future_stamp_{};
+  double max_range_{};
+  double min_view_angle_deg_{};
+  double max_view_angle_deg_{};
+  double max_condition_number_{};
+
+  int init_min_boards_{};
+  double init_min_spread_deg_{};
+  double init_max_range_{};
+  int init_consecutive_{};
+  double init_agreement_radius_{};
+  double init_max_condition_{};
+  double init_cooldown_s_{};
+  bool initialized_{false};
+  std::deque<Eigen::Vector3d> init_agreeing_;
+  std::optional<rclcpp::Time> last_init_publish_;
+
+  IntegrityMonitor integrity_;
+  LocalizationStateMachine state_machine_;
+  LocalizationState last_state_{LocalizationState::Uninitialized};
+  SolveResult last_result_;
+  IntegrityReport last_integrity_;
+  bool mrm_requested_{false};
+  std::set<std::uint32_t> unmapped_;
+  std::set<std::uint32_t> announced_;
+
+  std::vector<ArucoDetectionArray> pending_;
+  std::optional<nav_msgs::msg::Odometry> latest_odom_;
+
+  tf2_ros::Buffer tf_buffer_;
+  tf2_ros::TransformListener tf_listener_;
+  std::vector<rclcpp::Subscription<ArucoDetectionArray>::SharedPtr> detection_subs_;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr kinematic_sub_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr map_publisher_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr pose_publisher_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr
+    initial_pose_publisher_;
+  rclcpp::Publisher<ArucoLocalizerStatus>::SharedPtr status_publisher_;
+  rclcpp::TimerBase::SharedPtr window_timer_;
 };
 
 }  // namespace golfcart::aruco_localizer
@@ -310,17 +634,14 @@ private:
 int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
-
   try {
-    auto node = std::make_shared<golfcart::aruco_localizer::ArucoLocalizerNode>(
-      rclcpp::NodeOptions{});
-    rclcpp::spin(node);
+    rclcpp::spin(
+      std::make_shared<golfcart::aruco_localizer::ArucoLocalizerNode>(rclcpp::NodeOptions{}));
   } catch (const std::exception & e) {
     RCLCPP_FATAL(rclcpp::get_logger("aruco_localizer"), "startup failed: %s", e.what());
     rclcpp::shutdown();
     return 1;
   }
-
   rclcpp::shutdown();
   return 0;
 }

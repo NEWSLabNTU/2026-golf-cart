@@ -55,6 +55,21 @@ Eigen::Isometry3d expSe3(const Eigen::Matrix<double, 6, 1> & xi)
   return out;
 }
 
+/// Mean distance from camera to board. Used as the characteristic lever that
+/// makes the information matrix dimensionally consistent.
+double meanRange(const std::vector<BoardObservation> & used)
+{
+  if (used.empty()) {
+    return 0.0;
+  }
+  double sum = 0.0;
+  for (const auto & b : used) {
+    sum += b.cam_to_tag_1.translation().norm();
+  }
+  return sum / static_cast<double>(used.size());
+}
+
+
 double normalSpreadDeg(const std::vector<BoardObservation> & boards)
 {
   double worst = 0.0;
@@ -123,11 +138,24 @@ ConsensusResult resolveFlips(
   }
 
   const double rotation_tolerance = options.rotation_tolerance_deg * M_PI / 180.0;
-  auto agrees = [&](const Eigen::Isometry3d & a, const Eigen::Isometry3d & b) {
-      if ((a.translation() - b.translation()).norm() > options.position_tolerance) {
+
+  // These tolerances look loose for a gate whose job is to separate a true pose
+  // from its flip, and they are not. Measured over the view-angle window this
+  // node admits, two boards at 5.5 m disagree by 0.27 m and 2.8 deg at the 99th
+  // percentile under 0.3 px of corner noise; a flip puts them tens of metres and
+  // tens of degrees apart. There is a wide gap between the two, and the gate
+  // sits in it.
+  //
+  // Do NOT widen these to chase intermittent "no two boards agree". That symptom
+  // comes from too few boards surviving the ambiguity gate, not from good boards
+  // failing to agree, and widening trades a stalled fix for a confidently wrong
+  // one. See max_range.
+  auto agrees = [&](const Candidate & a, const Candidate & b) {
+      if ((a.pose.translation() - b.pose.translation()).norm() > options.position_tolerance) {
         return false;
       }
-      return Eigen::AngleAxisd(a.linear().transpose() * b.linear()).angle() < rotation_tolerance;
+      return Eigen::AngleAxisd(a.pose.linear().transpose() * b.pose.linear()).angle() <
+             rotation_tolerance;
     };
 
   // Grow a cluster about each candidate, at most one solution per board: a
@@ -139,7 +167,7 @@ ConsensusResult resolveFlips(
       if (board_used[candidates[j].board]) {
         continue;
       }
-      if (agrees(candidates[seed].pose, candidates[j].pose)) {
+      if (agrees(candidates[seed], candidates[j])) {
         clusters[seed].push_back(j);
         board_used[candidates[j].board] = true;
       }
@@ -166,7 +194,7 @@ ConsensusResult resolveFlips(
     if (clusters[i].size() != best_size || i == best) {
       continue;
     }
-    if (!agrees(candidates[i].pose, candidates[best].pose)) {
+    if (!agrees(candidates[i], candidates[best])) {
       out.tie = true;
       out.reason =
         "flip consensus tied between two equal clusters — the visible boards are "
@@ -430,7 +458,28 @@ SolveResult solvePose(
   out.covariance = saturatedCovariance(
     information, 1.0, options.max_position_variance, options.max_rotation_variance);
 
-  Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double, 6, 6>> eigen(information);
+  // The condition number has to be taken on a NON-DIMENSIONALIZED information
+  // matrix, and this is easy to get wrong in a way that produces a number which
+  // looks fine and means nothing.
+  //
+  // The increment is xi = (dt, dtheta): three metres and three radians. A
+  // condition number of a matrix whose blocks carry different units is not a
+  // property of the geometry at all -- it changes if the translation is
+  // expressed in centimetres, and no fixed threshold on it is meaningful. The
+  // first version of this code compared the raw value against 1e4 and reported
+  // "ill-conditioned" on nearly every window of a perfectly healthy fixture.
+  //
+  // Substituting dtheta = dtheta' / L, for a characteristic lever L, puts the
+  // rotation block in metres of arc as well. The natural L is how far away the
+  // boards are: that is exactly the lever by which an angular error becomes a
+  // positional one.
+  const double lever = std::max(meanRange(used), 1e-3);
+  Eigen::Matrix<double, 6, 1> scale;
+  scale << 1.0, 1.0, 1.0, 1.0 / lever, 1.0 / lever, 1.0 / lever;
+  const Eigen::Matrix<double, 6, 6> scaled =
+    scale.asDiagonal() * information * scale.asDiagonal();
+
+  Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double, 6, 6>> eigen(scaled);
   const double smallest = eigen.eigenvalues()(0);
   const double largest = eigen.eigenvalues()(5);
   out.observability.condition_number = (smallest > 1e-12)

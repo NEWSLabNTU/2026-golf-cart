@@ -31,7 +31,7 @@ namespace golfcart::aruco_localizer
 
 struct ConsensusOptions
 {
-  double position_tolerance{0.5};       // [m]
+  double position_tolerance{0.5};  // [m]
   double rotation_tolerance_deg{10.0};  // [deg]
   /// Reject a lone board whose two solutions fit about equally well.
   double ambiguity_ratio_max{0.2};

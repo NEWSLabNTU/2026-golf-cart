@@ -21,6 +21,7 @@ find_package(yaml-cpp REQUIRED)
 ament_auto_add_library(${PROJECT_NAME}_core SHARED
   src/tag_map.cpp
   src/solver.cpp
+  src/health.cpp
 )
 target_link_libraries(${PROJECT_NAME}_core Eigen3::Eigen yaml-cpp)
 
@@ -45,6 +46,11 @@ if(BUILD_TESTING)
   # covariance behaviour under degeneracy, and the per-board robust kernel.
   ament_add_gtest(test_solver test/test_solver.cpp)
   target_link_libraries(test_solver ${PROJECT_NAME}_core Eigen3::Eigen)
+
+  # Integrity monitoring and the localization state machine: what decides
+  # whether a fix can be trusted, and when to stop the vehicle.
+  ament_add_gtest(test_health test/test_health.cpp)
+  target_link_libraries(test_health ${PROJECT_NAME}_core)
 
   # Pins our corner-order convention against OpenCV's own object points. A
   # permutation here is a silent multiple-of-90-degree pose error that still

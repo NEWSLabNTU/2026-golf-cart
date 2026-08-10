@@ -74,7 +74,12 @@
       # Restrict which boards may be seen. One board exercises the DEGRADED
       # path; several boards on one wall exercise the coplanar flip tie, where
       # the correct answer is to publish nothing.
-      visible_board_ids: []
+      # NOTE: left commented out on purpose. An empty YAML list has no
+      # inferrable element type, so ROS 2 overrides the declared default with an
+      # untyped empty value and the node dies at startup with
+      # "parameter_value_from failed". Omit the key to mean "all boards";
+      # uncomment with real ids to restrict.
+      # visible_board_ids: [10, 11]
 
       # Push every stamp into the future, to check the clock-skew rejection.
       stamp_offset_s: 0.0

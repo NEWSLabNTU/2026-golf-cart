@@ -67,7 +67,25 @@
     # ─────────────────────────────────────────────────────────────────────────
     # Observation gates
     # ─────────────────────────────────────────────────────────────────────────
-    max_range: 13.0                  # [m]
+    # Bounded by where the ambiguity gate stops protecting, NOT by where the
+    # detector stops seeing boards -- it sees them a good deal further than it
+    # can orient them.
+    #
+    # Measured, 0.384 m board at f=900, 0.3 px corner noise, over the 25-75 deg
+    # view window, fraction of boards that PASS the ambiguity gate and are still
+    # flipped:
+    #     <=7 m   0.00 %
+    #      8 m    0.14 %
+    #      9 m    2.3  %
+    #     11 m   16.5  %
+    #     13 m   24.2  %
+    # The gate holds to about 8 m and then comes apart. Past that the boards it
+    # passes are worse than no boards at all, because a flip is a confident wrong
+    # answer rather than a missing one.
+    #
+    # Scales with f * marker_size / pixel_noise, so re-measure if any of the
+    # three change. 13.0 was the previous value and was chosen by eye.
+    max_range: 8.0                   # [m]
 
     # Viewing angle between the line of sight and the board normal. The usable
     # window is bounded BELOW by pose ambiguity and above by detection failure.
@@ -138,6 +156,18 @@
     residual_ewma_alpha: 0.1
     residual_flag_sigma: 3.0
     residual_flag_count: 10
+
+    # A board must exceed the cohort median by this many pixels in absolute
+    # terms as well as by the ratio above. Without it, sub-pixel scatter between
+    # healthy boards -- which is geometry, not health -- excludes boards and
+    # faults the vehicle on a clean run.
+    residual_flag_margin_px: 1.5
+
+    # How many boards may be excluded before the exclusions stop being credible
+    # as individual faults. Detecting and excluding a bad board is redundancy
+    # working and the drive continues; being unable to isolate the problem is
+    # what stops the vehicle.
+    residual_max_excluded: 2
 
     # ─────────────────────────────────────────────────────────────────────────
     # Localization states (phase 3D-4)

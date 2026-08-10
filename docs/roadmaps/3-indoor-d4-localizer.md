@@ -188,3 +188,103 @@ starts. But **stage 2 is not optional polish.** With one pose source and no
 cross-check, the state machine and integrity monitor are what make the system
 safe to drive behind. Do not let stage 1 working well be mistaken for the phase
 being finished.
+
+## Stage 2 results, and what running the loop changed
+
+Stage 2 added integrity monitoring and the localization state machine, and the
+first end-to-end run against the synthetic bench changed five things. All five
+were defects in what was designed, not in how it was coded, and none would have
+been found by unit tests alone.
+
+### Measured, against ground truth
+
+879 fixes over a 10 m straight run, three cameras, 0.3 px corner noise, seven
+boards with spread normals:
+
+| | p50 | p95 | max |
+|---|---|---|---|
+| position error | 0.017 m | 0.030 m | 0.610 m |
+| yaw error | 0.08° | 0.23° | 179.92° |
+| reported sigma | 0.028 m | 0.228 m | — |
+
+Position holds inside the 0.02 m survey accuracy, which is the ceiling on
+everything downstream. The max column is the interesting one; see the open
+item below.
+
+### `max_range` was set by eye and was roughly 60 % too far
+
+The limit belongs where the ambiguity gate stops keeping flipped boards out, not
+where the detector stops seeing boards — it sees them considerably further than
+it can orient them. Measured for a 0.384 m board at f = 900 under 0.3 px corner
+noise, over the 25–75° view window, the share of boards that *pass* the
+ambiguity gate and are still flipped:
+
+| range | 7 m | 8 m | 9 m | 11 m | 13 m |
+|---|---|---|---|---|---|
+| flipped among gate-passing | 0.00 % | 0.14 % | 2.3 % | 16.5 % | 24.2 % |
+
+The gate holds to about 8 m and then comes apart. `max_range` moved 13 → 8 m.
+The figure scales with `f · marker_size / pixel_noise`; re-measure if any of the
+three change.
+
+### The condition number was computed in mixed units
+
+The increment is ξ = (δt, δθ): three metres and three radians. The condition
+number of an information matrix whose blocks carry different units is not a
+property of the geometry — it changes if translation is expressed in
+centimetres — so no fixed threshold on it means anything. The raw value was
+being compared against 1e4 and reported "ill-conditioned" on nearly every window
+of a healthy fixture. Substituting δθ = δθ′/L for a characteristic lever L (the
+mean board range, which is exactly the lever by which an angular error becomes a
+positional one) puts the rotation block in metres of arc and makes the threshold
+meaningful.
+
+### The integrity monitor faulted the vehicle when it succeeded
+
+`integrity_failed` was `!flagged.empty()`, so the first board the monitor
+excluded latched FAULT and requested an MRM stop. This is backwards: a flagged
+board has already been dropped from the solve and the fix continues without it,
+which is the entire point of having redundancy. Detection *and exclusion* is the
+remedy. What warrants a stop is being unable to isolate — more exclusions than
+`residual_max_excluded`, past which "several bad boards" is a worse explanation
+than something common to all of them (extrinsics, marker size, map frame).
+
+### The ratio test alone flagged healthy boards
+
+Residuals differ between boards for reasons of geometry rather than health, and
+a board at several times the cohort median is still fine when every residual
+involved is sub-pixel. A board must now also exceed the median by
+`residual_flag_margin_px` in absolute terms.
+
+### Two tolerances were nearly widened to hide a symptom
+
+Intermittent "no two boards agree" looked like tolerances set below the
+single-board rotation jitter the design itself cites (11.7°). Both the
+consensus rotation tolerance and a range-scaled position gate were written, and
+both were wrong: measured over the admitted view window, two boards at 5.5 m
+disagree by 0.27 m and 2.8° at the 99th percentile, so the original 0.5 m / 10°
+tolerances were already generous. The 11.7° figure characterizes the *ungated*
+near-fronto-parallel case, which `min_view_angle_deg` exists to exclude. The
+real cause was too-generous `max_range` admitting boards that could not be
+oriented; widening the gate would have traded a stalled fix for a confidently
+wrong one. Both changes were reverted and the reasoning pinned in tests.
+
+## Open item: one flipped fix in 876, published confidently
+
+One fix carried a 179.92° yaw error with position correct to 0.051 m and a
+reported sigma of 0.152 m — a heading reversal that looked trustworthy. At
+roughly 0.1 % this is well outside what the covariance advertises, and a
+reversed heading is not a degraded fix, it is a dangerous one.
+
+The obvious mitigation is an innovation gate on the output: compare the solve
+against the propagated prior and refuse, or heavily inflate, when they disagree
+by more than the covariance allows. **This needs a decision before it is built**,
+because it sits against a stated principle of the design — that the branch is
+never chosen by proximity to the prior, since that is how an estimator ends up
+confirming what the filter already believes. Gating the *published output* is
+not the same act as choosing the *branch*, and is standard practice, but the
+line between them is thin enough to be worth agreeing on deliberately rather
+than discovering later in a log.
+
+Interim position: the EKF's `pose_gate_dist` (49.5) is the only thing currently
+standing between this and the filter. That is a backstop, not a design.

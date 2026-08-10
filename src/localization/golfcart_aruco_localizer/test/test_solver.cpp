@@ -343,4 +343,43 @@ TEST(Solver, ExpSe3AndSkewAgreeWithTheirDefinitions)
   EXPECT_TRUE(t.translation().isApprox(xi.head<3>(), 1e-12));
 }
 
+// The two tests below pin the gap the consensus gate lives in. They exist
+// because the gate was nearly widened to chase intermittent "no two boards
+// agree" — which would have traded a stalled fix for a confidently wrong one.
+// Measured over the admitted view window at 5.5 m under 0.3 px corner noise,
+// two boards disagree by 0.27 m / 2.8 deg at the 99th percentile; a flip puts
+// them tens of metres apart. The tolerances sit between those, and must stay
+// there.
+TEST(Consensus, NoiseLevelDisagreementIsStillAgreement)
+{
+  const Eigen::Isometry3d truth = vehicleAt(1.0, -0.5, 0.3);
+  std::vector<BoardObservation> boards{
+    makeBoard(1, truth, viewAt(1.0, -0.2, 4.0, 0.5)),
+    makeBoard(2, truth, viewAt(-1.0, 0.2, 5.5, -0.4))};
+
+  // Displace one board's implied pose to the measured 99th percentile of
+  // ordinary noise. Two good boards must not be split by their own scatter.
+  boards[1].map_to_tag.translation() += Eigen::Vector3d{0.2, 0.1, 0.05};  // 0.23 m
+
+  const ConsensusResult c = resolveFlips(boards);
+  EXPECT_TRUE(c.ok) << c.reason;
+  EXPECT_EQ(c.members.size(), 2U) << "two boards were split by noise-level disagreement";
+}
+
+TEST(Consensus, FlipLevelDisagreementIsRejected)
+{
+  const Eigen::Isometry3d truth = vehicleAt(1.0, -0.5, 0.3);
+  std::vector<BoardObservation> boards{
+    makeBoard(1, truth, viewAt(1.0, -0.2, 4.0, 0.5)),
+    makeBoard(2, truth, viewAt(-1.0, 0.2, 5.5, -0.4))};
+
+  // A flip is not a large noise sample; it is a different answer. Well short of
+  // the tens of metres one really produces, and it must already be rejected.
+  boards[1].map_to_tag.translation() += Eigen::Vector3d{3.0, 0.0, 0.0};
+
+  const ConsensusResult c = resolveFlips(boards);
+  EXPECT_FALSE(c.ok && c.members.size() == 2U)
+    << "a flipped board was accepted as corroboration";
+}
+
 }  // namespace golfcart::aruco_localizer
