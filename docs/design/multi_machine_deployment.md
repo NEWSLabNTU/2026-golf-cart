@@ -5,6 +5,32 @@
 
 ## Amendments
 
+**2026-08-10 — step 5 findings from first bring-up.**
+
+- **play_launch ignores SIGTERM.** systemd's default stop left the unit in
+  `deactivating` for the full `TimeoutStopSec`, then SIGKILLed the cgroup and
+  marked it `failed (Result: timeout)`. A SIGKILLed `ros2 bag` never writes
+  `metadata.yaml`, so every recording would have been lost on shutdown. The unit
+  now sets `KillSignal=SIGINT`, the path play_launch actually handles; stops are
+  clean and `Result=success`.
+- **The ZED SDK silently breaks DDS.** It ships
+  `/etc/sysctl.d/60-zed-buffers.conf` with `net.core.rmem_max=1048576`, which
+  sorts *after* our old `10-cyclone-max.conf` and undercuts it. Our profiles set
+  `SocketReceiveBufferSize min="10MB"`, a hard minimum, so CycloneDDS refused to
+  create a domain at all — with every profile, loopback included. The setup
+  script now writes `99-cyclonedds-max.conf` and deletes the `10-` file. Any host
+  that gets the ZED SDK installed later must re-run it.
+- **Watchdog timing is ~42s, not 30s.** Each cycle costs the ping timeout (2s)
+  plus the interval (5s), so six misses take `6 * 7 = 42s`. Still inside §6 item
+  6's "~30–45s" window, but the arithmetic in §2 is wrong.
+- **`set -u` cannot wrap ROS setup files.** They read unbound variables by
+  design (`AMENT_TRACE_SETUP_FILES`), which aborted the unit before it launched.
+
+Verified on hardware: `orin_remote.sh start` brings both units up, ZED topics and
+data reach the master, `stop` leaves both units inactive with no orphan processes,
+the watchdog fires when the master is unreachable, and `record:=true` produced a
+45s bag on the orin's local disk — 8397 messages, 295 MB, finalized cleanly.
+
 **2026-08-07 — §5's risk gate FAILED: play_launch does not replay `executable:` entries.**
 Tested against play_launch 0.5.1 with a launch file holding two `executable:`
 actions (`sleep 45`, and a `touch` of a marker file):

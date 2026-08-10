@@ -19,7 +19,9 @@ UNIT="golfcart-orin.service"
 
 log() { printf 'orin_watchdog: %s\n' "$1"; }
 
-log "watching ${MASTER_IP} every ${INTERVAL}s, stopping ${UNIT} after ${MAX_MISSES} misses"
+# Each cycle costs the ping timeout (2s) plus INTERVAL, so the real time to fire
+# is MAX_MISSES * (INTERVAL + 2) - about 42s at the defaults, not 30s.
+log "watching ${MASTER_IP} every ${INTERVAL}s, stopping ${UNIT} after ${MAX_MISSES} misses (~$(( MAX_MISSES * (INTERVAL + 2) ))s)"
 
 misses=0
 while true; do
