@@ -26,7 +26,13 @@
 
       # Measurement gate - larger value to accept AR tag corrections
       # AR tags are trusted as ground truth for global reference
-      pose_gate_dist: 10000.0  # Large value to trust AR tag measurements
+      # Mahalanobis outlier gate. Restored from 10000.0, which disabled it.
+      #
+      # With ArUco boards as the SOLE pose source there is no second estimator
+      # to contradict a bad fix, so this gate is the last line of defence. The
+      # value is upstream's default and a starting point: tune it once the
+      # measurement statistics are known, but do not switch it off again.
+      pose_gate_dist: 49.5
 
     twist_measurement:
       # Isaac VSLAM twist (velocity) measurement configuration

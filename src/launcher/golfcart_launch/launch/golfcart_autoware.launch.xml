@@ -87,7 +87,20 @@
 
   <!-- Map -->
   <group if="$(var launch_map)">
-    <include file="$(find-pkg-share autoware_launch)/launch/components/tier4_map_component.launch.xml"/>
+    <!--
+      pose_source:=aruco has no point cloud map. tier4_map_component composes
+      the pointcloud map loader unconditionally, so that path needs its own
+      component. See golfcart_map_component.launch.xml.
+    -->
+    <group if="$(eval '\'$(var pose_source)\' == \'aruco\'')">
+      <include file="$(find-pkg-share golfcart_launch)/launch/components/golfcart_map_component.launch.xml">
+        <arg name="map_path" value="$(var map_path)"/>
+        <arg name="lanelet2_map_file" value="$(var lanelet2_map_file)"/>
+      </include>
+    </group>
+    <group unless="$(eval '\'$(var pose_source)\' == \'aruco\'')">
+      <include file="$(find-pkg-share autoware_launch)/launch/components/tier4_map_component.launch.xml"/>
+    </group>
   </group>
 
   <!-- Sensing -->

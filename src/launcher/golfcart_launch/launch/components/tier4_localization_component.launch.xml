@@ -2,7 +2,8 @@
 <launch>
   <!-- Golf Cart: Use golfcart_launch config instead of autoware_launch -->
   <arg name="loc_config_path" default="$(find-pkg-share golfcart_launch)/config/localization"/>
-  <arg name="pose_source" default="ndt" description="select pose_estimator: ndt, cuda_ndt, yabloc, eagleye"/>
+  <arg name="pose_source" default="ndt" description="select pose_estimator: aruco, ndt, cuda_ndt, yabloc, eagleye"/>
+  <arg name="aruco_tag_map_path" default="" description="hand-surveyed board map; required when pose_source:=aruco"/>
   <arg name="twist_source" default="gyro_odom" description="select twist_estimator: gyro_odom, eagleye"/>
   <arg name="input_pointcloud" default="/sensing/lidar/concatenated/pointcloud" description="The topic will be used in the localization util module"/>
   <arg name="localization_pointcloud_container_name" default="/pointcloud_container" description="The target container to which pointcloud preprocessing nodes in localization be attached"/>
@@ -37,6 +38,27 @@
   <arg name="regularization_pose_topic" default="/sensing/gnss/pose_with_covariance"
        description="Pose source for NDT regularization; must be tag-only indoors"/>
 
+  <!--
+    ArUco boards as the sole pose source. Phase 3D-2.
+
+    This bypasses tier4_localization_launch entirely, the same way the
+    cuda_ndt branch below does. That is deliberate: upstream parses
+    pose_source against a fixed list [ndt, yabloc, eagleye, artag,
+    lidar-marker] and silently drops anything else, so adding "aruco" there
+    would mean patching an upstream package.
+
+    Nothing here brings up a scan matcher, its pointcloud preprocessing, or
+    the pointcloud map loader. See golfcart_map_component.launch.xml for why
+    the map side needs its own component.
+  -->
+  <group if="$(eval '\'$(var pose_source)\' == \'aruco\'')">
+    <include file="$(find-pkg-share golfcart_launch)/launch/components/aruco_localization.launch.xml">
+      <arg name="loc_config_path" value="$(var loc_config_path)"/>
+      <arg name="aruco_tag_map_path" value="$(var aruco_tag_map_path)"/>
+      <arg name="twist_source" value="$(var twist_source)"/>
+    </include>
+  </group>
+
   <!-- CUDA NDT localization stack -->
   <group if="$(eval &quot;'$(var pose_source)' == 'cuda_ndt'&quot;)">
     <include file="$(find-pkg-share cuda_ndt_matcher_launch)/launch/cuda_localization.launch.xml">
@@ -51,7 +73,7 @@
   </group>
 
   <!-- Standard Autoware localization stack (ndt, yabloc, eagleye) -->
-  <group unless="$(eval &quot;'$(var pose_source)' == 'cuda_ndt'&quot;)">
+  <group if="$(eval '\'$(var pose_source)\' not in [\'cuda_ndt\', \'aruco\']')">
     <include file="$(find-pkg-share tier4_localization_launch)/launch/localization.launch.xml">
       <arg name="pose_source" value="$(var pose_source)"/>
       <arg name="twist_source" value="$(var twist_source)"/>

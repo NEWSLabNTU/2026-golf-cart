@@ -1,0 +1,71 @@
+<?xml version="1.0"?>
+<!--
+  ArUco boards as the sole pose source. Phase 3D-2.
+
+  Brings up the three per-camera detectors, the localizer, gyro_odometer and
+  the EKF. Deliberately brings up NO scan matcher, no pointcloud preprocessing
+  and no pointcloud map loader.
+-->
+<launch>
+  <arg name="loc_config_path"/>
+  <arg name="aruco_tag_map_path"/>
+  <arg name="twist_source" default="gyro_odom"/>
+  <arg name="camera_names" default="['left','right','rear']"/>
+  <arg name="use_sim_detector" default="false"
+       description="substitute aruco_sim_detector for the real detectors (phase 3D-6)"/>
+
+  <group>
+    <push-ros-namespace namespace="localization"/>
+
+    <!-- ── pose estimator ────────────────────────────────────────────────── -->
+    <group>
+      <push-ros-namespace namespace="pose_estimator"/>
+
+      <node pkg="golfcart_aruco_localizer" exec="aruco_localizer_node"
+            name="aruco_localizer" output="screen">
+        <param from="$(var loc_config_path)/aruco_localizer.param.yaml"/>
+        <param name="tag_map_path" value="$(var aruco_tag_map_path)"/>
+
+        <remap from="~/input/detections/left"
+               to="/sensing/camera/left/aruco_detections"/>
+        <remap from="~/input/detections/right"
+               to="/sensing/camera/right/aruco_detections"/>
+        <remap from="~/input/detections/rear"
+               to="/sensing/camera/rear/aruco_detections"/>
+        <remap from="~/input/kinematic_state" to="/localization/kinematic_state"/>
+
+        <remap from="~/output/pose_with_covariance"
+               to="/localization/pose_estimator/pose_with_covariance"/>
+        <remap from="~/output/initialpose" to="/initialpose3d"/>
+      </node>
+    </group>
+
+    <!-- ── twist estimator ───────────────────────────────────────────────── -->
+    <group if="$(eval '\'$(var twist_source)\' == \'gyro_odom\'')">
+      <push-ros-namespace namespace="twist_estimator"/>
+      <include file="$(find-pkg-share autoware_gyro_odometer)/launch/gyro_odometer.launch.xml">
+        <arg name="input_vehicle_twist_with_covariance_topic"
+             value="/sensing/vehicle_velocity_converter/twist_with_covariance"/>
+        <arg name="input_imu_topic" value="/sensing/imu/imu_data"/>
+        <arg name="output_twist_with_covariance"
+             value="/localization/twist_estimator/twist_with_covariance"/>
+        <arg name="output_twist_with_covariance_raw"
+             value="/localization/twist_estimator/twist_with_covariance_raw"/>
+      </include>
+    </group>
+
+    <!-- ── fusion ────────────────────────────────────────────────────────── -->
+    <group>
+      <push-ros-namespace namespace="pose_twist_fusion_filter"/>
+      <include file="$(find-pkg-share autoware_ekf_localizer)/launch/ekf_localizer.launch.xml">
+        <arg name="param_file" value="$(var loc_config_path)/ekf_localizer.param.yaml"/>
+        <arg name="input_initial_pose_name" value="/initialpose3d"/>
+        <arg name="input_pose_with_cov_name"
+             value="/localization/pose_estimator/pose_with_covariance"/>
+        <arg name="input_twist_with_cov_name"
+             value="/localization/twist_estimator/twist_with_covariance"/>
+        <arg name="output_odom_name" value="/localization/kinematic_state"/>
+      </include>
+    </group>
+  </group>
+</launch>

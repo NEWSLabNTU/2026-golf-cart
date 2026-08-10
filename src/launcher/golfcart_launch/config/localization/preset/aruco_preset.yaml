@@ -1,0 +1,11 @@
+# ArUco boards as the sole indoor pose source. Phase 3D-2.
+#
+# Usage:
+#   just launch "pose_source:=aruco aruco_tag_map_path:=/path/to/aruco_tag_map.yaml"
+launch:
+  - arg:
+      name: pose_source
+      default: "aruco"
+  - arg:
+      name: twist_source
+      default: "gyro_odom"

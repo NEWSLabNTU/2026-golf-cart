@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<!--
+  Map component for pose_source:=aruco. Phase 3D-2.
+
+  Why this exists rather than reusing tier4_map_component: that one includes
+  tier4_map_launch/map.launch.xml, which composes
+  autoware::map_loader::PointCloudMapLoaderNode UNCONDITIONALLY. There is no
+  argument to disable it. With no NDT there is no point cloud map to load, and
+  starting the loader against a missing PCD is a startup failure.
+
+  So this brings up the vector map and the projection only.
+
+  Note on map_tf_generator: it derives its transform from the point cloud, so
+  it cannot run here. If anything downstream depends on the frame it published,
+  replace it with a static transform rather than silently dropping it.
+-->
+<launch>
+  <arg name="map_path"/>
+  <arg name="lanelet2_map_file" default="lanelet2_map.osm"/>
+
+  <group>
+    <push-ros-namespace namespace="map"/>
+
+    <include file="$(find-pkg-share autoware_map_projection_loader)/launch/map_projection_loader.launch.xml">
+      <arg name="param_path"
+           value="$(find-pkg-share autoware_launch)/config/map/map_projection_loader.param.yaml"/>
+      <arg name="map_projector_info_path" value="$(var map_path)/map_projector_info.yaml"/>
+      <arg name="lanelet2_map_path" value="$(var map_path)/$(var lanelet2_map_file)"/>
+    </include>
+
+    <include file="$(find-pkg-share autoware_map_loader)/launch/lanelet2_map_loader.launch.xml">
+      <arg name="lanelet2_map_path" value="$(var map_path)/$(var lanelet2_map_file)"/>
+      <arg name="lanelet2_map_loader_param_path"
+           value="$(find-pkg-share autoware_launch)/config/map/lanelet2_map_loader.param.yaml"/>
+      <arg name="output_topic" value="/map/vector_map"/>
+    </include>
+  </group>
+</launch>
