@@ -116,7 +116,13 @@ launch-master ARGS="":
         # A missing orin must not block the master, so failure here is ignored;
         # the trap is still armed, since a half-started unit needs stopping too.
         "$REMOTE" start "$RECORD" || true
-        trap '"$REMOTE" stop' EXIT
+        # INT and TERM as well as EXIT: bash does not run an EXIT trap when it is
+        # killed by an untrapped signal, and being killed is the normal way this
+        # recipe ends. The orin's watchdog is the backstop if even this is missed.
+        # Disarm on entry, or Ctrl-C runs the handler twice - once for INT, once
+        # for the EXIT that follows - costing a second pointless ssh round-trip.
+        stop_orin() { trap - EXIT INT TERM; "$REMOTE" stop; }
+        trap stop_orin EXIT INT TERM
     fi
     just launch "host:=master {{ARGS}}"
 
