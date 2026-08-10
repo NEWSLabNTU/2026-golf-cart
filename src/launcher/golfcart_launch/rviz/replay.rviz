@@ -1,0 +1,160 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /Concatenated1
+      Splitter Ratio: 0.5
+    Tree Height: 700
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Name: root
+  Displays:
+    - Alpha: 0.3
+      Cell Size: 5
+      Class: rviz_default_plugins/Grid
+      Color: 160; 160; 164
+      Enabled: true
+      Name: Grid
+      Plane Cell Count: 40
+      Reference Frame: base_link
+      Value: true
+
+    - Class: rviz_default_plugins/TF
+      Enabled: true
+      Name: TF
+      Marker Scale: 1.5
+      Show Arrows: false
+      Show Axes: true
+      Show Names: true
+      Value: true
+
+    # The fused cloud is already in base_link and is what the planner consumes,
+    # so it is the one enabled by default.
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Class: rviz_default_plugins/PointCloud2
+      Color Transformer: Intensity
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Min Color: 0; 0; 0
+      Name: Concatenated
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 2
+      Size (m): 0.03
+      Style: Points
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        # Best Effort accepts both reliable and best-effort publishers; the
+        # reverse is not true, and rosbag2 does not always republish with the
+        # QoS the topic was recorded under.
+        Reliability Policy: Best Effort
+        Value: /sensing/lidar/concatenated/pointcloud
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+
+    # The two raw clouds are off by default: shown together with the fused cloud
+    # they trebles the point count for no extra information. Enable one when
+    # checking a single sensor, or both to eyeball the extrinsic calibration.
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Class: rviz_default_plugins/PointCloud2
+      Color Transformer: FlatColor
+      Color: 0; 255; 128
+      Decay Time: 0
+      Enabled: false
+      Name: Velodyne VLP-32C
+      Position Transformer: XYZ
+      Size (Pixels): 2
+      Size (m): 0.03
+      Style: Points
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Reliability Policy: Best Effort
+        Value: /sensing/lidar/vlp32/velodyne_points
+      Use Fixed Frame: true
+      Value: false
+
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Class: rviz_default_plugins/PointCloud2
+      Color Transformer: FlatColor
+      Color: 255; 170; 0
+      Decay Time: 0
+      Enabled: false
+      Name: Falcon (Seyond)
+      Position Transformer: XYZ
+      Size (Pixels): 2
+      Size (m): 0.03
+      Style: Points
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Reliability Policy: Best Effort
+        Value: /sensing/lidar/falcon/iv_points
+      Use Fixed Frame: true
+      Value: false
+
+    # Recorded on the orin, compressed. bag_replay.launch.xml runs
+    # image_transport republish to decode it onto /replay/zed/image, because the
+    # display's own transport hint did not subscribe to the compressed topic.
+    - Class: rviz_default_plugins/Image
+      Enabled: true
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: ZED X (orin)
+      Normalize Range: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Reliability Policy: Best Effort
+        Value: /replay/zed/image
+      Value: true
+
+  Enabled: true
+  Global Options:
+    Background Color: 48; 48; 48
+    Fixed Frame: base_link
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/Measure
+      Line color: 128; 128; 0
+  Transformation:
+    Current:
+      Class: rviz_default_plugins/TF
+  Value: true
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 40
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 0
+      Name: Current View
+      Pitch: 0.5
+      Target Frame: base_link
+      Value: Orbit (rviz_default_plugins)
+      Yaw: 3.1
+    Saved: ~
+Window Geometry:
+  Displays:
+    collapsed: false
+  Height: 1000
+  Hide Left Dock: false
+  Hide Right Dock: true
+  Width: 1800
+  X: 60
+  Y: 60

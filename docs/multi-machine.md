@@ -124,7 +124,33 @@ Under the hood this is `ros2 bag convert` with repeated `-i` arguments. Note the
 explicit `sqlite3` storage id per input: bags recovered with `ros2 bag reindex`
 carry an empty `storage_id` in their metadata, and convert will not infer it.
 
-### Checking a merged bag
+### Replaying with RViz
+
+```bash
+just bag-replay                                    # newest merged bag, or newest master bag
+just bag-replay "" "start_offset:=40.0"            # skip the orin-only opening
+just bag-replay merged_20260810_1230 "rate:=2.0 play_args:=--loop"
+```
+
+Brings up the bag player, `robot_state_publisher` and RViz together. The fused
+cloud and the ZED image are on by default; the two raw LiDAR clouds are off,
+since drawing them alongside the fused cloud triples the point count for no extra
+information — enable them to eyeball the extrinsics.
+
+Two things this launch does that a bare `rviz2` cannot:
+
+- **It rebuilds the TF tree from the vehicle description.** The bag's own
+  `tf_static` is unusable: only two or three messages are recorded, and rosbag2
+  does not republish them with the transient-local QoS subscribers expect, so
+  nothing receives them. Without a TF tree RViz cannot place clouds stamped in
+  `velodyne` or `seyond` at all. Rebuilding also means the view reflects current
+  calibration rather than whatever was installed the day the bag was made.
+- **It decompresses the ZED stream.** Only the compressed image is recorded, and
+  RViz's Image display did not subscribe to it via its transport hint — the
+  compressed topic showed zero subscribers with the display enabled.
+  `image_transport republish` decodes it onto `/replay/zed/image` instead.
+
+### Checking a merged bag by hand
 
 ```bash
 ros2 bag play /mnt/external/rosbags/merged_<ts> --clock --start-offset 40

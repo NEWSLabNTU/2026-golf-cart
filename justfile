@@ -250,6 +250,28 @@ bag-fetch-orin ARGS="":
 bag-merge ARGS="":
     ./scripts/multi_machine/bag_merge.sh {{ARGS}}
 
+# Replay a bag in RViz. BAG defaults to the newest merged_*/master_* bag found.
+# ARGS: rate:=2.0 start_offset:=40.0 play_args:=--loop rviz:=false
+bag-replay BAG="" ARGS="":
+    #!/usr/bin/env bash
+    set -eo pipefail
+    BAG="{{BAG}}"
+    BAG_DIR="${GOLFCART_BAG_DIR:-${HOME}/rosbags}"
+    if [ -z "${BAG}" ]; then
+        # Newest merged bag first: it has both hosts in it. Fall back to a
+        # master bag so this still works before anything has been merged.
+        BAG=$(ls -td "${BAG_DIR}"/merged_* "${BAG_DIR}"/master_* 2>/dev/null | head -1)
+        if [ -z "${BAG}" ]; then
+            echo "No bag given and none found in ${BAG_DIR}" >&2
+            echo "Usage: just bag-replay <bag> [\"rate:=2.0 start_offset:=40.0\"]" >&2
+            exit 1
+        fi
+        echo "Replaying newest bag: ${BAG}"
+    elif [ ! -d "${BAG}" ] && [ -d "${BAG_DIR}/${BAG}" ]; then
+        BAG="${BAG_DIR}/${BAG}"
+    fi
+    ros2 launch golfcart_launch bag_replay.launch.xml bag:="${BAG}" {{ARGS}}
+
 # Record raw CAN frames (candump -L format) to rosbags/can/
 can-record IFACE="can0":
     ./scripts/can/record_can.sh {{IFACE}}
