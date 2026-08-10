@@ -73,6 +73,45 @@ This code already exists and works. The main risk in this phase is someone
       (`score: 1.0` is hardcoded), and D4 gates on it.
       Related: `L-12`, which records this path as deliberately-kept dead code.
 
+### IPPE alone is wrong on this OpenCV — measured, not suspected
+
+`solvePnPGeneric(..., SOLVEPNP_IPPE_SQUARE)` on OpenCV 4.5.4 returns poses that
+do not reproject. Measured on noiseless synthetic corners, where the correct
+answer reprojects to zero by construction, the *better* of its two solutions was
+off by:
+
+| geometry | best-solution reprojection error |
+|---|---|
+| fronto-parallel, centred | **115 px** |
+| 0.2 rad tilt, off-centre | 0.016 px |
+| 0.5 rad tilt, off-centre | **2.84 px** |
+| 0.9 rad tilt, off-centre | 0.008 px |
+
+`estimatePoseSingleMarkers` looks correct only because on 4.5.4 it quietly calls
+`solvePnP` with the default `SOLVEPNP_ITERATIVE` — it does *not* use IPPE. (The
+spec previously said otherwise; that claim was wrong and has been corrected.)
+IPPE_SQUARE became the default in the 4.7 `ArucoDetector` API, not here.
+
+- [ ] **Take candidates from both `SOLVEPNP_ITERATIVE` and `SOLVEPNP_IPPE_SQUARE`,
+      polish every one with `solvePnPRefineLM`, and score them with a
+      reprojection error computed in our own code** rather than the one OpenCV
+      returns. After refinement every geometry tested recovers the true pose to
+      about 1e-5 px, and the ambiguity ratio becomes meaningful — 0.9998 where
+      the view is genuinely two-valued, near zero where it is not.
+- [ ] **Deduplicate before reporting the alternate.** Refining several seeds
+      often lands them on the same pose; reporting a duplicate as the second
+      solution makes every marker look unambiguous, which is the opposite of the
+      truth. Where only one distinct pose survives, the second error is
+      infinite, not equal.
+
+The reference implementation is `aruco_sim_detector/marker_pnp.hpp`
+(`solveMarkerPose`), written for phase 3D-3 and carrying the same reasoning in
+comments. The Rust detector must reproduce the behaviour, not just the call.
+
+Skipping this yields a detector that looks like it works, reports small
+residuals, and is quietly wrong — the exact failure mode this project keeps
+running into.
+
 ### Message output
 
 - [ ] Publish `ArucoDetectionArray` from D1, carrying `k` so the stream is

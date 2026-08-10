@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<!--
+  Phase 3D-3 stage one: scripted ground truth into synthetic detections.
+  No Autoware simulator, no map server, no vehicle. Runs in seconds.
+
+  Example:
+    ros2 launch aruco_sim_detector bench_sim.launch.xml \
+      tag_map_path:=$(ros2 pkg prefix golfcart_aruco_localizer)/share/\
+golfcart_aruco_localizer/config/example_tag_map.yaml
+-->
+<launch>
+  <arg name="tag_map_path"/>
+  <arg name="pattern" default="straight"/>
+  <arg name="speed" default="1.0"/>
+  <arg name="corner_sigma_px" default="0.3"/>
+  <arg name="sim_config"
+       default="$(find-pkg-share aruco_sim_detector)/config/sim_detector.param.yaml"/>
+
+  <node pkg="aruco_sim_detector" exec="sim_trajectory_publisher_node"
+        name="sim_trajectory_publisher" output="screen">
+    <param name="pattern" value="$(var pattern)"/>
+    <param name="speed" value="$(var speed)"/>
+    <remap from="~/output/ground_truth" to="/simulation/ground_truth/kinematic_state"/>
+  </node>
+
+  <node pkg="aruco_sim_detector" exec="aruco_sim_detector_node"
+        name="aruco_sim_detector" output="screen">
+    <param from="$(var sim_config)"/>
+    <param name="tag_map_path" value="$(var tag_map_path)"/>
+    <param name="corner_sigma_px" value="$(var corner_sigma_px)"/>
+    <remap from="~/input/ground_truth" to="/simulation/ground_truth/kinematic_state"/>
+  </node>
+</launch>

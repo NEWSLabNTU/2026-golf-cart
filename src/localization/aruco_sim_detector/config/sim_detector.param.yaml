@@ -1,0 +1,80 @@
+/**:
+  ros__parameters:
+    # Path to the same tag map the localizer reads. One source of truth: if the
+    # simulator had its own copy, a divergence between them would look like a
+    # localizer bug.
+    tag_map_path: ""
+
+    # Corner noise, 1-sigma pixels. Set to 0.0 for the zero-noise round trip
+    # that checks the geometry chain; set to a realistic value to exercise the
+    # covariance model.
+    corner_sigma_px: 0.3
+
+    max_range: 13.0
+    # Detection limit only. Boards nearer their normal than the ambiguity cone
+    # are still detected — emitting them is the point, since resolving the
+    # ambiguity is the localizer's job.
+    max_detect_angle_deg: 82.0
+    min_marker_px: 20.0
+
+    # Deterministic by default. A fixture whose output changes run to run
+    # cannot be used to bisect a regression.
+    seed: 42
+
+    camera_names: ["left", "right", "rear"]
+
+    cameras:
+      left:
+        optical_frame: camera_left_optical
+        fx: 900.0
+        fy: 900.0
+        cx: 960.0
+        cy: 640.0
+        width: 1920
+        height: 1280
+        xyz: [0.0, 0.4, 0.6]
+        # Optical frame in base_link. Not identity even for a camera pointing
+        # straight ahead: z forward, x right, y down. The vehicle URDF is
+        # currently missing exactly this rotation.
+        rpy: [-1.5707963, 0.0, 0.0]
+        stamp_offset: 0.0
+      right:
+        optical_frame: camera_right_optical
+        fx: 900.0
+        fy: 900.0
+        cx: 960.0
+        cy: 640.0
+        width: 1920
+        height: 1280
+        xyz: [0.0, -0.4, 0.6]
+        rpy: [-1.5707963, 0.0, -3.1415927]
+        stamp_offset: 0.011
+      rear:
+        optical_frame: camera_rear_optical
+        fx: 900.0
+        fy: 900.0
+        cx: 960.0
+        cy: 640.0
+        width: 1920
+        height: 1280
+        xyz: [-0.5, 0.0, 0.6]
+        rpy: [-1.5707963, 0.0, 1.5707963]
+        stamp_offset: 0.022
+
+    fault:
+      # Emit nothing at all. Drives the localizer to DEAD_RECKONING and, once
+      # the budget expires, to FAULT and an MRM stop.
+      blackout: false
+
+      # Move one board away from where the map says it is. The integrity
+      # monitor must flag this ID and no other.
+      displaced_board_id: -1
+      displacement: [0.0, 0.0, 0.0]
+
+      # Restrict which boards may be seen. One board exercises the DEGRADED
+      # path; several boards on one wall exercise the coplanar flip tie, where
+      # the correct answer is to publish nothing.
+      visible_board_ids: []
+
+      # Push every stamp into the future, to check the clock-skew rejection.
+      stamp_offset_s: 0.0

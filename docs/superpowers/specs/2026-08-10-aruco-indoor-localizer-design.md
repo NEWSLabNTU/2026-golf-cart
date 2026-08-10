@@ -421,11 +421,24 @@ highest-value carryover.
 dropping rational-polynomial `k4`–`k6`. Also **validate `distortion_model`** and
 refuse unknown values rather than assuming `plumb_bob`.
 
-**Per-marker PnP** via `cv::solvePnPGeneric` with `SOLVEPNP_IPPE_SQUARE`,
-keeping both solutions and both reprojection errors — `err₁/err₂` is the
-ambiguity metric §2.4 gates on. `estimatePoseSingleMarkers` throws the second
-solution away, which is why LCTK has no confidence metric at all
+**Per-marker PnP** must keep both solutions and both reprojection errors, since
+`err₁/err₂` is the ambiguity metric §2.4 gates on. `estimatePoseSingleMarkers`
+throws the second away, which is why LCTK has no confidence metric at all
 (`score: 1.0` hardcoded).
+
+> **Measured, and it changes the recipe.** `solvePnPGeneric` with
+> `SOLVEPNP_IPPE_SQUARE` on OpenCV 4.5.4 returns poses that *do not reproject* —
+> on noiseless synthetic corners the better solution was off by 2.84 px at a
+> 0.5 rad tilt and 115 px viewed fronto-parallel, where the right answer
+> reprojects to zero by construction. `estimatePoseSingleMarkers` looks fine only
+> because on this version it quietly uses the iterative solver, not IPPE.
+>
+> So the working recipe is: take candidates from *both* `SOLVEPNP_ITERATIVE` and
+> `SOLVEPNP_IPPE_SQUARE`, refine every one with `solvePnPRefineLM`, score them
+> with a reprojection error computed in our own code, and deduplicate before
+> reporting the alternate. That recovers the true pose to ~1e-5 px across every
+> geometry tested, and makes the ambiguity ratio mean something. Reference
+> implementation: `aruco_sim_detector/marker_pnp.hpp`. Detail in phase doc 3D-5.
 
 **Detector parameters constructed in exactly one validated function** (LCTK
 `L-11`, where a copy-pasted five-line block set the same field twice and tuned a
