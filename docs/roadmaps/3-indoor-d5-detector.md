@@ -50,7 +50,7 @@ This code already exists and works. The main risk in this phase is someone
 
 ### The three gaps
 
-- [ ] **`rational_polynomial` support.** `DistortionModel` is a one-variant enum
+- [x] **`rational_polynomial` support.** `DistortionModel` is a one-variant enum
       (`PlumbBob`) and the MRPT loader hard-errors on non-zero coefficients past
       index 5. The detector core already passes `camera_info.d` through in full,
       so this is a loader and validation fix, not a maths fix. These cameras
@@ -59,12 +59,12 @@ This code already exists and works. The main risk in this phase is someone
       LCTK currently reads that field at all.
       Related: `L-03`, the bug of truncating `D` to five and silently dropping
       rational-polynomial `k4`–`k6`.
-- [ ] **Switch the wired entry point.** `detect_markers()` gates all-or-nothing
+- [x] **Switch the wired entry point.** `detect_markers()` gates all-or-nothing
       on the detected ID set exactly equalling the configured set — correct when
       calibrating against one known board, wrong for a localizer that must accept
       whatever is in view. `detect_single_aruco()` already has the right
       semantics and is currently unused by the node.
-- [ ] **Per-marker pose with an ambiguity metric.** Replace the dead
+- [x] **Per-marker pose with an ambiguity metric.** Replace the dead
       `estimate_pose()` — which calls `estimatePoseSingleMarkers` (discarding
       IPPE's second solution) and passes non-zero `D` against already-rectified
       corners — with `cv::solvePnPGeneric(SOLVEPNP_IPPE_SQUARE)`, keeping both
@@ -92,13 +92,17 @@ off by:
 spec previously said otherwise; that claim was wrong and has been corrected.)
 IPPE_SQUARE became the default in the 4.7 `ArucoDetector` API, not here.
 
-- [ ] **Take candidates from both `SOLVEPNP_ITERATIVE` and `SOLVEPNP_IPPE_SQUARE`,
+- [x] **Take candidates from both `SOLVEPNP_ITERATIVE` and `SOLVEPNP_IPPE_SQUARE`,
       polish every one with `solvePnPRefineLM`, and score them with a
       reprojection error computed in our own code** rather than the one OpenCV
       returns. After refinement every geometry tested recovers the true pose to
-      about 1e-5 px, and the ambiguity ratio becomes meaningful — 0.9998 where
-      the view is genuinely two-valued, near zero where it is not.
-- [ ] **Deduplicate before reporting the alternate.** Refining several seeds
+      about 1e-5 px.
+      (An earlier revision of this line claimed the ratio then "becomes
+      meaningful — 0.9998 where the view is genuinely two-valued". It was
+      measured on one hand-picked geometry and does not generalise; see the
+      status section below for the swept measurement, which shows the ratio
+      staying between 0.00 and 0.05 across the whole view window.)
+- [x] **Deduplicate before reporting the alternate.** Refining several seeds
       often lands them on the same pose; reporting a duplicate as the second
       solution makes every marker look unambiguous, which is the opposite of the
       truth. Where only one distinct pose survives, the second error is
@@ -129,14 +133,14 @@ running into.
 
 ### Detector parameters
 
-- [ ] Keep construction in **exactly one validated function**. `L-11`: a
+- [x] Keep construction in **exactly one validated function**. `L-11`: a
       copy-pasted five-line block set `adaptive_thresh_win_size_step` twice and
       tuned a refiner that was never enabled.
-- [ ] Defaults from LCTK's measured sweep: `SUBPIX`, `win_size 5`,
+- [x] Defaults from LCTK's measured sweep: `SUBPIX`, `win_size 5`,
       `max_iterations 30`, `min_accuracy 0.01`; adaptive threshold `13/33/10`.
       SUBPIX beat NONE by 25–60% at every apparent marker size from 54 px to 302 px;
       CONTOUR was equal or worse.
-- [ ] Expose the parameters LCTK leaves at OpenCV defaults — marker perimeter
+- [x] Expose the parameters LCTK leaves at OpenCV defaults — marker perimeter
       rate, error correction rate, `min_marker_distance_rate`. An indoor scene
       has small distant markers and these matter there.
 
@@ -144,16 +148,20 @@ running into.
 
 ## Tests
 
-- [ ] Port `rust/aruco-detector/tests/rectify_contract.rs`, including the two
+- [x] Port `rust/aruco-detector/tests/rectify_contract.rs`, including the two
       tests that were verified to fail when their bugs were reintroduced:
       one fails with *"SUBPIX and NONE produced the same corners, so corner
       refinement is not running at all"*, the other catches a `P`-less
       `undistortPoints` returning normalized coordinates.
-- [ ] Round-trip test: distort → detect → undistort, built by inverting
+- [x] Round-trip test: distort → detect → undistort, built by inverting
       `undistortPoints` into a `remap` table.
-- [ ] 12-coefficient `rational_polynomial` handling, end to end.
-- [ ] IPPE returns two distinct solutions on a near-fronto-parallel view, and
+- [x] 12-coefficient `rational_polynomial` handling, end to end.
+- [x] IPPE returns two distinct solutions on a near-fronto-parallel view, and
       `err₁/err₂` approaches 1 there.
+      **This turned out to be false, and the test now pins the opposite.** Near
+      fronto-parallel the twin solution is not distinct enough to survive
+      deduplication, so the ratio reports 0 — maximum confidence — exactly where
+      orientation is least reliable. See the status section.
 
 ---
 
@@ -174,3 +182,79 @@ primary measurement.
 The entire covariance model in D4 scales on this number. An hour of work
 converts it from a literature-anchored guess into a measurement, and it can be
 done today.
+
+## Status — implemented in LCTK, commit `729e556`
+
+Done, in `rust/aruco-detector`, `rust/aruco-locator` and `ros/aruco_locator_node`:
+
+- **`marker_pnp`** — `solve_marker_pose` returns both candidate poses with the
+  reprojection error of each, computed here rather than taken from OpenCV. Seeds
+  from both `SOLVEPNP_ITERATIVE` and `SOLVEPNP_IPPE_SQUARE`, refines every
+  candidate with `solvePnPRefineLM`, deduplicates, and reports an infinite
+  second error when only one distinct pose survives. 7 contract tests, including
+  one that fails if the implementation is simplified back to the bare IPPE call.
+- **`rational_polynomial`** — the loader carries all coefficients instead of
+  truncating to five, `DistortionModel` gained the variant, and the detector now
+  validates the declared model against the coefficient count. Measured: dropping
+  k4–k6 moves corners by more than 5 px. 3 tests, end to end through a
+  synthesized 12-coefficient lens.
+- **Detection mode** — `detection_mode: board | any` selects between the
+  all-or-nothing board semantic and reporting whatever is in view. Added rather
+  than swapped, because calibration genuinely needs the former; default
+  unchanged.
+- **Ambiguity in the message** — `score` was a hardcoded `1.0`; it now carries
+  the ratio. An unscored marker falls back to `1.0`, i.e. maximally ambiguous,
+  so a consumer gating on it rejects rather than waves through.
+- **Candidate filters** — `min`/`max_marker_perimeter_rate`,
+  `error_correction_rate`, `min_marker_distance_rate` exposed.
+  `error_correction_rate` deliberately stays at OpenCV's 0.6: a false ID
+  associates to a real surveyed pose and yields a confident wrong answer, so it
+  is worse than a missed marker.
+
+### The ambiguity ratio does not do what the design assumed
+
+Measured with 0.3 px corner noise on a 0.384 m marker at 3 m through f = 900,
+300 trials per tilt:
+
+| tilt | 0° | 5° | 10° | 15° | 25° | 45° | 75° |
+|---|---|---|---|---|---|---|---|
+| median ratio | 0.000 | 0.000 | 0.000 | 0.046 | 0.029 | 0.016 | 0.013 |
+| median rotation error | 1.45° | 1.01° | 0.65° | 0.44° | 0.28° | 0.19° | 0.14° |
+
+Rotation error is worst looking straight at a marker and improves as it tilts —
+the design had that right. But the ratio does not track it. Below about 10° of
+tilt the ratio reports 0, maximum confidence, precisely where the orientation is
+least reliable: the twin solution is not yet distinct enough to survive as a
+rival, so there is nothing to compare against.
+
+Taken with the range measurement from D4 — the gate rejects 85–95 % of
+detections at 11–13 m — the honest description is that `ambiguity_ratio_max` is
+a **resolution** gate, not a **geometry** gate. It catches markers too small or
+noisy to solve; `min_view_angle_deg` is the only thing excluding
+near-fronto-parallel views. Both config files now say so.
+
+Also worth noting against the design's headline figure: the measured
+single-marker rotation error here peaks at 1.45°, not the 11.7° the spec cites.
+That figure describes an ungated, poorly-resolved regime this system does not
+operate in. This is the second measurement pointing the same way — D4 found
+p99 board-to-board disagreement of 2.8°.
+
+## Still open
+
+- [ ] **`ArucoDetectionArray` output.** Blocked on a decision, not on work:
+      the message is defined in the golf-cart repo (`aruco_detection_msgs`, phase
+      3D-1) and LCTK cannot depend on it without a cross-repo dependency. The
+      options are to move the package somewhere both can consume, vendor it into
+      `lctk_interfaces`, or have the golf-cart side adapt LCTK's
+      `Detection2DArray`. Note that `Detection2DArray` genuinely cannot express
+      what is needed — its `bbox` is axis-aligned, so LCTK already smuggles the
+      four corners through `results` as one `ObjectHypothesisWithPose` per corner
+      (`C-01`). Carrying two poses, two errors and `K` as well would overload
+      that field past the point of being defensible.
+- [ ] **`image_transport` with `transport:=compressed`.** `rclrs` has no
+      `image_transport` binding, so this means subscribing to
+      `sensor_msgs/CompressedImage` and decoding with `imdecode` directly.
+      Straightforward, but it changes the node's input type and is worth doing
+      alongside the message decision rather than twice.
+- [ ] **Measure `corner_sigma_px`.** Still 0.3, still inferred from other
+      people's data. Needs only a camera and a board.

@@ -100,8 +100,24 @@
     # Ambiguity gate on a single board's IPPE pair:
     #     reprojection_error_1 / reprojection_error_2   in (0, 1]
     # near 1 means the two solutions fit equally well. Reject above this.
-    # 0.2 is the only threshold deployed in the field anywhere we could find;
-    # treat it as a starting value and a tuning target.
+    #
+    # What this gate ACTUALLY catches, measured in phase 3D-5: poorly resolved
+    # markers, not badly angled ones. Over the admitted view window at close
+    # range the ratio sits at 0.01-0.05 and this gate never fires; at 11-13 m it
+    # rejects 85-95 % of detections, which is where its value is.
+    #
+    # It does NOT protect against near-fronto-parallel views, and it is worth
+    # being explicit because the opposite is the natural assumption. With 0.3 px
+    # corner noise on a 0.384 m board at 3 m, median ratio by tilt:
+    #     0 deg 0.000 | 5 deg 0.000 | 10 deg 0.000 | 15 deg 0.046 | 45 deg 0.016
+    # while the rotation error of the pose runs the other way, 1.45 deg at 0 deg
+    # tilt down to 0.19 at 45. The ratio reports maximum confidence exactly where
+    # orientation is least reliable, because below ~10 deg the twin solution is
+    # not yet distinct enough to act as a rival and there is nothing to compare
+    # against.
+    #
+    # min_view_angle_deg is what excludes those views. The two gates are not
+    # interchangeable and neither substitutes for the other.
     ambiguity_ratio_max: 0.2
 
     # ─────────────────────────────────────────────────────────────────────────
