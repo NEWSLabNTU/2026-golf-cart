@@ -177,6 +177,43 @@ shell falls back to `.envrc`, which defaults to `loopback`. Set
 | `GOLFCART_BAG_DIR` | `~/rosbags` | where each host writes its bags |
 | `GOLFCART_WORKSPACE` | `~/2026-golf-cart` | workspace the orin's unit launches from |
 
+## A master bag with an empty metadata.yaml
+
+Large master-side bags can lose their metadata on shutdown: the `.db3` is
+complete but `metadata.yaml` is 0 bytes, and `ros2 bag info` reports
+`invalid node; first invalid key: "version"`. Observed with a 2.2 GB bag - the
+recorder is killed before it finishes writing. Recover in place:
+
+```bash
+rm -f <bag>/metadata.yaml
+ros2 bag reindex <bag>
+```
+
+The reindexed bag is complete; nothing is lost but the original metadata.
+
+The orin side does not have this problem: its recorder is stopped by systemd with
+`KillSignal=SIGINT` and `TimeoutStopSec=30`, which gives it time to finalize. The
+master's recorder is stopped by play_launch, whose grace period is shorter than a
+multi-gigabyte flush needs. Check `metadata.yaml` is non-empty after any long
+master recording.
+
+## Checking the recorded topic list is still right
+
+Topic names drift as the sensor kit changes, and a stale entry records zero
+messages while still appearing in `ros2 bag info` - which reads as "the sensor was
+quiet", not "the name is wrong". Audit against a running stack:
+
+```bash
+ros2 topic list > /tmp/live.txt
+grep -oE '^  /[a-z0-9_/]+' src/launcher/golfcart_launch/scripts/record_master.sh \
+  | tr -d ' ' \
+  | while read -r t; do grep -qx "$t" /tmp/live.txt || echo "MISSING $t"; done
+```
+
+This caught the Velodyne being under `vlp32/` rather than `top/`, the GNSS being
+the Xsens MTi rather than a u-blox, and the USB cameras publishing no
+`camera_info` at all.
+
 ## Two bags whose timestamps do not line up
 
 Check `chronyc tracking` on the orin. If `Reference ID` is anything other than

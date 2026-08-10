@@ -22,17 +22,24 @@ set -euo pipefail
 OUTPUT_DIR="${GOLFCART_BAG_DIR:-${HOME}/rosbags}"
 BAG_NAME="master_$(date +%Y%m%d_%H%M%S)"
 
+# Verified against a running stack on 2026-08-10 with `ros2 topic list`. The
+# earlier list was inherited from scripts/rosbag/record_outdoor.sh and had the
+# Velodyne under `top/` and the GNSS under `ublox/`; neither namespace exists
+# here, so those entries recorded zero messages while looking correct in
+# `ros2 bag info`. Re-check with the audit in docs/multi-machine.md after any
+# sensor kit change.
 TOPICS=(
-  # LiDAR - Velodyne VLP-32C
-  /sensing/lidar/top/pointcloud_raw
-  /sensing/lidar/top/pointcloud_raw_ex
+  # LiDAR - Velodyne VLP-32C (namespace is vlp32, not top)
+  /sensing/lidar/vlp32/velodyne_points
+  /sensing/lidar/vlp32/pointcloud
   /sensing/lidar/concatenated/pointcloud
 
   # LiDAR - Falcon (Seyond)
   /sensing/lidar/falcon/iv_points
 
-  # GNSS (u-blox)
-  /sensing/gnss/ublox/nav_sat_fix
+  # GNSS - Xsens MTi, not the u-blox the design assumed
+  /sensing/gnss/mti/fix
+  /sensing/gnss/fixed
   /sensing/gnss/pose
   /sensing/gnss/pose_with_covariance
 
@@ -40,13 +47,11 @@ TOPICS=(
   /sensing/imu/xsens/imu_raw
   /sensing/imu/imu_data
 
-  # USB cameras - compressed only, the raw streams are far too large
+  # USB cameras - compressed only, the raw streams are far too large.
+  # No camera_info: gscam publishes none for these, so those entries were dead.
   /sensing/camera/left/image_raw/compressed
-  /sensing/camera/left/camera_info
   /sensing/camera/right/image_raw/compressed
-  /sensing/camera/right/camera_info
   /sensing/camera/rear/image_raw/compressed
-  /sensing/camera/rear/camera_info
 
   # Vehicle interface status
   /vehicle/status/velocity_status
