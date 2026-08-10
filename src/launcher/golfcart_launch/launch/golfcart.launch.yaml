@@ -12,6 +12,11 @@ launch:
     - value: "orin"
     - value: "all"
 
+- arg:
+    name: record
+    default: "false"
+    description: "Record this host's sensor topics to a rosbag on its own local disk"
+
 - let:
     name: is_master
     value: $(eval "'$(var host)' in ('master', 'all')")
@@ -220,6 +225,33 @@ launch:
     children:
     - include:
         file: "$(find-pkg-share golfcart_launch)/launch/zed.launch.xml"
+
+# Rosbag recording - one recorder per host, each writing to its own local disk.
+# Declared as node: entries, not executable: entries, so play_launch supervises
+# them and stops them with the stack; see the scripts' headers for why.
+- group:
+    if: $(var is_master)
+    children:
+    - group:
+        if: $(var record)
+        children:
+        - node:
+            pkg: golfcart_launch
+            exec: record_master.sh
+            name: record_master
+            output: screen
+
+- group:
+    if: $(var is_orin)
+    children:
+    - group:
+        if: $(var record)
+        children:
+        - node:
+            pkg: golfcart_launch
+            exec: record_orin.sh
+            name: record_orin
+            output: screen
 
 # System Monitor
 # - include:

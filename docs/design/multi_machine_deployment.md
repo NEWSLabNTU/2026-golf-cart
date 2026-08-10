@@ -5,6 +5,45 @@
 
 ## Amendments
 
+**2026-08-07 — §5's risk gate FAILED: play_launch does not replay `executable:` entries.**
+Tested against play_launch 0.5.1 with a launch file holding two `executable:`
+actions (`sleep 45`, and a `touch` of a marker file):
+
+- Plain `ros2 launch` runs both, so the YAML is valid.
+- Under play_launch, step 1 (dump) **runs** them — the marker appears — and then
+  **waits for them to exit**: `sleep 45` held the dump for the full 45 s.
+- The resulting `record.json` has keys `container`, `file_data`,
+  `lifecycle_node`, `load_node`, `node` and nothing for `ExecuteProcess`. All
+  five lists were empty.
+- Step 2 (replay) reported `Spawning 0 nodes (0 pure nodes, 0 containers,
+  0 composable nodes)`.
+
+So an `executable:` entry runs exactly once, in the wrong phase, unsupervised,
+and never appears in the replay the user actually interacts with. A long-lived
+one — `ros2 bag record`, or `orin_remote.sh` holding an ssh session — blocks the
+dump indefinitely, so the stack would never reach replay at all. This kills the
+recorder and orchestrator design in §2 and §3 as written.
+
+The fallback works: a `node:` entry (`demo_nodes_cpp talker`) dumps without being
+executed and replays as `Spawning 1 nodes (1 pure nodes, …)`. dump_launch
+evidently intercepts `Node` actions to record their command lines while letting
+`ExecuteProcess` run for real.
+
+Resolution: recorders take option 1, the orchestrator takes option 2. The
+recorders belong in the play_launch UI and need supervised teardown so the bag
+finalizes; the orchestrator is not a ROS node and should not pretend to be, and
+its ssh-hold semantics fit a shell EXIT trap in the `just launch-master` recipe.
+
+Options as considered:
+
+1. Wrap each script as a package executable so it enters as a `node:` entry.
+   Caveat: replay spawns nodes with ROS arguments appended, so a shell script
+   must tolerate a trailing `--ros-args …`.
+2. Start them outside play_launch, from the `just launch-master` recipe, with a
+   shell EXIT trap for teardown. Loses play_launch's supervision and web UI.
+3. systemd user units on both hosts, started and stopped around the launch.
+   Consistent with the orin side, which already needs a unit for §2's lifecycle.
+
 **2026-08-07 — the inter-machine link is the existing wired LAN, not the WiFi AP.**
 The master has no wireless radio: no `wlan*` device, no wireless PCI or USB
 device, `rfkill` lists no radios, and `cfg80211` is loaded with no driver above
