@@ -242,6 +242,10 @@ bag-play:
     echo "Playing: $LATEST"; \
     ros2 bag play "$LATEST" --clock
 
+# Fetch the orin's rosbags to this host. ARGS: --latest, --list, or a bag name.
+bag-fetch-orin ARGS="":
+    ./scripts/multi_machine/bag_fetch_orin.sh {{ARGS}}
+
 # Record raw CAN frames (candump -L format) to rosbags/can/
 can-record IFACE="can0":
     ./scripts/can/record_can.sh {{IFACE}}

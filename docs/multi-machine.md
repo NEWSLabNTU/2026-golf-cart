@@ -33,6 +33,24 @@ just launch                         # host:=all, loopback DDS, nothing remote
 GOLFCART_USE_ORIN=0 just launch-master   # master alone, without touching the orin
 ```
 
+## Collecting the bags
+
+Each host records to its own disk, so a session leaves two bags on two machines.
+Bring the orin's side over afterwards:
+
+```bash
+just bag-fetch-orin              # everything not already here
+just bag-fetch-orin "--latest"   # only the newest
+just bag-fetch-orin "--list"     # show what is on the orin, copy nothing
+just bag-fetch-orin "orin_20260810_112836"   # one by name
+```
+
+Nothing is deleted from the orin — re-running is safe and resumes a partial
+transfer. Delete the originals there yourself once you have checked the copies.
+
+Expect roughly 11 MB/s, which saturates the 100 Mb/s link: a 45s ZED recording is
+~300 MB and takes ~26s to pull. Do not fetch while a run is in progress.
+
 To drive the orin by hand:
 
 ```bash
