@@ -124,6 +124,29 @@ Under the hood this is `ros2 bag convert` with repeated `-i` arguments. Note the
 explicit `sqlite3` storage id per input: bags recovered with `ros2 bag reindex`
 carry an empty `storage_id` in their metadata, and convert will not infer it.
 
+### Checking a merged bag
+
+```bash
+ros2 bag play /mnt/external/rosbags/merged_<ts> --clock --start-offset 40
+```
+
+**Use `--start-offset`.** The orin starts recording before the master finishes
+its ~45s launch dump, so a merged bag opens with roughly 35 seconds of orin-only
+data. Playing from the beginning and checking a master topic reports it silent,
+which looks like a broken merge and is not one. Skip past the gap and both hosts
+appear together.
+
+Then confirm messages from each side, and that they share a time base:
+
+```bash
+ros2 topic echo /sensing/lidar/vlp32/velodyne_points --no-daemon --once   # master
+ros2 topic echo /sensing/camera/zed/imu/data --no-daemon --once          # orin
+```
+
+Both header stamps should fall inside the bag's own start/end range from
+`ros2 bag info`. A merged bag whose halves sit in different epochs means the
+clocks were not synced when it was recorded — see *Time sync*.
+
 To drive the orin by hand:
 
 ```bash
