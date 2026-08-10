@@ -9,11 +9,14 @@
 # depending on just being installed and on PATH inside the unit. Keep the
 # arguments below in sync with that recipe.
 
-set -euo pipefail
+set -eo pipefail
 
 WORKSPACE="${GOLFCART_WORKSPACE:-${HOME}/2026-golf-cart}"
 cd "${WORKSPACE}"
 
+# `set -u` is deliberately absent: ROS's setup.bash chain reads unbound variables
+# (AMENT_TRACE_SETUP_FILES and friends) and aborts the unit under -u with
+#   /opt/ros/humble/setup.bash: line 8: AMENT_TRACE_SETUP_FILES: unbound variable
 # shellcheck disable=SC1091
 source /opt/autoware/1.5.0/setup.bash
 # shellcheck disable=SC1091
