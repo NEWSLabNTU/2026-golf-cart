@@ -20,6 +20,7 @@ find_package(yaml-cpp REQUIRED)
 # ── tag map library ──────────────────────────────────────────────────────────
 ament_auto_add_library(${PROJECT_NAME}_core SHARED
   src/tag_map.cpp
+  src/solver.cpp
 )
 target_link_libraries(${PROJECT_NAME}_core Eigen3::Eigen yaml-cpp)
 
@@ -39,6 +40,11 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_tag_map test/test_tag_map.cpp)
   target_link_libraries(test_tag_map ${PROJECT_NAME}_core Eigen3::Eigen)
+
+  # Synthetic constellations with known ground truth: the geometry chain, the
+  # covariance behaviour under degeneracy, and the per-board robust kernel.
+  ament_add_gtest(test_solver test/test_solver.cpp)
+  target_link_libraries(test_solver ${PROJECT_NAME}_core Eigen3::Eigen)
 
   # Pins our corner-order convention against OpenCV's own object points. A
   # permutation here is a silent multiple-of-90-degree pose error that still
