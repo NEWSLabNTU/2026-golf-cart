@@ -383,6 +383,7 @@ twist_source:=gyro_odom|eagleye            # Override preset twist source
 | [docs/guides/lidar_integration.md](docs/guides/lidar_integration.md) | Velodyne VLP-32C, TensorRT |
 | [docs/guides/control_testing.md](docs/guides/control_testing.md) | Control system testing procedures |
 | [docs/guides/mrm_configuration.md](docs/guides/mrm_configuration.md) | MRM (emergency stop) configuration |
+| [docs/multi-machine.md](docs/multi-machine.md) | Two-machine operation: `just launch-master`, per-host DDS profiles, orin lifecycle, recording |
 | [docs/guides/isaac_vslam_testing.md](docs/guides/isaac_vslam_testing.md) | Isaac SLAM testing |
 | [docs/design/isaac_vslam_integration.md](docs/design/isaac_vslam_integration.md) | Isaac SLAM architecture |
 | [docs/research/localization/ndt_parameter_tuning_coss_map.md](docs/research/localization/ndt_parameter_tuning_coss_map.md) | NDT tuning research |
