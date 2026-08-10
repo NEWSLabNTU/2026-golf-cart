@@ -260,10 +260,22 @@ bag-replay BAG="" ARGS="":
     if [ -z "${BAG}" ]; then
         # Newest merged bag first: it has both hosts in it. Fall back to a
         # master bag so this still works before anything has been merged.
-        BAG=$(ls -td "${BAG_DIR}"/merged_* "${BAG_DIR}"/master_* 2>/dev/null | head -1)
+        #
+        # Deliberately no `ls ... | head`: ls exits 2 when one of the two globs
+        # matches nothing, and with pipefail + set -e that killed the recipe
+        # before it printed anything. nullglob plus a plain loop has no such edge.
+        shopt -s nullglob
+        for candidate in "${BAG_DIR}"/merged_* "${BAG_DIR}"/master_*; do
+            [ -d "${candidate}" ] || continue
+            if [ -z "${BAG}" ] || [ "${candidate}" -nt "${BAG}" ]; then
+                BAG="${candidate}"
+            fi
+        done
+        shopt -u nullglob
         if [ -z "${BAG}" ]; then
             echo "No bag given and none found in ${BAG_DIR}" >&2
-            echo "Usage: just bag-replay <bag> [\"rate:=2.0 start_offset:=40.0\"]" >&2
+            echo "Set GOLFCART_BAG_DIR, or pass one:" >&2
+            echo "  just bag-replay <bag> [\"rate:=2.0 start_offset:=40.0\"]" >&2
             exit 1
         fi
         echo "Replaying newest bag: ${BAG}"
