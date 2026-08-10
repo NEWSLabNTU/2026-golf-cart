@@ -1,0 +1,165 @@
+/**:
+  ros__parameters:
+    # ─────────────────────────────────────────────────────────────────────────
+    # Tag map
+    # ─────────────────────────────────────────────────────────────────────────
+    # Path to the hand-surveyed board map. Required; the node refuses to start
+    # without it, because a localizer with no map is not a degraded localizer,
+    # it is a silent one.
+    tag_map_path: ""
+
+    # Max distance a surveyed corner may sit from the plane fitted through all
+    # four. A non-planar quad has no well-defined orientation, so accepting one
+    # would invent a rotation out of measurement noise.
+    coplanarity_tolerance: 0.01      # [m]
+
+    # Warn when two boards are closer than this. Safe (association is by ID) but
+    # nearly always a mistyped coordinate.
+    proximity_warn: 0.10             # [m]
+
+    # Warn when a declared marker_size disagrees with the size implied by the
+    # surveyed corners by more than this fraction.
+    size_mismatch_warn: 0.05
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Cameras
+    # ─────────────────────────────────────────────────────────────────────────
+    camera_names: ["left", "right", "rear"]
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Measurement model
+    # ─────────────────────────────────────────────────────────────────────────
+    # Corner localization noise, 1-sigma, pixels. Everything the covariance
+    # model produces scales on this.
+    #
+    # WARNING: 0.3 is inferred, not measured. No published work gives a measured
+    # corner sigma for ArUco with sub-pixel refinement; the "0.05-0.5 px" figure
+    # that circulates is not traceable to a primary measurement. This value is
+    # back-solved from synthetic depth-error data and cross-checked against
+    # published marker-centre jitter. Phase 3D-5/3D-7 replace it with a
+    # measurement: park in front of a board, record ~1000 frames, take the
+    # standard deviation of the corner positions.
+    corner_sigma_px: 0.3
+
+    # Inflation applied while the vehicle is moving, to stand in for motion
+    # blur until that too is measured.
+    corner_sigma_px_moving: 0.6
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Windowing
+    # ─────────────────────────────────────────────────────────────────────────
+    # The cameras are not hardware-synchronized, so detections are collected
+    # over a window and solved together. One frame period by default.
+    window_duration: 0.033           # [s]
+
+    # Compensate each detection to the window's reference stamp using EKF twist.
+    # Cheap to build now; its absence shows up later as a speed-dependent bias,
+    # which is a miserable thing to diagnose after the fact.
+    motion_compensation: true
+
+    # Reject messages stamped this far in the future -- clock skew, not physics.
+    max_future_stamp: 0.1            # [s]
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Observation gates
+    # ─────────────────────────────────────────────────────────────────────────
+    max_range: 13.0                  # [m]
+
+    # Viewing angle between the line of sight and the board normal. The usable
+    # window is bounded BELOW by pose ambiguity and above by detection failure.
+    #
+    # Below ~25 deg the planar two-solution ambiguity dominates and orientation
+    # becomes unusable -- looking straight at a board is the WORST case, not the
+    # best, which is the most counter-intuitive result in the whole design.
+    # Above ~75 deg detection itself starts failing, and collapses by 85.
+    min_view_angle_deg: 25.0
+    max_view_angle_deg: 75.0
+
+    # Ambiguity gate on a single board's IPPE pair:
+    #     reprojection_error_1 / reprojection_error_2   in (0, 1]
+    # near 1 means the two solutions fit equally well. Reject above this.
+    # 0.2 is the only threshold deployed in the field anywhere we could find;
+    # treat it as a starting value and a tuning target.
+    ambiguity_ratio_max: 0.2
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Consensus and degrees of freedom
+    # ─────────────────────────────────────────────────────────────────────────
+    # Clustering tolerances for resolving the flip across boards. With two or
+    # more boards the correct solution is decided by agreement and needs no
+    # prior -- never pick the branch nearest the prior, which is how an
+    # estimator ends up confirming what the filter already believes.
+    consensus_position_tolerance: 0.5      # [m]
+    consensus_rotation_tolerance_deg: 10.0
+
+    # Full 6-DoF requires at least this many boards agreeing, with at least this
+    # much spread between their normals. Below it the solve drops to 3-DoF
+    # position with orientation clamped to the prior.
+    min_markers_for_6dof: 2
+    min_normal_spread_deg: 20.0
+
+    # Above this the constellation is too ill-conditioned to trust.
+    max_condition_number: 1.0e4
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Solve
+    # ─────────────────────────────────────────────────────────────────────────
+    # Huber threshold, in pixels, applied PER BOARD rather than per corner: the
+    # four corners of a board share one rigid pose, so when a board is wrong all
+    # four are wrong together. Rejecting per corner lets three bad corners hide
+    # behind the fourth.
+    huber_delta_px: 2.0
+    max_iterations: 30
+    convergence_tolerance: 1.0e-8
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Covariance
+    # ─────────────────────────────────────────────────────────────────────────
+    # J^T J is routinely near-singular, and that is a RESULT, not an error --
+    # it is what an unobservable direction looks like. Eigendirections are
+    # inverted individually and saturated at these caps rather than the matrix
+    # being inverted whole.
+    #
+    # A zero variance must never be emitted: downstream reads it as "exact", and
+    # with one pose source there is nothing to contradict it.
+    max_position_variance: 100.0     # [m^2]
+    max_rotation_variance: 1.0       # [rad^2]
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Integrity (phase 3D-4)
+    # ─────────────────────────────────────────────────────────────────────────
+    # The redundancy is BETWEEN boards. With >=2 visible the solve is
+    # over-determined, so each board's residual is a consistency check against
+    # the others. Structurally this is the GNSS RAIM problem.
+    residual_ewma_alpha: 0.1
+    residual_flag_sigma: 3.0
+    residual_flag_count: 10
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Localization states (phase 3D-4)
+    # ─────────────────────────────────────────────────────────────────────────
+    # How long the vehicle may run on one board (heading uncorrected), and how
+    # long on no boards at all (position and heading both drifting), before the
+    # state escalates to FAULT and an MRM stop is requested.
+    #
+    # BOTH MUST BE MEASURED, not guessed: they follow from IMU drift and
+    # odometry error against an allowable position error. The defaults here are
+    # placeholders deliberately set short.
+    degraded_budget_s: 10.0
+    dead_reckoning_budget_s: 3.0
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Initialization (phase 3D-4)
+    # ─────────────────────────────────────────────────────────────────────────
+    # Stricter than the tracking gates on purpose. One bad initialization is
+    # worse than none: the estimate settles into a confident wrong answer, and
+    # nothing downstream can tell.
+    initialization:
+      min_markers: 2
+      min_normal_spread_deg: 20.0
+      max_range: 8.0
+      max_view_angle_deg: 50.0
+      consecutive_solves: 5
+      agreement_radius: 0.5          # [m]
+      max_condition_number: 1.0e4
+      republish_cooldown: 10.0       # [s]
