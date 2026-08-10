@@ -132,6 +132,13 @@ _setup-linuxptp:
 linuxptp: _init
     @just _run linuxptp "{{scripts_dir}}/install-linuxptp.sh"
 
+# Align the two hosts' clocks: master serves time, orin follows it
+chrony-master:
+    sudo "{{scripts_dir}}/install-chrony-timesync.sh" master
+
+chrony-orin:
+    sudo "{{scripts_dir}}/install-chrony-timesync.sh" orin
+
 
 # Alias for setup (resume from where it left off due to markers)
 resume: setup

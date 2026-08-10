@@ -1,0 +1,13 @@
+# Golf Cart: take time from the master.
+# Installed to /etc/chrony/sources.d/ by setup/scripts/install-chrony-timesync.sh
+#
+# `prefer` rather than removing the upstream pools: on the LAN the master is
+# reachable in under a millisecond, while the 4G pools carry error bounds of
+# hundreds of milliseconds - far too coarse to align the master's and orin's
+# bags. If the master is unreachable, chrony falls back to the pools rather than
+# leaving the orin with no time source at all.
+#
+# minpoll/maxpoll are tightened from the default 6/10 to 3/6 (8s to 64s): the
+# link is local and free, and faster polling keeps the offset small across the
+# short runs that recording sessions actually are.
+server 192.168.125.100 iburst prefer minpoll 3 maxpoll 6
