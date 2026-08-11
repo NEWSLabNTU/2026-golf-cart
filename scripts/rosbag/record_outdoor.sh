@@ -33,10 +33,19 @@ TOPICS=(
   /sensing/imu/imu_raw
   /sensing/imu/tamagawa/imu_raw
 
-  # Camera (USB front)
-  /sensing/camera/front/image_raw
-  /sensing/camera/front/image_raw/compressed
-  /sensing/camera/front/camera_info
+  # Cameras (USB: left, right, rear).
+  #
+  # There is no `front` camera and no raw `image_raw` on any of them. The sensor
+  # kit's camera.launch.xml brings up three cameras and gscam is configured with
+  # `enable_pub_plugins: ["image_transport/compressed"]`, so the compressed topic
+  # is the only one that exists. This list previously named
+  # /sensing/camera/front/* and recorded three empty channels.
+  /sensing/camera/left/image_raw/compressed
+  /sensing/camera/left/camera_info
+  /sensing/camera/right/image_raw/compressed
+  /sensing/camera/right/camera_info
+  /sensing/camera/rear/image_raw/compressed
+  /sensing/camera/rear/camera_info
 
   # Vehicle interface status + diagnostics
   /vehicle/status/velocity_status

@@ -144,3 +144,83 @@ Collecting them early means these answers arrive while there is still time to
 act on them — particularly the coverage census, which can change where boards
 get mounted, and the CPU measurement, which can change the detection rate the
 whole design budgets for.
+
+## Status — tooling done, recordings blocked on hardware
+
+Everything except pressing record is in place. The measurements themselves need
+a camera, printed boards and a tape measure, and the site bags need the vehicle
+and the mounted boards; none of that can be produced from a workstation.
+
+### Recording
+
+- `scripts/rosbag/record_aruco.sh`, `just bag-record-aruco <scenario>`.
+  Records the three compressed camera streams with their `camera_info`, IMU, TF,
+  velocity status and `/diagnostics`, plus the detector output if it happens to
+  be running.
+
+  It checks free disk before starting and, more usefully, **lists topics that
+  nobody is currently publishing and asks before continuing**. `ros2 bag record`
+  will happily record a topic with no publisher and produce an empty channel,
+  which is exactly how a session gets recorded with no camera data and nobody
+  notices until afterwards.
+
+- `record_outdoor.sh` named `/sensing/camera/front/image_raw`,
+  `.../front/image_raw/compressed` and `.../front/camera_info`. There is no
+  `front` camera on this vehicle and no raw `image_raw` on any of them: the kit
+  brings up left, right and rear, and gscam is configured compressed-only. Every
+  camera channel it recorded was empty. Fixed.
+  (`record_localization.sh` turned out not to name any camera topics.)
+
+- `scripts/rosbag/bag_note_template.md`, copied next to each bag automatically.
+  It asks for the tag map used, how board positions were measured **and to what
+  stated accuracy** — that number is the ceiling on every accuracy claim later
+  made from the bag — the exposure setting, and what went wrong.
+
+### Analysis
+
+`scripts/analysis/aruco_bag_report.py`, `just bag-report-aruco <bag>`. Three
+reports, matching the three questions in this phase:
+
+- **corner sigma** — per-board standard deviation of corner pixel positions,
+  pooled over the eight coordinates. Also prints **drift**, the start-to-end
+  movement of the mean, so a "static" recording where the rig actually crept is
+  visible rather than silently reported as corner noise.
+- **detection geometry** — detections bucketed by range and by incidence angle,
+  with median ambiguity ratio per bucket. This is what confirms or corrects the
+  25–75° window the design takes from the literature.
+- **coverage census** — boards visible per solve window, how many had normals
+  spread far enough for 6-DoF, and the **longest unbroken stretch with no usable
+  constellation**. That last number is the one to compare against
+  `dead_reckoning_budget_s`: a hole longer than the budget is a stop, not a
+  degradation. An average hides it completely.
+
+### Verified against a synthetic bag
+
+The tooling was run end to end on a bag recorded from the simulator. The corner
+sigma report recovered **0.296–0.303 px** from data generated with
+`corner_sigma_px: 0.3`, so the measurement method round-trips. That validates the
+tool, not the constant: 0.3 is still inferred, and only a real camera pointed at
+a real board can replace it.
+
+One bug surfaced from that run and is worth recording, because it would have
+produced a confidently wrong conclusion about board layout. The coverage census
+originally counted each **camera's** message as one window, so a vehicle seeing
+one board in each of three cameras was scored as "one board" three times. The
+symptom was a suspiciously tidy 33.3 / 33.3 / 33.3 split. Detections are now
+grouped across cameras by time, using the same window as the localizer, and the
+same bag reports 99.4 % two-or-more.
+
+### What is left, and what it needs
+
+| item | needs |
+|---|---|
+| `corner_sigma_px` at three ranges and while moving | one camera, one board, a tripod, a tape measure |
+| detection rate against incidence and range | the same, plus a protractor or a measured layout |
+| fixed-exposure gscam profile chosen on evidence | the same scene recorded with auto-exposure on and off |
+| multi-board bench bag, end to end | four or five boards and tape-measured positions |
+| all site bags, coverage census, stop-point ground truth | mounted boards, a surveyed map, the vehicle |
+
+The bench recordings need no vehicle, no site and no mounted boards, and the
+corner-sigma one is roughly an hour of work. Everything downstream of it — the
+whole covariance model — is currently scaled by a number nobody here has
+measured.

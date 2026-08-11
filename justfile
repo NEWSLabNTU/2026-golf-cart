@@ -432,6 +432,16 @@ bag-record:
 bag-record-indoor:
     ./scripts/rosbag/record_indoor_mapping.sh
 
+# Record everything the ArUco indoor localizer needs (phase 3D-7).
+# Name the scenario so the bag is readable without opening it:
+#   just bag-record-aruco bench_static_1board_3m
+bag-record-aruco SCENARIO="session":
+    ./scripts/rosbag/record_aruco.sh {{SCENARIO}}
+
+# Report corner sigma, detection geometry and coverage from a recorded bag.
+bag-report-aruco BAG:
+    python3 ./scripts/analysis/aruco_bag_report.py {{BAG}}
+
 # Play the most recent outdoor recording
 bag-play:
     #!/usr/bin/env bash
