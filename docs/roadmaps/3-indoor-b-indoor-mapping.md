@@ -2,10 +2,11 @@
 
 Prerequisite for [Phase 3 indoor localization](3-indoor-localization.md).
 Design spec: [§2 B](../superpowers/specs/2026-07-27-indoor-artag-localization-design.md#b--indoor-mapping-contract-for-d)
+Mapping method: [indoor_pcd_mapping_reflector_anchor.md](../design/indoor_pcd_mapping_reflector_anchor.md)
 
 **Status: Not started — blocked by DBW; blocks sub-phases C and D**
 
-Last updated: 2026-07-27
+Last updated: 2026-08-11
 
 ---
 
@@ -47,22 +48,51 @@ mapping run can be recorded and processed offline before DBW lands.
 
 ---
 
+## Mapping method: reflector-anchored origin
+
+The map origin problem below has a chosen answer. A single retroreflective board
+is mounted permanently at the site; the finished map is rigidly transformed so
+that the board's face centroid is the origin and its surface normal is +X. This
+makes the origin physically re-findable every session, and lets cold start
+replace the manual RViz seed with a fixed parking position — or, later, with
+`autoware_lidar_marker_localizer`.
+
+The board is an **anchor, not a localizer**: it defines the origin and the start
+pose. It does not bound NDT drift away from the entrance, and it is not used as
+a SLAM loop closure feature — indoor geometric loop closure on walls and corners
+is stronger than one 0.8 m panel.
+
+Full method, board specification, detector retuning, and failure modes:
+[indoor_pcd_mapping_reflector_anchor.md](../design/indoor_pcd_mapping_reflector_anchor.md).
+
+---
+
 ## Tasks
 
 ### Not done
 
 - [ ] **Choose the indoor site** and confirm vehicle access, lighting, and route.
+- [ ] **Mount the reflective board** — rectangular (not square) 3M retroreflective
+      face with a matte margin, permanently fixed, floor footprint marked. See
+      the design doc §5.
 - [ ] **Record a mapping rosbag** — VLP-32C + xsens IMU + all three cameras.
-      Record cameras even though mapping does not need them: sub-phase C replays
-      this same bag to bootstrap the tag map, so tags should already be in place
-      during this drive.
+      Record `/sensing/lidar/top/pointcloud_raw_ex` specifically: intensity and
+      per-point time are both needed. Record cameras even though mapping does not
+      need them: sub-phase C replays this same bag to bootstrap the tag map, so
+      tags should already be in place during this drive.
 - [ ] **Build the PCD map** — offline LiDAR SLAM. Slow, batched, loop-closed;
       this is the accuracy ceiling for everything downstream.
-- [ ] **Build the Lanelet2 vector map** covering the drivable indoor route.
-- [ ] **Define and record the map origin** — no GNSS means no automatic
-      georeferencing; the map frame origin must be chosen and documented.
-- [ ] **Validate NDT indoors** — replay through `logging_simulation`, seed with a
-      manual RViz "2D Pose Estimate", confirm convergence and tracking.
+- [ ] **Anchor the cloud to the board** — detect the board by intensity, gate on
+      planarity/size/height, transform the cloud so the board is the origin, and
+      store the transform with the map.
+- [ ] **Build the Lanelet2 vector map** covering the drivable indoor route, with
+      the board as a `pose_marker` / `reflector` polygon.
+- [ ] **Set `projector_type: Local`** in the indoor map's
+      `map_projector_info.yaml`. Copying the outdoor map's `TransverseMercator`
+      config is a silent-failure path.
+- [ ] **Validate NDT indoors** — replay through `logging_simulation`, seed from
+      the board-derived fixed start pose (manual RViz seed as fallback), confirm
+      convergence and tracking.
 - [ ] **Characterize NDT degeneracy** — identify which corridors NDT slides along.
       This directly drives tag placement in sub-phase C: tags go where NDT is weak,
       not where they are convenient to hang.
@@ -72,16 +102,20 @@ mapping run can be recorded and processed offline before DBW lands.
 
 ### Can do before DBW lands
 
-- [ ] Site selection, mapping run, PCD and Lanelet2 construction — all offline.
+- [ ] Site selection, board mounting, mapping run, PCD and Lanelet2 construction,
+      board anchoring, projector config — all offline.
 - [ ] GNSS-dependency audit of the launch tree.
 
 ---
 
 ## Acceptance criteria
 
-- PCD + Lanelet2 map of the indoor route exists, with a documented map origin.
-- NDT converges from a manual seed and tracks the full route in replay, with no
-  GNSS in the pipeline.
+- PCD + Lanelet2 map of the indoor route exists, with `projector_type: Local` and
+  the map origin at the board's face centroid.
+- The cloud→map anchoring transform is stored with the map, so a rebuild from the
+  same bag can be checked against it.
+- NDT converges from the board-derived fixed start pose and tracks the full route
+  in replay, with no GNSS in the pipeline.
 - NDT degeneracy characterized per corridor, written up, and handed to sub-phase C
   as tag placement guidance.
 
