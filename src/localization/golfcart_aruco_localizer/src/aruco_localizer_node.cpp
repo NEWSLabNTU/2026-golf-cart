@@ -18,6 +18,7 @@
 #include <golfcart_aruco_localizer/solver.hpp>
 #include <golfcart_aruco_localizer/tag_map.hpp>
 
+#include <diagnostic_updater/diagnostic_updater.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
@@ -43,6 +44,7 @@ namespace golfcart::aruco_localizer
 
 using aruco_detection_msgs::msg::ArucoDetectionArray;
 using aruco_detection_msgs::msg::ArucoLocalizerStatus;
+using diagnostic_msgs::msg::DiagnosticStatus;
 
 class ArucoLocalizerNode : public rclcpp::Node
 {
@@ -62,6 +64,16 @@ public:
     initial_pose_publisher_ = create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>(
       "~/output/initialpose", rclcpp::QoS(1));
     status_publisher_ = create_publisher<ArucoLocalizerStatus>("~/status", rclcpp::QoS(10));
+
+    // /diagnostics is the machine-readable half of ~/status, and the half that
+    // can actually stop the vehicle: Autoware's diagnostic_graph_aggregator
+    // consumes it and rolls it into HazardStatus, which is what drives an MRM.
+    // Without this the state machine computes a FAULT, logs it, and nothing
+    // downstream ever hears -- which is the worst of both worlds, because the
+    // node looks like it has fault handling.
+    diagnostics_ = std::make_unique<diagnostic_updater::Updater>(this);
+    diagnostics_->setHardwareID("aruco_localizer");
+    diagnostics_->add("aruco_localization_status", this, &ArucoLocalizerNode::diagnose);
 
     for (const auto & name : camera_names_) {
       detection_subs_.push_back(
@@ -487,11 +499,52 @@ private:
 
   // ── reporting ─────────────────────────────────────────────────────────────
 
+  /// Map the localization state onto diagnostic levels.
+  ///
+  /// DEGRADED is WARN rather than ERROR on purpose: position is still being
+  /// corrected and only heading is running open-loop, so escalating it to ERROR
+  /// would trip an MRM for a condition the vehicle is designed to drive
+  /// through. DEAD_RECKONING is also WARN while inside its budget, and becomes
+  /// ERROR when the budget expires -- the state machine has already made that
+  /// decision, so this reads its verdict rather than re-deriving one.
+  void diagnose(diagnostic_updater::DiagnosticStatusWrapper & status)
+  {
+    const auto & state = last_state_report_;
+
+    std::uint8_t level = DiagnosticStatus::OK;
+    if (state.request_mrm || state.state == LocalizationState::Fault) {
+      level = DiagnosticStatus::ERROR;
+    } else if (
+      state.state == LocalizationState::Degraded ||
+      state.state == LocalizationState::DeadReckoning)
+    {
+      level = DiagnosticStatus::WARN;
+    } else if (state.state == LocalizationState::Uninitialized) {
+      // Not an error: the vehicle has not been given an initial pose yet.
+      level = DiagnosticStatus::WARN;
+    }
+
+    status.summary(level, toString(state.state) + ": " + state.reason);
+
+    status.add("state", toString(state.state));
+    status.add("boards_used", last_result_.observability.boards);
+    status.add("normal_spread_deg", last_result_.observability.normal_spread_deg);
+    status.add("condition_number", last_result_.observability.condition_number);
+    status.add("reprojection_rms_px", last_result_.observability.reprojection_rms_px);
+    status.add("integrity_checked", last_integrity_.checked);
+    status.add("boards_excluded", last_integrity_.flagged.size());
+    status.add("elapsed_without_fix_s", state.elapsed_s);
+    status.add("budget_s", state.budget_s);
+  }
+
   void report(
     const WindowOutcome & outcome, const SolveResult & result,
     const IntegrityReport & integrity)
   {
     const StateReport state = state_machine_.update(now().seconds(), outcome);
+    // The diagnostic callback runs on the updater's own timer, not in this
+    // window, so it needs the latest verdict rather than recomputing one.
+    last_state_report_ = state;
 
     // A window can be empty simply because the timer ticked between camera
     // frames, and the state machine holds the previous state through that. If
@@ -626,6 +679,8 @@ private:
   rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr
     initial_pose_publisher_;
   rclcpp::Publisher<ArucoLocalizerStatus>::SharedPtr status_publisher_;
+  std::unique_ptr<diagnostic_updater::Updater> diagnostics_;
+  StateReport last_state_report_;
   rclcpp::TimerBase::SharedPtr window_timer_;
 };
 

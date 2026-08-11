@@ -16,6 +16,8 @@ golfcart_aruco_localizer/config/example_tag_map.yaml
        default="$(find-pkg-share aruco_sim_detector)/config/bench_tag_map.yaml"/>
   <arg name="pattern" default="straight"/>
   <arg name="localizer_log_level" default="info"/>
+  <arg name="blackout" default="false"
+       description="emit no detections at all, to exercise DEAD_RECKONING then FAULT"/>
   <arg name="speed" default="1.0"/>
   <arg name="corner_sigma_px" default="0.3"/>
   <arg name="localizer_config"
@@ -35,6 +37,7 @@ golfcart_aruco_localizer/config/example_tag_map.yaml
     <param from="$(var sim_config)"/>
     <param name="tag_map_path" value="$(var tag_map_path)"/>
     <param name="corner_sigma_px" value="$(var corner_sigma_px)"/>
+    <param name="fault.blackout" value="$(var blackout)"/>
     <remap from="~/input/ground_truth" to="/simulation/ground_truth/kinematic_state"/>
   </node>
 

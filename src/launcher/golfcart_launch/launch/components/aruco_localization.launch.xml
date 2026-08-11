@@ -24,7 +24,7 @@
 
        Subscribes to the COMPRESSED topic. The gscam pipeline is configured
        with `enable_pub_plugins: ["image_transport/compressed"]`, so no raw
-       sensor_msgs/Image is published at all -- a detector on the raw topic
+       sensor_msgs/Image is published at all — a detector on the raw topic
        waits forever and presents as a camera that sees nothing.
   -->
   <group unless="$(var use_sim_detector)">
@@ -96,6 +96,33 @@
              value="/localization/twist_estimator/twist_with_covariance"/>
         <arg name="output_twist_with_covariance_raw"
              value="/localization/twist_estimator/twist_with_covariance_raw"/>
+      </include>
+    </group>
+
+    <!-- ── health monitors ───────────────────────────────────────────────
+         Both live inside tier4_localization_launch, which this branch bypasses,
+         so neither was running. Both are pose-source agnostic — the error
+         monitor reads only /localization/kinematic_state, and the instability
+         detector compares the filter output against dead reckoning — so there
+         is no reason for ArUco to go without them.
+
+         The error monitor is monitoring-only for now: its ellipse thresholds
+         were chosen for a LiDAR pose source, and this repo already records that
+         they caused false MRM stops. It publishes its diagnostic but does not
+         gate. See config/system/diagnostics/localization-aruco.yaml.
+    -->
+    <group>
+      <include file="$(find-pkg-share autoware_localization_error_monitor)/launch/localization_error_monitor.launch.xml">
+        <arg name="input/odom" value="/localization/kinematic_state"/>
+        <arg name="param_file" value="$(var loc_config_path)/localization_error_monitor.param.yaml"/>
+      </include>
+    </group>
+
+    <group>
+      <include file="$(find-pkg-share autoware_pose_instability_detector)/launch/pose_instability_detector.launch.xml">
+        <arg name="input_odometry" value="/localization/kinematic_state"/>
+        <arg name="input_twist" value="/localization/twist_estimator/twist_with_covariance"/>
+        <arg name="param_file" value="$(var loc_config_path)/pose_instability_detector.param.yaml"/>
       </include>
     </group>
 

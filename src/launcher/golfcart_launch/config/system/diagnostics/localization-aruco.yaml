@@ -1,0 +1,70 @@
+# Localization health when ArUco boards are the sole pose source.
+#
+# Upstream's localization.yaml requires `ndt_scan_matcher: scan_matching_status`.
+# There is no scan matcher on this path at all, so that diagnostic never
+# publishes and the entire /autoware/localization subtree sits stale -- reporting
+# a fault while the vehicle localizes perfectly well and, worse, reporting the
+# same thing when it does not.
+#
+# Based on upstream's localization.yaml. Only the scan-matcher link is replaced
+# and the accuracy link is moved out of the gating list; everything else is
+# unchanged, INCLUDING node/name pairs that have not been verified on this
+# vehicle. Only the aruco link below has been checked against a running node.
+units:
+  - path: /autoware/localization
+    type: and
+    list:
+      - type: link
+        link: /autoware/localization/state
+      - type: and
+        list:
+          - { type: link, link: /autoware/localization/topic_rate_check/transform }
+          - { type: link, link: /autoware/localization/topic_rate_check/pose_twist_fusion }
+          - { type: link, link: /autoware/localization/aruco_status }
+          - { type: link, link: /autoware/localization/sensor_fusion_status }
+
+  - path: /autoware/localization/state
+    type: diag
+    node: /adapi/node/localization
+    name: state
+
+  - path: /autoware/localization/topic_rate_check/transform
+    type: diag
+    node: topic_state_monitor_transform_map_to_base_link
+    name: localization_topic_status
+
+  - path: /autoware/localization/topic_rate_check/pose_twist_fusion
+    type: diag
+    node: topic_state_monitor_pose_twist_fusion_filter_pose
+    name: localization_topic_status
+
+  # Replaces scan_matching_status. Verified against a running node: the status
+  # publishes as "aruco_localizer: aruco_localization_status".
+  #
+  # ERROR here is what escalates to an MRM, and the localizer raises it only for
+  # a latched FAULT -- an expired dead-reckoning budget, or a failed integrity
+  # check. DEGRADED and in-budget DEAD_RECKONING report WARN, because the
+  # vehicle is designed to drive through those.
+  - path: /autoware/localization/aruco_status
+    type: diag
+    node: aruco_localizer
+    name: aruco_localization_status
+
+  # Kept so the diagnostic exists and is observable, but deliberately NOT in the
+  # gating list above.
+  #
+  # This repo's own localization.yaml already carries a note that the
+  # error-ellipse thresholds caused false MRM stops here, and those thresholds
+  # were picked for a LiDAR pose source. ArUco covariance has a different shape
+  # -- it saturates in unobservable directions by design -- so gating on the
+  # ellipse before re-measuring would trip stops on geometry that is working as
+  # intended. Move it into the list once phase 3D-7 provides real numbers.
+  - path: /autoware/localization/accuracy
+    type: diag
+    node: localization_error_monitor
+    name: ellipse_error_status
+
+  - path: /autoware/localization/sensor_fusion_status
+    type: diag
+    node: localization
+    name: ekf_localizer

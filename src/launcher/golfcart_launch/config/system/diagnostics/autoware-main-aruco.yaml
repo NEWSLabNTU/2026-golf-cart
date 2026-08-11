@@ -1,0 +1,95 @@
+# Diagnostic graph for the ArUco pose source.
+#
+# A verbatim copy of autoware_launch's autoware-main.yaml with ONE change: the
+# localization subtree comes from localization-aruco.yaml, which drops the NDT
+# scan-matcher requirement that can never be satisfied on this path.
+#
+# Every other section is pulled from autoware_launch rather than from this
+# directory ON PURPOSE. This repo carries local copies of control.yaml,
+# system.yaml and the rest which differ from upstream -- the MRM delegate links
+# are removed, among other things -- and which nothing currently loads. Pointing
+# at $(dirname) here would silently adopt all of those as a side effect of
+# selecting ArUco, which is not a decision this file should be making.
+#
+# Keep it a copy: when Autoware is upgraded, re-copy and re-apply the one line
+# rather than merging by hand.
+files:
+  - { path: $(find-pkg-share autoware_launch)/config/system/diagnostics/control.yaml }
+  - { path: $(dirname)/localization-aruco.yaml }
+  - { path: $(find-pkg-share autoware_launch)/config/system/diagnostics/map.yaml }
+  - { path: $(find-pkg-share autoware_launch)/config/system/diagnostics/perception.yaml }
+  - { path: $(find-pkg-share autoware_launch)/config/system/diagnostics/planning.yaml }
+  - { path: $(find-pkg-share autoware_launch)/config/system/diagnostics/system.yaml }
+  - { path: $(find-pkg-share autoware_launch)/config/system/diagnostics/vehicle.yaml }
+
+units:
+  - path: /autoware/modes/local
+    type: and
+    list:
+      - { type: link, link: /autoware/vehicle }
+      - { type: link, link: /autoware/system }
+      - { type: link, link: /autoware/control/local }
+      - { type: link, link: /adapi/mrm_request/delegate }
+
+  - path: /autoware/modes/remote
+    type: and
+    list:
+      - { type: link, link: /autoware/vehicle }
+      - { type: link, link: /autoware/system }
+      - { type: link, link: /autoware/control/remote }
+      - { type: link, link: /adapi/mrm_request/delegate }
+
+  - path: /autoware/modes/stop
+    type: and
+    list:
+      - { type: link, link: /adapi/mrm_request/delegate }
+
+  - path: /autoware/modes/autonomous
+    type: and
+    list:
+      - { type: link, link: /autoware/map }
+      - { type: link, link: /autoware/localization }
+      - { type: link, link: /autoware/planning }
+      - { type: link, link: /autoware/perception }
+      - { type: link, link: /autoware/control }
+      - { type: link, link: /autoware/vehicle }
+      - { type: link, link: /autoware/system }
+      - { type: link, link: /adapi/mrm_request/delegate }
+
+  - path: /autoware/modes/pull_over
+    type: and
+    list:
+      - { type: link, link: /autoware/map }
+      - { type: link, link: /autoware/localization }
+      - { type: link, link: /autoware/planning }
+      - { type: link, link: /autoware/perception }
+      - { type: link, link: /autoware/control }
+      - { type: link, link: /autoware/vehicle }
+      - { type: link, link: /autoware/system }
+
+  - path: /autoware/modes/comfortable_stop
+    type: and
+    list:
+      - { type: link, link: /autoware/map }
+      - { type: link, link: /autoware/localization }
+      - { type: link, link: /autoware/planning }
+      - { type: link, link: /autoware/perception }
+      - { type: link, link: /autoware/control }
+      - { type: link, link: /autoware/vehicle }
+      - { type: link, link: /autoware/system }
+
+  - path: /autoware/modes/emergency_stop
+    type: and
+    list:
+      - { type: link, link: /autoware/vehicle }
+      - { type: link, link: /autoware/system }
+
+  - path: /autoware/debug/tools
+    type: and
+    list:
+      - { type: link, link: /autoware/system/service_log_checker }
+
+  - path: /adapi/mrm_request/delegate
+    type: diag
+    node: /adapi/node/mrm_request
+    name: delegate
