@@ -16,6 +16,16 @@
   <arg name="detector_config_path"
        default="$(find-pkg-share golfcart_aruco_detector)/config/aruco_detector.param.yaml"/>
   <arg name="detector_debug_overlay" default="false"/>
+  <arg name="sim_detector_config"
+       default="$(find-pkg-share aruco_sim_detector)/config/sim_detector.param.yaml"/>
+  <arg name="sim_corner_sigma_px" default="0.3"/>
+  <arg name="sim_blackout" default="false"/>
+  <arg name="sim_blackout_start_s" default="0.0"/>
+  <arg name="sim_displaced_board_id" default="-1"/>
+  <arg name="sim_displacement" default="[0.0, 0.0, 0.0]"/>
+  <arg name="sim_stamp_offset_s" default="0.0"/>
+  <arg name="initialization_stop_check" default="false"
+       description="require standstill before accepting an initial pose"/>
 
   <!-- ── detectors, one per camera ───────────────────────────────────────────
        Not in the localization namespace: these are sensing, and they publish
@@ -27,6 +37,28 @@
        sensor_msgs/Image is published at all — a detector on the raw topic
        waits forever and presents as a camera that sees nothing.
   -->
+  <!-- Phase 3D-6 stage 1. Publishes on the same three topics the real
+       detectors do, so the localizer, the EKF and the diagnostics graph are
+       all exercised unchanged — the substitution is invisible downstream,
+       which is the only way this proves anything about the real path. -->
+  <group if="$(var use_sim_detector)">
+    <node pkg="aruco_sim_detector" exec="aruco_sim_detector_node"
+          name="aruco_sim_detector" output="screen">
+      <param from="$(var sim_detector_config)"/>
+      <param name="tag_map_path" value="$(var aruco_tag_map_path)"/>
+      <param name="corner_sigma_px" value="$(var sim_corner_sigma_px)"/>
+      <param name="fault.blackout" value="$(var sim_blackout)"/>
+      <param name="fault.blackout_start_s" value="$(var sim_blackout_start_s)"/>
+      <param name="fault.displaced_board_id" value="$(var sim_displaced_board_id)"/>
+      <param name="fault.displacement" value="$(var sim_displacement)"/>
+      <param name="fault.stamp_offset_s" value="$(var sim_stamp_offset_s)"/>
+      <remap from="~/input/ground_truth" to="/simulation/ground_truth/kinematic_state"/>
+      <remap from="~/output/detections/left" to="/sensing/camera/left/aruco_detections"/>
+      <remap from="~/output/detections/right" to="/sensing/camera/right/aruco_detections"/>
+      <remap from="~/output/detections/rear" to="/sensing/camera/rear/aruco_detections"/>
+    </node>
+  </group>
+
   <group unless="$(var use_sim_detector)">
     <node pkg="golfcart_aruco_detector" exec="golfcart_aruco_detector"
           name="aruco_detector_left" output="screen">
@@ -92,10 +124,48 @@
         <arg name="input_vehicle_twist_with_covariance_topic"
              value="/sensing/vehicle_velocity_converter/twist_with_covariance"/>
         <arg name="input_imu_topic" value="/sensing/imu/imu_data"/>
-        <arg name="output_twist_with_covariance"
+        <!-- NOTE the `_topic` suffix. Without it these are simply unknown
+             arguments, which ROS 2 XML launch accepts in silence: gyro_odometer
+             kept its default output name, the EKF subscribed to a topic nobody
+             published, and the entire fusion chain was dead while every node
+             reported healthy. -->
+        <arg name="output_twist_with_covariance_topic"
              value="/localization/twist_estimator/twist_with_covariance"/>
-        <arg name="output_twist_with_covariance_raw"
+        <arg name="output_twist_with_covariance_raw_topic"
              value="/localization/twist_estimator/twist_with_covariance_raw"/>
+      </include>
+    </group>
+
+    <!-- ── initial pose ──────────────────────────────────────────────────
+         The EKF does not activate on an initial pose alone: it stays dormant
+         until something calls its `trigger_node` service, and pose_initializer
+         is the component that does. Leaving it out meant the localizer
+         published a perfectly good /initialpose3d, the EKF ignored it, and
+         nothing downstream ever produced a fused pose — with every node in the
+         graph reporting healthy.
+
+         NDT and GNSS initialization are off because neither exists on this
+         path; the ArUco localizer produces the initial pose itself, on the
+         same /initialpose3d topic pose_initializer already listens to.
+    -->
+    <group>
+      <include file="$(find-pkg-share autoware_pose_initializer)/launch/pose_initializer.launch.xml">
+        <arg name="config_file" value="$(var loc_config_path)/pose_initializer.param.yaml"/>
+        <!-- pose_initializer.param.yaml is loaded with allow_substs, so every
+             $(var ...) it mentions must exist here or the launch aborts. -->
+        <arg name="ndt_enabled" value="false"/>
+        <arg name="gnss_enabled" value="false"/>
+        <arg name="ekf_enabled" value="true"/>
+        <arg name="yabloc_enabled" value="false"/>
+        <!-- Whether the vehicle must be stationary to accept an initial pose.
+             Off by default here because the ArUco localizer already gates its
+             own cold start on several consecutive solves agreeing, which is a
+             stronger check than standstill and works while moving. Turning it
+             on is a policy decision about how the vehicle is commissioned, not
+             a correctness one. -->
+        <arg name="stop_check_enabled" value="$(var initialization_stop_check)"/>
+        <arg name="user_defined_initial_pose/enable" value="false"/>
+        <arg name="user_defined_initial_pose/pose" value="[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]"/>
       </include>
     </group>
 

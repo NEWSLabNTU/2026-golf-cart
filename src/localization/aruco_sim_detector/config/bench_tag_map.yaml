@@ -1,22 +1,51 @@
 # Bench map for the simulation smoke test. NOT a survey.
 #
-# Chosen so the DEFAULT bench run is a healthy one. Boards sit on four walls of
-# a 14 x 6 m room with their normals spread across all four directions, and the
-# straight trajectory (x 0 -> 10 along y=0) keeps at least two boards with
-# DIFFERENT normals inside both the 8 m range gate and the 25-75 deg view window
-# for its whole length.
+# An L: one arm along +x at y = 0, a second along +y at x = 14, joined by the
+# turn the `corridor` trajectory drives. Boards sit on both walls of each arm at
+# MATCHING positions, in facing pairs, every 3 m.
 #
-# That spread is a correctness requirement, not a quality nicety. Coplanar
-# boards flip TOGETHER, so their wrong solutions corroborate each other exactly
-# as well as their right ones do and no amount of agreement separates them.
-# example_tag_map.yaml demonstrates the file format and happens to put three of
-# its four boards on one wall; running the bench against it produces flip ties
-# and ill-conditioned solves, which is the design working, not the design
-# failing. Use that map to exercise the degenerate path on purpose.
+# The pairing is the whole design, and it is worth understanding before copying
+# this layout to a real site.
+#
+# A board flat on a wall is only usable over a narrow band of the drive. Viewing
+# angle is acos(wall_offset / range), so with a 3 m offset:
+#
+#     distance ahead   0 m    1 m    3 m    5 m    7 m    9 m
+#     view angle       0 deg  18     45     59     66     72
+#
+# Below min_view_angle_deg (25) the pose is fronto-parallel and its orientation
+# is untrustworthy; above max_view_angle_deg (75) detection itself fails; and
+# initialization is stricter still at 50 deg. So a single wall board is only
+# init-eligible while it is roughly 2-4 m away -- a window about 2 m long.
+#
+# Two boards must satisfy that at the SAME MOMENT, with different normals, or
+# the system never initializes. Boards staggered along one wall never do: each
+# enters and leaves the window alone. Facing pairs at equal offset enter it
+# together and have opposite normals, which is also the maximum possible spread.
+#
+# This replaced a staggered layout that looked reasonable and could not
+# cold-start: the localizer reported "1 of 1 boards within 8.0 m and 50 deg
+# (need 2), spread 0.0 deg" for an entire run.
+#
+# The second arm exists because the `corridor` trajectory turns out of the first
+# one. Without it the vehicle drove into unmapped space and diverged -- correct
+# behaviour against a map that stopped, but it tested the fixture rather than
+# the localizer.
+#
+# The four boards at the corner (ids 103, 203, 113, 213) close a coverage hole
+# that only appeared once the rest worked: arm A's boards ended at x = 9 and arm
+# B's began at y = 6, so the entire turn was unseen. The vehicle stayed DEGRADED
+# through it -- fixes from one board, no heading correction -- and along-track
+# error reached 2.9 m before the next pair came into view, against 1.5 cm
+# everywhere else.
+#
+# That is the single most transferable lesson here for the real site: straights
+# look after themselves, and CORNERS ARE WHERE COVERAGE FAILS. A board layout
+# planned by walking the straights will have exactly this hole.
 frame_id: map
 
 survey:
-  date: "2026-08-11"
+  date: "2026-08-12"
   method: "SYNTHETIC BENCH FIXTURE -- not a real survey"
   stated_accuracy: 0.02
 
@@ -26,51 +55,128 @@ defaults:
 
 tags:
   - id: 100
-    # left wall, faces -y, centre (1.0, 3.0, 1.5)
+    # arm A left wall, faces -y, centre (3.0, 3.0, 1.5)
     corners:
-      - [0.808, 3.000, 1.692]
-      - [1.192, 3.000, 1.692]
-      - [1.192, 3.000, 1.308]
-      - [0.808, 3.000, 1.308]
-  - id: 101
-    # left wall, faces -y, centre (5.0, 3.0, 1.5)
-    corners:
-      - [4.808, 3.000, 1.692]
-      - [5.192, 3.000, 1.692]
-      - [5.192, 3.000, 1.308]
-      - [4.808, 3.000, 1.308]
-  - id: 102
-    # left wall, faces -y, centre (9.0, 3.0, 1.5)
-    corners:
-      - [8.808, 3.000, 1.692]
-      - [9.192, 3.000, 1.692]
-      - [9.192, 3.000, 1.308]
-      - [8.808, 3.000, 1.308]
+      - [2.808, 3.000, 1.692]
+      - [3.192, 3.000, 1.692]
+      - [3.192, 3.000, 1.308]
+      - [2.808, 3.000, 1.308]
   - id: 200
-    # right wall, faces +y, centre (3.0, -3.0, 1.5)
+    # arm A right wall, faces +y, centre (3.0, -3.0, 1.5)
     corners:
       - [3.192, -3.000, 1.692]
       - [2.808, -3.000, 1.692]
       - [2.808, -3.000, 1.308]
       - [3.192, -3.000, 1.308]
+  - id: 101
+    # arm A left wall, faces -y, centre (6.0, 3.0, 1.5)
+    corners:
+      - [5.808, 3.000, 1.692]
+      - [6.192, 3.000, 1.692]
+      - [6.192, 3.000, 1.308]
+      - [5.808, 3.000, 1.308]
   - id: 201
-    # right wall, faces +y, centre (7.0, -3.0, 1.5)
+    # arm A right wall, faces +y, centre (6.0, -3.0, 1.5)
     corners:
-      - [7.192, -3.000, 1.692]
-      - [6.808, -3.000, 1.692]
-      - [6.808, -3.000, 1.308]
-      - [7.192, -3.000, 1.308]
+      - [6.192, -3.000, 1.692]
+      - [5.808, -3.000, 1.692]
+      - [5.808, -3.000, 1.308]
+      - [6.192, -3.000, 1.308]
+  - id: 102
+    # arm A left wall, faces -y, centre (9.0, 3.0, 1.5)
+    corners:
+      - [8.808, 3.000, 1.692]
+      - [9.192, 3.000, 1.692]
+      - [9.192, 3.000, 1.308]
+      - [8.808, 3.000, 1.308]
+  - id: 202
+    # arm A right wall, faces +y, centre (9.0, -3.0, 1.5)
+    corners:
+      - [9.192, -3.000, 1.692]
+      - [8.808, -3.000, 1.692]
+      - [8.808, -3.000, 1.308]
+      - [9.192, -3.000, 1.308]
+  - id: 110
+    # arm B west wall, faces +x, centre (11.0, 6.0, 1.5)
+    corners:
+      - [11.000, 5.808, 1.692]
+      - [11.000, 6.192, 1.692]
+      - [11.000, 6.192, 1.308]
+      - [11.000, 5.808, 1.308]
+  - id: 210
+    # arm B east wall, faces -x, centre (17.0, 6.0, 1.5)
+    corners:
+      - [17.000, 6.192, 1.692]
+      - [17.000, 5.808, 1.692]
+      - [17.000, 5.808, 1.308]
+      - [17.000, 6.192, 1.308]
+  - id: 111
+    # arm B west wall, faces +x, centre (11.0, 9.0, 1.5)
+    corners:
+      - [11.000, 8.808, 1.692]
+      - [11.000, 9.192, 1.692]
+      - [11.000, 9.192, 1.308]
+      - [11.000, 8.808, 1.308]
+  - id: 211
+    # arm B east wall, faces -x, centre (17.0, 9.0, 1.5)
+    corners:
+      - [17.000, 9.192, 1.692]
+      - [17.000, 8.808, 1.692]
+      - [17.000, 8.808, 1.308]
+      - [17.000, 9.192, 1.308]
+  - id: 112
+    # arm B west wall, faces +x, centre (11.0, 12.0, 1.5)
+    corners:
+      - [11.000, 11.808, 1.692]
+      - [11.000, 12.192, 1.692]
+      - [11.000, 12.192, 1.308]
+      - [11.000, 11.808, 1.308]
+  - id: 212
+    # arm B east wall, faces -x, centre (17.0, 12.0, 1.5)
+    corners:
+      - [17.000, 12.192, 1.692]
+      - [17.000, 11.808, 1.692]
+      - [17.000, 11.808, 1.308]
+      - [17.000, 12.192, 1.308]
   - id: 300
-    # far end wall, faces -x, centre (12.0, 0.0, 1.5)
+    # arm A far end, faces -x, centre (13.0, 0.0, 1.5)
     corners:
-      - [12.000, 0.192, 1.692]
-      - [12.000, -0.192, 1.692]
-      - [12.000, -0.192, 1.308]
-      - [12.000, 0.192, 1.308]
+      - [13.000, 0.192, 1.692]
+      - [13.000, -0.192, 1.692]
+      - [13.000, -0.192, 1.308]
+      - [13.000, 0.192, 1.308]
   - id: 301
-    # near end wall, faces +x, centre (-2.0, 0.0, 1.5)
+    # arm A near end, faces +x, centre (-3.0, 0.0, 1.5)
     corners:
-      - [-2.000, -0.192, 1.692]
-      - [-2.000, 0.192, 1.692]
-      - [-2.000, 0.192, 1.308]
-      - [-2.000, -0.192, 1.308]
+      - [-3.000, -0.192, 1.692]
+      - [-3.000, 0.192, 1.692]
+      - [-3.000, 0.192, 1.308]
+      - [-3.000, -0.192, 1.308]
+  - id: 103
+    # corner, arm A side, faces -y, centre (12.0, 3.0, 1.5)
+    corners:
+      - [11.808, 3.000, 1.692]
+      - [12.192, 3.000, 1.692]
+      - [12.192, 3.000, 1.308]
+      - [11.808, 3.000, 1.308]
+  - id: 203
+    # corner, arm A side, faces +y, centre (12.0, -3.0, 1.5)
+    corners:
+      - [12.192, -3.000, 1.692]
+      - [11.808, -3.000, 1.692]
+      - [11.808, -3.000, 1.308]
+      - [12.192, -3.000, 1.308]
+  - id: 113
+    # corner, arm B side, faces +x, centre (11.0, 3.0, 1.5)
+    corners:
+      - [11.000, 2.808, 1.692]
+      - [11.000, 3.192, 1.692]
+      - [11.000, 3.192, 1.308]
+      - [11.000, 2.808, 1.308]
+  - id: 213
+    # corner, arm B side, faces -x, centre (17.0, 3.0, 1.5)
+    corners:
+      - [17.000, 3.192, 1.692]
+      - [17.000, 2.808, 1.692]
+      - [17.000, 2.808, 1.308]
+      - [17.000, 3.192, 1.308]

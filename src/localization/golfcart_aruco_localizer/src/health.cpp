@@ -78,6 +78,29 @@ IntegrityReport IntegrityMonitor::update(const std::map<std::uint32_t, double> &
   return report;
 }
 
+void IntegrityMonitor::noteConsensusOutlier(std::uint32_t id)
+{
+  // Counted on the same ladder as a residual outlier, so one disagreeing frame
+  // is still noise and a persistent one still becomes a maintenance event.
+  //
+  // Note this is a RATIO test, not a count: a board must be an outlier more
+  // often than not. Counting up without ever counting down means any board that
+  // is occasionally rejected -- which is every board, at the edge of its view
+  // window -- reaches the threshold given a long enough drive, and the monitor
+  // slowly flags the entire map. That is what happened on the first corridor
+  // run, where two healthy boards were excluded after a couple of minutes.
+  seen_[id] += 1;
+  strikes_[id] += 1;
+  if (strikes_[id] * 2 < static_cast<int>(seen_[id])) {
+    // A minority of frames: noise at a view-window edge, not a fault.
+    strikes_[id] = std::max(0, strikes_[id] - 1);
+  }
+  const bool already = std::find(flagged_.begin(), flagged_.end(), id) != flagged_.end();
+  if (strikes_[id] >= options_.flag_count && !already) {
+    flagged_.push_back(id);
+  }
+}
+
 bool IntegrityMonitor::isFlagged(std::uint32_t id) const
 {
   return std::find(flagged_.begin(), flagged_.end(), id) != flagged_.end();
@@ -139,6 +162,21 @@ StateReport LocalizationStateMachine::update(double now_s, const WindowOutcome &
     since_good_s_ = 0.0;
     report.state = state_;
     report.reason = "boards agree with sufficient spread";
+    return report;
+  }
+
+  // Before the first fix there is nothing to dead-reckon FROM, so the budget
+  // cannot be counting down. It used to: from UNINITIALIZED an empty window
+  // fell straight through to DEAD_RECKONING, the clock ran while the graph was
+  // still coming up, and the vehicle latched FAULT and requested an MRM a few
+  // seconds after launch -- before it had ever localized once.
+  //
+  // Staying UNINITIALIZED is also the more honest report: "I do not know where
+  // I am yet" and "I knew, and have been losing it for N seconds" are different
+  // conditions and downstream should be able to tell them apart.
+  if (state_ == LocalizationState::Uninitialized && !outcome.solved) {
+    report.state = state_;
+    report.reason = "waiting for a first usable fix";
     return report;
   }
 

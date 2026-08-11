@@ -17,6 +17,12 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <nav_msgs/msg/odometry.hpp>
+#include <sensor_msgs/msg/imu.hpp>
+#include <geometry_msgs/msg/twist_with_covariance_stamped.hpp>
+
+#include <random>
+
+#include <tf2_ros/static_transform_broadcaster.h>
 #include <tf2/LinearMath/Quaternion.h>
 
 #include <cmath>
@@ -41,6 +47,7 @@ public:
     origin_y_ = declare_parameter<double>("origin_y", 0.0);
     frame_id_ = declare_parameter<std::string>("frame_id", "map");
     child_frame_id_ = declare_parameter<std::string>("child_frame_id", "base_link");
+    imu_frame_id_ = declare_parameter<std::string>("imu_frame_id", "imu_link");
 
     if (pattern_ != "static" && pattern_ != "straight" && pattern_ != "circle" &&
       pattern_ != "corridor")
@@ -54,6 +61,44 @@ public:
 
     publisher_ = create_publisher<nav_msgs::msg::Odometry>("~/output/ground_truth",
       rclcpp::QoS(10));
+
+    // The EKF cannot run on pose alone: gyro_odometer needs a rate and a speed,
+    // and without them the fused output never moves between ArUco fixes. The
+    // trajectory already knows both exactly, so they are published from the
+    // same source rather than differentiated back out of the pose.
+    // RELIABLE, not SensorDataQoS. gyro_odometer subscribes reliably, and a
+    // best-effort publisher is simply refused: "offering incompatible QoS. No
+    // messages will be sent to it." Every node stays up and looks healthy while
+    // the twist chain is silently disconnected.
+    imu_publisher_ = create_publisher<sensor_msgs::msg::Imu>(
+      "~/output/imu", rclcpp::QoS(10));
+    velocity_publisher_ = create_publisher<geometry_msgs::msg::TwistWithCovarianceStamped>(
+      "~/output/velocity", rclcpp::QoS(10));
+
+    // Noise is on by default. A dead-reckoning chain fed perfect rates does not
+    // drift, which would make DEAD_RECKONING look survivable for far longer than
+    // it is and would quietly invalidate every budget measured against it.
+    gyro_noise_ = declare_parameter<double>("gyro_noise", 0.002);        // [rad/s]
+    gyro_bias_ = declare_parameter<double>("gyro_bias", 0.001);          // [rad/s]
+    velocity_noise_ = declare_parameter<double>("velocity_noise", 0.02);  // [m/s]
+    rng_.seed(static_cast<std::uint32_t>(declare_parameter<int>("seed", 42)));
+
+    // gyro_odometer transforms the IMU into base_link before using it, so with
+    // no base_link -> imu_link transform it silently drops every message and
+    // publishes nothing. The EKF then has no twist, produces no output, and the
+    // whole fusion chain is dead while every individual node looks healthy.
+    //
+    // Broadcast from here because this node is what publishes the IMU. Identity
+    // on purpose: the trajectory's angular rate IS the body rate, so giving the
+    // simulated IMU an offset would mean modelling a lever arm that the rates
+    // themselves do not have.
+    static_tf_ = std::make_unique<tf2_ros::StaticTransformBroadcaster>(*this);
+    geometry_msgs::msg::TransformStamped imu_tf;
+    imu_tf.header.stamp = now();
+    imu_tf.header.frame_id = child_frame_id_;
+    imu_tf.child_frame_id = imu_frame_id_;
+    imu_tf.transform.rotation.w = 1.0;
+    static_tf_->sendTransform(imu_tf);
     timer_ = create_wall_timer(
       std::chrono::duration<double>(1.0 / rate_hz_), [this]() { tick(); });
 
@@ -77,13 +122,24 @@ private:
     if (pattern_ == "static") {
       vx = 0.0;
     } else if (pattern_ == "straight") {
-      // Out and back, so a long run stays inside the board layout.
+      // Out and back, so a long run stays inside the board layout. The return
+      // leg REVERSES rather than turning around: yaw stays 0 and the body
+      // velocity goes negative.
+      //
+      // It used to flip yaw to pi at the turnaround while still reporting
+      // wz = 0, which is not a motion any vehicle can perform. The gyro said
+      // "not rotating" while the truth rotated 180 degrees instantly, so the
+      // filter could not possibly follow -- it ran 180 degrees out and
+      // accumulated tens of metres of along-track error, and every scenario
+      // built on this pattern failed for a reason that had nothing to do with
+      // the localizer.
       const double period = 2.0 * length_ / std::max(speed_, 1e-6);
       const double phase = std::fmod(t, period);
       const bool outbound = phase < period / 2.0;
       const double s = outbound ? speed_ * phase : length_ - speed_ * (phase - period / 2.0);
       x = origin_x_ + s;
-      yaw = outbound ? 0.0 : M_PI;
+      yaw = 0.0;
+      vx = outbound ? speed_ : -speed_;
     } else if (pattern_ == "circle") {
       wz = speed_ / std::max(radius_, 1e-6);
       const double a = wz * t;
@@ -94,7 +150,13 @@ private:
       const double leg = length_;
       const double turn_arc = M_PI_2 * radius_;
       const double total = 2.0 * leg + turn_arc;
-      const double s = std::fmod(speed_ * t, total);
+      // Clamped, NOT wrapped. fmod sent the vehicle back to the start
+      // instantaneously at the end of the route -- a teleport that no filter
+      // can follow, and it showed up as the corridor scenario diverging by
+      // 17 m in its final seconds while tracking to a centimetre before that.
+      // Running off the end of the route and stopping is honest; jumping is
+      // not.
+      const double s = std::min(speed_ * t, total);
       if (s < leg) {
         x = origin_x_ + s;
         yaw = 0.0;
@@ -131,6 +193,40 @@ private:
     msg.twist.twist.angular.z = wz;
 
     publisher_->publish(msg);
+
+    const auto stamp = msg.header.stamp;
+
+    sensor_msgs::msg::Imu imu;
+    imu.header.stamp = stamp;
+    // The IMU frame, not base_link: imu_corrector and gyro_odometer both expect
+    // the sensor's own frame and transform it themselves.
+    imu.header.frame_id = imu_frame_id_;
+    imu.orientation = msg.pose.pose.orientation;
+    imu.angular_velocity.z = wz + gyro_bias_ + noise(gyro_noise_);
+    // Diagonal covariances, since the axes are independent here by construction.
+    imu.angular_velocity_covariance[8] = gyro_noise_ * gyro_noise_;
+    imu.linear_acceleration_covariance[0] = 1.0;
+    imu.linear_acceleration_covariance[4] = 1.0;
+    imu.linear_acceleration_covariance[8] = 1.0;
+    imu_publisher_->publish(imu);
+
+    geometry_msgs::msg::TwistWithCovarianceStamped velocity;
+    velocity.header.stamp = stamp;
+    velocity.header.frame_id = child_frame_id_;
+    velocity.twist.twist.linear.x = vx + noise(velocity_noise_);
+    velocity.twist.twist.angular.z = wz + gyro_bias_ + noise(gyro_noise_);
+    velocity.twist.covariance[0] = velocity_noise_ * velocity_noise_;
+    velocity.twist.covariance[35] = gyro_noise_ * gyro_noise_;
+    velocity_publisher_->publish(velocity);
+  }
+
+  double noise(double sigma)
+  {
+    if (sigma <= 0.0) {
+      return 0.0;
+    }
+    std::normal_distribution<double> distribution(0.0, sigma);
+    return distribution(rng_);
   }
 
   std::string pattern_;
@@ -145,6 +241,15 @@ private:
   double elapsed_{0.0};
 
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr publisher_;
+  rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_publisher_;
+  rclcpp::Publisher<geometry_msgs::msg::TwistWithCovarianceStamped>::SharedPtr
+    velocity_publisher_;
+  std::string imu_frame_id_;
+  double gyro_noise_{};
+  double gyro_bias_{};
+  double velocity_noise_{};
+  std::mt19937 rng_;
+  std::unique_ptr<tf2_ros::StaticTransformBroadcaster> static_tf_;
   rclcpp::TimerBase::SharedPtr timer_;
 };
 

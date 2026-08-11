@@ -75,10 +75,22 @@ double normalSpreadDeg(const std::vector<BoardObservation> & boards)
   double worst = 0.0;
   for (std::size_t i = 0; i < boards.size(); ++i) {
     for (std::size_t j = i + 1; j < boards.size(); ++j) {
-      // |dot| so a normal pointing the other way does not read as 180 degrees
-      // of spread when the boards are really parallel.
-      const double d = std::abs(boards[i].normalInMap().dot(boards[j].normalInMap()));
-      worst = std::max(worst, std::acos(std::min(1.0, d)));
+      // SIGNED, not |dot|. Two boards on facing walls have opposite normals,
+      // and that is the most informative geometry available -- a yaw error
+      // swings them in opposite senses, which is exactly what makes heading
+      // observable. Taking the absolute value scored that case as ZERO spread,
+      // identical to two boards side by side on one wall, and the effect was
+      // not academic: a corridor with facing pairs could not cold-start,
+      // because every solve reported 0.0 deg against a 20 deg requirement.
+      //
+      // The abs() was there to guard the flip degeneracy of parallel planes.
+      // That is a real concern, but it is not this function's job and this
+      // function cannot do it: resolveFlips already detects a tied consensus
+      // between two equal clusters and refuses to publish. Conditioning is
+      // measured separately by the condition number. Three problems, three
+      // mechanisms.
+      const double d = boards[i].normalInMap().dot(boards[j].normalInMap());
+      worst = std::max(worst, std::acos(std::clamp(d, -1.0, 1.0)));
     }
   }
   return worst * 180.0 / M_PI;

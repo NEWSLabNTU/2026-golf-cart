@@ -34,6 +34,7 @@
 #include <random>
 #include <string>
 #include <unordered_set>
+#include <optional>
 #include <vector>
 
 namespace golfcart::aruco_sim
@@ -61,7 +62,10 @@ public:
       get_logger(), "simulating %zu cameras against %zu boards, corner sigma %.2f px",
       cameras_.size(), map_.tags.size(), corner_sigma_px_);
     if (blackout_) {
-      RCLCPP_WARN(get_logger(), "FAULT INJECTION: blackout active, no detections will be emitted");
+      RCLCPP_WARN(
+        get_logger(),
+        "FAULT INJECTION: blackout active from %.1f s, no detections will be emitted after that",
+        blackout_start_s_);
     }
     if (displaced_id_ >= 0) {
       RCLCPP_WARN(
@@ -101,6 +105,14 @@ private:
 
     // ── fault injection ────────────────────────────────────────────────────
     blackout_ = declare_parameter<bool>("fault.blackout", false);
+    // Seconds of normal operation before the blackout starts.
+    //
+    // Losing every board from the first frame tests almost nothing: the system
+    // has never localized, so there is nothing to dead-reckon FROM and staying
+    // UNINITIALIZED is the correct response. The interesting failure is losing
+    // coverage while under way, which is what the dead-reckoning budget exists
+    // for, and that needs the blackout to start after a good fix.
+    blackout_start_s_ = declare_parameter<double>("fault.blackout_start_s", 0.0);
     displaced_id_ = declare_parameter<int>("fault.displaced_board_id", -1);
     const auto d = declare_parameter<std::vector<double>>(
       "fault.displacement", std::vector<double>{0.0, 0.0, 0.0});
@@ -214,6 +226,10 @@ private:
 
   void onGroundTruth(const nav_msgs::msg::Odometry & msg)
   {
+    if (!first_truth_) {
+      first_truth_ = now();
+    }
+
     Eigen::Isometry3d map_to_base;
     tf2::fromMsg(msg.pose.pose, map_to_base);
 
@@ -227,7 +243,7 @@ private:
       out.image_width = static_cast<std::uint32_t>(cam.width);
       out.image_height = static_cast<std::uint32_t>(cam.height);
 
-      if (!blackout_) {
+      if (!blackedOut()) {
         for (const auto & [id, tag] : map_.tags) {
           if (!allowedVisible(id)) {
             continue;
@@ -315,7 +331,21 @@ private:
   unsigned int seed_{};
   std::mt19937 rng_;
 
+  /// True once the blackout window has begun.
+  bool blackedOut() const
+  {
+    if (!blackout_) {
+      return false;
+    }
+    if (!first_truth_) {
+      return true;
+    }
+    return (now() - *first_truth_).seconds() >= blackout_start_s_;
+  }
+
   bool blackout_{false};
+  double blackout_start_s_{0.0};
+  std::optional<rclcpp::Time> first_truth_;
   int displaced_id_{-1};
   Eigen::Vector3d displacement_{Eigen::Vector3d::Zero()};
   std::unordered_set<std::uint32_t> visible_allowlist_;

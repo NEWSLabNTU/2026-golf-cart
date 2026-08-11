@@ -33,10 +33,16 @@
         width: 1920
         height: 1280
         xyz: [0.0, 0.4, 0.6]
-        # Optical frame in base_link. Not identity even for a camera pointing
-        # straight ahead: z forward, x right, y down. The vehicle URDF is
-        # currently missing exactly this rotation.
-        rpy: [-1.5707963, 0.0, 0.0]
+        # Optical frame in base_link: z forward, x right, y down, then yawed to
+        # where the camera actually points. The vehicle URDF is currently
+        # missing exactly this rotation.
+        #
+        # These yaws used to disagree with the names -- "left" pointed straight
+        # ahead and "right" pointed backwards -- so nothing ever looked at the
+        # right-hand wall. Every solve then drew its boards from one wall, the
+        # normal spread was 0, and the system could not initialize or resolve
+        # heading no matter how the board map was arranged.
+        rpy: [-1.5707963, 0.0, 1.5707963]   # +90 deg: looks left (+y)
         stamp_offset: 0.0
       right:
         optical_frame: camera_right_optical
@@ -47,7 +53,7 @@
         width: 1920
         height: 1280
         xyz: [0.0, -0.4, 0.6]
-        rpy: [-1.5707963, 0.0, -3.1415927]
+        rpy: [-1.5707963, 0.0, -1.5707963]  # -90 deg: looks right (-y)
         stamp_offset: 0.011
       rear:
         optical_frame: camera_rear_optical
@@ -58,7 +64,7 @@
         width: 1920
         height: 1280
         xyz: [-0.5, 0.0, 0.6]
-        rpy: [-1.5707963, 0.0, 1.5707963]
+        rpy: [-1.5707963, 0.0, 3.1415927]   # 180 deg: looks behind (-x)
         stamp_offset: 0.022
 
     fault:

@@ -19,6 +19,7 @@
 #include <golfcart_aruco_localizer/tag_map.hpp>
 
 #include <diagnostic_updater/diagnostic_updater.hpp>
+#include <autoware_localization_msgs/srv/initialize_localization.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
@@ -61,8 +62,27 @@ public:
       "~/debug/mapped_tags", rclcpp::QoS(1).transient_local().reliable());
     pose_publisher_ = create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>(
       "~/output/pose_with_covariance", rclcpp::QoS(10));
+    // TRANSIENT_LOCAL, because this is published exactly once and the EKF is
+    // not necessarily listening yet when it happens. With volatile durability
+    // the one message goes out into an empty graph, the EKF waits forever for
+    // an initial pose it already missed, and nothing downstream ever produces a
+    // fused pose -- while the localizer log cheerfully reports that it
+    // initialized. Latching it means a late subscriber still gets it.
+    // Publishing /initialpose3d does NOT initialize Autoware, which is the
+    // opposite of what the topic name suggests. pose_initializer PUBLISHES that
+    // topic; it does not listen to it. Initialization arrives through this
+    // service, and pose_initializer is what then triggers the EKF out of its
+    // dormant state.
+    //
+    // Sending the topic alone meant the pose went out, nobody acted on it, and
+    // the EKF waited forever for an initialization that had, from its point of
+    // view, never been requested.
+    initialize_client_ =
+      create_client<autoware_localization_msgs::srv::InitializeLocalization>(
+      "/localization/initialize");
+
     initial_pose_publisher_ = create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>(
-      "~/output/initialpose", rclcpp::QoS(1));
+      "~/output/initialpose", rclcpp::QoS(1).transient_local());
     status_publisher_ = create_publisher<ArucoLocalizerStatus>("~/status", rclcpp::QoS(10));
 
     // /diagnostics is the machine-readable half of ~/status, and the half that
@@ -181,8 +201,11 @@ private:
     init_min_boards_ = declare_parameter<int>("initialization.min_markers", 2);
     init_min_spread_deg_ = declare_parameter<double>("initialization.min_normal_spread_deg", 20.0);
     init_max_range_ = declare_parameter<double>("initialization.max_range", 8.0);
+    init_max_view_angle_deg_ =
+      declare_parameter<double>("initialization.max_view_angle_deg", 50.0);
     init_consecutive_ = declare_parameter<int>("initialization.consecutive_solves", 5);
     init_agreement_radius_ = declare_parameter<double>("initialization.agreement_radius", 0.5);
+    init_max_speed_ = declare_parameter<double>("initialization.max_speed", 2.0);
     init_max_condition_ = declare_parameter<double>("initialization.max_condition_number", 1.0e4);
     init_cooldown_s_ = declare_parameter<double>("initialization.republish_cooldown", 10.0);
 
@@ -325,8 +348,29 @@ private:
       board.error_2 = detection.reprojection_error_2;
 
       if (board.range() > max_range_) {
+        ++rejected_range_;
         continue;
       }
+
+      // The view-angle window. Declared, cross-validated at startup, and then
+      // never applied to a single observation until now -- so the gate the
+      // design leans on hardest did not exist.
+      //
+      // It matters more than the ambiguity ratio, which is the intuitive
+      // candidate for this job and cannot do it: phase 3D-5 measured the ratio
+      // reporting maximum confidence at exactly the fronto-parallel geometry
+      // where orientation is least reliable, because the twin solution is not
+      // yet distinct enough to act as a rival. Only the geometry itself says
+      // this board should not be trusted for orientation.
+      const double view_angle = board.viewAngleDeg();
+      if (view_angle < min_view_angle_deg_ || view_angle > max_view_angle_deg_) {
+        ++rejected_view_angle_;
+        RCLCPP_DEBUG(
+          get_logger(), "board %u rejected: view angle %.1f deg outside [%.1f, %.1f]",
+          board.id, view_angle, min_view_angle_deg_, max_view_angle_deg_);
+        continue;
+      }
+
       out->push_back(board);
     }
   }
@@ -383,6 +427,12 @@ private:
       }
       RCLCPP_DEBUG(get_logger(), "per-board residual px:%s", line.c_str());
     }
+    // Boards consensus threw out never reach the solve, so they never appear
+    // in board_residual_px. Tell the monitor about them separately or they stay
+    // invisible however wrong they are.
+    for (const auto id : consensus.outliers) {
+      integrity_.noteConsensusOutlier(id);
+    }
     const IntegrityReport integrity = integrity_.update(result.board_residual_px);
     for (const auto id : integrity.flagged) {
       if (announced_.insert(id).second) {
@@ -413,7 +463,7 @@ private:
     }
 
     publishPose(result, stamp);
-    maybeInitialize(result, stamp);
+    maybeInitialize(result, boards, stamp);
     report(outcome, result, integrity);
   }
 
@@ -442,21 +492,77 @@ private:
   /// Cold start. Nothing NDT-refines the seed any more, so the first
   /// well-conditioned solve is the answer — but the gates are strict, because
   /// one bad initialization is worse than none.
-  void maybeInitialize(const SolveResult & result, const rclcpp::Time & stamp)
+  void maybeInitialize(
+    const SolveResult & result, const std::vector<BoardObservation> & used,
+    const rclcpp::Time & stamp)
   {
-    if (initialized_) {
+    // "Initialized" means the FILTER took it, not that we sent it.
+    //
+    // Publishing once and latching the flag is not enough, and transient-local
+    // durability does not rescue it: a latched sample is only replayed to a
+    // subscriber that also asks for transient-local, and the EKF's
+    // subscription is volatile. So an initial pose sent before the EKF is
+    // listening is simply lost, the filter waits forever for a pose that was
+    // already sent, and every node in the graph reports healthy while nothing
+    // downstream ever produces a fused pose.
+    //
+    // Evidence that it landed is odometry coming back from the filter. Until
+    // that arrives, keep offering the pose at the cooldown interval.
+    if (initialized_ && latest_odom_) {
       return;
     }
-    const bool eligible =
-      result.observability.boards >= static_cast<std::size_t>(init_min_boards_) &&
-      result.observability.normal_spread_deg >= init_min_spread_deg_ &&
-      result.observability.condition_number <= init_max_condition_;
-    if (!eligible) {
+    if (initialized_ && !latest_odom_) {
+      if (last_init_publish_ && (stamp - *last_init_publish_).seconds() < init_cooldown_s_) {
+        return;
+      }
+      RCLCPP_WARN(
+        get_logger(),
+        "no odometry back from the filter %.0f s after sending the initial pose; "
+        "re-sending. If this repeats, the EKF is not receiving /initialpose3d.",
+        init_cooldown_s_);
+      initialized_ = false;
+    }
+
+    // `initialization.max_range` and `initialization.max_view_angle_deg` were
+    // declared and then never read: the config advertised a stricter cold-start
+    // gate than the code applied, so initialization ran on the ordinary
+    // tracking gates while appearing to be guarded. Applied here now.
+    //
+    // They are counted rather than used to filter, because a solve is a joint
+    // fit over every board that went into it -- dropping one after the fact
+    // would leave a pose that no longer corresponds to the boards being
+    // checked. The question asked is "were there enough close, well-angled
+    // boards in this solve", not "re-solve without the far ones".
+    std::size_t close_and_square = 0;
+    for (const auto & board : used) {
+      if (board.range() <= init_max_range_ &&
+        board.viewAngleDeg() <= init_max_view_angle_deg_)
+      {
+        ++close_and_square;
+      }
+    }
+
+    const bool enough_boards =
+      close_and_square >= static_cast<std::size_t>(init_min_boards_);
+    const bool enough_spread = result.observability.normal_spread_deg >= init_min_spread_deg_;
+    const bool conditioned = result.observability.condition_number <= init_max_condition_;
+
+    if (!enough_boards || !enough_spread || !conditioned) {
       init_agreeing_.clear();
+      // Say why. A cold start that silently never happens is the hardest kind
+      // of failure to diagnose: every node is up, detections flow, and the only
+      // symptom is that nothing downstream ever produces a pose.
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 5000,
+        "not initializing yet: %zu of %zu boards within %.1f m and %.0f deg "
+        "(need %d), spread %.1f deg (need %.1f), condition %.1e (limit %.1e)",
+        close_and_square, used.size(), init_max_range_, init_max_view_angle_deg_,
+        init_min_boards_, result.observability.normal_spread_deg, init_min_spread_deg_,
+        result.observability.condition_number, init_max_condition_);
       return;
     }
 
-    init_agreeing_.push_back(result.pose.translation());
+    init_agreeing_.push_back({stamp, result.pose.translation()});
     if (static_cast<int>(init_agreeing_.size()) < init_consecutive_) {
       return;
     }
@@ -468,12 +574,27 @@ private:
     // solve can still be wrong, several in a row landing in the same place is
     // much harder to fake.
     Eigen::Vector3d mean = Eigen::Vector3d::Zero();
-    for (const auto & p : init_agreeing_) {
-      mean += p;
+    for (const auto & sample : init_agreeing_) {
+      mean += sample.position;
     }
     mean /= static_cast<double>(init_agreeing_.size());
-    for (const auto & p : init_agreeing_) {
-      if ((p - mean).norm() > init_agreement_radius_) {
+
+    // The allowance has to grow with how long the samples span, because the
+    // vehicle may be MOVING. A fixed radius applied to a moving vehicle
+    // measures travel, not disagreement: at 1 m/s five windows cover half a
+    // metre, which is the entire budget, so a perfectly consistent cold start
+    // fails for driving forward. The gate is meant to catch solves that
+    // disagree with each other, not solves taken at different places.
+    const double span_s =
+      (init_agreeing_.back().stamp - init_agreeing_.front().stamp).seconds();
+    const double allowed = init_agreement_radius_ + init_max_speed_ * std::abs(span_s);
+    for (const auto & sample : init_agreeing_) {
+      if ((sample.position - mean).norm() > allowed) {
+        RCLCPP_WARN_THROTTLE(
+          get_logger(), *get_clock(), 5000,
+          "not initializing yet: %d solves span %.2f m, above the %.2f m allowed "
+          "over %.2f s", init_consecutive_, (sample.position - mean).norm(), allowed,
+          span_s);
         return;
       }
     }
@@ -486,10 +607,49 @@ private:
     msg.header.stamp = stamp;
     msg.header.frame_id = map_.frame_id;
     msg.pose.pose = tf2::toMsg(result.pose);
-    msg.pose.covariance[0] = 1.0;   // honest and coarse
-    msg.pose.covariance[7] = 1.0;
-    msg.pose.covariance[35] = 0.1;
+    // Every diagonal entry, not just the three that seemed interesting.
+    // Leaving z, roll and pitch at zero states them as EXACTLY known, and the
+    // EKF will not activate on a pose it cannot invert -- which presents as an
+    // initial pose that is published, accepted by nobody, and silently ignored
+    // while the filter waits forever. It is the same rule the solver already
+    // follows for its own covariance: never emit a zero variance.
+    msg.pose.covariance[0] = 1.0;    // x   [m^2], honest and coarse
+    msg.pose.covariance[7] = 1.0;    // y
+    msg.pose.covariance[14] = 0.25;  // z, better constrained: the boards fix height
+    msg.pose.covariance[21] = 0.05;  // roll  [rad^2]
+    msg.pose.covariance[28] = 0.05;  // pitch
+    msg.pose.covariance[35] = 0.1;   // yaw
+    // Still published, for anything watching the estimator directly (rviz,
+    // recordings, debugging). The service call is what actually initializes.
     initial_pose_publisher_->publish(msg);
+
+    if (initialize_client_->service_is_ready()) {
+      auto request =
+        std::make_shared<autoware_localization_msgs::srv::InitializeLocalization::Request>();
+      // DIRECT, not AUTO: AUTO asks the configured pose estimator to refine the
+      // guess, and on this vehicle that estimator IS this node. Handing our own
+      // answer back to ourselves for refinement is at best a no-op.
+      request->method =
+        autoware_localization_msgs::srv::InitializeLocalization::Request::DIRECT;
+      request->pose_with_covariance.push_back(msg);
+      initialize_client_->async_send_request(
+        request,
+        [this](rclcpp::Client<
+          autoware_localization_msgs::srv::InitializeLocalization>::SharedFuture future) {
+          const auto status = future.get()->status;
+          if (!status.success) {
+            RCLCPP_ERROR(
+              get_logger(), "pose_initializer rejected our initial pose: %s",
+              status.message.c_str());
+          }
+        });
+    } else {
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 5000,
+        "/localization/initialize is not available; publishing the pose but nothing "
+        "will act on it. Is pose_initializer running?");
+    }
+
     last_init_publish_ = stamp;
     initialized_ = true;
     RCLCPP_INFO(
@@ -643,6 +803,8 @@ private:
   bool motion_compensation_{true};
   double max_future_stamp_{};
   double max_range_{};
+  std::size_t rejected_range_{0};
+  std::size_t rejected_view_angle_{0};
   double min_view_angle_deg_{};
   double max_view_angle_deg_{};
   double max_condition_number_{};
@@ -650,12 +812,23 @@ private:
   int init_min_boards_{};
   double init_min_spread_deg_{};
   double init_max_range_{};
+  double init_max_view_angle_deg_{};
   int init_consecutive_{};
   double init_agreement_radius_{};
+  double init_max_speed_{};
   double init_max_condition_{};
   double init_cooldown_s_{};
   bool initialized_{false};
-  std::deque<Eigen::Vector3d> init_agreeing_;
+  /// A cold-start sample: where the solve put the vehicle, and when.
+  ///
+  /// The stamp is not decoration -- without it the agreement test cannot tell
+  /// travel from disagreement.
+  struct InitSample
+  {
+    rclcpp::Time stamp;
+    Eigen::Vector3d position;
+  };
+  std::deque<InitSample> init_agreeing_;
   std::optional<rclcpp::Time> last_init_publish_;
 
   IntegrityMonitor integrity_;
@@ -678,6 +851,8 @@ private:
   rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr pose_publisher_;
   rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr
     initial_pose_publisher_;
+  rclcpp::Client<autoware_localization_msgs::srv::InitializeLocalization>::SharedPtr
+    initialize_client_;
   rclcpp::Publisher<ArucoLocalizerStatus>::SharedPtr status_publisher_;
   std::unique_ptr<diagnostic_updater::Updater> diagnostics_;
   StateReport last_state_report_;

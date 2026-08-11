@@ -20,6 +20,8 @@
 #include <Eigen/Core>
 #include <Eigen/Geometry>
 
+#include <cmath>
+
 #include <array>
 #include <cstdint>
 #include <string>
@@ -82,6 +84,26 @@ struct BoardObservation
 
   /// Range from the camera to the board centre.
   double range() const {return cam_to_tag_1.translation().norm();}
+
+  /// Angle between the line of sight and the board normal, in degrees.
+  ///
+  /// 0 is fronto-parallel — looking straight at the board — and that is the
+  /// WORST case for orientation, not the best. The two planar pose solutions
+  /// merge there, and phase 3D-5 measured single-marker rotation error peaking
+  /// at fronto-parallel and improving monotonically with tilt.
+  ///
+  /// Returns 180 for a board facing away from the camera, so such a board fails
+  /// any upper gate rather than sneaking through with a small angle.
+  double viewAngleDeg() const
+  {
+    const Eigen::Vector3d normal_in_cam = cam_to_tag_1.linear().col(2);
+    const Eigen::Vector3d line_of_sight = cam_to_tag_1.translation().normalized();
+    const double cos_phi = -normal_in_cam.dot(line_of_sight);
+    if (cos_phi <= 0.0) {
+      return 180.0;
+    }
+    return std::acos(std::min(1.0, cos_phi)) * 180.0 / M_PI;
+  }
 };
 
 /// How well the visible constellation constrains the pose.

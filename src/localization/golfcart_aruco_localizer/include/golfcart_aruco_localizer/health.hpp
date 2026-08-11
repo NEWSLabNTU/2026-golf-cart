@@ -105,6 +105,15 @@ public:
   /// from the next solve.
   IntegrityReport update(const std::map<std::uint32_t, double> & residual_px);
 
+  /// Record that a board was thrown out of the flip consensus.
+  ///
+  /// Such a board never reaches the solve, so it never produces a residual and
+  /// `update()` never sees it. Without this it can disagree with its neighbours
+  /// on every single frame and still be reported as healthy -- silently
+  /// dropped, never named, and nobody is ever sent to look at it. Which is
+  /// exactly what a board knocked off its mount looks like.
+  void noteConsensusOutlier(std::uint32_t id);
+
   bool isFlagged(std::uint32_t id) const;
   /// Clear a board's history, for when someone has been out to fix it.
   void clear(std::uint32_t id);
@@ -113,6 +122,9 @@ private:
   IntegrityOptions options_;
   std::map<std::uint32_t, double> ewma_;
   std::map<std::uint32_t, int> strikes_;
+  /// How many times each board has been offered to the outlier path, so a
+  /// strike count can be judged as a proportion rather than a total.
+  std::map<std::uint32_t, int> seen_;
   std::vector<std::uint32_t> flagged_;
 };
 

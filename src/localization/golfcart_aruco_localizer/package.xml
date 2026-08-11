@@ -16,6 +16,7 @@
   <buildtool_depend>ament_cmake_auto</buildtool_depend>
 
   <depend>aruco_detection_msgs</depend>
+  <depend>autoware_localization_msgs</depend>
   <depend>diagnostic_msgs</depend>
   <depend>diagnostic_updater</depend>
   <depend>eigen</depend>
