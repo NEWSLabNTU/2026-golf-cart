@@ -17,8 +17,10 @@
       1. Launch Golf Cart: just launch
       2. Run this: ros2 launch control_test keyboard_control.launch.xml
       3. Click on the GUI window to focus it
-      4. Engage autonomous via /control/control_mode_request service
-         (or use the drive TUI: just tool-tui)
+      4. Have the driver switch the vehicle to autonomous on its own
+         controls; golfcart_vehicle_interface transmits commands only while
+         all four VCU subsystem states report autonomous. Check
+         /vehicle/status/control_mode (or the drive TUI: just tool-tui)
       5. Press 'x' for DRIVE gear
       6. Use arrow keys to control
 

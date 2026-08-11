@@ -51,11 +51,19 @@ publish_rate: 30.0
 
 1. Launch system: `just launch`
 2. Launch keyboard_control: `ros2 launch control_test keyboard_control.launch.xml`
-3. Engage autonomous via service or TUI:
+3. Have the driver switch the vehicle to autonomous on its own controls.
+   `golfcart_vehicle_interface` commands nothing until all four VCU subsystem
+   states (MTR, BRK, EPS, Drv) report autonomous — no service call can force
+   it. Confirm with:
+   ```bash
+   ros2 topic echo --once /vehicle/status/control_mode   # mode: 1 == AUTONOMOUS
+   # or use: just tool-tui
+   ```
+   If a fault is latched (`mode: 5`, DISENGAGED), clear it after fixing the
+   cause:
    ```bash
    ros2 service call /control/control_mode_request \
-     autoware_vehicle_msgs/srv/ControlModeCommand "{mode: 1}"
-   # or use: just tool-tui
+     autoware_vehicle_msgs/srv/ControlModeCommand "{mode: 4}"
    ```
 4. Set gear (`x` for DRIVE), then drive with arrow keys.
 

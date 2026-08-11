@@ -190,16 +190,48 @@ control-straight:
 control-circle:
     ros2 run control_test trajectory_player --ros-args -p trajectory_file:=circle.yaml
 
+# Terminal keyboard controller (autoware_manual_control), commanding /control/command/*
+# Pair with `just vehicle-interface` in a second terminal. The driver switches the
+# vehicle to autonomous on its own controls — this only reports the mode it sees on
+# start (--no-mode-check skips that). Needs a real terminal: raw-tty key reads.
+manual-control *ARGS="":
+    ./scripts/control/keyboard_control_direct.sh {{ARGS}}
+
+# Launch ONLY the vehicle interface, via the Autoware entry launch file
+# (golfcart_autoware.launch.xml with every other module disabled).
+# ⚠️  tx_enabled defaults to true: CAN TX is live and the cart will move.
+# Override both: just vehicle-interface can1 false
+vehicle-interface CAN="can0" TX="true":
+    play_launch launch golfcart_launch golfcart_autoware.launch.xml \
+        vehicle_model:=golfcart_vehicle \
+        sensor_model:=golfcart_sensor_kit \
+        map_path:={{justfile_directory()}}/data/COSS-map-planning \
+        launch_vehicle:=true \
+        launch_vehicle_interface:=true \
+        launch_system:=false \
+        launch_map:=false \
+        launch_sensing:=false \
+        launch_sensing_driver:=false \
+        launch_localization:=false \
+        launch_perception:=false \
+        launch_planning:=false \
+        launch_control:=false \
+        launch_api:=false \
+        rviz:=false \
+        can_interface:={{CAN}} \
+        tx_enabled:={{TX}}
+
 # Launch keyboard control GUI (requires X11/DISPLAY; use after `just launch`)
 control-keyboard:
     ros2 launch control_test keyboard_control.launch.xml
 
-# Launch bare vehicle interface node in read-only mode (CAN RX only, tx disabled)
+# Launch bare vehicle interface node, read-only by default (CAN RX only, tx disabled)
 # Safe bench test — populates /vehicle/status/* without commanding motion
-# Override interface: just control-vehicle-test CAN=can0
-control-vehicle-test CAN="vcan0":
+# Positional args, in order: just control-vehicle-test can0 true
+# ⚠️  TX=true puts real frames on the bus and can command motion
+control-vehicle-test CAN="vcan0" TX="false":
     ros2 launch golfcart_vehicle_launch vehicle_interface_test.launch.xml \
-        can_interface:={{CAN}} tx_enabled:=false
+        can_interface:={{CAN}} tx_enabled:={{TX}}
 
 # Launch teleop GUI + vehicle interface on real CAN bus (tx enabled — DRIVES THE CART)
 # ⚠️  Requires X11 display. Requires can0 up. Commands actual motor/steering.
