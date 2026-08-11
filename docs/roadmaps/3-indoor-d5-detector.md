@@ -239,9 +239,60 @@ That figure describes an ungated, poorly-resolved regime this system does not
 operate in. This is the second measurement pointing the same way — D4 found
 p99 board-to-board disagreement of 2.8°.
 
+## Vendored into this repo, and the message question resolved
+
+The detector now lives here as `src/localization/golfcart_aruco_detector`,
+copied from LCTK's four ArUco packages and merged into one. LCTK keeps its own
+copy for calibration; the two are expected to diverge, because they want
+different things.
+
+That resolves the message question by removing it. `ArucoDetectionArray` is
+published directly, and the `Detection2DArray` corner-smuggling hack is gone —
+it existed because `bbox` is axis-aligned and cannot carry four real corners.
+
+**Dropped in the merge**, all of it calibration-only or dead:
+
+| dropped | why it has no caller here |
+|---|---|
+| ICP board fit (`fit_icp`, `IcpRegression`, `PoseEstimation`) | fits a known multi-marker board; this system uses single-ID boards |
+| all-or-nothing board mode | returns nothing unless every configured ID is visible; a vehicle sees whatever the room presents |
+| `estimate_pose()` | the path `marker_pnp` replaced |
+| `MrptCalibration` loader | intrinsics come from `CameraInfo`, by design |
+| `MultiArucoPattern` grid | one marker per board, so there is no grid to describe |
+| highgui windows | the node publishes a ROS overlay instead |
+
+`marker_size` is now stated directly rather than derived from board size, border
+and a square ratio: one number checkable against a tape measure instead of three
+that have to agree. `cv-convert` was dropped too — its feature flags pin an exact
+OpenCV minor version and had none for the one this repo builds against, so the
+fifteen-line conversion is written out.
+
+28 tests: 10 unit, 11 detection contract, 7 pose contract.
+
+### Compressed transport, which turned out to be load-bearing
+
+The gscam config sets `enable_pub_plugins: ["image_transport/compressed"]`, so
+**no raw `sensor_msgs/Image` is published on these topics at all**. A detector
+subscribed to the raw topic waits forever and presents as a camera that sees
+nothing. The node therefore defaults to `use_compressed: true` and decodes
+straight to grayscale with `imdecode`.
+
+`rclrs` has no `image_transport` binding, so this is a direct
+`CompressedImage` subscription rather than a transport plugin. That is a
+simplification, not a workaround: it also avoids a decompressor node and a topic
+round trip.
+
+### Wired into the launch
+
+`aruco_localization.launch.xml` claimed in its own header to bring up "the three
+per-camera detectors" and brought up none — the localizer's remaps pointed at
+topics nothing published. It now launches one detector per camera, guarded by
+`use_sim_detector` (an argument phase 3D-2 declared and never used).
+
 ## Still open
 
-- [ ] **`ArucoDetectionArray` output.** Blocked on a decision, not on work:
+- [x] **`ArucoDetectionArray` output.** Resolved by vendoring; see above.
+      The original note read: blocked on a decision, not on work:
       the message is defined in the golf-cart repo (`aruco_detection_msgs`, phase
       3D-1) and LCTK cannot depend on it without a cross-repo dependency. The
       options are to move the package somewhere both can consume, vendor it into
@@ -251,10 +302,7 @@ p99 board-to-board disagreement of 2.8°.
       four corners through `results` as one `ObjectHypothesisWithPose` per corner
       (`C-01`). Carrying two poses, two errors and `K` as well would overload
       that field past the point of being defensible.
-- [ ] **`image_transport` with `transport:=compressed`.** `rclrs` has no
-      `image_transport` binding, so this means subscribing to
-      `sensor_msgs/CompressedImage` and decoding with `imdecode` directly.
-      Straightforward, but it changes the node's input type and is worth doing
-      alongside the message decision rather than twice.
+- [x] **`image_transport` with `transport:=compressed`.** Done as a direct
+      `CompressedImage` subscription; see above.
 - [ ] **Measure `corner_sigma_px`.** Still 0.3, still inferred from other
       people's data. Needs only a camera and a board.

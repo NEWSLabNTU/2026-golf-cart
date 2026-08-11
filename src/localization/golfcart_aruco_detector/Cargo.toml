@@ -1,0 +1,35 @@
+[package]
+name = "golfcart_aruco_detector"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "golfcart_aruco_detector"
+path = "src/main.rs"
+
+[lib]
+name = "golfcart_aruco_detector"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1.0"
+arc-swap = "1.7"
+log = "0.4"
+nalgebra = "0.33"
+serde = { version = "1", features = ["derive"] }
+
+# ROS 2 dependencies (resolved via ament_index by colcon-cargo-ros2)
+rclrs = "*"
+std_msgs = "*"
+sensor_msgs = "*"
+geometry_msgs = "*"
+aruco_detection_msgs = "*"
+
+[dependencies.opencv]
+version = "0.88.9"
+default-features = false
+# aruco: detectMarkers and the predefined dictionaries.
+# calib3d: undistortPoints, solvePnP*, Rodrigues.
+# imgproc: colour conversion, and `remap` in the round-trip test.
+# imgcodecs: imdecode, for the compressed image path.
+features = ["aruco", "calib3d", "imgproc", "imgcodecs", "clang-runtime"]

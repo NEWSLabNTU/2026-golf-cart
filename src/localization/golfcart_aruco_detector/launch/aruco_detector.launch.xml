@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<!--
+  One detector node per camera. The localizer subscribes to all of them and
+  solves the vehicle pose jointly over whatever they collectively see.
+-->
+<launch>
+  <arg name="camera_name" description="Names the node and its namespace, e.g. front"/>
+  <arg name="image_topic"/>
+  <arg name="camera_info_topic"/>
+  <arg name="param_file"
+       default="$(find-pkg-share golfcart_aruco_detector)/config/aruco_detector.param.yaml"/>
+  <arg name="debug_overlay" default="false"/>
+
+  <node pkg="golfcart_aruco_detector" exec="golfcart_aruco_detector"
+        name="aruco_detector_$(var camera_name)" output="screen">
+    <param from="$(var param_file)"/>
+    <param name="debug_overlay" value="$(var debug_overlay)"/>
+    <remap from="~/input/image" to="$(var image_topic)"/>
+    <remap from="~/input/camera_info" to="$(var camera_info_topic)"/>
+  </node>
+</launch>

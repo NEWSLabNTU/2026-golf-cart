@@ -1,0 +1,62 @@
+/**:
+  ros__parameters:
+    # ─────────────────────────────────────────────────────────────────────────
+    # The printed marker
+    # ─────────────────────────────────────────────────────────────────────────
+    dictionary: "DICT_5X5_1000"
+
+    # Side of the BLACK SQUARE, in metres -- not the size of the printed board.
+    # The board carries a white quiet zone which is not part of the marker.
+    # Getting this wrong scales every reported range linearly, and presents as a
+    # calibration error rather than as the typo it is.
+    marker_size: 0.384
+
+    border_bits: 1
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Corner localization
+    # ─────────────────────────────────────────────────────────────────────────
+    # Corner error is the direct input noise of the pose solve, and with four
+    # corners per marker there is no redundancy to average it away. OpenCV's
+    # default is "none", which quantises corners to the pixel grid; "subpix"
+    # measured 25-60 % better at every apparent marker size from 54 to 302 px.
+    corner_refinement: "subpix"
+
+    # Must stay well under half the spacing between two corners of one marker,
+    # or adjacent corners' windows overlap and pull each other off-target.
+    # Pinned by a test across 60-300 px markers.
+    corner_refinement_win_size: 5
+    corner_refinement_max_iterations: 30
+    corner_refinement_min_accuracy: 0.01
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Candidate search
+    # ─────────────────────────────────────────────────────────────────────────
+    adaptive_thresh_win_size_min: 13
+    adaptive_thresh_win_size_max: 33
+    adaptive_thresh_win_size_step: 10
+
+    # OpenCV's defaults here are tuned for markers filling a good part of the
+    # frame. An indoor localization scene is the opposite -- small markers, far
+    # away, several per image -- and the defaults reject exactly those.
+    # OpenCV's min is 0.03, which discards anything below roughly 14 px per side
+    # on a 1920-wide image.
+    min_marker_perimeter_rate: 0.01
+    max_marker_perimeter_rate: 4.0
+
+    # Fraction of the dictionary's error-correction capacity usable when
+    # decoding. Deliberately NOT raised to chase detections: a false ID gets
+    # associated to a real surveyed board pose and produces a confident wrong
+    # answer, which is worse than the missing observation.
+    error_correction_rate: 0.6
+
+    # Markers legitimately appear close together when several boards are seen at
+    # an angle.
+    min_marker_distance_rate: 0.05
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Debug
+    # ─────────────────────────────────────────────────────────────────────────
+    # Publishes the rectified frame. Costs a full-image warp per frame, so it is
+    # off unless someone is looking.
+    debug_overlay: false

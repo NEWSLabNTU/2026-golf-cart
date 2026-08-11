@@ -13,6 +13,51 @@
   <arg name="camera_names" default="['left','right','rear']"/>
   <arg name="use_sim_detector" default="false"
        description="substitute aruco_sim_detector for the real detectors (phase 3D-6)"/>
+  <arg name="detector_config_path"
+       default="$(find-pkg-share golfcart_aruco_detector)/config/aruco_detector.param.yaml"/>
+  <arg name="detector_debug_overlay" default="false"/>
+
+  <!-- ── detectors, one per camera ───────────────────────────────────────────
+       Not in the localization namespace: these are sensing, and they publish
+       alongside the camera they belong to. The localizer subscribes to all
+       three and solves jointly over whatever they collectively see.
+
+       Subscribes to the COMPRESSED topic. The gscam pipeline is configured
+       with `enable_pub_plugins: ["image_transport/compressed"]`, so no raw
+       sensor_msgs/Image is published at all -- a detector on the raw topic
+       waits forever and presents as a camera that sees nothing.
+  -->
+  <group unless="$(var use_sim_detector)">
+    <node pkg="golfcart_aruco_detector" exec="golfcart_aruco_detector"
+          name="aruco_detector_left" output="screen">
+      <param from="$(var detector_config_path)"/>
+      <param name="debug_overlay" value="$(var detector_debug_overlay)"/>
+      <remap from="~/input/image/compressed"
+             to="/sensing/camera/left/image_raw/compressed"/>
+      <remap from="~/input/camera_info" to="/sensing/camera/left/camera_info"/>
+      <remap from="~/output/detections" to="/sensing/camera/left/aruco_detections"/>
+    </node>
+
+    <node pkg="golfcart_aruco_detector" exec="golfcart_aruco_detector"
+          name="aruco_detector_right" output="screen">
+      <param from="$(var detector_config_path)"/>
+      <param name="debug_overlay" value="$(var detector_debug_overlay)"/>
+      <remap from="~/input/image/compressed"
+             to="/sensing/camera/right/image_raw/compressed"/>
+      <remap from="~/input/camera_info" to="/sensing/camera/right/camera_info"/>
+      <remap from="~/output/detections" to="/sensing/camera/right/aruco_detections"/>
+    </node>
+
+    <node pkg="golfcart_aruco_detector" exec="golfcart_aruco_detector"
+          name="aruco_detector_rear" output="screen">
+      <param from="$(var detector_config_path)"/>
+      <param name="debug_overlay" value="$(var detector_debug_overlay)"/>
+      <remap from="~/input/image/compressed"
+             to="/sensing/camera/rear/image_raw/compressed"/>
+      <remap from="~/input/camera_info" to="/sensing/camera/rear/camera_info"/>
+      <remap from="~/output/detections" to="/sensing/camera/rear/aruco_detections"/>
+    </node>
+  </group>
 
   <group>
     <push-ros-namespace namespace="localization"/>

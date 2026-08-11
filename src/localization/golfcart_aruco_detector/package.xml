@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>golfcart_aruco_detector</name>
+  <version>0.1.0</version>
+  <description>
+    ArUco marker detection: images in, rectified corners and per-marker candidate
+    poses out. No map, no TF, no map-frame pose — that is the localizer's job.
+
+    Vendored from LCTK (rust/aruco-config, rust/aruco-detector, rust/aruco-locator,
+    ros/aruco_locator_node) and merged into one package. LCTK keeps its own copy
+    for calibration; see docs/roadmaps/3-indoor-d5-detector.md for what was
+    dropped in the merge and why.
+  </description>
+  <maintainer email="dev@golfcart.org">Golf Cart Team</maintainer>
+  <license>Apache-2.0</license>
+
+  <depend>rclrs</depend>
+  <depend>std_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>aruco_detection_msgs</depend>
+
+  <export>
+    <build_type>ament_cargo</build_type>
+  </export>
+</package>
