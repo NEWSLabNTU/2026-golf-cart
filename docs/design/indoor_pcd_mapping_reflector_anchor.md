@@ -164,19 +164,95 @@ Adapt `scripts/rosbag/record_outdoor.sh`, dropping the GNSS topics and keeping:
 - Keep pedestrians out of the environment. Moving bodies survive into the map as
   smeared surfaces and later corrupt NDT scoring.
 
-### 6.3 Offline LiDAR-inertial SLAM
+### 6.3 Offline LiDAR-inertial SLAM — GLIM
 
-VLP-32C at 10 Hz with the xsens IMU. Candidates, in rough order of preference:
+VLP-32C at 10 Hz with the xsens IMU. **GLIM** (v1.2.2, koide3/AIST, MIT) is the
+chosen framework. It is sensor-agnostic — no ring count or scan pattern
+assumptions — GPU-accelerated, and upstream-tested on Jetson Orin under
+JetPack 6.1, one minor version below ours.
 
-- **GLIM** — GPU-accelerated, built-in loop closure, well suited to the Orin.
-- **FAST-LIO2 + `interactive_slam`** — FAST-LIO2 for the odometry pass,
-  `interactive_slam` to add loop closure constraints and correct drift by hand.
-  The manual step is appropriate here because the site is small and mapped once.
-- **LIO-SAM** — loop closure built in, but expects a 9-axis IMU.
+Install on the Orin from the maintainer's PPA. JetPack 6.2 ships CUDA 12.6:
+
+```bash
+sudo apt install -y ros-humble-glim-ros-cuda12.6
+```
+
+Source builds require GTSAM 4.3a0 and gtsam_points, in that order.
+
+Offline processing, which is what this phase needs:
+
+```bash
+ros2 run glim_ros glim_rosbag <bag>   # auto-throttles playback; no data drop
+ros2 run glim_ros offline_viewer      # open /tmp/dump, inspect, refine, export
+ros2 run glim_ros map_editor          # remove pedestrians and dynamic ghosts
+```
 
 The mapping pass is offline-quality on purpose: slow, batched, loop-closed. Its
 accuracy is the ceiling for the tag map built in sub-phase C and for every
 runtime correction in D.
+
+#### Loop closure — which mechanism, and its limits
+
+GLIM ships two global-mapping backends plus an extension, and they close loops in
+materially different ways.
+
+**`global_mapping` (default, GPU).** No place recognition. It finds submap pairs
+by proximity and overlap, then adds direct matching-cost factors:
+
+```json
+// config/config_global_mapping_gpu.json
+"max_implicit_loop_distance": 100.0,
+"min_implicit_loop_overlap": 0.2
+```
+
+A loop closes whenever accumulated drift is still small enough that the two
+submaps overlap by at least 20%. On a small indoor site with LiDAR-inertial
+odometry, drift stays well inside that capture range, so this works. It fails
+when drift exceeds the overlap range — multi-floor routes, or long featureless
+runs returning from far away.
+
+**`global_mapping_pose_graph` (CPU).** Classic pose graph with *explicit* loop
+detection, VGICP-validated and robust-kernelled. Carries a trap for a small site:
+
+```json
+// config/config_global_mapping_pose_graph.json
+"min_travel_dist": 50.0,
+"max_neighbor_dist": 5.0
+```
+
+An indoor loop shorter than 50 m of travel generates no loop candidate at all.
+If this backend is used, `min_travel_dist` must come down to match the site.
+
+**`glim_ext` ScanContext loop detector.** Appearance-based explicit detection —
+the genuine large-drift fallback. The DBoW variant in the same repo is
+unmaintained.
+
+**Manual loop closing** in `offline_viewer` lets constraints be added by hand.
+The site is mapped once, so this is a legitimate safety net rather than a
+workaround.
+
+Recommended order: default GPU backend with implicit closure, inspected visually
+in the offline viewer; manual constraints if a seam is visible; ScanContext only
+if implicit closure demonstrably fails.
+
+Note what loop closure does *not* provide: it makes the map self-consistent in a
+relative sense. It says nothing about where the vehicle is in that map at t=0.
+That is the board's job, and no improvement in closure quality changes it.
+
+#### Intensity survives to the exported map
+
+This matters because the board must be findable in the finished cloud:
+
+```
+config/config_sensors.json:62        "intensity_field": "intensity"
+src/glim/preprocess/cloud_preprocessor.cpp:98    frame->add_intensities(...)
+src/glim/mapping/global_mapping.cpp:652          export_intensities
+src/glim/viewer/offline_viewer.cpp:249-261       PLY written with intensities
+```
+
+**The export is PLY, not PCD.** Autoware needs PCD, so a conversion step is
+required and it must preserve the intensity field — `pcl_ply2pcd` keeps scalar
+fields; Open3D silently drops intensity and must not be used for this step.
 
 ### 6.4 Anchor the cloud to the board
 
@@ -195,8 +271,11 @@ Step 2 is not optional. See §8.
 
 ### 6.5 Post-process and tile
 
+- Convert the exported PLY to PCD, preserving intensity (§6.3).
 - Voxel downsample at 0.2 m.
-- Remove residual dynamic-object ghosts.
+- Remove residual dynamic-object ghosts. GLIM's `map_editor` does this
+  interactively — MinCut segmentation for objects, region growing for planes, a
+  gizmo box for everything else — so this is GUI work rather than a script.
 - **Keep the ceiling and walls.** Outdoor mapping habits favour stripping
   overhead structure; indoors, ceilings and walls are the geometry NDT relies on,
   and removing them manufactures the exact degeneracy this phase is trying to avoid.
@@ -219,26 +298,85 @@ in §6.4.
 
 ## 7. Runtime cold start
 
-Two options. Implement the first, upgrade to the second if the accuracy is
-insufficient.
+The recommended runtime configuration is **NDT as the pose estimator, with the
+board supplying only the initial pose**. NDT is what the rest of the stack
+already expects, and indoor geometry — walls, corners, ceilings — is good NDT
+terrain. Tracking is not the indoor problem. The initial guess is.
 
-**Option 1 — fixed start pose.** Park the vehicle at a marked position facing
-the board and publish a constant initial pose; NDT converges from there. No new
-code, and the board-at-origin frame makes the constant exact rather than
-approximate. This should be the first thing tried, because it validates the map
-and the NDT configuration without also debugging a detector.
+### 7.1 Why the upstream marker localizer cannot do this
 
-**Option 2 — `autoware_lidar_marker_localizer`.** Real detection, launched via
-`pose_source:=lidar-marker` or `pose_source:=ndt_lidar-marker`. The upstream
-defaults assume a corridor densely populated with markers and need retuning for
-a single board and a VLP-32C:
+`autoware_lidar_marker_localizer` is the obvious candidate and it does not fit.
+It subscribes to `/localization/pose_twist_fusion_filter/biased_pose_with_covariance`
+and gates detections on `limit_distance_from_self_pose_to_marker` and
+`self_pose_timeout_sec` — that is, it associates a detection with a map marker
+*using the pose that cold start does not yet have*. It is a tracking corrector,
+not an initializer.
 
-| Parameter | Default | Indoor single-board starting point | Reasoning |
-|-----------|---------|-----------------------------------|-----------|
+A dedicated node is therefore genuinely required for detection-based
+initialization. Its job is easier than the upstream package's: one board, so
+association is trivial and there are no marker IDs to disambiguate.
+
+### 7.2 Staging
+
+**Stage 0 — fixed user-defined pose. No new code.** With the board at the origin,
+the parking pose is a known constant, and `autoware_pose_initializer` already
+accepts one:
+
+```yaml
+# src/launcher/golfcart_launch/config/localization/pose_initializer.param.yaml:3
+user_defined_initial_pose:
+  enable: $(var user_defined_initial_pose/enable)
+  pose: $(var user_defined_initial_pose/pose)
+```
+
+One wrinkle: `automatic_pose_initializer` is launched only when GNSS is enabled
+(`cuda_ndt_matcher_launch/launch/cuda_localization.launch.xml:28,86`), so under
+`gnss_enabled:=false` nothing calls `/localization/initialize` on startup. Either
+launch it unconditionally, or issue one service call at startup.
+
+Do this stage first. It validates the map, the NDT configuration, and the
+no-GNSS launch path without simultaneously debugging a detector.
+
+**Stage 1 — board pose initializer node.** Detect the board in the current scan,
+compute the vehicle pose, call `/localization/initialize` with a
+`PoseWithCovarianceStamped`:
+
+```
+T_map←base_link = T_map←board ∘ (T_base_link←lidar ∘ T_lidar←board)⁻¹
+```
+
+`T_map←board` is identity by construction (§4), which is the payoff of anchoring
+the map to the board. Detection must gate on planarity, size, and height band,
+exactly as in §6.4 — the same false-positive population applies at runtime.
+
+This removes the "park exactly here" requirement and is the version that
+genuinely replaces GNSS initialization.
+
+**Stage 2 — optional, only with more boards.** Mount two or three additional
+boards in the corridors where sub-phase B's degeneracy characterisation shows NDT
+is weakest, and enable `autoware_lidar_marker_localizer` as a *corrector* via
+`pose_source:=ndt_lidar-marker`. Its upstream defaults assume a densely marked
+corridor and need retuning for a VLP-32C:
+
+| Parameter | Default | Indoor starting point | Reasoning |
+|-----------|---------|----------------------|-----------|
 | `vote_threshold_for_detect_marker` | 20 | 8–10 | The VLP-32C's 32 rings are non-uniformly spaced. A 1 m board at 10 m falls across roughly 10–17 rings; at 3 m it is comfortably covered. The default rejects valid detections at useful ranges. |
-| `limit_distance_from_self_pose_to_marker` | 2.0 | 8–10 | 2 m is a tracking-refinement range, not an acquisition range. Cold start needs to see the board from the parking position. |
+| `limit_distance_from_self_pose_to_marker` | 2.0 | 8–10 | 2 m is a tracking-refinement range, not an acquisition range. |
 | `limit_distance_from_self_pose_to_nearest_marker` | 2.0 | matched to the above | Same reasoning. |
 | `intensity_pattern` | `[-1,-1,0,1,1,1,1,1,0,-1,-1]` | keep, given the §5 matte margin | The pattern presumes low-intensity flanks; the board's margin supplies them. |
+
+Only at this stage does the upstream package earn its place.
+
+### 7.3 Everything else that must change with it
+
+The initializer is the only new *code*. It is not the only change:
+
+| Change | Where | Why |
+|--------|-------|-----|
+| `projector_type: Local` | indoor map `map_projector_info.yaml` | §4. Copying the outdoor map's `TransverseMercator` config is a silent-failure path. |
+| `gnss_enabled:=false` | launch | Otherwise the initializer waits on a GNSS pose that never arrives. |
+| Repoint `input_regularization_pose_topic` | `cuda_localization.launch.xml:49`, hardcoded to `/sensing/gnss/pose_with_covariance` | Harmless while `regularization.enable: false`, but lands the moment corridor degeneracy forces regularization on. |
+| Detection gating | initializer node | Intensity thresholding alone finds exit signage, safety vests, and floor tape (§8). |
 
 ---
 
@@ -275,8 +413,10 @@ required to break the symmetry.
   cloud→map transform is stored with the map.
 - The board's Lanelet2 polygon coordinates agree with its physical dimensions
   about the origin, within a documented tolerance.
-- NDT converges from the fixed start pose of §7 Option 1 and tracks the full
-  route in `logging_simulation` replay, with no GNSS in the pipeline.
+- The exported cloud reaches PCD with its intensity field intact, so the board is
+  visible in the delivered map.
+- NDT converges from the §7 stage 0 fixed start pose and tracks the full route in
+  `logging_simulation` replay, with no GNSS in the pipeline.
 - NDT degeneracy is characterised per corridor and handed to sub-phase C as tag
   placement guidance, per
   [3-indoor-b-indoor-mapping.md](../roadmaps/3-indoor-b-indoor-mapping.md).
@@ -301,7 +441,15 @@ and share the LiDAR the vehicle already depends on. The two share the
 
 **Anchoring tooling.** Whether §6.4 is a small offline Python script over the
 finished PCD or a ROS node replaying the bag is undecided. The script is simpler;
-the node reuses the runtime detector and therefore validates it.
+the node reuses the §7 stage 1 detector and therefore validates it. Sharing the
+detection code between the offline anchoring step and the runtime initializer is
+attractive — the two solve the same geometry problem — but it couples an offline
+tool to a runtime node's build.
+
+**GLIM version pinning.** GLIM is under active development; the PPA tracks
+releases and the config schema has changed across versions (the GTSAM base
+version changed in 2025/06). The map build should record the GLIM version and the
+config directory used, so a rebuild is reproducible.
 
 **Validation blocker.** NDT needs wheel velocity from the Turing Drive DBW
 package; `velocity_report.py` still publishes zeros. Map construction (§6.1–6.6)

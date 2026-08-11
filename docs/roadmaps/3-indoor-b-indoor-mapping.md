@@ -80,8 +80,11 @@ Full method, board specification, detector retuning, and failure modes:
       per-point time are both needed. Record cameras even though mapping does not
       need them: sub-phase C replays this same bag to bootstrap the tag map, so
       tags should already be in place during this drive.
-- [ ] **Build the PCD map** — offline LiDAR SLAM. Slow, batched, loop-closed;
-      this is the accuracy ceiling for everything downstream.
+- [ ] **Build the PCD map** — offline LiDAR SLAM with GLIM
+      (`ros2 run glim_ros glim_rosbag`, then `offline_viewer` to inspect and
+      refine). Slow, batched, loop-closed; this is the accuracy ceiling for
+      everything downstream. GLIM exports PLY — convert to PCD with the
+      intensity field preserved.
 - [ ] **Anchor the cloud to the board** — detect the board by intensity, gate on
       planarity/size/height, transform the cloud so the board is the origin, and
       store the transform with the map.
@@ -91,8 +94,9 @@ Full method, board specification, detector retuning, and failure modes:
       `map_projector_info.yaml`. Copying the outdoor map's `TransverseMercator`
       config is a silent-failure path.
 - [ ] **Validate NDT indoors** — replay through `logging_simulation`, seed from
-      the board-derived fixed start pose (manual RViz seed as fallback), confirm
-      convergence and tracking.
+      the board-derived fixed start pose via `user_defined_initial_pose` (manual
+      RViz seed as fallback), confirm convergence and tracking. A board *detector*
+      is not needed for this: see design §7 stage 0.
 - [ ] **Characterize NDT degeneracy** — identify which corridors NDT slides along.
       This directly drives tag placement in sub-phase C: tags go where NDT is weak,
       not where they are convenient to hang.
