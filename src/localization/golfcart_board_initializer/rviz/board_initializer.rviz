@@ -55,6 +55,10 @@ Visualization Manager:
       Color Transformer: FlatColor
       Color: 0; 255; 0
       Decay Time: 0
+    # Off by default: a latched PoseStamped cannot be retracted, so after a
+    # failed attempt this display keeps drawing the previous detection. The
+    # green arrow in Rejected clusters carries the same pose and is cleared
+    # with the rest of the markers.
     - Class: rviz_default_plugins/Pose
       Name: Board pose
       Topic:
@@ -62,7 +66,7 @@ Visualization Manager:
         Depth: 1
         Durability Policy: Transient Local
         Reliability Policy: Reliable
-      Enabled: true
+      Enabled: false
       Shape: Axes
       Axes Length: 0.5
       Axes Radius: 0.05

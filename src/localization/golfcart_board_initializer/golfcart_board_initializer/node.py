@@ -13,7 +13,7 @@ from typing import Optional
 import numpy as np
 import rclpy
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
-from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
+from geometry_msgs.msg import Point, PoseStamped, PoseWithCovarianceStamped
 from rclpy.node import Node
 from rclpy.qos import QoSDurabilityPolicy, QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
 from sensor_msgs.msg import PointCloud2
@@ -254,7 +254,7 @@ class BoardPoseInitializer(Node):
         result = detect_board(
             points, intensity, self._transform_base_sensor, self._detector_params
         )
-        self._publish_rejected(result, frame_id)
+        self._publish_clusters(result, frame_id)
 
         if result.status is Status.AMBIGUOUS:
             # The map holds one board. A second survivor means that assumption
@@ -391,13 +391,6 @@ class BoardPoseInitializer(Node):
     # -- debug output -------------------------------------------------------
 
     def _publish_detection(self, detection, frame_id: str):
-        header = Header()
-        header.frame_id = frame_id
-        header.stamp = self.get_clock().now().to_msg()
-        self._points_pub.publish(
-            point_cloud2.create_cloud_xyz32(header, detection.points.tolist())
-        )
-
         pose = PoseStamped()
         pose.header.frame_id = frame_id
         pose.header.stamp = self.get_clock().now().to_msg()
@@ -411,32 +404,104 @@ class BoardPoseInitializer(Node):
         pose.pose.orientation.w = w
         self._pose_pub.publish(pose)
 
-    def _publish_rejected(self, result, frame_id: str):
-        """One marker per rejected cluster, labelled with the reason.
+    def _text_marker(self, index, ns, position, text, colour, frame_id):
+        marker = Marker()
+        marker.header.frame_id = frame_id
+        marker.header.stamp = self.get_clock().now().to_msg()
+        marker.ns = ns
+        marker.id = index
+        marker.type = Marker.TEXT_VIEW_FACING
+        marker.action = Marker.ADD
+        marker.pose.position.x = float(position[0])
+        marker.pose.position.y = float(position[1])
+        marker.pose.position.z = float(position[2])
+        marker.pose.orientation.w = 1.0
+        marker.scale.z = 0.2
+        marker.color.r, marker.color.g, marker.color.b = colour
+        marker.color.a = 1.0
+        marker.text = text
+        return marker
 
-        When detection fails on site the question is always what it saw and why
-        it was discarded. Without this the answer needs a rebuild in the field.
+    def _publish_clusters(self, result, frame_id: str):
+        """Label every cluster this attempt looked at, kept or discarded.
+
+        Two things this has to get right. When detection fails on site the
+        question is always what it saw and why it was discarded, so each
+        rejected cluster carries its reason. And an ambiguous result must show
+        *both* candidates: without that the operator sees an empty scene and no
+        indication of which second object broke the one-board assumption.
+
+        Everything is cleared first. The debug topics are latched, so a stale
+        detection from a previous attempt would otherwise sit on screen looking
+        like a current one.
         """
+        clear = Marker()
+        clear.action = Marker.DELETEALL
         markers = MarkerArray()
+        markers.markers.append(clear)
+
         for index, rejection in enumerate(result.rejections):
-            marker = Marker()
-            marker.header.frame_id = frame_id
-            marker.header.stamp = self.get_clock().now().to_msg()
-            marker.ns = "rejected"
-            marker.id = index
-            marker.type = Marker.TEXT_VIEW_FACING
-            marker.action = Marker.ADD
-            marker.pose.position.x = float(rejection.centroid[0])
-            marker.pose.position.y = float(rejection.centroid[1])
-            marker.pose.position.z = float(rejection.centroid[2])
-            marker.pose.orientation.w = 1.0
-            marker.scale.z = 0.2
-            marker.color.r = 1.0
-            marker.color.g = 0.6
-            marker.color.a = 1.0
-            marker.text = f"{rejection.reason} {rejection.detail} ({rejection.n_points} pts)"
-            markers.markers.append(marker)
+            markers.markers.append(
+                self._text_marker(
+                    index,
+                    "rejected",
+                    rejection.centroid,
+                    f"{rejection.reason} {rejection.detail} ({rejection.n_points} pts)",
+                    (1.0, 0.6, 0.0),
+                    frame_id,
+                )
+            )
+
+        if result.status is Status.OK:
+            # The pose also goes out on ~/debug/board_pose, but a PoseStamped
+            # cannot be retracted: after a later failed attempt the old pose
+            # would still be drawn. This copy lives in the marker array, so
+            # DELETEALL clears it with everything else.
+            detection = result.detection
+            arrow = Marker()
+            arrow.header.frame_id = frame_id
+            arrow.header.stamp = self.get_clock().now().to_msg()
+            arrow.ns = "detection"
+            arrow.id = 0
+            arrow.type = Marker.ARROW
+            arrow.action = Marker.ADD
+            arrow.scale.x, arrow.scale.y, arrow.scale.z = 0.05, 0.10, 0.0
+            arrow.color.g = 1.0
+            arrow.color.a = 1.0
+            tip = detection.centre + 0.8 * detection.normal
+            for point, target in ((detection.centre, Point()), (tip, Point())):
+                target.x, target.y, target.z = (float(v) for v in point)
+                arrow.points.append(target)
+            markers.markers.append(arrow)
+
+        if result.status is Status.AMBIGUOUS:
+            for index, candidate in enumerate(result.candidates):
+                markers.markers.append(
+                    self._text_marker(
+                        index,
+                        "candidate",
+                        candidate.centre,
+                        f"AMBIGUOUS candidate {index + 1}: "
+                        f"{candidate.range_m:.1f} m, {candidate.n_points} pts",
+                        (1.0, 0.0, 0.0),
+                        frame_id,
+                    )
+                )
+
         self._rejected_pub.publish(markers)
+
+        header = Header()
+        header.frame_id = frame_id
+        header.stamp = self.get_clock().now().to_msg()
+        if result.status is Status.OK:
+            points = result.detection.points
+        elif result.status is Status.AMBIGUOUS:
+            points = np.vstack([c.points for c in result.candidates])
+        else:
+            points = np.zeros((0, 3))
+        self._points_pub.publish(
+            point_cloud2.create_cloud_xyz32(header, points.tolist())
+        )
 
     def _publish_diagnostics(self):
         status = DiagnosticStatus()
