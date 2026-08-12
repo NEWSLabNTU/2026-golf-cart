@@ -42,11 +42,18 @@ ros2 launch golfcart_board_initializer simulated_scene.launch.xml scene:=two_boa
 ros2 launch golfcart_board_initializer simulated_scene.launch.xml scene:=distractors
 ```
 
-Add `rviz:=true` to open RViz with `rviz/board_initializer.rviz`, which shows the
-raw scan coloured by intensity over a fixed 0–255 range — the retroreflector band
-above 100 then separates visually — plus the detected board points, the board
-pose, the rejected clusters with their reasons, and the dry-run initial pose with
-its covariance.
+Add `rviz:=true` to open RViz with `rviz/board_initializer.rviz`: the raw scan
+coloured by intensity over a fixed 0–255 range — the retroreflector band above
+100 then separates visually — the detected board points in green, a green arrow
+along the board normal, every rejected cluster labelled with its reason, and the
+dry-run initial pose with its covariance.
+
+An ambiguous result draws **both** candidates in green with red `AMBIGUOUS
+candidate N` labels. Every debug topic is cleared at the start of each attempt:
+they are latched, so without that a stale detection from a previous run keeps
+drawing and reads as a current one. The `Board pose` display is off by default
+for the same reason — a latched `PoseStamped` cannot be retracted, so the arrow
+marker carries that pose instead.
 
 `dry_run` defaults to true there: the composed pose is published on
 `~/debug/initial_pose` instead of calling the service, so the whole path runs

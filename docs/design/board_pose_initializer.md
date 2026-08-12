@@ -125,6 +125,13 @@ microseconds.
 intensity over a fixed 0–255 range so the retroreflector band above 100 is
 visually obvious.
 
+Two properties matter more than they look. Every marker and the point cloud are
+**cleared at the start of each attempt** — the topics are latched, so a stale
+detection from a previous run would otherwise keep drawing and read as a current
+one. And an **ambiguous result publishes both candidates**, in green with red
+labels: without that the operator sees an empty scene and no indication of which
+second object broke the one-board assumption.
+
 The rejected-cluster topic is not decoration. When detection fails on site, the
 question is always "what did it see, and why was it thrown away". Without that
 topic the answer requires a rebuild with extra logging, in the field.
