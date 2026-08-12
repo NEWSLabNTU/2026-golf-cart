@@ -40,10 +40,21 @@ just tool-controller    # Keyboard manual control
 just tool-tui           # Drive monitor TUI (pose, speed, states)
 ```
 
+### Vehicle Interface (standalone, no Autoware)
+```bash
+just vehicle-interface                       # CAN RX only on can0 — cart cannot move
+just vehicle-interface can=vcan0             # bench, against mock_vcu
+just vehicle-interface keyboard=on           # + keyboard teleop in its own tmux session
+just vehicle-interface converter=on          # + robot_state_publisher + velocity converter
+just vehicle-interface tx=on                 # ⚠️ CAN TX live: this can drive the cart
+```
+Options are `KEY=VALUE`, any order: `can=`, `tx=on|off`, `keyboard=on|off`,
+`converter=on|off`. `tx` defaults to `off` on every path. The keyboard controller
+runs in tmux (`tmux attach -t golfcart-teleop`).
+
 ### Control Testing
 ```bash
-just control-basic      # Launch vehicle control test
-just control-straight   # Run 10m straight trajectory
+just control-straight   # Run 10m straight trajectory (needs: just vehicle-interface converter=on)
 just control-circle     # Run circular trajectory
 ```
 

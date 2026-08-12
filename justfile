@@ -175,70 +175,68 @@ tool-tui:
     python3 ./scripts/testing/drive/run.py
 
 # ============================================================================
+# Vehicle Interface - standalone bring-up and bench testing
+# ============================================================================
+
+# Vehicle interface on its own, without Autoware. Bench, bring-up and teleop.
+# Options are KEY=VALUE in any order:
+#   can=can0|vcan0     SocketCAN interface                          (default can0)
+#   tx=on|off          CAN TX master enable                         (default off)
+#   keyboard=on|off    keyboard controller in its own tmux session  (default off)
+#   converter=on|off   robot_state_publisher + velocity converter   (default off)
+# With tx=off the node only listens: /vehicle/status/* and /diagnostics fill in
+# and the cart cannot be commanded into motion.
+# ⚠️  tx=on puts real frames on the bus and can command motion.
+vehicle-interface *OPTS="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    CAN=can0
+    TX=false
+    KEYBOARD=false
+    CONVERTER=false
+    for opt in {{OPTS}}; do
+        case "$opt" in
+            can=*)                         CAN="${opt#can=}" ;;
+            tx=on|tx=true)                 TX=true ;;
+            tx=off|tx=false)               TX=false ;;
+            keyboard=on|keyboard=true)     KEYBOARD=true ;;
+            keyboard=off|keyboard=false)   KEYBOARD=false ;;
+            converter=on|converter=true)   CONVERTER=true ;;
+            converter=off|converter=false) CONVERTER=false ;;
+            *)
+                echo "Unknown option '$opt'" >&2
+                echo "Usage: just vehicle-interface [can=IFACE] [tx=on|off] [keyboard=on|off] [converter=on|off]" >&2
+                exit 2 ;;
+        esac
+    done
+    if [[ "$TX" == "true" ]]; then
+        printf '\033[1;31mCAN TX ENABLED on %s — the cart can move. Ctrl-C to abort.\033[0m\n' "$CAN"
+        for i in 3 2 1; do printf '  starting in %d...\r' "$i"; sleep 1; done
+        printf '                       \n'
+    fi
+    if [[ "$KEYBOARD" == "true" ]]; then
+        echo "Keyboard controller runs in tmux: tmux attach -t golfcart-teleop"
+    fi
+    ros2 launch golfcart_vehicle_launch vehicle_interface_standalone.launch.xml \
+        can_interface:="$CAN" \
+        tx_enabled:="$TX" \
+        manual_control:="$KEYBOARD" \
+        vehicle_description:="$CONVERTER" \
+        velocity_converter:="$CONVERTER"
+
+# ============================================================================
 # Control Commands - Control system testing
 # ============================================================================
 
-# Launch vehicle control test (basic_control.launch.xml)
-control-basic:
-    play_launch launch control_test basic_control.launch.xml
-
 # Run trajectory player with straight_10m.yaml (10m straight line)
+# Needs the vehicle stack up: just vehicle-interface converter=on
 control-straight:
     ros2 run control_test trajectory_player --ros-args -p trajectory_file:=straight_10m.yaml
 
 # Run trajectory player with circle.yaml (circular path)
+# Needs the vehicle stack up: just vehicle-interface converter=on
 control-circle:
     ros2 run control_test trajectory_player --ros-args -p trajectory_file:=circle.yaml
-
-# Terminal keyboard controller (autoware_manual_control), commanding /control/command/*
-# Pair with `just vehicle-interface` in a second terminal. The driver switches the
-# vehicle to autonomous on its own controls — this only reports the mode it sees on
-# start (--no-mode-check skips that). Needs a real terminal: raw-tty key reads.
-manual-control *ARGS="":
-    ./scripts/control/keyboard_control_direct.sh {{ARGS}}
-
-# Launch ONLY the vehicle interface, via the Autoware entry launch file
-# (golfcart_autoware.launch.xml with every other module disabled).
-# ⚠️  tx_enabled defaults to true: CAN TX is live and the cart will move.
-# Override both: just vehicle-interface can1 false
-vehicle-interface CAN="can0" TX="true":
-    play_launch launch golfcart_launch golfcart_autoware.launch.xml \
-        vehicle_model:=golfcart_vehicle \
-        sensor_model:=golfcart_sensor_kit \
-        map_path:={{justfile_directory()}}/data/COSS-map-planning \
-        launch_vehicle:=true \
-        launch_vehicle_interface:=true \
-        launch_system:=false \
-        launch_map:=false \
-        launch_sensing:=false \
-        launch_sensing_driver:=false \
-        launch_localization:=false \
-        launch_perception:=false \
-        launch_planning:=false \
-        launch_control:=false \
-        launch_api:=false \
-        rviz:=false \
-        can_interface:={{CAN}} \
-        tx_enabled:={{TX}}
-
-# Launch keyboard control GUI (requires X11/DISPLAY; use after `just launch`)
-control-keyboard:
-    ros2 launch control_test keyboard_control.launch.xml
-
-# Launch bare vehicle interface node, read-only by default (CAN RX only, tx disabled)
-# Safe bench test — populates /vehicle/status/* without commanding motion
-# Positional args, in order: just control-vehicle-test can0 true
-# ⚠️  TX=true puts real frames on the bus and can command motion
-control-vehicle-test CAN="vcan0" TX="false":
-    ros2 launch golfcart_vehicle_launch vehicle_interface_test.launch.xml \
-        can_interface:={{CAN}} tx_enabled:={{TX}}
-
-# Launch teleop GUI + vehicle interface on real CAN bus (tx enabled — DRIVES THE CART)
-# ⚠️  Requires X11 display. Requires can0 up. Commands actual motor/steering.
-# Override interface: just control-teleop-real CAN=can0
-control-teleop-real CAN="can0":
-    ros2 launch golfcart_vehicle_launch teleop_bench.launch.xml \
-        can_interface:={{CAN}} tx_enabled:=true
 
 # Decode live CAN frames using vehicle DBC (CAX_ADS_CAN.dbc)
 # Usage: just can-decode          (defaults to can0)
@@ -351,7 +349,7 @@ can-test LOG="" LOOP="1":
         LOOP_FLAG="--loop"
     fi
     parallel --line-buffer ::: \
-      "ros2 launch golfcart_vehicle_launch vehicle_interface_test.launch.xml can_interface:=vcan0" \
+      "ros2 launch golfcart_vehicle_launch vehicle_interface_standalone.launch.xml can_interface:=vcan0" \
       "sleep 3 && ./scripts/can/replay_can.sh $LOOP_FLAG \"$F\" vcan0"
 
 # ============================================================================
