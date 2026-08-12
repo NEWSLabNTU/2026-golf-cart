@@ -20,7 +20,7 @@ Visualization Manager:
       Reference Frame: base_link
     - Class: rviz_default_plugins/TF
       Name: TF
-      Enabled: true
+      Enabled: false
       Show Names: true
       Marker Scale: 1
     - Class: rviz_default_plugins/PointCloud2
@@ -51,7 +51,7 @@ Visualization Manager:
         Reliability Policy: Reliable
       Enabled: true
       Style: Spheres
-      Size (m): 0.03
+      Size (m): 0.05
       Color Transformer: FlatColor
       Color: 0; 255; 0
       Decay Time: 0
@@ -105,13 +105,13 @@ Visualization Manager:
     Current:
       Class: rviz_default_plugins/Orbit
       Name: Current View
-      Distance: 18
+      Distance: 13
       Focal Point:
-        X: 4
+        X: 3.0
         Y: 0
-        Z: 0
-      Pitch: 0.45
-      Yaw: 3.1
+        Z: 0.4
+      Pitch: 0.28
+      Yaw: 3.14
       Near Clip Distance: 0.01
     Saved: ~
 Window Geometry:
