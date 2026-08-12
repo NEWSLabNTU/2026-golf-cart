@@ -20,6 +20,7 @@ from golfcart_board_initializer.geometry import (
 def make_detection(centre, rotation, **kwargs):
     defaults = dict(
         extents=(0.8, 1.0),
+        points=np.zeros((400, 3)),
         n_points=400,
         plane_residual=0.005,
         range_m=float(np.linalg.norm(centre)),

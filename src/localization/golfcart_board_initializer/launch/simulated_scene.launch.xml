@@ -10,6 +10,7 @@
   <arg name="yaw_deg" default="0.0"/>
   <arg name="blooming" default="false"/>
   <arg name="dry_run" default="true"/>
+  <arg name="rviz" default="false"/>
 
   <node pkg="golfcart_board_initializer" exec="board_scene_publisher"
         name="board_scene_publisher" output="screen">
@@ -22,4 +23,6 @@
   <include file="$(find-pkg-share golfcart_board_initializer)/launch/board_initializer.launch.xml">
     <arg name="dry_run" value="$(var dry_run)"/>
   </include>
+  <node pkg="rviz2" exec="rviz2" name="rviz2" if="$(var rviz)"
+        args="-d $(find-pkg-share golfcart_board_initializer)/rviz/board_initializer.rviz"/>
 </launch>

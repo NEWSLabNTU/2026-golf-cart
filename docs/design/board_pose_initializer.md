@@ -121,6 +121,10 @@ microseconds.
 | Debug | `~/debug/board_points` (PointCloud2), `~/debug/board_pose` (PoseStamped), `~/debug/rejected` (MarkerArray, one marker per rejected cluster carrying its rejection reason) |
 | Diagnostics | `OK` on success; `ERROR` with a reason on failure. Never a silent fallback pose. |
 
+`rviz/board_initializer.rviz` lays these out, with the raw scan coloured by
+intensity over a fixed 0–255 range so the retroreflector band above 100 is
+visually obvious.
+
 The rejected-cluster topic is not decoration. When detection fails on site, the
 question is always "what did it see, and why was it thrown away". Without that
 topic the answer requires a rebuild with extra logging, in the field.

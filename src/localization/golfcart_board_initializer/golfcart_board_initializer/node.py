@@ -18,6 +18,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSDurabilityPolicy, QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
 from sensor_msgs.msg import PointCloud2
 from sensor_msgs_py import point_cloud2
+from std_msgs.msg import Header
 from tf2_ros import Buffer, TransformListener
 from visualization_msgs.msg import Marker, MarkerArray
 
@@ -390,6 +391,13 @@ class BoardPoseInitializer(Node):
     # -- debug output -------------------------------------------------------
 
     def _publish_detection(self, detection, frame_id: str):
+        header = Header()
+        header.frame_id = frame_id
+        header.stamp = self.get_clock().now().to_msg()
+        self._points_pub.publish(
+            point_cloud2.create_cloud_xyz32(header, detection.points.tolist())
+        )
+
         pose = PoseStamped()
         pose.header.frame_id = frame_id
         pose.header.stamp = self.get_clock().now().to_msg()

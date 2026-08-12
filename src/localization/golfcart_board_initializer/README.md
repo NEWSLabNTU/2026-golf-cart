@@ -20,6 +20,7 @@ vehicle pose in the map frame, and calls `/localization/initialize` with
 | `golfcart_board_initializer/simulation/` | Synthetic VLP-32C scans and scenes. |
 | `golfcart_board_initializer/node.py` | ROS wiring, state machine, diagnostics. |
 | `golfcart_board_initializer/scene_publisher.py` | Publishes synthetic scans for desk testing. |
+| `rviz/board_initializer.rviz` | RViz layout for the debug topics. |
 
 `detector.py` and `geometry.py` import no ROS. That is what lets the tests run
 with nothing installed, and it lets the offline map-anchoring step share the code
@@ -40,6 +41,12 @@ ros2 launch golfcart_board_initializer simulated_scene.launch.xml
 ros2 launch golfcart_board_initializer simulated_scene.launch.xml scene:=two_boards
 ros2 launch golfcart_board_initializer simulated_scene.launch.xml scene:=distractors
 ```
+
+Add `rviz:=true` to open RViz with `rviz/board_initializer.rviz`, which shows the
+raw scan coloured by intensity over a fixed 0–255 range — the retroreflector band
+above 100 then separates visually — plus the detected board points, the board
+pose, the rejected clusters with their reasons, and the dry-run initial pose with
+its covariance.
 
 `dry_run` defaults to true there: the composed pose is published on
 `~/debug/initial_pose` instead of calling the service, so the whole path runs

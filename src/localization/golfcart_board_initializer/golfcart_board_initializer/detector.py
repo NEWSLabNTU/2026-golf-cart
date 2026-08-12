@@ -98,6 +98,7 @@ class BoardDetection:
     up: np.ndarray  # (3,) unit, gravity-up projected into the board plane
     right: np.ndarray  # (3,) unit
     extents: Tuple[float, float]  # observed (width, height)
+    points: np.ndarray  # (N, 3) the cluster itself, sensor frame, for debug output
     n_points: int
     plane_residual: float  # RMS distance to the fitted plane
     range_m: float
@@ -332,6 +333,7 @@ def _evaluate_cluster(
     edges = _observed_edges(coords, (width, height), params, range_m)
 
     detection = BoardDetection(
+        points=points,
         centre=centre,
         rotation=np.column_stack((normal, right, up)),
         normal=normal,
