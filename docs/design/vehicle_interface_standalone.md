@@ -214,19 +214,19 @@ controller can override that.
 
 ## Status
 
-Implemented 2026-08-12. Verified on the bench (`vcan0` + `mock_vcu`, isolated
-`ROS_DOMAIN_ID`): the interface comes up, publishes `/vehicle/status/*`, reports
-`AUTONOMOUS`, and puts no `ADS_VCU_*` frames on the bus with `tx=off`. The tmux
-wrapper is verified standalone for normal exit, non-zero exit, duplicate-session
-refusal and SIGINT teardown.
+Implemented and verified on the bench 2026-08-12 (`vcan0` + `mock_vcu`, isolated
+`ROS_DOMAIN_ID`):
 
-Open, and needing an Orin that is not shared with someone else's ROS graph:
+- `tx=off` — interface publishes `/vehicle/status/*`, reports `AUTONOMOUS`, and
+  puts no `ADS_VCU_*` frames on the bus.
+- `keyboard=on` — tmux session comes up with the node on a real pty, showing the
+  golf-cart limits (5 m/s, 20°); keys produce `/control/command/control_cmd` and
+  `gear_cmd`, `s` reports the vehicle's own control mode, and the launch terminal
+  stays free of teleop output.
+- Ctrl-C — wrapper exits 130, session killed, no orphan processes or temp files.
+- `can-test` — replay rig still works after the rewire.
 
-- the keyboard path end to end (`keyboard=on`: attach, drive `mock_vcu`, confirm
-  the launch log stays clean), and tmux teardown driven by a launch Ctrl-C;
-- `can-test` after the rewire;
-- whether `play_launch` preserves `launch-prefix` — only matters if teleop later
-  moves inside the full `just launch` stack; the standalone recipe uses plain
-  `ros2 launch`.
-
-See the phase doc for the exact commands.
+Untested, out of scope: whether `play_launch` preserves `launch-prefix`. Only
+matters if teleop later moves inside the full `just launch` stack; the standalone
+recipe uses plain `ros2 launch`. Real-bus driving (`can0`, `tx=on`) is field-test
+work.

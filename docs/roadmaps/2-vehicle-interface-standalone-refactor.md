@@ -102,15 +102,21 @@ fixes, fast-forward `main`, push, bump the submodule pointer here.
       published, `/vehicle/status/control_mode` = 1 (AUTONOMOUS), and `candump`
       showed only the mock's four `VCU_ADS_*` IDs — no `ADS_VCU_*` frames, i.e. TX
       really is off.
-- [ ] **V-4 bench smoke, keys on** — `just vehicle-interface can=vcan0 keyboard=on`;
-      tmux session appears, attach works, keys move `mock_vcu` state, launch log
-      stays unscrambled. *Started, then aborted before it could be inspected: the
-      Orin is shared and another person was running ROS on it.*
-- [ ] **V-5 teardown** — Ctrl-C on the launch terminal kills the tmux session; no
-      orphan `keyboard_control`, no orphan session. *The wrapper's own SIGINT path
-      is verified standalone (see W-1); what remains untested is that path driven
-      by `ros2 launch`.*
-- [ ] **V-6 `can-test`** — still works after the rewire.
+- [x] **V-4 bench smoke, keys on** — `just vehicle-interface can=vcan0 keyboard=on`:
+      session `golfcart-teleop` created, pane shows the help menu and
+      `Limits: speed <= 5 m/s (step 0.25), steer <= 19.9962 deg` (F2 live), keys
+      sent with `tmux send-keys` produced `/control/command/control_cmd`
+      (velocity 0.5, steering 0.0174) and `gear_cmd` command 2 = DRIVE, and `s`
+      printed `Vehicle:Autonomous Gear:D` (F5 live). The launch terminal carried
+      only the two wrapper hint lines - no interleaving with the teleop display.
+- [x] **V-5 teardown** — SIGINT to the launch process: wrapper exited 130, tmux
+      session gone, no orphan `keyboard_control` or `vehicle_interface`, status
+      temp file removed. Launch logs the wrapper's 130 as an ERROR line, same as
+      it does for any node on Ctrl-C.
+- [x] **V-6 `can-test`** — runs the standalone launch on `vcan0` and replays
+      `can_can0_20260507_163716.log`; `/vehicle/status/*` publish from the replayed
+      frames (`control_mode` = 6/NOT_READY, as expected from a capture whose four
+      subsystem states are not all autonomous).
 
 ## Step 7: Docs
 
@@ -123,20 +129,23 @@ fixes, fast-forward `main`, push, bump the submodule pointer here.
 - [x] **X-6 `docs/README.md` + root `README.md`** — index entries for the design and
       phase docs.
 
-## Remaining work
+## Status
 
-V-4, V-5 and V-6 need the machine to themselves — a keyboard session, a Ctrl-C,
-and a CAN replay, none of which can share an Orin with someone else's ROS graph.
-Run them together on the bench:
+Complete, verified on the bench 2026-08-12 (`vcan0` + `mock_vcu`, isolated
+`ROS_DOMAIN_ID`). Reproduce with:
 
 ```bash
 sudo ./scripts/can/up-vcan0.sh vcan0
 ros2 run golfcart_vehicle_interface mock_vcu --interface vcan0 --auto &
 just vehicle-interface can=vcan0 keyboard=on
-# second terminal: tmux attach -t golfcart-teleop, then x / u / j and watch mock_vcu
-# back on the launch terminal: Ctrl-C, then confirm `tmux ls` shows no golfcart-teleop
+# second terminal: tmux attach -t golfcart-teleop, then x / u / j
+# launch terminal: Ctrl-C, then `tmux ls` shows no golfcart-teleop
 just can-test
 ```
+
+Untested and out of scope: whether `play_launch` preserves `launch-prefix`. Only
+matters if teleop later moves inside the full `just launch` stack; this recipe
+uses plain `ros2 launch`. Real-bus (`can0`, `tx=on`) driving is field-test work.
 
 ## Risks
 
