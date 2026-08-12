@@ -86,7 +86,11 @@ proceeds in parallel.
 - [x] Fallback to `user_defined_initial_pose` implemented but **default off**.
 - [x] Debug topics: `~/debug/board_points`, `~/debug/board_pose`, and
       `~/debug/rejected` carrying a rejection reason per cluster.
+- [x] Clear every debug topic at the start of each attempt. They are latched, so
+      a stale detection otherwise keeps drawing after a failed attempt.
+- [x] Publish both candidates, labelled, when the result is ambiguous.
 - [x] Diagnostics distinguishing "no detection", "ambiguous", and "service failed".
+- [x] `rviz/board_initializer.rviz` layout, verified on a display.
 
 ### 5. Tests
 
@@ -148,6 +152,55 @@ Live ROS graph, `simulated_scene.launch.xml` with `dry_run:=true` — all three 
 paths exercised: detection at 6.0 m with a published pose, ambiguity abort with
 both candidates reported, and no-candidate with the rejection reason logged.
 
+Topic values checked against ground truth on the running graph:
+
+| Topic | Value | Against |
+|-------|-------|---------|
+| `debug/board_points` | 6436 points | matches the count the detection logged |
+| `debug/board_pose` (`velodyne`) | x 6.0001, y 0.0010, z −0.489, yaw 180° | board at 6.0 m; yaw 180° is the normal facing the sensor |
+| `debug/initial_pose` (`map`) | x 6.0018, y 0.0092, z −0.0267 | vehicle 6 m along map +x, facing the board |
+| covariance σ²ₓ | 0.4365 | (2 × (0.15 + 0.03 × 6.02))² — the range model with its safety factor |
+
+The pose z reads 3.6 cm high because the board's lower rows fall below the beam
+fan at 6 m — the observed height is 0.91 m against a nominal 1.0 m. Bounded, and
+inside tolerance, but note the edge test still calls the vertical centre
+constrained there: the margin at 6 m is 0.20 m, so roughly 9 cm of missing height
+passes unflagged.
+
+### What running RViz exposed
+
+Everything above was verified by echoing topics, and it all passed. Opening RViz
+found a defect none of it could: **the debug topics are latched, and a failed
+attempt published nothing**, so an ambiguous or no-candidate result left the
+previous run's successful detection on screen — a green board and a stale
+rejection label, drawn confidently, while the node was refusing to initialize.
+
+Three fixes followed, all of them about the failure cases rather than the success
+case:
+
+- Every attempt clears the markers and the point cloud before publishing.
+- An ambiguous result publishes **both** candidates, green with red
+  `AMBIGUOUS candidate N` labels. Previously the one case where the operator most
+  needs to see what the sensor saw drew nothing at all.
+- The detection pose also goes out as an arrow marker inside the cleared array,
+  because a latched `PoseStamped` cannot be retracted. The separate `Pose`
+  display is off by default for that reason.
+
+Worth generalising: a debug topic that is only exercised on the success path is
+not a debug topic. All three of these were invisible to topic echoes, unit tests,
+and the node's own logs, and visible immediately on a screen.
+
+Two smaller findings from the same session:
+
+- Only one rejection marker appears in the distractor scene, because the floor
+  tape and the vest are killed by the height and cluster-size gates before stage
+  3 ever sees them. The log line `clusters 1` is their only trace. Not wrong, but
+  the markers do not show everything the gates discarded.
+- `ros2 launch` under a shell `timeout` can leave the scene publisher alive. A
+  stale publisher feeding a second scene into the same topic presents exactly as
+  a detector bug — three board candidates in a two-board scene. Check
+  `pgrep -f board_scene_publisher` before believing a detector defect.
+
 ### What the simulator taught us that the design got wrong
 
 - **Minimum range is 3 m, and the reason is the beam table, not blooming.** The
@@ -162,13 +215,6 @@ both candidates reported, and no-candidate with the rejection reason logged.
 - **A one-sided view cannot recover the centre.** The detector flags it and
   inflates the covariance instead of pretending otherwise; the tight 0.20 m bound
   is not claimed for occluded cases.
-
-### Field gotcha worth remembering
-
-`ros2 launch` under a shell `timeout` can leave the scene publisher running. A
-stale publisher feeding a second scene into the same topic presents exactly as a
-detector bug — three board candidates where the scene has two. Check
-`pgrep -f board_scene_publisher` before believing a detector defect.
 
 ---
 
