@@ -44,7 +44,7 @@ diagnostic surface.
 - [ ] **T-11 `can_replay` node** — Plays a `candump -L` capture against `vcan0`. Captures real drives once, replays forever for regression. Located in `control_test/can_replay.py` or as Rust bin.
 - [ ] **T-12 `diag_watcher`** — Subscribes `/diagnostics`, asserts no `vehicle_interface/*` entry exceeds threshold level for N seconds. Returns non-zero exit on assertion failure — usable in CI.
 - [ ] **T-13 `fsm_assert`** — Scripted scenario runner. Drives `~/control_mode_request` + `control_cmd` through a YAML-defined sequence; verifies `ControlModeReport` transitions match expected. Integrates with `mock_vcu` for fault injection.
-- [ ] **T-14 Justfile entries** — `just test-can-bench` (vcan0 + mock_vcu + interface), `just test-fsm` (run scenario suite), `just test-bringup` (real CAN, static frames, monitor in parallel).
+- [x] **T-14 Justfile entries** — collapsed into a single `just vehicle-interface` with `can=` / `tx=` / `keyboard=` / `converter=` options instead of a recipe per rig; `just vehicle-interface can=vcan0` is the bench entry (pair with `mock_vcu`), `just can-test` still drives the replay rig. See [2-vehicle-interface-standalone-refactor.md](2-vehicle-interface-standalone-refactor.md). `test-fsm` remains open, blocked on T-13.
 
 ## Scenario coverage matrix
 

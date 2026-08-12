@@ -98,8 +98,7 @@ schema.
 
 | File | Purpose |
 |---|---|
-| `basic_control.launch.xml` | Minimal vehicle stack: `robot_state_publisher`, `golfcart_vehicle_interface`, `vehicle_velocity_converter`. Used as a thin shim for control testing. Configurable `can_interface` (default `can0`). |
-| `keyboard_control.launch.xml` | GUI manual control (above). |
+| `keyboard_control.launch.xml` | GUI manual control (above). Built for the full stack — it publishes `GateMode` and calls the adapi engage service, neither of which runs standalone. |
 | `control_command_service.launch.xml` | Service publisher (above). |
 | `trajectory_player.launch.xml` | Trajectory replay (above). |
 
@@ -107,10 +106,8 @@ schema.
 
 **Bench (vcan0) smoke**:
 ```bash
-sudo modprobe vcan && sudo ip link add vcan0 type vcan && sudo ip link set up vcan0
-ros2 launch control_test basic_control.launch.xml can_interface:=vcan0
-# then in another terminal:
-ros2 launch control_test keyboard_control.launch.xml
+sudo ./scripts/can/up-vcan0.sh vcan0
+just vehicle-interface can=vcan0 converter=on   # + keyboard=on for teleop
 ```
 
 **Trajectory regression**:
