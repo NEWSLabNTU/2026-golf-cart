@@ -1,143 +1,178 @@
 # golfcart_aruco_localizer
 
-Vehicle pose from ArUco boards whose poses are measured by hand and supplied as
-data. This is the **sole** pose source for indoor operation — there is no scan
-matching, no point cloud map and no GNSS.
+Marker detections from every camera in, one vehicle pose out. This is the sole
+pose source when `pose_source:=aruco` — there is no scan matcher behind it and no
+point cloud map, so when it stops the vehicle has nothing else.
 
-Design spec: [`docs/superpowers/specs/2026-08-10-aruco-indoor-localizer-design.md`](../../../docs/superpowers/specs/2026-08-10-aruco-indoor-localizer-design.md)
+## Where it sits
 
----
+```mermaid
+flowchart LR
+    subgraph sensing["sensing"]
+        CL["camera left"] --> DL["aruco_detector<br/>left"]
+        CR["camera right"] --> DR["aruco_detector<br/>right"]
+        CB["camera rear"] --> DB["aruco_detector<br/>rear"]
+    end
 
-## Status: phase 3D-1 (infrastructure)
+    DL --> LOC
+    DR --> LOC
+    DB --> LOC
 
-What is here:
+    MAP[("aruco_tag_map.yaml<br/>hand-surveyed")] --> LOC
+    TF["TF<br/>base_link to camera"] --> LOC
 
-- `tag_frame.hpp` — the tag frame convention and corner ordering, defined once
-- `tag_map.{hpp,cpp}` — tag map loading and validation
-- `aruco_localizer_node` — declares and validates the parameter set, loads the
-  map, publishes it for RViz, and stops there
+    LOC["aruco_localizer"] -->|"pose_with_covariance"| EKF
+    LOC -->|"/localization/initialize"| PI["pose_initializer"]
+    PI -->|"trigger_node"| EKF["ekf_localizer"]
+    PI -->|"/initialpose3d"| EKF
+    IMU["imu + wheel speed"] --> GY["gyro_odometer"] --> EKF
+    EKF --> KS["/localization/kinematic_state"]
+    KS -.->|"motion compensation"| LOC
 
-What is **not** here yet: detections are not consumed and no pose is produced.
-The solve, integrity monitoring and the state machine are phase
-[3D-4](../../../docs/roadmaps/3-indoor-d4-localizer.md).
-
----
-
-## Try it
-
-```bash
-colcon build --base-paths src --symlink-install \
-  --cmake-args -DCMAKE_BUILD_TYPE=Release \
-  --packages-select aruco_detection_msgs golfcart_aruco_localizer
-source install/setup.bash
-
-SHARE=$(ros2 pkg prefix golfcart_aruco_localizer)/share/golfcart_aruco_localizer
-ros2 run golfcart_aruco_localizer aruco_localizer_node --ros-args \
-  --params-file $SHARE/config/aruco_localizer.param.yaml \
-  -p tag_map_path:=$SHARE/config/example_tag_map.yaml
+    LOC -->|"/diagnostics"| DG["diagnostic_graph_aggregator"] --> MRM["MRM stop"]
 ```
 
-The loaded map is published latched on `~/debug/mapped_tags`, so RViz shows it
-whenever it connects rather than only if it happened to be listening at startup.
+Publishing `/initialpose3d` does **not** initialize Autoware — `pose_initializer`
+publishes that topic, it does not listen to it. Initialization goes through the
+`/localization/initialize` service, and `pose_initializer` is what then calls the
+EKF's `trigger_node` to bring it out of its dormant state.
 
----
+## How one solve works
 
-## The tag frame convention
+```mermaid
+flowchart TB
+    W["collect detections<br/>over one window"] --> MC["motion-compensate<br/>to a common stamp"]
+    MC --> G{"gates:<br/>range, view angle,<br/>mapped id"}
+    G -->|"rejected"| DROP["dropped"]
+    G -->|"kept"| C["resolveFlips<br/>consensus over SE(3)"]
+    C -->|"tie"| NIL["publish nothing"]
+    C -->|"agreed"| S["solvePose<br/>LM over all corners"]
+    S --> COV["saturated covariance"]
+    S --> I["integrity monitor<br/>residual vs cohort median"]
+    I --> SM["state machine"]
+    COV --> P["pose_with_covariance"]
+    SM --> D["/diagnostics + ~/status"]
+```
 
-Origin at the marker centre, **x right, y up, z out of the printed face** toward
-a viewer looking at it. Corners are ordered top-left, top-right, bottom-right,
-bottom-left, as seen by that viewer.
+Two markers is the minimum for 6-DoF, and **not because of the count** — a single
+marker's orientation is two-valued and nothing in one image resolves it. Two
+markers with *different normals* resolve it by agreement, with no prior. Two
+markers with the *same* normal do not: coplanar boards flip together, so their
+wrong solutions agree exactly as well as their right ones. That is why
+`min_normal_spread_deg` exists alongside `min_markers_for_6dof`.
 
-This is OpenCV's marker frame, and it deliberately violates REP-103's x-forward
-preference. Matching OpenCV exactly is worth more here, because these
-coordinates go straight into PnP and every other convention in this data path is
-already OpenCV's.
+## Interface
 
-There is exactly one definition of it, in `tag_frame.hpp`, and `test_tag_frame`
-pins it against OpenCV by projecting our corners through a pinhole camera and
-asking `cv::aruco::estimatePoseSingleMarkers` to recover the pose using *its*
-object points. If the two disagree, the pose comes back rotated and the test
-says by how much and about which axis.
+| direction | topic / service | type |
+|---|---|---|
+| in | `~/input/detections/<camera>` | `aruco_detection_msgs/ArucoDetectionArray` |
+| in | `~/input/kinematic_state` | `nav_msgs/Odometry` (motion compensation only) |
+| out | `~/output/pose_with_covariance` | `geometry_msgs/PoseWithCovarianceStamped` |
+| out | `~/status` | `aruco_detection_msgs/ArucoLocalizerStatus` |
+| out | `~/debug/mapped_tags` | `visualization_msgs/MarkerArray` (latched) |
+| out | `/diagnostics` | `diagnostic_msgs/DiagnosticArray` |
+| calls | `/localization/initialize` | `autoware_localization_msgs/InitializeLocalization` |
 
-That matters more than it sounds. A corner permutation is a silent multiple-of-90°
-pose error that still converges and still reports a small residual, so nothing
-downstream can detect it. The pipeline this is adapted from defined corner order
-twice, in two languages, with nothing checking the two agreed.
+`~/status` is for humans; `/diagnostics` is the machine interface and the only
+one that can stop the vehicle.
 
----
+### States
 
-## Tag map format
+| state | meaning | level |
+|---|---|---|
+| `UNINITIALIZED` | no first fix yet. Not dead reckoning — there is nothing to reckon *from*. | WARN |
+| `NOMINAL` | ≥2 boards agreeing with enough normal spread | OK |
+| `DEGRADED` | one board, or normals too alike. Position corrected, heading on the gyro. | WARN |
+| `DEAD_RECKONING` | no usable boards. Budget counting down. | WARN |
+| `FAULT` | budget expired, or integrity could not isolate. Latched; requests MRM. | ERROR |
 
-Two forms per board, and they must mean the same thing —
-`TagMap.CornerFormAndPoseFormAgree` is the test that holds them together.
+`DEGRADED` and in-budget `DEAD_RECKONING` are deliberately WARN: the vehicle is
+designed to drive through them, and escalating would trip an MRM for working
+geometry.
+
+### The tag map
 
 ```yaml
 frame_id: map
 survey:
-  date: "2026-08-10"
-  method: "laser distance meter + plumb line"
-  stated_accuracy: 0.02          # [m] 1-sigma — the system's accuracy ceiling
+  date: "2026-08-12"
+  method: "tape measure"
+  stated_accuracy: 0.02     # the ceiling on everything downstream
 defaults:
   dictionary: DICT_5X5_1000
-  marker_size: 0.384             # [m] the black MARKER square, not the board
+  marker_size: 0.384
 tags:
-  - id: 696                      # pose form
-    position:    {x: 12.340, y: -3.210, z: 1.500}
-    orientation: {x: 0.0, y: 0.0, z: 0.70711, w: 0.70711}
-    position_stddev: 0.02        # optional; overrides survey.stated_accuracy
-
-  - id: 306                      # corner form — PREFERRED for a hand survey
+  - id: 100
+    position: {x: 3.0, y: 3.0, z: 1.5}
+    orientation: {x: 0.5, y: -0.5, z: -0.5, w: 0.5}
+  - id: 200                  # or give four surveyed corners instead
     corners:
-      - [3.192, 9.000, 1.692]    # top-left
-      - [2.808, 9.000, 1.692]    # top-right
-      - [2.808, 9.000, 1.308]    # bottom-right
-      - [3.192, 9.000, 1.308]    # bottom-left
+      - [3.192, -3.0, 1.692]
+      - [2.808, -3.0, 1.692]
+      - [2.808, -3.0, 1.308]
+      - [3.192, -3.0, 1.308]
 ```
 
-**Prefer the corner form when measuring by hand.** Four measured points fix
-position, orientation and size at once, with no frame convention for a human to
-get wrong. Writing a quaternion by hand means deciding what the board's local
-axes mean and being right about it.
+The loader hard-errors on duplicate ids, non-planar corners, non-unit
+quaternions and a missing `stated_accuracy`. See
+[`config/example_tag_map.yaml`](config/example_tag_map.yaml).
 
-**`survey.stated_accuracy` is the ceiling on the whole system's accuracy.**
-Survey error and vision error add in quadrature, so a 2 cm survey with a 3 cm
-vision solution gives about 3.6 cm — while a 10 cm survey makes the vision
-accuracy nearly irrelevant. It is worth measuring carefully once.
+**Board layout is a correctness concern, not a quality one.** A board flat on a
+wall is only usable over a narrow band of the drive — viewing angle is
+`acos(offset / range)`, so with a 3 m offset it passes through the usable
+25–75° window while roughly 2–7 m away. Two boards must satisfy that *at the same
+moment, with different normals*. Boards staggered along one wall never do; facing
+pairs at equal offset do. And corners are where coverage fails: a layout planned
+by walking the straights will have a hole exactly where the vehicle turns.
 
-### What is rejected, and why
+## Usage
 
-| Condition | Reason |
-|---|---|
-| Duplicate ID | Unique IDs are what make association prior-free, and prior-free association is what makes cold start possible. Not hygiene — load-bearing. |
-| Non-planar surveyed corners | A non-planar quad has no well-defined orientation. Accepting one would invent a rotation out of measurement noise. |
-| Quaternion whose norm is not 1 | Refused rather than normalized: a norm meaningfully off 1 is usually transcription error, and normalizing bakes the mistake in as a plausible rotation. |
-| Both `corners` and `position`/`orientation` | Ambiguous. |
-| No `marker_size` anywhere | It scales every range estimate linearly, so it cannot be guessed. |
-| No position uncertainty anywhere | It is the board's weight in the solve. Assuming one would quietly invent confidence. |
+Whole vehicle:
 
-Warnings — reported, not fatal — cover boards closer together than a threshold
-(safe, since association is by ID, but usually a mistyped coordinate) and a
-declared `marker_size` that disagrees with the surveyed corners.
+```bash
+just launch "pose_source:=aruco aruco_tag_map_path:=./data/huaxia-campus/aruco_tag_map.yaml"
+```
 
-Every message names the offending board.
+Whole stack against synthetic detections — no map, no simulator, runs in seconds:
 
----
+```bash
+ros2 launch golfcart_launch sim_smoke.launch.xml pattern:=circle
+python3 scripts/check/aruco_smoke_test.py          # 6 graded scenarios
+```
 
-## Notes on the parameters
+Watch it:
 
-Two defaults are honest placeholders and are marked as such in the log output:
+```bash
+ros2 topic echo /localization/pose_estimator/aruco_localizer/status
+ros2 topic echo /diagnostics --field status[0].message
+```
 
-- **`corner_sigma_px: 0.3`** is *inferred*, not measured. No published work gives
-  a measured corner sigma for ArUco with sub-pixel refinement. Everything the
-  covariance model produces scales on it. Phase 3D-5 replaces it with a
-  measurement: park in front of a board, record ~1000 frames, take the standard
-  deviation of the corner positions.
-- **`dead_reckoning_budget_s`** and **`degraded_budget_s`** must follow from
-  measured IMU drift and odometry error against an allowable position error. The
-  values shipped here are deliberately short.
+Not producing a pose? The node says why, throttled: too few boards inside the
+initialization gates, normals too alike, or an ill-conditioned constellation. If
+it initialized but nothing downstream moves, check `pose_initializer` is running
+— without it the EKF stays dormant forever.
 
-One counter-intuitive parameter pair worth reading twice:
-`min_view_angle_deg: 25.0` is a *lower* bound. Looking straight down a board's
-normal is the **worst** case for orientation, not the best, because that is where
-the planar two-solution ambiguity is strongest. The usable window is bounded
-below by ambiguity and above by detection failure.
+### Parameters
+
+40, with rationale, in
+[`config/aruco_localizer.param.yaml`](config/aruco_localizer.param.yaml). The ones
+that change behaviour most:
+
+| parameter | default | note |
+|---|---|---|
+| `tag_map_path` | — | Required. No map is not a degraded localizer, it is a silent one. |
+| `max_range` | `8.0` | Set by where the ambiguity gate stops keeping flipped boards out, not by where the detector stops seeing them. Measured: 0.14 % flipped-among-passing at 8 m, 2.3 % at 9 m, 24 % at 13 m. |
+| `min_view_angle_deg` / `max_view_angle_deg` | `25` / `75` | Below the lower bound the pose is fronto-parallel and its orientation is untrustworthy; above the upper one detection fails. |
+| `corner_sigma_px` | `0.3` | **Inferred, not measured.** The whole covariance model scales on it. Phase 3D-7 replaces it. |
+| `dead_reckoning_budget_s` | `3.0` | Placeholder. Must follow from measured gyro drift against an allowable position error. |
+
+## Tests
+
+```bash
+colcon build --base-paths src --packages-select golfcart_aruco_localizer
+colcon test --base-paths src --packages-select golfcart_aruco_localizer
+```
+
+69 tests over the tag frame, map loader, solver and health logic — including that
+a systematic fault flags nobody, that excluding one bad board is not a fault, and
+that consensus admits noise-level disagreement while rejecting flip-level.

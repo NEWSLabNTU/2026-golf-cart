@@ -88,6 +88,54 @@ ros2 topic echo /system/fail_safe/mrm_state
 ros2 run rqt_robot_monitor rqt_robot_monitor
 ```
 
+## Choosing a pose source
+
+`pose_source` selects how the vehicle knows where it is. The three options are
+not variations on one pipeline — `aruco` replaces the pipeline.
+
+| value | what runs | needs |
+|---|---|---|
+| `ndt` (default) | Autoware NDT scan matching | point cloud map |
+| `cuda_ndt` | CUDA-accelerated NDT | point cloud map |
+| `aruco` | indoor ArUco board localization | surveyed board map, **no** point cloud map |
+
+```bash
+just launch                                    # ndt
+just launch "pose_source:=cuda_ndt"
+just launch "pose_source:=aruco aruco_tag_map_path:=./data/huaxia-campus/aruco_tag_map.yaml"
+
+# or by preset, which sets pose_source for you
+just launch "localization_preset:=aruco aruco_tag_map_path:=/path/to/aruco_tag_map.yaml"
+```
+
+`aruco_tag_map_path` has no default and is required. A default would be worse
+than nothing: it would point at some other site's board positions and the
+vehicle would localize confidently into the wrong building.
+
+Selecting `aruco` changes more than one node:
+
+- no scan matcher, no point cloud map loader, no NDT pointcloud preprocessing —
+  `golfcart_map_component.launch.xml` brings up lanelet2 and the projection only
+- three per-camera ArUco detectors come up under `/sensing/camera/*`
+- the **diagnostics graph is switched** to `autoware-main-aruco.yaml`, because
+  upstream's requires an NDT scan-matcher diagnostic that can never publish on
+  this path and would leave the whole localization subtree stale
+- `pose_initializer` runs with NDT and GNSS initialization disabled; the ArUco
+  localizer supplies the initial pose through `/localization/initialize`
+
+Related: [`golfcart_aruco_localizer`](../../localization/golfcart_aruco_localizer/README.md),
+[`golfcart_aruco_detector`](../../localization/golfcart_aruco_detector/README.md).
+
+### Trying it without a vehicle
+
+The whole localization stack runs against synthetic detections in seconds — no
+map, no simulator, no hardware:
+
+```bash
+ros2 launch golfcart_launch sim_smoke.launch.xml pattern:=corridor
+python3 scripts/check/aruco_smoke_test.py       # 6 graded scenarios, exits non-zero on failure
+```
+
 ## Configuration Categories (config/ directory)
 
 - **control/**: Vehicle control parameters (trajectory following, cmd gate, etc.)

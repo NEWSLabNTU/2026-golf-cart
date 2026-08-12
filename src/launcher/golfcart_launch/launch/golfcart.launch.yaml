@@ -87,7 +87,29 @@ launch:
 - arg:
     name: pose_source
     default: "ndt"
-    description: "Pose estimation source: ndt, cuda_ndt"
+    description: >-
+      Pose estimation source: ndt, cuda_ndt, aruco.
+      aruco is indoor ArUco-board localization and REPLACES the scan matcher
+      entirely -- no point cloud map is loaded and no NDT runs. It requires
+      aruco_tag_map_path.
+
+- arg:
+    name: aruco_tag_map_path
+    default: ""
+    description: >-
+      Hand-surveyed ArUco board map. Required when pose_source:=aruco, ignored
+      otherwise. The localizer refuses to start without it: with no map it is
+      not a degraded localizer, it is a silent one.
+      Example: just launch "pose_source:=aruco aruco_tag_map_path:=./data/huaxia-campus/aruco_tag_map.yaml"
+
+- arg:
+    name: localization_stop_check
+    default: "false"
+    description: >-
+      Require the vehicle to be stationary before an initial pose is accepted.
+      Off by default because the ArUco localizer gates its own cold start on
+      several consecutive agreeing solves, which works while moving. Turning it
+      on is a commissioning policy choice.
 
 - arg:
     name: launch_perception
@@ -103,7 +125,9 @@ launch:
 - arg:
     name: localization_preset
     default: "default"
-    description: "Localization preset: default, eagleye"
+    description: >-
+      Localization preset: default, eagleye, aruco.
+      aruco sets pose_source and additionally requires aruco_tag_map_path.
 
 # Include perception preset (defines perception_mode, use_traffic_light_recognition, etc.)
 - include:
@@ -186,6 +210,12 @@ launch:
     -
       name: pose_source
       value: $(var pose_source)
+    -
+      name: aruco_tag_map_path
+      value: $(var aruco_tag_map_path)
+    -
+      name: initialization_stop_check
+      value: $(var localization_stop_check)
     -
       name: twist_source
       value: $(var twist_source)

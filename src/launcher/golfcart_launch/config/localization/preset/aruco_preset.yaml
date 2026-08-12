@@ -1,7 +1,15 @@
-# ArUco boards as the sole indoor pose source. Phase 3D-2.
+# ArUco boards as the sole indoor pose source.
 #
-# Usage:
-#   just launch "pose_source:=aruco aruco_tag_map_path:=/path/to/aruco_tag_map.yaml"
+#   just launch "localization_preset:=aruco aruco_tag_map_path:=/path/to/aruco_tag_map.yaml"
+#
+# Selecting this preset sets pose_source, which switches the whole localization
+# stack: no scan matcher, no point cloud map loader, no NDT preprocessing. The
+# diagnostics graph is switched too, because upstream's requires an NDT
+# scan-matcher diagnostic that can never publish on this path.
+#
+# aruco_tag_map_path has no default and must be given. A default would be worse
+# than nothing here: it would point at some other site's board positions and the
+# vehicle would localize confidently into the wrong building.
 launch:
   - arg:
       name: pose_source
