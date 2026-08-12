@@ -136,15 +136,19 @@ just launch "lidar_model:=vlp32c"
 ```
 
 #### Camera Configuration
-```bash
-# USB cameras (current)
-just launch "camera_model:=usb"
+`camera.launch.xml` is the single entry point for every camera. The Autoware
+sensing launch chain forwards only a fixed set of arguments, so through `just
+launch` the selection is made by environment variable:
 
-# Tier IV GMSL cameras (future)
-just launch "camera_model:=tier4"
+```bash
+# Three GMSL cameras on the Advantech (default)
+CAMERA_MODEL=gscam just launch
+
+# ZED X — set automatically for the orin host; also selectable directly
+ros2 launch golfcart_sensor_kit_launch camera.launch.xml camera_model:=zedx
 
 # No camera
-just launch "camera_model:=none"
+CAMERA_MODEL=none just launch
 ```
 
 #### GNSS Configuration
@@ -297,8 +301,8 @@ sensor_suite:=vlp32c             # Velodyne VLP-32C
 
 # Individual sensor overrides
 lidar_model:=vlp32c
-camera_model:=usb|none
-imu_source:=tamagawa
+camera_model:=gscam|zedx|none   # env: CAMERA_MODEL
+imu_source:=xsens|zed           # env: IMU_SOURCE
 gnss_receiver:=ublox|septentrio
 ```
 
@@ -384,6 +388,8 @@ twist_source:=gyro_odom|eagleye            # Override preset twist source
 | [docs/guides/control_testing.md](docs/guides/control_testing.md) | Control system testing procedures |
 | [docs/guides/mrm_configuration.md](docs/guides/mrm_configuration.md) | MRM (emergency stop) configuration |
 | [docs/multi-machine.md](docs/multi-machine.md) | Two-machine operation: `just launch-master`, per-host DDS profiles, orin lifecycle, recording |
+| [docs/design/zed_camera_integration.md](docs/design/zed_camera_integration.md) | ZED X launch structure, published topics, TF ownership split between the ZED driver and Autoware, IMU source selection |
+| [docs/roadmaps/2-zed-camera-integration.md](docs/roadmaps/2-zed-camera-integration.md) | ZED integration phase: work items, acceptance criteria, deferred field measurements |
 | [docs/guides/isaac_vslam_testing.md](docs/guides/isaac_vslam_testing.md) | Isaac SLAM testing |
 | [docs/design/isaac_vslam_integration.md](docs/design/isaac_vslam_integration.md) | Isaac SLAM architecture |
 | [docs/research/localization/ndt_parameter_tuning_coss_map.md](docs/research/localization/ndt_parameter_tuning_coss_map.md) | NDT tuning research |
@@ -550,40 +556,65 @@ Target configuration for golf cart:
 - Must work together with map for Autoware localization
 - Coordinate with map preparation team
 
-## Tamagawa IMU Integration
+## IMU Integration
 
-### Golf Cart Configuration
-Replace MPU9250 with Tamagawa IMU (Autoware recommended):
-- **Status**: Pending hardware and driver integration
-- **Driver**: Tamagawa IMU ROS 2 driver (to be obtained)
-- **Launch file**: `golfcart_sensor_kit_launch/launch/imu.launch.xml` (to be updated)
-- **Calibration**: IMU corrector parameters in `sensor_kit_calibration.yaml`
+Two sources, selected by `imu_source` (env `IMU_SOURCE`). Both feed the same
+Autoware chain — `imu_corrector` then `gyro_bias_estimator` — which always runs
+on the Advantech regardless of source. Launch file:
+`golfcart_sensor_kit_launch/launch/imu.launch.xml`.
 
-### Golf Cart MPU9250 (Reference Only)
-Original system used MPU9250:
-- Driver: `ros2_mpu9250_driver` submodule
-- Launch file includes imu_corrector and gyro_bias_estimator
-- **Note**: Golf cart will replace with Tamagawa IMU
+### Xsens MTi over CAN (`imu_source:=xsens`, default)
+- **Driver**: `xsens_mti_can_ros_driver`, launched by `imu.launch.xml`
+- **Raw topic**: `/sensing/imu/xsens/imu_raw`
+- **Frame**: `imu_link`
+- **Known issue**: the driver has `pub_transform: true`, broadcasting
+  `world -> imu_link` while the URDF publishes `sensor_kit_base_link -> imu_link`.
+  That frame has two parents today.
+
+### ZED X built-in (`imu_source:=zed`)
+- **Driver**: none launched here — the ZED node on the orin already publishes it
+- **Raw topic**: `/sensing/camera/zed/imu/data`
+- **Frame**: `zed_imu_link`, parented to `zed_left_camera_frame` by the driver
+- Uses `imu/data`, not `imu/data_raw`. "raw" in Autoware means "not yet corrected
+  by Autoware", not "uncalibrated by the vendor"; `gyro_bias_estimator` can only
+  remove a constant bias, so feeding it the SDK's uncalibrated fields would
+  discard scale and misalignment corrections nothing can rebuild.
+- Crosses the DDS link at 100 Hz. `gyro_odometer` time-syncs it against vehicle
+  twist, so link jitter shows up as twist noise — prefer a wired link.
+
+### Corrected output
+`/sensing/imu/imu_data`, consumed by `autoware_gyro_odometer`. Corrector
+parameters are per-device and do not transfer between sources:
+`individual_params/.../imu_corrector_{xsens,zed}.param.yaml`.
 
 ## Camera Configuration
 
-### USB Cameras (Current)
-The golf cart currently uses USB cameras:
-- **Launch file**: `golfcart_sensor_kit_launch/launch/camera.launch.xml`
-- **Camera model parameter**: `camera_model:=usb`
-- USB cameras provide basic vision input for perception
+Two camera sets on two machines, both behind `camera.launch.xml`. Design:
+[docs/design/zed_camera_integration.md](docs/design/zed_camera_integration.md).
 
-### Tier IV GMSL Cameras (Future Upgrade)
-Plan to upgrade to Tier IV GMSL cameras:
-- Higher quality and reliability
-- Better integration with Autoware
-- **Camera model parameter**: `camera_model:=tier4` (when available)
+### GMSL cameras — Advantech (`camera_model:=gscam`)
+Three TIER IV GMSL cameras (left, right, rear) via `gscam`:
+- **Config**: `golfcart_sensor_kit_launch/config/camera_{left,right,rear}.yaml`
+- **Topics**: `/sensing/camera/{left,right,rear}/image_raw/compressed`
+- **Frames**: `camera_left`, `camera_right`, `camera_rear`
 
-### Golf Cart ZED Camera (Reference Only)
-Original Golf Cart used ZED stereo cameras with object detection:
-- ZED object detection integration available in codebase
-- Launch file: `golfcart_sensor_kit_launch/launch/zed_with_object_detection.launch.xml`
-- **Note**: Not used in golf cart configuration
+### ZED X — orin (`camera_model:=zedx`)
+One ZED X stereo camera, driven as a composable node:
+- **Launch**: `golfcart_sensor_kit_launch/launch/zed.launch.xml`
+- **Config**: `golfcart_sensor_kit_launch/config/zed.param.yaml`, layered over
+  `zed_wrapper`'s `common_stereo.yaml` and `zedx.yaml`
+- **Topics**: `/sensing/camera/zed/rgb/color/rect/{image,camera_info}` and
+  `/sensing/camera/zed/imu/data`
+- **The RGB channel is the left camera.** Images are stamped
+  `zed_left_camera_frame_optical` (Z forward, X right, Y down), so any pose
+  computed from them is in that frame — transform with tf2, never by hand.
+- Left/right stereo, depth, and point cloud are all disabled. Positional
+  tracking is off, because Autoware owns `map -> odom` and `odom -> base_link`.
+- Only `zed_camera_link` (the screw hole in the camera's bottom) is calibrated
+  in `sensor_kit_calibration.yaml`. Everything below it comes from the vendor
+  URDF via a `robot_state_publisher` inside `zed.launch.xml`.
+- Needs OpenGL hardware acceleration — plain VNC breaks it. If the GMSL link
+  wedges (`ZEDX#0#0#FROZEN`), run `sudo service zed_x_daemon restart; sleep 25`.
 
 ## Golf Cart Migration Plan
 
