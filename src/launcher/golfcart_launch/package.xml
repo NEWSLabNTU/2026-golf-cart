@@ -10,6 +10,8 @@
   <buildtool_depend>ament_cmake_auto</buildtool_depend>
 
   <exec_depend>rclpy</exec_depend>
+  <!-- camera.launch.xml, included directly by the is_orin group -->
+  <exec_depend>golfcart_sensor_kit_launch</exec_depend>
   
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

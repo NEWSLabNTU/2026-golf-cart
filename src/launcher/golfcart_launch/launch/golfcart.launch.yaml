@@ -219,12 +219,21 @@ launch:
             - from: ~/output/objects
               to: /perception/object_recognition/objects
 
-# ZED X camera - runs on the orin (slave) host
+# ZED X camera - runs on the orin (slave) host.
+#
+# Included directly rather than through sensing.launch.xml, because the whole
+# sensing subtree hangs off golfcart_autoware.launch.xml, which is master-only.
+# camera.launch.xml is still the single entry point for every camera on the
+# vehicle; the orin just reaches it by a shorter path.
 - group:
     if: $(var is_orin)
     children:
     - include:
-        file: "$(find-pkg-share golfcart_launch)/launch/zed.launch.xml"
+        file: "$(find-pkg-share golfcart_sensor_kit_launch)/launch/camera.launch.xml"
+        arg:
+        -
+          name: camera_model
+          value: zedx
 
 # Rosbag recording - one recorder per host, each writing to its own local disk.
 # Declared as node: entries, not executable: entries, so play_launch supervises

@@ -218,12 +218,21 @@ launch:
     - include:
         file: "$(find-pkg-share golfcart_system_monitor)/launch/golfcart_system_monitor.launch.yaml"
 
-# ZED X camera - runs on the orin (slave) host
+# ZED X camera - runs on the orin (slave) host.
+#
+# Included directly rather than through sensing.launch.xml, because the whole
+# sensing subtree hangs off golfcart_autoware.launch.xml, which is master-only.
+# camera.launch.xml is still the single entry point for every camera on the
+# vehicle; the orin just reaches it by a shorter path.
 - group:
     if: $(var is_orin)
     children:
     - include:
-        file: "$(find-pkg-share golfcart_launch)/launch/zed.launch.xml"
+        file: "$(find-pkg-share golfcart_sensor_kit_launch)/launch/camera.launch.xml"
+        arg:
+        -
+          name: camera_model
+          value: zedx
 
 # # RQT Runtime Monitor
 # - node:

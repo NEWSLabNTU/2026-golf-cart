@@ -9,7 +9,8 @@
 # zed-ros2-wrapper v5 scheme (rgb/color/rect/image), NOT the v4 scheme
 # (rgb/image_rect_color) that the design document quotes.
 #
-# Depth is off: depth.depth_mode is NONE in zed.launch.xml, so nothing publishes
+# Depth is off: depth.depth_mode is NONE in golfcart_sensor_kit_launch's
+# config/zed.param.yaml, so nothing publishes
 # on the depth topics. Enable both deliberately if ever needed - depth data is
 # very large.
 
