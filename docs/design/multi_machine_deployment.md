@@ -178,7 +178,8 @@ Decisions taken for this design:
 │ systemd user units (cgroup kill ⇒ no orphans)         │
 │   golfcart-orin.service                               │
 │     └─ play_launch ── golfcart.launch.yaml host:=orin │
-│          ├─ zed.launch.xml  (/sensing/camera/zed/...) │
+│          ├─ camera.launch.xml camera_model:=zedx      │
+│          │    (/sensing/camera/zed/...)               │
 │          └─ record_orin.sh  (if record:=true, local)  │
 │   golfcart-orin-watchdog.service (PartOf=main unit)   │
 │     └─ ping 192.168.13.1; 6 misses ⇒ stop main unit   │
@@ -241,7 +242,7 @@ timestamps aligned to ~ms.
 | Component | Path | Role |
 |---|---|---|
 | Launch gating | `src/launcher/golfcart_launch/launch/golfcart.launch.yaml` | `host`/`record`/`use_orin` args; falcon under `is_master`; ZED under `is_orin`; recorder + orchestrator executables |
-| ZED launch | `src/launcher/golfcart_launch/launch/zed.launch.xml` | falcon-style lift-out; namespaces `sensing/camera`; includes `zed_wrapper/launch/zed_camera.launch.py` |
+| ZED launch | `golfcart_sensor_kit_launch/launch/{camera,zed}.launch.xml` | reached from the `is_orin` group with `camera_model:=zedx`; absolute `sensing/camera` namespaces; builds the container itself rather than including `zed_camera.launch.py`. See [zed_camera_integration.md](zed_camera_integration.md) |
 | ZED driver | `src/sensor_component/external/zed-ros2-wrapper` (submodule) | NEWSLabNTU zed-ros2-wrapper; build-skipped when `/usr/local/zed` absent |
 | DDS profiles | `config/cyclonedds/{loopback,master,orin}.xml` | see above |
 | Orchestrator | `scripts/multi_machine/orin_remote.sh` | master-side; ssh start/hold/stop of the orin unit, 60 s reachability retry, EXIT trap |
@@ -279,7 +280,7 @@ just launch                         # host:=all, loopback DDS, no remote anythin
    `executable:` YAML entries (test with a trivial `sleep`; fallback = wrap scripts
    as `ros2 run` entry points).
 3. Recording scripts (testable single-box: `just launch ARGS="record:=true"`).
-4. ZED: submodule, `zed.launch.xml`, build gating, SDK setup script (needs orin hardware).
+4. ZED: submodule, sensor-kit `zed.launch.xml`, build gating, SDK setup script (needs orin hardware).
 5. Lifecycle units + orchestrator + watchdog + provisioning scripts.
 6. Docs (`docs/multi-machine.md` usage guide) + CLAUDE.md corrections.
 
