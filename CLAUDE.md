@@ -392,6 +392,8 @@ twist_source:=gyro_odom|eagleye            # Override preset twist source
 | [docs/superpowers/specs/2026-07-27-indoor-artag-localization-design.md](docs/superpowers/specs/2026-07-27-indoor-artag-localization-design.md) | Indoor AR-tag + NDT localization design: tags replace GNSS for init, EKF correction, and NDT regularization |
 | [docs/roadmaps/3-indoor-localization.md](docs/roadmaps/3-indoor-localization.md) | Indoor localization phase master: sub-phases A (calibration) → B (mapping) → C (tag map) → D (runtime) |
 | [docs/design/indoor_pcd_mapping_reflector_anchor.md](docs/design/indoor_pcd_mapping_reflector_anchor.md) | Indoor PCD map creation with no GNSS: retroreflective board defines map origin and cold-start pose |
+| [docs/design/board_pose_initializer.md](docs/design/board_pose_initializer.md) | Board pose initializer node: detection algorithm, pose extraction, VLP-32C simulator, test matrix |
+| [docs/roadmaps/3-indoor-e-board-initializer.md](docs/roadmaps/3-indoor-e-board-initializer.md) | Phase 3E work items and acceptance criteria for the board initializer |
 
 ## Known Issues
 

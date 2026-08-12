@@ -56,6 +56,21 @@ A and B are independent — two people can run them in parallel.
 | B — Indoor mapping | [3-indoor-b-indoor-mapping.md](3-indoor-b-indoor-mapping.md) | Not started |
 | C — Tag map building | [3-indoor-c-tag-map-building.md](3-indoor-c-tag-map-building.md) | Not started |
 | D — Runtime integration | [3-indoor-d-runtime-integration.md](3-indoor-d-runtime-integration.md) | Design complete, not started |
+| E — Board pose initializer | [3-indoor-e-board-initializer.md](3-indoor-e-board-initializer.md) | Design complete, not started |
+
+### E — Board pose initializer, added 2026-08-12
+
+Sub-phase E replaces GNSS for **cold start only**, using a LiDAR-detected
+retroreflective board rather than a camera-detected tag. It exists because the
+indoor map is anchored to that board
+([mapping design §4](../design/indoor_pcd_mapping_reflector_anchor.md)), which
+makes the map origin physically re-findable and the initial pose exact by
+construction.
+
+E is largely independent of A–D: its detector and simulator need no camera, no
+map, and no vehicle, so it can proceed in parallel while the Orin work continues
+elsewhere. It does not replace D — the board is not visible from most of the
+route, so bounding drift remains the tags' job.
 
 ---
 

@@ -337,9 +337,11 @@ launch it unconditionally, or issue one service call at startup.
 Do this stage first. It validates the map, the NDT configuration, and the
 no-GNSS launch path without simultaneously debugging a detector.
 
-**Stage 1 — board pose initializer node.** Detect the board in the current scan,
-compute the vehicle pose, call `/localization/initialize` with a
-`PoseWithCovarianceStamped`:
+**Stage 1 — board pose initializer node.** Designed in
+[board_pose_initializer.md](board_pose_initializer.md), tracked in
+[3-indoor-e-board-initializer.md](../roadmaps/3-indoor-e-board-initializer.md).
+Detect the board in the current scan, compute the vehicle pose, call
+`/localization/initialize` with a `PoseWithCovarianceStamped`:
 
 ```
 T_map←base_link = T_map←board ∘ (T_base_link←lidar ∘ T_lidar←board)⁻¹
