@@ -107,7 +107,8 @@ schema.
 **Bench (vcan0) smoke**:
 ```bash
 sudo ./scripts/can/up-vcan0.sh vcan0
-just vehicle-interface can=vcan0 converter=on   # + keyboard=on for teleop
+just vehicle-interface can=vcan0 converter=on
+just manual-control                             # second terminal, for teleop
 ```
 
 **Trajectory regression**:

@@ -1,7 +1,7 @@
 # Standalone Vehicle-Interface Recipe Refactor
 
-Collapses seven overlapping vehicle-interface recipes into one, with options for
-CAN TX and keyboard manual control. Design:
+Collapses seven overlapping vehicle-interface recipes into two: `vehicle-interface`
+with CAN TX and extras as options, and `manual-control` for keyboard teleop. Design:
 [../design/vehicle_interface_standalone.md](../design/vehicle_interface_standalone.md).
 
 Scope: `justfile`, `src/vehicle/golfcart_vehicle_launch/`, `src/vehicle/control_test/`,
@@ -17,8 +17,8 @@ Branch off `main` (== `origin/main` == `origin/2026-golf` == `dbfc812`), land th
 fixes, fast-forward `main`, push, bump the submodule pointer here.
 
 - [x] **F1 tty guard** — `terminal_reader.hpp`: `isatty(STDIN_FILENO)` + check the
-      `tcgetattr` return. No tty → `RCLCPP_ERROR` naming `just vehicle-interface
-      keyboard=on`, skip the key thread instead of spinning on EOF.
+      `tcgetattr` return. No tty → `RCLCPP_ERROR` pointing at `just manual-control`,
+      skip the key thread instead of spinning on EOF.
 - [x] **F2 limits as parameters** — `max_speed`, `step_speed`, `max_steer_angle`,
       `step_steer_angle`, replacing the `#define`s at `keyboard_control.cpp:9-12`
       (100 km/h max, 5 km/h per keypress).
@@ -34,43 +34,39 @@ fixes, fast-forward `main`, push, bump the submodule pointer here.
 - [x] **Build + ff-merge** — `colcon build --packages-select autoware_manual_control`,
       ff-merge to `main`, push, bump submodule pointer with a `chore(submodule)` commit.
 
-## Step 2: tmux wrapper
+## Step 2: keyboard controller placement — REVISED
 
-- [x] **W-1 `run_in_tmux.sh`** — `golfcart_vehicle_launch/scripts/run_in_tmux.sh`,
-      `SESSION -- <cmd...>`. tmux missing → exit 127 with an install hint. Existing
-      session → refuse, print attach/kill hints. `new-session -d` with ROS env via
-      `-e`, attach hint on stdout, `trap INT TERM EXIT` → SIGINT the pane, then
-      `kill-session`.
-      *Implementation note: `remain-on-exit` + a `#{pane_dead}` poll was the plan,
-      but the option can only be set after the session exists, and a command that
-      fails instantly takes the session with it first — the status was lost exactly
-      when it mattered. The pane now writes its exit status to a temp file and
-      parks on `sleep`, so the wrapper reads the status, dumps the last 20 lines
-      of pane output into the launch log, and exits with the same code. Verified:
-      exit 0, exit 3, duplicate-session refusal, and SIGINT teardown (session
-      killed, status 130 propagated, no leftover session or temp file).*
-- [x] **W-2 install rule** — `install(PROGRAMS scripts/run_in_tmux.sh DESTINATION
-      share/${PROJECT_NAME}/scripts)` in `golfcart_vehicle_launch/CMakeLists.txt`,
-      so the launch file resolves it via `$(find-pkg-share ...)`.
+Originally a node inside the launch file, handed a terminal by a
+`run_in_tmux.sh` `launch-prefix` wrapper. Built, and verified working under plain
+`ros2 launch`. Dropped anyway: **`play_launch` does not support `launch-prefix`**,
+and `play_launch` runs the full stack, so that path would work in one launcher
+and silently do nothing in the other.
+
+- [x] **W-1 `run_in_tmux.sh`** — built, verified (exit 0, exit 3, duplicate-session
+      refusal, SIGINT teardown), then **removed** along with its install rule and
+      the `autoware_manual_control` exec_depend it justified.
+- [x] **W-2 `just manual-control`** — runs `ros2 run autoware_manual_control
+      keyboard_control` directly, so it owns the terminal it is typed in. Passes
+      `mode_backend:=control_mode`, the `/control/command/*` topics, and the cart's
+      limits (`max_speed:=5.0`, `step_speed:=0.25`, `max_steer_angle:=0.349`,
+      `step_steer_angle:=0.0174`). Extra `--ros-args` pass through via `ARGS`.
 
 ## Step 3: Standalone launch file
 
 - [x] **L-1 `vehicle_interface_standalone.launch.xml`** — args `can_interface`
-      (`can0`), `tx_enabled` (`false`), `manual_control` (`false`),
-      `vehicle_description` (`false`), `velocity_converter` (`false`). Includes
-      `vehicle_interface.launch.xml` unchanged.
-- [x] **L-2 keyboard group** — `autoware_manual_control/keyboard_control` under the
-      `run_in_tmux.sh` `launch-prefix`, remapped onto `/control/command/control_cmd`
-      + `gear_cmd`, with `mode_backend:=control_mode` and golf-cart speed/steer limits.
+      (`can0`), `tx_enabled` (`false`), `vehicle_description` (`false`),
+      `velocity_converter` (`false`). Includes `vehicle_interface.launch.xml`
+      unchanged. Vehicle interface only — no keyboard node, see step 2.
+- [x] **L-2 keyboard group** — *dropped, superseded by `just manual-control`.*
 - [x] **L-3 description + converter groups** — `robot_state_publisher` and
       `autoware_vehicle_velocity_converter`, lifted from `basic_control.launch.xml:13-33`.
 
 ## Step 4: Justfile
 
 - [x] **J-1 single `vehicle-interface` recipe** — `KEY=VALUE` options
-      (`can`, `tx`, `keyboard`, `converter`), order-free, unknown keys rejected,
-      defaults `can0 / off / off / off`. `tx=on` prints a warning banner and counts
-      down 3 s.
+      (`can`, `tx`, `converter`), order-free, unknown keys rejected, defaults
+      `can0 / off / off`. `tx=on` prints a warning banner and counts down 3 s.
+      Keyboard control lives in `just manual-control` (step 2).
 - [x] **J-2 remove superseded recipes** — `control-vehicle-test`,
       `control-teleop-real`, `control-basic`, `control-keyboard`, `manual-control`.
 - [x] **J-3 rewire `can-test`** — point at `vehicle_interface_standalone.launch.xml`
@@ -95,24 +91,25 @@ fixes, fast-forward `main`, push, bump the submodule pointer here.
       and `control_test` all build. `control_test` needed its stale `build/`
       directory removed: setup.py globs the launch dir, and the copy list still
       held the deleted `basic_control.launch.xml`.
-- [x] **V-2 launch parses** — `--show-args` lists all five arguments with their
-      defaults.
+- [x] **V-2 launch parses** — `--show-args` lists the four arguments with their
+      defaults, and no keyboard-related ones.
 - [x] **V-3 bench smoke, keys off** — `just vehicle-interface can=vcan0` against
       `mock_vcu --auto` on an isolated `ROS_DOMAIN_ID`: `/vehicle/status/velocity_status`
       published, `/vehicle/status/control_mode` = 1 (AUTONOMOUS), and `candump`
       showed only the mock's four `VCU_ADS_*` IDs — no `ADS_VCU_*` frames, i.e. TX
       really is off.
-- [x] **V-4 bench smoke, keys on** — `just vehicle-interface can=vcan0 keyboard=on`:
-      session `golfcart-teleop` created, pane shows the help menu and
-      `Limits: speed <= 5 m/s (step 0.25), steer <= 19.9962 deg` (F2 live), keys
-      sent with `tmux send-keys` produced `/control/command/control_cmd`
-      (velocity 0.5, steering 0.0174) and `gear_cmd` command 2 = DRIVE, and `s`
-      printed `Vehicle:Autonomous Gear:D` (F5 live). The launch terminal carried
-      only the two wrapper hint lines - no interleaving with the teleop display.
-- [x] **V-5 teardown** — SIGINT to the launch process: wrapper exited 130, tmux
-      session gone, no orphan `keyboard_control` or `vehicle_interface`, status
-      temp file removed. Launch logs the wrapper's 130 as an ERROR line, same as
-      it does for any node on Ctrl-C.
+- [x] **V-4 keyboard smoke** — `just manual-control` in a second terminal, against
+      `just vehicle-interface can=vcan0`: help menu plus
+      `Limits: speed <= 5 m/s (step 0.25), steer <= 19.9962 deg` (F2 live); keys
+      `x u u u l` produced `/control/command/control_cmd` (velocity 0.75, steering
+      -0.0174) and `gear_cmd` command 2 = DRIVE; `s` printed
+      `Vehicle:Autonomous Gear:D` (F5 live).
+      *First verified in the tmux/`launch-prefix` form; re-verified after the
+      rework as a standalone recipe.*
+- [x] **V-5 teardown** — Ctrl-C on the controller: `signal_handler(SIGINT/SIGTERM)`,
+      process exits, terminal settings restored, no orphan. `just` prints
+      `terminated ... by signal 2`, which is its normal report for an interrupted
+      recipe.
 - [x] **V-6 `can-test`** — runs the standalone launch on `vcan0` and replays
       `can_can0_20260507_163716.log`; `/vehicle/status/*` publish from the replayed
       frames (`control_mode` = 6/NOT_READY, as expected from a capture whose four
@@ -137,9 +134,8 @@ Complete, verified on the bench 2026-08-12 (`vcan0` + `mock_vcu`, isolated
 ```bash
 sudo ./scripts/can/up-vcan0.sh vcan0
 ros2 run golfcart_vehicle_interface mock_vcu --interface vcan0 --auto &
-just vehicle-interface can=vcan0 keyboard=on
-# second terminal: tmux attach -t golfcart-teleop, then x / u / j
-# launch terminal: Ctrl-C, then `tmux ls` shows no golfcart-teleop
+just vehicle-interface can=vcan0
+# second terminal: just manual-control, then x / u / j
 just can-test
 ```
 
@@ -149,8 +145,10 @@ uses plain `ros2 launch`. Real-bus (`can0`, `tx=on`) driving is field-test work.
 
 ## Risks
 
-- **tmux under `launch-prefix`** — the wrapper must block for the node's lifetime,
-  or launch declares the node dead immediately. Covered by V-4/V-5.
+- **`launch-prefix` is not portable across launchers** — `play_launch` ignores it,
+  so anything that depends on it works under `ros2 launch` only. This is why the
+  keyboard controller is a recipe rather than a node. Same family as play_launch
+  dropping `executable:` entries.
 - **Deleting `basic_control.launch.xml`** — `control-straight` / `control-circle`
   assume that stack is already up. Their comments must point at
   `just vehicle-interface converter=on`.
