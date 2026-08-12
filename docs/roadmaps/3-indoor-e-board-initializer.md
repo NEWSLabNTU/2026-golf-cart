@@ -4,7 +4,8 @@ Part of [Phase 3 indoor localization](3-indoor-localization.md).
 Design: [board_pose_initializer.md](../design/board_pose_initializer.md)
 Map contract: [indoor_pcd_mapping_reflector_anchor.md](../design/indoor_pcd_mapping_reflector_anchor.md)
 
-**Status: Not started — simulation work is unblocked and can start now**
+**Status: Implemented and passing in simulation. On-vehicle and replay validation
+blocked by the indoor map (sub-phase B) and the DBW velocity stub.**
 
 Last updated: 2026-08-12
 
@@ -37,71 +38,72 @@ proceeds in parallel.
 
 ### 1. Package scaffolding
 
-- [ ] Create `src/localization/golfcart_board_initializer/` with the layout in
+- [x] Create `src/localization/golfcart_board_initializer/` with the layout in
       design §3 — `detector.py`, `geometry.py`, `node.py`, `test/`, `config/`, `launch/`.
-- [ ] `detector.py` must not import `rclpy`. It is shared with the offline
+- [x] `detector.py` must not import `rclpy`. It is shared with the offline
       map-anchoring step, and it is what makes the tests runnable without ROS.
-- [ ] Add `config/board_initializer.param.yaml` with the parameter set in design §6.
+- [x] Add `config/board_initializer.param.yaml` with the parameter set in design §6.
 
 ### 2. Simulator
 
-- [ ] Load the 32 lasers' `vert_correction` and `rot_correction` from
+- [x] Load the 32 lasers' `vert_correction` and `rot_correction` from
       `/opt/ros/humble/share/nebula_decoders/calibration/velodyne/VLP32.yaml`
       rather than assuming uniform elevation spacing.
-- [ ] Ray–plane scene renderer: room (six planes) + board + distractors, nearest
+- [x] Ray–plane scene renderer: room (six planes) + board + distractors, nearest
       hit per ray.
-- [ ] Calibrated-reflectivity intensity model — diffuse clipped to 0–100, retro
+- [x] Calibrated-reflectivity intensity model — diffuse clipped to 0–100, retro
       clipped to 101–255 (design §7).
-- [ ] Range noise σ = 0.02 m and 2% dropout.
-- [ ] Optional blooming: halo points around the panel with range inflated 3–5 cm.
-- [ ] Distractor set: exit sign, floor tape, safety vest, second board.
-- [ ] Emit `sensor_msgs/PointCloud2` with `x, y, z, intensity, ring`, and support
+- [x] Range noise σ = 0.02 m and 2% dropout.
+- [x] Optional blooming: halo points around the panel with range inflated 3–5 cm.
+- [x] Distractor set: exit sign, floor tape, safety vest, second board.
+- [x] Emit `sensor_msgs/PointCloud2` with `x, y, z, intensity, ring`, and support
       writing a rosbag2 for repeatable regression runs.
 
 ### 3. Detector
 
-- [ ] Stage 1 gates: intensity ≥ 110, range 1.5–15 m, height 0.4–1.8 m in `base_link`.
-- [ ] Stage 2 Euclidean clustering, tolerance 0.20 m, minimum 20 points, with a
-      range-scaled minimum count.
-- [ ] Stage 3 geometric scoring: planarity, verticality, extent, height, density.
-- [ ] Ambiguity abort when two or more clusters survive.
-- [ ] Stage 4 pose extraction: normal sign from the sensor direction, up axis from
+- [x] Stage 1 gates: intensity ≥ 110, range **3–18 m**, height 0.4–1.8 m in
+      `base_link`. The 3 m floor was measured, not chosen — see the results below.
+- [x] Stage 2 clustering: voxel-grid connected components, tolerance **0.30 m**,
+      minimum 20 points.
+- [x] Stage 3 geometric scoring: planarity, verticality, extent, height, density.
+- [x] Ambiguity abort when two or more clusters survive.
+- [x] Stage 4 pose extraction: normal sign from the sensor direction, up axis from
       gravity, bounding-rectangle **centre** rather than centroid.
-- [ ] Observed-edge tracking, with rejection or covariance inflation when a centre
+- [x] Observed-edge tracking, with rejection or covariance inflation when a centre
       axis is unconstrained.
-- [ ] Fit the Stage 3 density model from simulator output rather than deriving it
+- [x] Fit the Stage 3 density model from simulator output rather than deriving it
       analytically (design §10).
 
 ### 4. Node
 
-- [ ] Scan accumulation (10 scans), with restart when the vehicle is moving.
-- [ ] Static TF lookup `base_link ← velodyne`, with the state machine waiting for it.
-- [ ] Pose composition and the covariance model of design §5 stage 5.
-- [ ] Service call to `/localization/initialize`,
+- [x] Scan accumulation (10 scans), with restart when the vehicle is moving.
+- [x] Static TF lookup `base_link ← velodyne`, with the state machine waiting for it.
+- [x] Pose composition and the covariance model of design §5 stage 5.
+- [x] Service call to `/localization/initialize`,
       `tier4_localization_msgs/srv/InitializeLocalization`, **`method=AUTO`**.
       `DIRECT` converts every detection error into a localization error.
-- [ ] State machine with `max_attempts`, then `ERROR` and idle.
-- [ ] Fallback to `user_defined_initial_pose` implemented but **default off**.
-- [ ] Debug topics: `~/debug/board_points`, `~/debug/board_pose`, and
+- [x] State machine with `max_attempts`, then `ERROR` and idle.
+- [x] Fallback to `user_defined_initial_pose` implemented but **default off**.
+- [x] Debug topics: `~/debug/board_points`, `~/debug/board_pose`, and
       `~/debug/rejected` carrying a rejection reason per cluster.
-- [ ] Diagnostics distinguishing "no detection", "ambiguous", and "service failed".
+- [x] Diagnostics distinguishing "no detection", "ambiguous", and "service failed".
 
 ### 5. Tests
 
-- [ ] Range sweep: 2, 5, 10, 15 m.
-- [ ] Yaw sweep: 0°, ±30°, ±60°.
-- [ ] Occlusion: 0%, 30% left, 50% bottom.
-- [ ] Distractors only — asserts **no detection**.
-- [ ] Two boards — asserts **ambiguity abort**.
-- [ ] Dirty board, intensity capped at 130 — asserts detection.
-- [ ] Board tilted 10° — asserts the verticality gate does not reject it.
-- [ ] Blooming enabled — asserts bias stays within tolerance.
-- [ ] Metrics reported per run: position error, yaw error, detection rate,
+- [x] Range sweep: 3, 5, 10, 15 m, plus 2 m asserting **no** detection.
+- [x] Yaw sweep: 0°, ±30°, ±60°.
+- [x] Occlusion: 0%, 30% left, 50% bottom.
+- [x] Distractors only — asserts **no detection**.
+- [x] Two boards — asserts **ambiguity abort**.
+- [x] Dirty board, intensity capped at 130 — asserts detection.
+- [x] Board tilted 10° — asserts the verticality gate does not reject it.
+- [x] Blooming enabled — asserts bias stays within tolerance.
+- [x] Metrics reported per run: position error, yaw error, detection rate,
       false-positive rate.
 
 ### 6. Integration
 
-- [ ] Launch file, wired behind an argument so it is off by default outdoors.
+- [x] Launch file, wired behind an argument so it is off by default outdoors.
 - [ ] Confirm stage 0 (`user_defined_initial_pose`) still works independently —
       it is the fallback path and the thing to test first on any new map.
 - [ ] `automatic_pose_initializer` is launched only when GNSS is enabled
@@ -114,14 +116,59 @@ proceeds in parallel.
 
 ## Acceptance criteria
 
-- [ ] Detector recovers the board pose within **0.20 m and 5°** across the nominal
-      test matrix rows in simulation.
-- [ ] **Zero false positives** on the distractor-only scene.
-- [ ] Ambiguity abort fires on the two-board scene.
+- [x] Detector recovers the board pose within **0.20 m and 5°** across the nominal
+      test matrix rows in simulation. Measured 1–8 cm across range and yaw sweeps.
+- [x] **Zero false positives** on the distractor-only scene.
+- [x] Ambiguity abort fires on the two-board scene.
+- [x] Diagnostics distinguish "no detection", "ambiguous", and "service failed".
+- [x] `detector.py` runs, and its tests pass, with no ROS installed. 30 tests,
+      about one second.
 - [ ] Node initializes localization end to end in replay, with no GNSS and no
-      manual RViz input.
-- [ ] Diagnostics distinguish "no detection", "ambiguous", and "service failed".
-- [ ] `detector.py` runs, and its tests pass, with no ROS installed.
+      manual RViz input. **Blocked on the sub-phase B indoor map.**
+
+---
+
+## Results
+
+Simulation, `python3 -m pytest test` in the package — 30 tests, no ROS.
+
+| Case | Outcome |
+|------|---------|
+| Range 3, 5, 10, 15 m | Detect; vehicle-pose error 1–8 cm |
+| Range 2 m | No detection, as designed |
+| Yaw 0°, ±30°, ±60° | Detect; error under 4 cm |
+| Blooming | Detect; error 5 cm |
+| Tilt 10°, dirty board | Detect |
+| 30% horizontal occlusion | Detect, centre flagged unconstrained, covariance inflated, error 22 cm |
+| 50% vertical occlusion | Clean reject on the extent gate |
+| Distractors only | No detection |
+| Two boards | Ambiguity abort |
+
+Live ROS graph, `simulated_scene.launch.xml` with `dry_run:=true` — all three node
+paths exercised: detection at 6.0 m with a published pose, ambiguity abort with
+both candidates reported, and no-candidate with the rejection reason logged.
+
+### What the simulator taught us that the design got wrong
+
+- **Minimum range is 3 m, and the reason is the beam table, not blooming.** The
+  VLP-32C's 9.36° gap between the −25.0° and −15.6° beams swallows the bottom of
+  the board below 3 m; a board at 2 m measures 0.55 m tall against a nominal 1.0 m.
+  Parking closer makes detection worse.
+- **The density gate needs the real elevation table.** A mean-elevation-step model
+  is wrong by 3× across the working range, in a range-dependent direction. Reading
+  the Nebula table brings the prediction within a few percent.
+- **Accumulated scan count belongs to the detector, not just the node.** The first
+  end-to-end run rejected a perfectly good board as ten times too dense.
+- **A one-sided view cannot recover the centre.** The detector flags it and
+  inflates the covariance instead of pretending otherwise; the tight 0.20 m bound
+  is not claimed for occluded cases.
+
+### Field gotcha worth remembering
+
+`ros2 launch` under a shell `timeout` can leave the scene publisher running. A
+stale publisher feeding a second scene into the same topic presents exactly as a
+detector bug — three board candidates where the scene has two. Check
+`pgrep -f board_scene_publisher` before believing a detector defect.
 
 ---
 

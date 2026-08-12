@@ -70,7 +70,11 @@ unbounded everywhere else.
 After SLAM produces a self-consistent cloud in an arbitrary frame, the cloud is
 rigidly transformed so that:
 
-- **Origin** — the centroid of the board's reflective face.
+- **Origin** — the point on the floor directly below the centre of the board's
+  reflective face. Floor level rather than board-centre height keeps vehicle
+  poses near z = 0, which is what the rest of the stack expects; the board centre
+  then sits at (0, 0, 1.075), which is the initializer's `board_pose_in_map`
+  default.
 - **+X** — the board's outward surface normal, pointing into the drivable space.
 - **+Z** — gravity-up, taken from the IMU's estimated gravity direction during
   the mapping run, not from the SLAM frame's nominal Z.

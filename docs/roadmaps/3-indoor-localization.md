@@ -5,7 +5,7 @@ the primary pose estimator.
 
 Design spec: [2026-07-27-indoor-artag-localization-design.md](../superpowers/specs/2026-07-27-indoor-artag-localization-design.md)
 
-Last updated: 2026-07-27 (design phase, no implementation started)
+Last updated: 2026-08-12 (sub-phase E implemented; A-D still design-phase)
 
 ---
 
@@ -56,7 +56,7 @@ A and B are independent — two people can run them in parallel.
 | B — Indoor mapping | [3-indoor-b-indoor-mapping.md](3-indoor-b-indoor-mapping.md) | Not started |
 | C — Tag map building | [3-indoor-c-tag-map-building.md](3-indoor-c-tag-map-building.md) | Not started |
 | D — Runtime integration | [3-indoor-d-runtime-integration.md](3-indoor-d-runtime-integration.md) | Design complete, not started |
-| E — Board pose initializer | [3-indoor-e-board-initializer.md](3-indoor-e-board-initializer.md) | Design complete, not started |
+| E — Board pose initializer | [3-indoor-e-board-initializer.md](3-indoor-e-board-initializer.md) | Implemented, passing in simulation; replay validation blocked by B |
 
 ### E — Board pose initializer, added 2026-08-12
 

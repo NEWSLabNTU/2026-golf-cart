@@ -85,6 +85,7 @@ colcon build --base-paths src --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=
 - **src/sensor_kit/golfcart_sensor_kit_launch/** - Sensor integration and launch files
 - **src/vehicle/golfcart_vehicle_launch/** - Vehicle interface and description
 - **src/sensor_component/external/** - External sensor drivers (submodules)
+- **src/localization/golfcart_board_initializer/** - Indoor cold-start pose from a retroreflective board; ROS-free detector plus a VLP-32C simulator, so `python3 -m pytest test` runs with no ROS or hardware
 
 ### Key Submodules
 **Golf Cart Migration Notes:**
@@ -393,7 +394,7 @@ twist_source:=gyro_odom|eagleye            # Override preset twist source
 | [docs/roadmaps/3-indoor-localization.md](docs/roadmaps/3-indoor-localization.md) | Indoor localization phase master: sub-phases A (calibration) → B (mapping) → C (tag map) → D (runtime) |
 | [docs/design/indoor_pcd_mapping_reflector_anchor.md](docs/design/indoor_pcd_mapping_reflector_anchor.md) | Indoor PCD map creation with no GNSS: retroreflective board defines map origin and cold-start pose |
 | [docs/design/board_pose_initializer.md](docs/design/board_pose_initializer.md) | Board pose initializer node: detection algorithm, pose extraction, VLP-32C simulator, test matrix |
-| [docs/roadmaps/3-indoor-e-board-initializer.md](docs/roadmaps/3-indoor-e-board-initializer.md) | Phase 3E work items and acceptance criteria for the board initializer |
+| [docs/roadmaps/3-indoor-e-board-initializer.md](docs/roadmaps/3-indoor-e-board-initializer.md) | Phase 3E work items, acceptance criteria, and simulation results for the board initializer |
 
 ## Known Issues
 
