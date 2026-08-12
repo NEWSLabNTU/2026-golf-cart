@@ -54,18 +54,19 @@ Specific defects:
 
 ## Design
 
-### Recipe
+### Recipes
 
 ```
-just vehicle-interface                        # RX only, no keys
-just vehicle-interface keyboard=on            # teleop, TX still off — dry run
-just vehicle-interface tx=on keyboard=on      # drives the cart
-just vehicle-interface can=vcan0 keyboard=on  # bench, against mock_vcu
-just vehicle-interface converter=on           # + robot_state_publisher + velocity converter
+just vehicle-interface                  # RX only
+just vehicle-interface tx=on            # drives the cart
+just vehicle-interface can=vcan0        # bench, against mock_vcu
+just vehicle-interface converter=on     # + robot_state_publisher + velocity converter
+just manual-control                     # keyboard teleop, second terminal
 ```
 
 Options are `KEY=VALUE`, order-free, unknown keys rejected. Defaults:
-`can=can0 tx=off keyboard=off converter=off`.
+`can=can0 tx=off converter=off`. Keyboard control is a second recipe, for the
+terminal-ownership reason below.
 
 Named options rather than positional parameters: `just` has no `NAME=value` syntax
 for recipe parameters, so positional arguments silently shift when one is omitted —
@@ -84,15 +85,14 @@ New `golfcart_vehicle_launch/launch/vehicle_interface_standalone.launch.xml`:
 ```xml
 <arg name="can_interface"       default="can0"/>
 <arg name="tx_enabled"          default="false"/>
-<arg name="manual_control"      default="false"/>
 <arg name="vehicle_description" default="false"/>
 <arg name="velocity_converter"  default="false"/>
 ```
 
 It `<include>`s the existing `vehicle_interface.launch.xml` unchanged — that file
 stays the single owner of the node and its remaps, shared with the full Autoware
-stack — and adds conditional groups for the keyboard controller, the
-`robot_state_publisher` (URDF/TF), and `autoware_vehicle_velocity_converter`. The
+stack — and adds conditional groups for the
+`robot_state_publisher` (URDF/TF) and `autoware_vehicle_velocity_converter`. The
 latter two blocks are lifted from `basic_control.launch.xml:13-33`, which this
 file replaces.
 
@@ -100,7 +100,7 @@ Launched with plain `ros2 launch`, not through `golfcart_autoware.launch.xml`. N
 global parameter loader, no pointcloud container, and every argument is declared
 where it is used.
 
-### Keyboard control in its own tmux session
+### Keyboard control as a separate recipe
 
 The keyboard controller is `autoware_manual_control` (terminal, raw tty). The two
 Tk GUIs are not wired into the standalone path.
@@ -112,48 +112,41 @@ standalone. It stays in the tree for use with `just launch`. `teleop_gui.py` and
 its `teleop_bench.launch.xml` are superseded by the terminal controller plus the
 fork fixes below.
 
-The terminal controller cannot simply be added as a node: under `ros2 launch` its
-stdin is not the terminal, so `tcgetattr` fails and `getchar()` returns EOF
-forever — a live node that reads no keys. Nor should it share a terminal with
-launch: log lines would scramble a raw-tty interface mid-render.
+It cannot be a node in the launch file: under `ros2 launch` its stdin is not the
+terminal, so `tcgetattr` fails and `getchar()` returns EOF forever — a live node
+that reads no keys. Nor should it share a terminal with launch: log lines would
+scramble a raw-tty interface mid-render.
 
-So the node runs inside its own **tmux session**, spawned by a `launch-prefix`
-wrapper:
+A `launch-prefix` that hands the node its own tmux session solves both, and was
+built and verified — but **`play_launch` does not support `launch-prefix`**, and
+that is what runs the full stack. A keyboard path that only works under plain
+`ros2 launch` is a path that breaks the moment teleop is wanted inside `just
+launch`. So the launch file starts the vehicle interface and nothing else, and
+the controller is its own recipe:
 
-```xml
-<node pkg="autoware_manual_control" exec="keyboard_control" name="manual_control"
-      if="$(var manual_control)"
-      launch-prefix="$(find-pkg-share golfcart_vehicle_launch)/scripts/run_in_tmux.sh golfcart-teleop --">
+```bash
+just vehicle-interface        # terminal 1
+just manual-control           # terminal 2
 ```
 
-`launch-prefix` is split on whitespace and prepended to the node's argv, so the
-wrapper receives the full node command (including `--ros-args`) as trailing
-arguments. Remaps and parameters are unaffected.
+`manual-control` runs the node directly, so it owns the terminal it is typed in —
+no wrapper, no session management, nothing to tear down, and it composes with any
+way of starting the interface (`vehicle-interface`, `just launch`, or a launch
+file of your own). It passes the golf cart's limits and the standalone topic and
+mode settings:
 
-**`run_in_tmux.sh SESSION -- <cmd...>`**, installed to
-`share/golfcart_vehicle_launch/scripts/` so the launch file can name it with a
-plain `$(find-pkg-share ...)` path:
+```
+-p mode_backend:=control_mode
+-p control_cmd_topic:=/control/command/control_cmd
+-p gear_cmd_topic:=/control/command/gear_cmd
+-p max_speed:=5.0  -p step_speed:=0.25
+-p max_steer_angle:=0.349  -p step_steer_angle:=0.0174
+```
 
-1. No `tmux` on `PATH` → exit 127 with an install hint. tmux only; no X-terminal
-   fallback, no inline mode. Field work is over SSH, where `DISPLAY` is unset, and
-   one backend means one behavior to reason about.
-2. Session name already taken → refuse rather than steal it; print `attach` and
-   `kill-session` hints.
-3. `tmux new-session -d`, with the ROS environment passed through explicitly via
-   `-e` (tmux 3.2a copies the client environment into a new session, but an
-   already-running server with a stale global environment would otherwise poison
-   it).
-4. `set-option remain-on-exit on` — a node that dies at startup leaves its error
-   on screen instead of the pane vanishing.
-5. Print the attach hint on stdout, so it lands in the launch log.
-6. Block by polling `#{pane_dead}`, then exit with `#{pane_dead_status}`. Launch
-   treats a returning prefix process as node death, so the wrapper must outlive
-   the node. Polling `has-session` would hang forever given `remain-on-exit on`.
-7. `trap INT TERM EXIT` → `kill-session`, so launch shutdown never orphans a
-   session.
-
-Result: launch logs stay on the launch terminal, the keyboard UI owns a clean pty,
-and both die together.
+`mode_backend=control_mode`: no `vehicle_cmd_gate` and no adapi run here, so `z`
+asks the vehicle interface directly. Whether the vehicle obeys is still the
+driver's call — the interface transmits only while the VCU reports all four
+subsystems autonomous.
 
 ### Fork fixes: `NEWSLabNTU/autoware_manual_control`
 
@@ -196,8 +189,8 @@ controller can override that.
 |---|---|
 | `just vehicle-interface can0 true` | `just vehicle-interface tx=on` |
 | `just control-vehicle-test vcan0` | `just vehicle-interface can=vcan0` |
-| `just control-teleop-real can0` | `just vehicle-interface keyboard=on tx=on` |
-| `just control-keyboard` / `just manual-control` | `just vehicle-interface keyboard=on` |
+| `just control-teleop-real can0` | `just vehicle-interface tx=on` + `just manual-control` |
+| `just control-keyboard` / old `just manual-control` | `just manual-control` (now parameterized for the cart) |
 | `just control-basic` | `just vehicle-interface converter=on` |
 
 ## Consequences
@@ -207,10 +200,11 @@ controller can override that.
   impossible.
 - `can-test` re-points at the standalone launch, removing the last reference to the
   deleted test file.
-- New files (`run_in_tmux.sh`, the standalone launch) require one `just build`:
-  `--symlink-install` only covers files present at configure time.
-- The keyboard controller now depends on tmux at runtime. It is already installed
-  on the Orin; the wrapper fails loudly if it ever is not.
+- The standalone launch file requires one `just build`: `--symlink-install` only
+  covers files present at configure time.
+- Teleop is one recipe regardless of how the interface was started — standalone,
+  `just launch`, or a launch file of your own — because it is not bound to any of
+  them.
 
 ## Status
 
@@ -219,14 +213,20 @@ Implemented and verified on the bench 2026-08-12 (`vcan0` + `mock_vcu`, isolated
 
 - `tx=off` — interface publishes `/vehicle/status/*`, reports `AUTONOMOUS`, and
   puts no `ADS_VCU_*` frames on the bus.
-- `keyboard=on` — tmux session comes up with the node on a real pty, showing the
-  golf-cart limits (5 m/s, 20°); keys produce `/control/command/control_cmd` and
-  `gear_cmd`, `s` reports the vehicle's own control mode, and the launch terminal
-  stays free of teleop output.
-- Ctrl-C — wrapper exits 130, session killed, no orphan processes or temp files.
+- `just manual-control` in a second terminal — shows the golf-cart limits
+  (5 m/s in 0.25 m/s steps, 20° in 1° steps), keys produce
+  `/control/command/control_cmd` (0.75 m/s, -0.0174 rad after `u u u l`) and
+  `gear_cmd` = 2 (DRIVE), and `s` reports `Vehicle:Autonomous Gear:D` — the
+  vehicle's own `ControlModeReport`. Ctrl-C restores the terminal and exits.
 - `can-test` — replay rig still works after the rewire.
 
-Untested, out of scope: whether `play_launch` preserves `launch-prefix`. Only
-matters if teleop later moves inside the full `just launch` stack; the standalone
-recipe uses plain `ros2 launch`. Real-bus driving (`can0`, `tx=on`) is field-test
-work.
+Real-bus driving (`can0`, `tx=on`) is field-test work.
+
+### History
+
+The keyboard controller was first built as a node inside the launch file, given a
+terminal by a `run_in_tmux.sh` `launch-prefix` wrapper. That worked under plain
+`ros2 launch` — session spawned, keys delivered, teardown clean — but
+`play_launch`, which runs the full stack, does not support `launch-prefix`. The
+wrapper was removed rather than left as a path that works in one launcher and
+silently does nothing in the other.

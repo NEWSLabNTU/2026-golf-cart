@@ -178,34 +178,32 @@ tool-tui:
 # Vehicle Interface - standalone bring-up and bench testing
 # ============================================================================
 
-# Vehicle interface on its own, without Autoware. Bench, bring-up and teleop.
+# Vehicle interface on its own, without Autoware. Bench and bring-up.
 # Options are KEY=VALUE in any order:
 #   can=can0|vcan0     SocketCAN interface                          (default can0)
 #   tx=on|off          CAN TX master enable                         (default off)
-#   keyboard=on|off    keyboard controller in its own tmux session  (default off)
 #   converter=on|off   robot_state_publisher + velocity converter   (default off)
 # With tx=off the node only listens: /vehicle/status/* and /diagnostics fill in
 # and the cart cannot be commanded into motion.
+# For keys, run `just manual-control` in a second terminal.
 # ⚠️  tx=on puts real frames on the bus and can command motion.
 vehicle-interface *OPTS="":
     #!/usr/bin/env bash
     set -euo pipefail
     CAN=can0
     TX=false
-    KEYBOARD=false
     CONVERTER=false
     for opt in {{OPTS}}; do
         case "$opt" in
             can=*)                         CAN="${opt#can=}" ;;
             tx=on|tx=true)                 TX=true ;;
             tx=off|tx=false)               TX=false ;;
-            keyboard=on|keyboard=true)     KEYBOARD=true ;;
-            keyboard=off|keyboard=false)   KEYBOARD=false ;;
             converter=on|converter=true)   CONVERTER=true ;;
             converter=off|converter=false) CONVERTER=false ;;
             *)
                 echo "Unknown option '$opt'" >&2
-                echo "Usage: just vehicle-interface [can=IFACE] [tx=on|off] [keyboard=on|off] [converter=on|off]" >&2
+                echo "Usage: just vehicle-interface [can=IFACE] [tx=on|off] [converter=on|off]" >&2
+                echo "       keyboard control is a separate recipe: just manual-control" >&2
                 exit 2 ;;
         esac
     done
@@ -214,15 +212,28 @@ vehicle-interface *OPTS="":
         for i in 3 2 1; do printf '  starting in %d...\r' "$i"; sleep 1; done
         printf '                       \n'
     fi
-    if [[ "$KEYBOARD" == "true" ]]; then
-        echo "Keyboard controller runs in tmux: tmux attach -t golfcart-teleop"
-    fi
     ros2 launch golfcart_vehicle_launch vehicle_interface_standalone.launch.xml \
         can_interface:="$CAN" \
         tx_enabled:="$TX" \
-        manual_control:="$KEYBOARD" \
         vehicle_description:="$CONVERTER" \
         velocity_converter:="$CONVERTER"
+
+# Terminal keyboard controller (autoware_manual_control), commanding /control/command/*.
+# Run in a second terminal next to `just vehicle-interface` — keys are read from a
+# raw tty, so this must own a real terminal and cannot live inside a launch file.
+# Keys: x drive, c reverse, v park, u/o speed, j/l steer, i/k zero, s status, z mode.
+# Limits are the cart's: 5 m/s ceiling in 0.25 m/s steps, 0.349 rad in 1° steps.
+# Extra ARGS are appended to --ros-args, e.g. just manual-control "-p max_speed:=2.0"
+manual-control *ARGS="":
+    ros2 run autoware_manual_control keyboard_control --ros-args \
+        -p mode_backend:=control_mode \
+        -p control_cmd_topic:=/control/command/control_cmd \
+        -p gear_cmd_topic:=/control/command/gear_cmd \
+        -p max_speed:=5.0 \
+        -p step_speed:=0.25 \
+        -p max_steer_angle:=0.349 \
+        -p step_steer_angle:=0.0174 \
+        {{ARGS}}
 
 # ============================================================================
 # Control Commands - Control system testing
