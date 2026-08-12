@@ -108,7 +108,61 @@ Full method, board specification, detector retuning, and failure modes:
 
 - [ ] Site selection, board mounting, mapping run, PCD and Lanelet2 construction,
       board anchoring, projector config — all offline.
-- [ ] GNSS-dependency audit of the launch tree.
+- [x] GNSS-dependency audit of the launch tree. **Done, and it found a real
+      defect — see below.**
+- [x] Indoor mapping bag recording script: `just bag-record-indoor`
+      (`scripts/rosbag/record_indoor_mapping.sh`).
+
+---
+
+## GNSS-dependency audit
+
+Done 2026-08-13, by tracing `use_gnss` through the launch tree.
+
+**`use_gnss:=false` did not reach localization at all.** It is threaded from
+`golfcart.launch.yaml` into sensing, so the GNSS driver stops — but
+`golfcart_autoware.launch.xml:107` included the localization component with no
+arguments, and `tier4_localization_component.launch.xml` never mentioned
+`gnss_enabled`. Both localization stacks therefore kept the upstream default:
+
+```xml
+<!-- cuda_ndt_matcher_launch/launch/cuda_localization.launch.xml:28 -->
+<arg name="gnss_enabled" default="true" .../>
+<!-- tier4_localization_launch/launch/pose_twist_estimator/pose_twist_estimator.launch.xml:9 -->
+<arg name="gnss_enabled" default="true" .../>
+```
+
+Two consequences indoors, neither of which announces itself:
+
+1. `pose_initializer` runs with `gnss_enabled: true` and waits on a GNSS pose
+   that will never arrive.
+2. `automatic_pose_initializer` launches and asks for initialization from that
+   same absent source, racing whatever else supplies the initial pose.
+
+**Fixed** by declaring `gnss_enabled` in
+`tier4_localization_component.launch.xml`, defaulting it to `$(var use_gnss)`,
+and passing it into both the CUDA NDT and the standard Autoware branch. Verified
+with a standalone launch-file pair: under `use_gnss:=false` the gated group does
+not launch, under `use_gnss:=true` it does.
+
+This also answers the open integration question in
+[phase 3E](3-indoor-e-board-initializer.md): indoors `automatic_pose_initializer`
+does not run, so the board initializer is the cold-start trigger rather than a
+competitor to it.
+
+### Still outstanding from the audit
+
+- `input_regularization_pose_topic` remains hardcoded to
+  `/sensing/gnss/pose_with_covariance` at `cuda_localization.launch.xml:49` and
+  `autoware_localization.launch.xml:39`. Harmless while
+  `ndt_scan_matcher.param.yaml` has `regularization.enable: false`, and a
+  correctness bug the moment corridor degeneracy forces it on.
+- `golfcart_system_monitor` still monitors five GNSS topics
+  (`config/monitor_topics.yaml:10-15`), so an indoor run will show them all as
+  failed. Cosmetic, but it trains operators to ignore the monitor.
+- `data/COSS-map-planning/map_projector_info.yaml` uses `TransverseMercator`.
+  The indoor map needs `projector_type: Local` — copying the outdoor file is the
+  silent-failure path.
 
 ---
 

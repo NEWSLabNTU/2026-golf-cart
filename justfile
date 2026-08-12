@@ -263,6 +263,10 @@ check-sensors:
 bag-record:
     ./scripts/rosbag/record_outdoor.sh
 
+# Record the phase 3B indoor mapping run: LiDAR + IMU for SLAM, cameras for 3C
+bag-record-indoor:
+    ./scripts/rosbag/record_indoor_mapping.sh
+
 # Play the most recent outdoor recording
 bag-play:
     #!/usr/bin/env bash

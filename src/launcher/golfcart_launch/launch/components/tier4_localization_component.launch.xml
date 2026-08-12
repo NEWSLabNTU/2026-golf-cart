@@ -8,12 +8,23 @@
   <arg name="localization_pointcloud_container_name" default="/pointcloud_container" description="The target container to which pointcloud preprocessing nodes in localization be attached"/>
   <arg name="initial_pose" default="[]" description="initial pose (x, y, z, quat_x, quat_y, quat_z, quat_w)"/>
 
+  <!--
+    Localization must follow use_gnss, not assume GNSS exists. Without this the
+    stack keeps gnss_enabled at its upstream default of true even under
+    use_gnss:=false, which leaves pose_initializer waiting on a GNSS pose that
+    never arrives and launches automatic_pose_initializer to ask for it. Indoors
+    that is a cold start that never completes.
+  -->
+  <arg name="use_gnss" default="true"/>
+  <arg name="gnss_enabled" default="$(var use_gnss)" description="GNSS availability for pose initialization"/>
+
   <!-- CUDA NDT localization stack -->
   <group if="$(eval '\'$(var pose_source)\' == \'cuda_ndt\'')">
     <include file="$(find-pkg-share cuda_ndt_matcher_launch)/launch/cuda_localization.launch.xml">
       <arg name="input_pointcloud" value="$(var input_pointcloud)"/>
       <arg name="localization_pointcloud_container_name" value="$(var localization_pointcloud_container_name)"/>
       <arg name="localization_config_path" value="$(var loc_config_path)"/>
+      <arg name="gnss_enabled" value="$(var gnss_enabled)"/>
       <!-- Use Golf Cart-tuned NDT parameters -->
       <arg name="ndt_param_file" value="$(var loc_config_path)/ndt_scan_matcher/ndt_scan_matcher.param.yaml"/>
     </include>
@@ -24,6 +35,7 @@
     <include file="$(find-pkg-share tier4_localization_launch)/launch/localization.launch.xml">
       <arg name="pose_source" value="$(var pose_source)"/>
       <arg name="twist_source" value="$(var twist_source)"/>
+      <arg name="gnss_enabled" value="$(var gnss_enabled)"/>
       <arg name="system_run_mode" value="$(var system_run_mode)"/>
       <arg name="input_pointcloud" value="$(var input_pointcloud)"/>
       <arg name="localization_pointcloud_container_name" value="$(var localization_pointcloud_container_name)"/>
