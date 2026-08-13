@@ -4,9 +4,13 @@ Prerequisite for [Phase 3 indoor localization](3-indoor-localization.md).
 Design spec: [§2 B](../superpowers/specs/2026-07-27-indoor-artag-localization-design.md#b--indoor-mapping-contract-for-d)
 Mapping method: [indoor_pcd_mapping_reflector_anchor.md](../design/indoor_pcd_mapping_reflector_anchor.md)
 
-**Status: Not started — blocked by DBW; blocks sub-phases C and D**
+**Status: Tooling done, field work not started.** The GNSS audit, the mapping-run
+recorder, the anchoring tool, and the PLY-to-PCD conversion all exist and are
+tested. Everything remaining needs the mapping bag, which needs a site, a mounted
+board, and a vehicle. Still blocks sub-phases C and D; NDT validation is
+additionally blocked by DBW.
 
-Last updated: 2026-08-11
+Last updated: 2026-08-13
 
 ---
 
@@ -25,15 +29,10 @@ in parallel.
 - No indoor map exists. `data/` holds the COSS practice map and the 華夏科大
   campus map slot, both outdoor.
 - NDT has never been validated indoors on this vehicle.
-- GNSS is threaded through the localization stack in several places that must be
-  switched off together — `pose_initializer.param.yaml` has `gnss_enabled`, and
-  the cuda_ndt launch hardcodes the NDT regularization input to
-  `/sensing/gnss/pose_with_covariance`:
-
-  ```xml
-  <!-- cuda_ndt_matcher_launch/launch/autoware_localization.launch.xml:39 -->
-  <arg name="input_regularization_pose_topic" value="/sensing/gnss/pose_with_covariance"/>
-  ```
+- GNSS threading through localization is **fixed**: `gnss_enabled` now follows
+  `use_gnss`. See the audit below for what it was doing before, and for the two
+  GNSS dependencies that remain — the hardcoded NDT regularization topic and the
+  system monitor's GNSS entries.
 
 ---
 
@@ -52,7 +51,8 @@ mapping run can be recorded and processed offline before DBW lands.
 
 The map origin problem below has a chosen answer. A single retroreflective board
 is mounted permanently at the site; the finished map is rigidly transformed so
-that the board's face centroid is the origin and its surface normal is +X. This
+that the origin sits on the floor below the board's face centre, with its surface
+normal as +X. This
 makes the origin physically re-findable every session, and lets cold start
 replace the manual RViz seed with a fixed parking position — or, later, with
 `autoware_lidar_marker_localizer`.
@@ -83,16 +83,17 @@ Full method, board specification, detector retuning, and failure modes:
 - [ ] **Build the PCD map** — offline LiDAR SLAM with GLIM
       (`ros2 run glim_ros glim_rosbag`, then `offline_viewer` to inspect and
       refine). Slow, batched, loop-closed; this is the accuracy ceiling for
-      everything downstream. GLIM exports PLY — convert to PCD with the
-      intensity field preserved.
-- [ ] **Anchor the cloud to the board** — detect the board by intensity, gate on
-      planarity/size/height, transform the cloud so the board is the origin, and
-      store the transform with the map.
+      everything downstream. GLIM exports PLY; `anchor_map_to_board` reads it
+      directly and writes PCD with the intensity field preserved.
+- [ ] **Anchor the cloud to the board** — run `anchor_map_to_board` on the GLIM
+      export. The tool exists and is tested; this task is running it on the real
+      cloud and checking the reported extents and plane residual look sane.
 - [ ] **Build the Lanelet2 vector map** covering the drivable indoor route, with
       the board as a `pose_marker` / `reflector` polygon.
-- [ ] **Set `projector_type: Local`** in the indoor map's
-      `map_projector_info.yaml`. Copying the outdoor map's `TransverseMercator`
-      config is a silent-failure path.
+- [ ] **Confirm `projector_type: Local`** in the indoor map's
+      `map_projector_info.yaml`. `anchor_map_to_board` writes it; the task is not
+      overwriting it with a copy of the outdoor map's `TransverseMercator`
+      config, which is a silent-failure path.
 - [ ] **Validate NDT indoors** — replay through `logging_simulation`, seed from
       the board-derived fixed start pose via `user_defined_initial_pose` (manual
       RViz seed as fallback), confirm convergence and tracking. A board *detector*
