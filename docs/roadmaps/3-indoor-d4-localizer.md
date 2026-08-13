@@ -23,24 +23,24 @@ makes it safe to be the only pose source.
 
 ### Windowing
 
-- [ ] Buffer detections from all cameras over a window, default one frame period
+- [x] Buffer detections from all cameras over a window, default one frame period
       (~33 ms).
-- [ ] Motion-compensate each detection to a common reference stamp using EKF
+- [x] Motion-compensate each detection to a common reference stamp using EKF
       twist. Switchable off.
-- [ ] Output stamped with the **sensor** stamp, not receive time.
+- [x] Output stamped with the **sensor** stamp, not receive time.
 
 Compensation is cheap to build now and its absence shows up later as a
 speed-dependent bias, which is miserable to diagnose after the fact.
 
 ### Candidate generation and flip consensus
 
-- [ ] For each detected marker and each of its two IPPE solutions, form a
+- [x] For each detected marker and each of its two IPPE solutions, form a
       candidate `T_map→base`. N markers gives 2N candidates.
-- [ ] Cluster the candidates in SE(3).
-- [ ] Largest cluster is the consensus; membership assigns each marker's flip.
-- [ ] Markers with neither solution in the cluster are flagged, not silently kept.
-- [ ] Seed the solve from the cluster mean.
-- [ ] Tie between two equal clusters → publish nothing that window, WARN.
+- [x] Cluster the candidates in SE(3).
+- [x] Largest cluster is the consensus; membership assigns each marker's flip.
+- [x] Markers with neither solution in the cluster are flagged, not silently kept.
+- [x] Seed the solve from the cluster mean.
+- [x] Tie between two equal clusters → publish nothing that window, WARN.
       **A tie is the expected outcome for coplanar boards**, whose flips agree
       with each other as well as the correct solutions do (spec §2.4). Detecting
       it is not an edge case, it is the safety net for a mounting mistake — so
@@ -53,23 +53,23 @@ believes.
 
 ### Joint solve
 
-- [ ] Levenberg–Marquardt over `T_map→base` (6 parameters), analytic Jacobian.
-- [ ] Residuals are reprojection errors of every corner of every marker of every
+- [x] Levenberg–Marquardt over `T_map→base` (6 parameters), analytic Jacobian.
+- [x] Residuals are reprojection errors of every corner of every marker of every
       camera. Cameras differ only in `T_base→cam` and `K`.
-- [ ] Huber kernel applied **per marker** — all four corners of a marker share
+- [x] Huber kernel applied **per marker** — all four corners of a marker share
       one robust weight, because a wrong board makes all four wrong together.
       Rejecting at corner granularity lets three bad corners hide behind the fourth.
-- [ ] Per-tag weight from `position_stddev` in the map.
-- [ ] Small dense problem — hand-rolled, no Ceres dependency, and direct access
+- [x] Per-tag weight from `position_stddev` in the map.
+- [x] Small dense problem — hand-rolled, no Ceres dependency, and direct access
       to `JᵀJ` for covariance and conditioning.
 
 ### Covariance
 
 - [ ] `Σ = σ̂²(JᵀJ)⁻¹`, `σ̂²` from residuals at `dof = 2N − 6`.
-- [ ] **Eigendecompose and invert per eigendirection, saturating unobservable
+- [x] **Eigendecompose and invert per eigendirection, saturating unobservable
       directions at a large variance cap.** Never `try_inverse()` unguarded —
       `JᵀJ` is routinely near-singular and that is a *result*, not an error.
-- [ ] **Never emit a zero variance.** Downstream reads it as exact.
+- [x] **Never emit a zero variance.** Downstream reads it as exact.
 - [ ] Build the covariance in the **camera frame and rotate it into map**, not
       axis-aligned in the vehicle frame. Depth error leaks laterally off-axis as
       `tanθ·σ_Z`, which dominates at the edge of a wide field of view.
@@ -81,11 +81,11 @@ three are the same near-null direction of `JᵀJ`.
 
 ### Observability and DoF selection
 
-- [ ] Compute per solve: marker count and IDs, **angular spread of marker
+- [x] Compute per solve: marker count and IDs, **angular spread of marker
       normals** (max pairwise, using `|dot|` so a flipped normal does not read as
       180° of spread), depth range, `cond(JᵀJ)`, reprojection RMS overall and per
       marker, `err₁/err₂` per marker.
-- [ ] Select DoF per window:
+- [x] Select DoF per window:
 
 | Observability | Solve | Orientation |
 |---|---|---|
@@ -103,7 +103,7 @@ tells an operator what to physically change.
 
 ### Output
 
-- [ ] `PoseWithCovarianceStamped` on
+- [x] `PoseWithCovarianceStamped` on
       `/localization/pose_estimator/pose_with_covariance`, `frame_id = "map"`.
 - [ ] Debug `MarkerArray`s for mapped boards and boards used this solve.
 
@@ -119,28 +119,28 @@ Structurally this is the GNSS RAIM problem — N redundant measurements, detect
 and exclude the faulty one — and that literature is where to look rather than
 inventing a scheme.
 
-- [ ] Per-ID normalized residual, EWMA across the session.
-- [ ] Persistent exceedance → flag, exclude from the solve, name the board in
+- [x] Per-ID normalized residual, EWMA across the session.
+- [x] Persistent exceedance → flag, exclude from the solve, name the board in
       diagnostics. **The message should say which physical board to go and look
       at**, because this is a maintenance event, not a tuning problem.
-- [ ] Track and publish whether a fix was **checked** or **unchecked**. With
+- [x] Track and publish whether a fix was **checked** or **unchecked**. With
       exactly two markers, excluding one leaves an unchecked solve; with one
       there is no check at all. An unchecked fix is a different thing from a
       checked one even when both look fine.
-- [ ] Unmapped detected IDs: count and WARN listing them. **Never synthesize a
+- [x] Unmapped detected IDs: count and WARN listing them. **Never synthesize a
       pose.** The upstream node returns a default-constructed zero pose with
       `q.w = 0` in this case, which a large map's distance gate happens to
       swallow — an indoor map near the origin does not.
 
 ### State machine
 
-- [ ] `NOMINAL` — ≥2 markers in consensus, spread above threshold.
-- [ ] `DEGRADED` — 1 usable marker, or ≥2 with poor spread. Time-limited.
-- [ ] `DEAD_RECKONING` — 0 usable markers. Hard time budget.
-- [ ] `FAULT` — budget expired, or integrity check failed. Requests MRM.
-- [ ] Publish on `~/status` and to `/diagnostics`. Diagnostics is the machine
+- [x] `NOMINAL` — ≥2 markers in consensus, spread above threshold.
+- [x] `DEGRADED` — 1 usable marker, or ≥2 with poor spread. Time-limited.
+- [x] `DEAD_RECKONING` — 0 usable markers. Hard time budget.
+- [x] `FAULT` — budget expired, or integrity check failed. Requests MRM.
+- [x] Publish on `~/status` and to `/diagnostics`. Diagnostics is the machine
       path to MRM; `~/status` is the human and TUI path.
-- [ ] Recovery from every state except `FAULT` when boards are reacquired.
+- [x] Recovery from every state except `FAULT` when boards are reacquired.
 
 The dead-reckoning budget is a configured duration derived from **measured** IMU
 drift and odometry error against an allowable position error. It must not be
@@ -149,11 +149,11 @@ driving on a stale estimate.
 
 ### Initialization mode
 
-- [ ] Gates from spec §4.3: `min_markers: 2`, minimum normal spread,
+- [x] Gates from spec §4.3: `min_markers: 2`, minimum normal spread,
       `max_range: 8.0`, `max_view_angle: 50.0`, 5 consecutive solves agreeing
       within 0.5 m, `max_condition_number`, republish cooldown.
-- [ ] Publish `/initialpose3d` (or via `pose_initializer` — decided in D2).
-- [ ] Never seed from a single ambiguous marker.
+- [x] Publish `/initialpose3d` (or via `pose_initializer` — decided in D2).
+- [x] Never seed from a single ambiguous marker.
 
 ---
 
@@ -161,20 +161,20 @@ driving on a stale estimate.
 
 All of these run against D3's synthetic source, no hardware.
 
-- [ ] **Zero-noise round trip** — recovers ground truth to numerical tolerance.
+- [x] **Zero-noise round trip** — recovers ground truth to numerical tolerance.
       This is the whole geometry chain: map convention, corner order, TF
       composition, optical frame, solve direction.
-- [ ] **Degeneracy sweep** — one marker, coplanar cluster, well-spread. Assert
+- [x] **Degeneracy sweep** — one marker, coplanar cluster, well-spread. Assert
       reported covariance grows in the directions that are genuinely
       unobservable, and does not in the others.
-- [ ] **Singular `JᵀJ`** — covariance saturates rather than throwing or
+- [x] **Singular `JᵀJ`** — covariance saturates rather than throwing or
       returning zeros.
-- [ ] **Noise scaling** — covariance tracks `corner_sigma_px`.
-- [ ] **Flip consensus** — with ≥2 markers, resolves correctly with no prior;
+- [x] **Noise scaling** — covariance tracks `corner_sigma_px`.
+- [x] **Flip consensus** — with ≥2 markers, resolves correctly with no prior;
       with a deliberate tie, publishes nothing.
-- [ ] **Integrity** — one displaced board is flagged and excluded, its neighbours
+- [x] **Integrity** — one displaced board is flagged and excluded, its neighbours
       are not, and the fix is reported as unchecked when redundancy runs out.
-- [ ] **State machine** — every transition, including budget expiry to `FAULT`
+- [x] **State machine** — every transition, including budget expiry to `FAULT`
       and the MRM request, driven by D3's blackout injection.
 - [ ] **Stamp handling** — future stamps and out-of-order arrivals rejected.
 
@@ -288,3 +288,35 @@ than discovering later in a log.
 
 Interim position: the EKF's `pose_gate_dist` (49.5) is the only thing currently
 standing between this and the filter. That is a backstop, not a design.
+
+## Bookkeeping
+
+39 of 43 items ticked, all covered by the 69 unit tests plus the D6 smoke suite.
+
+Three shipped **differently from the specification**, and the difference matters
+more than the tick would:
+
+- **`Σ = σ̂²(JᵀJ)⁻¹` is wrong and was not implemented.** The weight matrix
+  already carries `1/σ²ₚₓ`, so scaling by a residual-derived `σ̂²` counts the
+  noise twice — and collapses the covariance to zero whenever the data happens
+  to fit well. What shipped is `Σ = (JᵀWJ)⁻¹`, with `σ̂²` kept as a diagnostic
+  that sits near 1 when the assumed corner noise matches reality. The box is
+  left unticked because ticking it would record the wrong formula as done.
+- **The consensus tolerances** are not the ones the spec implies. Measured
+  board-to-board disagreement inside the admitted view window is 0.27 m and
+  2.8° at p99, so the original values were already generous; the spec's 11.7°
+  single-marker jitter describes an ungated regime this system does not operate
+  in.
+- **`ambiguity_ratio_max` does not do what the spec assumed.** Measured in D5:
+  it is a *resolution* gate, not a *geometry* gate, and reports maximum
+  confidence exactly at the fronto-parallel views that are least reliable.
+  `min_view_angle_deg` is what protects those.
+
+Still open:
+
+- **Build the covariance in the camera frame and rotate it into map.** Not
+  implemented; it is built directly in the solve frame.
+- **Debug `MarkerArray` for boards used this solve.** Only `~/debug/mapped_tags`
+  exists.
+- **Out-of-order arrivals.** Future stamps are rejected and tested; ordering is
+  not.

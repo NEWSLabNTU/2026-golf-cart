@@ -48,7 +48,7 @@ viewer frame, planning) depends on the frame it publishes before dropping it.
 
 ### The `aruco` branch
 
-- [ ] Add an `aruco` group to
+- [x] Add an `aruco` group to
       `src/launcher/golfcart_launch/launch/components/tier4_localization_component.launch.xml`,
       structured like the existing `cuda_ndt` group, that brings up:
       - three `aruco_detector` instances (left, right, rear) with per-camera
@@ -56,28 +56,28 @@ viewer frame, planning) depends on the frame it publishes before dropping it.
       - one `golfcart_aruco_localizer`
       - `gyro_odometer` and `ekf_localizer`
       - `pose_initializer` (see the open decision below)
-- [ ] Adjust the two existing groups so the `aruco` case does not fall through
+- [x] Adjust the two existing groups so the `aruco` case does not fall through
       into the `unless cuda_ndt` branch. The current condition is a binary split;
       it needs to become a three-way selection.
-- [ ] `config/localization/preset/aruco_preset.yaml`, following the existing
+- [x] `config/localization/preset/aruco_preset.yaml`, following the existing
       `*_preset.yaml` naming convention (CLAUDE.md:259).
 
 ### Map component
 
-- [ ] New `launch/components/golfcart_map_component.launch.xml` bringing up
+- [x] New `launch/components/golfcart_map_component.launch.xml` bringing up
       `lanelet2_map_loader` + `map_projection_loader` only.
-- [ ] Switch `golfcart_autoware.launch.xml:90` to it when the pose source is
+- [x] Switch `golfcart_autoware.launch.xml:90` to it when the pose source is
       `aruco`, or gate on a new `use_pointcloud_map` argument.
-- [ ] Resolve `map_tf_generator` — keep, replace with a static transform, or drop.
+- [x] Resolve `map_tf_generator` — keep, replace with a static transform, or drop.
 
 ### Parameters that must change
 
-- [ ] `pose_initializer.param.yaml`: `ndt_enabled: false`, `gnss_enabled: false`.
-- [ ] `ekf_localizer.param.yaml`: restore `pose_gate_dist` from its current
+- [x] `pose_initializer.param.yaml`: `ndt_enabled: false`, `gnss_enabled: false`.
+- [x] `ekf_localizer.param.yaml`: restore `pose_gate_dist` from its current
       `10000.0`. Upstream's default is `49.5`. **With one pose source this gate is
       the only remaining defence against a bad fix** — the value can be tuned
       later, but it must not stay disabled.
-- [ ] Review `localization_error_monitor` and `pose_instability_detector`. Both
+- [x] Review `localization_error_monitor` and `pose_instability_detector`. Both
       are shaped around a scan-matching convergence signal that no longer exists.
       Retune, replace, or exclude — but decide deliberately rather than leaving
       them running against a signal they will never see.
@@ -89,7 +89,7 @@ viewer frame, planning) depends on the frame it publishes before dropping it.
 `golfcart.launch.yaml`, passed down, and consumed by nothing.
 
 - [ ] Wire `use_mapless_mode` — it is now conceptually what this system runs in.
-- [ ] Either wire or delete the rest. Leaving arguments that look like they work
+- [x] Either wire or delete the rest. Leaving arguments that look like they work
       but do nothing is how the July design ended up assuming GNSS could be
       disabled by setting `use_gnss:=false`, which it cannot.
 
@@ -209,3 +209,26 @@ against dead reckoning — so there was no reason for ArUco to go without them.
 (from phase 3D-5) and the new block in `golfcart_autoware.launch.xml` contained
 it. The 3D-5 file would have failed to parse at launch. Every launch file in
 `golfcart_launch` and the localization packages is now checked well-formed.
+
+## Bookkeeping
+
+Ticked above: implemented and verified by running the full
+`golfcart.launch.yaml` with `pose_source:=aruco` (151 nodes, no exceptions, NDT
+stack absent, tag map loaded).
+
+Still open, and why:
+
+- **Wire `use_mapless_mode`.** The argument is declared and forwarded from
+  `golfcart.launch.yaml`, but nothing on the ArUco path consumes it. Deciding
+  what it should mean when ArUco *is* the localization needs a call: it
+  currently reads as "run without localization", which is no longer the only
+  alternative to a point cloud map.
+
+`map_tf_generator` is resolved as **dropped**, with the reasoning recorded in
+`golfcart_map_component.launch.xml`: it derives its transform from the point
+cloud, and there is no point cloud on this path.
+
+Dead launch arguments are now checked mechanically rather than by eye:
+`just audit-launch`. Two of mine were found and fixed; three more live in the
+`golfcart_sensor_kit_launch` submodule and are reported there rather than
+changed cross-repo.

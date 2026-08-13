@@ -8,6 +8,51 @@ Last updated: 2026-08-10
 
 ---
 
+## Status
+
+Last updated 2026-08-13, on branch `feat/aruco-indoor-localizer`.
+
+| Phase | State | Open | Blocked on |
+|---|---|---|---|
+| D1 Infrastructure | **done** | 0 | — |
+| D2 Launch switch | **done** | 1 | a decision on what `use_mapless_mode` means here |
+| D3 Synthetic detections | **done** | 5 | scenarios, not mechanisms |
+| D4 Localizer | **done** | 4 | see its bookkeeping note |
+| D5 Detector | **done** | 3 | hardware: the `corner_sigma_px` measurement |
+| D6 Smoke test | **stage 1 done**, stage 2 untouched | 16 | the Autoware planning simulator |
+| D7 Rosbag collection | **tooling done** | 19 | hardware, and the site |
+
+The pipeline runs end to end. Against synthetic detections through the real
+launch graph it tracks ground truth to **3 mm lateral, 9 mm along-track and
+0.04° heading** (median), with 6/6 graded scenarios passing including fault
+injection, and 112 unit tests. `pose_source:=aruco` was verified on the full
+`golfcart.launch.yaml`: 151 nodes, no launch exceptions, the tag map reaching
+the localizer, and the entire NDT stack absent.
+
+**Two things need a decision rather than more work:**
+
+1. **One fix in 876 published a 179.92° yaw error with a confident covariance.**
+   Position was correct to 5 cm. The obvious mitigation is an innovation gate
+   against the prior, and it sits against a stated principle of this design —
+   that the branch is never chosen by proximity to the prior. Gating the
+   published *output* is not the same act as choosing the *branch*, but the line
+   is thin enough to be worth drawing deliberately. Recorded in
+   [D4](3-indoor-d4-localizer.md).
+
+2. **`corner_sigma_px` is still 0.3, inferred from other people's data.** Every
+   covariance this system publishes scales on it. The measurement needs one
+   camera, one board and a tripod — about an hour, no vehicle and no site.
+
+**Two budgets are placeholders**: `dead_reckoning_budget_s` and
+`degraded_budget_s` must follow from measured gyro drift against an allowable
+position error, not from the round numbers currently in the config.
+
+What the open counts mean: they are the items genuinely not done. Each phase doc
+ends with a bookkeeping note saying which were left open and why, and — where it
+matters more than the tick — which shipped **differently from what the phase doc
+originally specified**. D4 has three of those, including a covariance formula
+that was wrong as written.
+
 ## Build order
 
 Infrastructure and the launch switch first, then the algorithm, then a

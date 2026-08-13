@@ -95,15 +95,22 @@ Broken into seven phase docs, indexed at
 Infrastructure and the launch switch first, then the algorithm, then a
 simulation smoke test; rosbag collection runs in parallel from day one.
 
-| Phase | Doc | Can start |
+| Phase | Doc | Status |
 |---|---|---|
-| D1 | [Infrastructure](3-indoor-d1-infrastructure.md) — msgs, package skeletons, tag map loader | **now** |
-| D2 | [Launch switch](3-indoor-d2-launch-switch.md) — `pose_source:=aruco`, stubs are fine | after D1 skeletons |
-| D3 | [Synthetic detection source](3-indoor-d3-sim-detection-source.md) — the ground-truth harness | after D1 |
-| D4 | [Localizer algorithm](3-indoor-d4-localizer.md) — the solve, integrity, states | after D3 |
-| D5 | [Detector](3-indoor-d5-detector.md) — LCTK extension | **now**, separate repo |
-| D6 | [Simulation smoke test](3-indoor-d6-sim-smoke-test.md) | after D4 |
-| D7 | [Rosbag collection](3-indoor-d7-rosbag-collection.md) | **now** |
+| D1 | [Infrastructure](3-indoor-d1-infrastructure.md) — msgs, package skeletons, tag map loader | **done** |
+| D2 | [Launch switch](3-indoor-d2-launch-switch.md) — `pose_source:=aruco` | **done** |
+| D3 | [Synthetic detection source](3-indoor-d3-sim-detection-source.md) — the ground-truth harness | **done** |
+| D4 | [Localizer algorithm](3-indoor-d4-localizer.md) — the solve, integrity, states | **done** |
+| D5 | [Detector](3-indoor-d5-detector.md) — vendored from LCTK into this repo | **done** |
+| D6 | [Simulation smoke test](3-indoor-d6-sim-smoke-test.md) | stage 1 **done**, stage 2 open |
+| D7 | [Rosbag collection](3-indoor-d7-rosbag-collection.md) | tooling **done**, recordings need hardware |
+
+Per-phase detail, what shipped differently from the specification, and the two
+decisions still outstanding are in the
+[phase D index](3-indoor-d-runtime-integration.md#status). D5 moved: the
+detector was vendored into this repo rather than left in LCTK, because the
+message that is the detector-to-localizer contract could not live in a vehicle
+package that a general toolkit depends on.
 
 The ordering hinges on one decoupling: **the localizer does not need the
 detector.** D3's synthetic source produces `ArucoDetectionArray` from a known

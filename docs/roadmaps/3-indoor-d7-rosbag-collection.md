@@ -29,7 +29,7 @@ compressed topic is remapped, so `image_raw` does not exist at all.
 
 Recording against the current list captures nothing.
 
-- [ ] New `scripts/rosbag/record_aruco.sh` with the correct topics:
+- [x] New `scripts/rosbag/record_aruco.sh` with the correct topics:
       ```
       /sensing/camera/{left,right,rear}/image_raw/compressed
       /sensing/camera/{left,right,rear}/camera_info
@@ -38,8 +38,8 @@ Recording against the current list captures nothing.
       /vehicle/status/velocity_status        # zeros for now, record anyway
       /diagnostics
       ```
-- [ ] `just bag-record-aruco` recipe.
-- [ ] Fix or retire the stale `front` topics in `record_outdoor.sh` and
+- [x] `just bag-record-aruco` recipe.
+- [x] Fix or retire the stale `front` topics in `record_outdoor.sh` and
       `record_localization.sh` while in there.
 
 **Record compressed, not raw.** Three 1920×1280 streams at 30 Hz is roughly
@@ -224,3 +224,15 @@ The bench recordings need no vehicle, no site and no mounted boards, and the
 corner-sigma one is roughly an hour of work. Everything downstream of it — the
 whole covariance model — is currently scaled by a number nobody here has
 measured.
+
+## Bookkeeping
+
+The three tooling items are done and are the only ones that could be done from a
+workstation. Everything else on this page needs hardware: a camera and printed
+boards for the bench bags, and mounted boards, a survey and the vehicle for the
+site bags.
+
+The conventions items — bag naming, the sidecar note, recording the tag map
+alongside the bag — are supported by the tooling (`record_aruco.sh` copies the
+note template automatically) but are left unticked, because a convention is only
+done once bags actually follow it.

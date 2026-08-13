@@ -29,26 +29,26 @@ because it gives two things no rosbag can:
 
 ### `aruco_sim_detector`
 
-- [ ] Subscribe a ground-truth vehicle pose (see the source question below).
-- [ ] Read the same `aruco_tag_map.yaml` the localizer reads, via D1's loader.
+- [x] Subscribe a ground-truth vehicle pose (see the source question below).
+- [x] Read the same `aruco_tag_map.yaml` the localizer reads, via D1's loader.
 - [ ] Read camera intrinsics and extrinsics from `CameraInfo` and TF, so the sim
       and the real path share one source of truth for geometry. **Do not
       hard-code a second copy of the camera model** — a divergence between the
       sim's camera and the real one produces a localizer that works perfectly in
       simulation and not at all on the vehicle.
-- [ ] Per camera, per board, decide visibility:
+- [x] Per camera, per board, decide visibility:
       - inside the image after projection
       - within `max_range`
       - incidence angle `|φ|` between the board normal and the line of sight
         inside the detectable band (detection collapses past ~85°)
       - optional per-board occlusion flag
-- [ ] Project the four corners, add Gaussian noise with `corner_sigma_px`.
-- [ ] Run IPPE on the noisy corners to produce **both** solutions and both
+- [x] Project the four corners, add Gaussian noise with `corner_sigma_px`.
+- [x] Run IPPE on the noisy corners to produce **both** solutions and both
       reprojection errors, so the message carries the same ambiguity structure
       the real detector produces. Do not synthesize a single clean pose — the
       flip ambiguity is the thing D4 exists to resolve, and a fixture that hides
       it tests nothing.
-- [ ] Publish one `ArucoDetectionArray` per camera, on the same topics the real
+- [x] Publish one `ArucoDetectionArray` per camera, on the same topics the real
       detectors use, with realistic per-camera timing offsets (the cameras are
       not hardware-synchronized).
 
@@ -57,14 +57,14 @@ because it gives two things no rosbag can:
 Each of these maps to a specific D4 behaviour. Expose them as parameters or a
 service so they can be triggered mid-run.
 
-- [ ] **Board displacement** — offset one board's true pose from its map entry.
+- [x] **Board displacement** — offset one board's true pose from its map entry.
       Tests integrity monitoring: the per-ID residual should flag that board and
       no other.
-- [ ] **Board blackout** — drop all detections for N seconds. Tests
+- [x] **Board blackout** — drop all detections for N seconds. Tests
       `DEAD_RECKONING` entry, the time budget, and the MRM request.
-- [ ] **Single-board stretch** — allow only one board visible. Tests `DEGRADED`
+- [x] **Single-board stretch** — allow only one board visible. Tests `DEGRADED`
       and the 3-DoF path with clamped orientation.
-- [ ] **Coplanar-only** — allow only boards on one wall at one depth. Tests
+- [x] **Coplanar-only** — allow only boards on one wall at one depth. Tests
       covariance saturation on the unobservable direction, **and the flip tie**:
       coplanar boards flip together, so two equal clusters are the correct
       outcome and the localizer must publish nothing rather than pick one
@@ -80,7 +80,7 @@ service so they can be triggered mid-run.
 
 Two stages, simplest first.
 
-- [ ] **Stage 1 — scripted pose publisher.** Straight line, circle, and a
+- [x] **Stage 1 — scripted pose publisher.** Straight line, circle, and a
       corridor-with-corner path, published as a pose at a fixed rate. No Autoware
       simulator, no map, nothing else running. This is enough for all of D4's
       development and most of its tests, and it starts in minutes.
@@ -94,7 +94,7 @@ Two stages, simplest first.
 
 ### Error reporting
 
-- [ ] Publish the ground-truth pose on a debug topic alongside the detections,
+- [x] Publish the ground-truth pose on a debug topic alongside the detections,
       so a comparison node or a plot can difference it against
       `/localization/kinematic_state` without replaying the trajectory script.
 
@@ -131,3 +131,23 @@ Both stayed self-consistent internally and produced believable numbers.
 
 A zero-noise round trip through synthetic detections catches all of them at
 once, on the first day, in a test that runs in a second.
+
+## Bookkeeping
+
+Still open, and why:
+
+- **Read camera intrinsics and extrinsics from `CameraInfo` and TF.** Shipped
+  differently: the simulator defines its cameras in its own parameter file and
+  *broadcasts* their extrinsics as TF, rather than reading either. That is a
+  weaker guarantee than the item asked for — the sim cannot disagree with a real
+  `CameraInfo` because it never reads one — and it is worth closing once real
+  calibration files exist.
+- **Fronto-parallel approach** and **noise sweep** — the mechanisms exist
+  (`fault.visible_board_ids`, `corner_sigma_px`) but no scenario drives them.
+- **Out-of-order arrivals.** Future stamps are rejected and tested; arrival
+  order is not exercised.
+- **Stage 2, the Autoware planning simulator** — deferred to D6, still deferred.
+
+The single-board and coplanar-only cases are ticked as *capabilities*
+(`fault.visible_board_ids` restricts what may be seen); the scenarios that
+exercise them belong to D6 and are listed as open there.

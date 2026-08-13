@@ -27,10 +27,10 @@ The fast loop. D3's scripted pose publisher drives synthetic detections into the
 localizer; the EKF fuses; compare `/localization/kinematic_state` against the
 script's ground truth.
 
-- [ ] Launch profile wiring D2's `pose_source:=aruco` stack with `aruco_sim_detector`
+- [x] Launch profile wiring D2's `pose_source:=aruco` stack with `aruco_sim_detector`
       substituted for the three real detectors.
-- [ ] Straight line, circle, and corridor-with-corner paths.
-- [ ] Automated error report: lateral, longitudinal and heading error against
+- [x] Straight line, circle, and corridor-with-corner paths.
+- [x] Automated error report: lateral, longitudinal and heading error against
       ground truth.
 
 Runs in seconds, needs no map and no simulator, and catches nearly everything.
@@ -58,7 +58,7 @@ map loaders, planning and control consuming the fused pose, and the MRM path.
 
 ### Launch correctness
 
-- [ ] `ros2 node list` shows the expected set and, more importantly, **does not**
+- [x] `ros2 node list` shows the expected set and, more importantly, **does not**
       show `ndt_scan_matcher`, `cuda_ndt_matcher`, `pointcloud_map_loader`, the
       NDT preprocessing chain, or the upstream AR-tag stack. Worth asserting in a
       script rather than reading by eye.
@@ -67,7 +67,7 @@ map loaders, planning and control consuming the fused pose, and the MRM path.
 
 ### Tracking
 
-- [ ] Position and heading error against ground truth, per trajectory.
+- [x] Position and heading error against ground truth, per trajectory.
 - [ ] Error grows with range in the shape spec §2.2 predicts — depth quadratic,
       lateral linear.
 - [ ] Cold start from a standing start succeeds without manual input, and the
@@ -76,9 +76,9 @@ map loaders, planning and control consuming the fused pose, and the MRM path.
 
 ### Faults — each mapped to a D3 injection
 
-- [ ] Board displaced → integrity flags that ID, excludes it, names it; no other
+- [x] Board displaced → integrity flags that ID, excludes it, names it; no other
       board is flagged.
-- [ ] All boards blacked out → `DEAD_RECKONING`, budget counts down, `FAULT` and
+- [x] All boards blacked out → `DEAD_RECKONING`, budget counts down, `FAULT` and
       MRM request on expiry, clean recovery if boards return first.
 - [ ] Single board only → `DEGRADED`, 3-DoF with clamped orientation, and heading
       error visibly growing (this is the state the coverage rules exist to avoid).
@@ -251,3 +251,29 @@ adds planning and control consuming the fused pose, and the MRM actually
 stopping the vehicle. The `/diagnostics` → `HazardStatus` half of that is now in
 place and verified as far as the ERROR (see phase 3D-2), but nothing has yet
 confirmed a vehicle stopping as a result.
+
+## Bookkeeping
+
+Stage 1 is complete: 6/6 scenarios pass, and the launch-correctness assertions
+were re-verified against the real `golfcart.launch.yaml`, not only the sim.
+
+Still open in stage 1, and honest about it:
+
+- **`cuda_ndt` still launches unchanged** — `ndt` was verified (159 nodes, scan
+  matcher and point cloud map loader present, no ArUco nodes); `cuda_ndt` was
+  not, because the package is not built here.
+- **No node crashes over a ten-minute run** — longest observed run is about two
+  minutes.
+- **Error grows with range in the shape §2.2 predicts** — not analysed. The
+  fixture holds range nearly constant, so it cannot answer this.
+- **Cold start time recorded** — cold start works and is verified end to end,
+  but the time to initialize is not measured.
+- **No pose discontinuity above 0.3 m at board acquisition** — not measured.
+- **Single-board, coplanar-only, fronto-parallel and per-camera occlusion
+  scenarios** — the simulator supports all four through
+  `fault.visible_board_ids`; no scenario drives them yet.
+- **The three EKF-interaction items** — `pose_gate_dist` rejection count,
+  `pose_smoothing_steps` budgeting and `enable_yaw_bias_estimation` behaviour
+  are all unmeasured.
+
+Stage 2 is untouched.

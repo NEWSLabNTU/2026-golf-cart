@@ -118,16 +118,16 @@ running into.
 
 ### Message output
 
-- [ ] Publish `ArucoDetectionArray` from D1, carrying `k` so the stream is
+- [x] Publish `ArucoDetectionArray` from D1, carrying `k` so the stream is
       replayable without the camera.
-- [ ] Resolve the coordination question from D1: retain LCTK's existing
+- [x] Resolve the coordination question from D1: retain LCTK's existing
       `vision_msgs/Detection2DArray` output alongside, or replace it. Replacing
       is cleaner and `C-01`/`H-10` are the argument, but it breaks LCTK's
       calibration pipeline.
 
 ### Input transport
 
-- [ ] Subscribe via `image_transport` with `transport:=compressed`. The gscam
+- [x] Subscribe via `image_transport` with `transport:=compressed`. The gscam
       pipeline is jpeg-only — no raw `sensor_msgs/Image` exists on these topics.
       This avoids both a separate decompressor node and a topic round-trip.
 
@@ -306,3 +306,13 @@ topics nothing published. It now launches one detector per camera, guarded by
       `CompressedImage` subscription; see above.
 - [ ] **Measure `corner_sigma_px`.** Still 0.3, still inferred from other
       people's data. Needs only a camera and a board.
+
+## Bookkeeping
+
+The message and transport items are closed by vendoring the detector into this
+repo — see the status section above.
+
+Still open, all needing hardware: the `corner_sigma_px` measurement at three
+ranges and while moving. It remains 0.3, inferred from other people's data, and
+every covariance the localizer publishes scales on it. One camera, one board and
+a tripod; roughly an hour.
