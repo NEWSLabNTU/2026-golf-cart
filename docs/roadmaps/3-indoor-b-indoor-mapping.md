@@ -175,9 +175,21 @@ competitor to it.
   reaches the setting through `tier4_localization_launch`, which hardcodes the
   GNSS topic in its own `ndt_scan_matcher.launch.xml`, so with `pose_source:=ndt`
   indoors regularization must stay disabled until that is forked.
-- `golfcart_system_monitor` still monitors five GNSS topics
-  (`config/monitor_topics.yaml:10-15`), so an indoor run will show them all as
-  failed. Cosmetic, but it trains operators to ignore the monitor.
+- ~~The system monitor watches five GNSS topics regardless.~~ **Fixed**: its
+  `monitor_gps` parameter now defaults to `$(var use_gnss)`, and the launches
+  that include it pass `use_gnss` through. An explicit `monitor_gps:=true` still
+  wins. Verified all three cases.
+
+  Fixing it surfaced a worse bug alongside. Both `logging_simulation.launch.yaml`
+  and `sensor_only.launch.yaml` included
+  `$(find-pkg-share golfcart_system_monitor)/launch/golfcart_system_monitor.launch.yaml`,
+  but the package is still named `autosdv_system_monitor` and so is its launch
+  file — a leftover from the rename. `find-pkg-share` raises on an unknown
+  package, so both launches would have died at that include, unconditionally.
+  `logging_simulation` is the file this sub-phase needs for NDT validation, so
+  this would have been discovered at the worst moment. Both references now point
+  at the real package; the rename itself belongs to
+  [0-autosdv-to-golfcart-rename.md](0-autosdv-to-golfcart-rename.md).
 - `data/COSS-map-planning/map_projector_info.yaml` uses `TransverseMercator`.
   The indoor map needs `projector_type: Local` — copying the outdoor file is the
   silent-failure path.
