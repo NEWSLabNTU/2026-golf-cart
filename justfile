@@ -432,6 +432,10 @@ bag-record:
 bag-record-indoor:
     ./scripts/rosbag/record_indoor_mapping.sh
 
+# Audit launch files for silently-ignored arguments and unparseable comments.
+audit-launch:
+    python3 ./scripts/check/audit_launch.py
+
 # Record everything the ArUco indoor localizer needs (phase 3D-7).
 # Name the scenario so the bag is readable without opening it:
 #   just bag-record-aruco bench_static_1board_3m

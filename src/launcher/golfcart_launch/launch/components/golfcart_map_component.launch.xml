@@ -32,7 +32,13 @@
       <arg name="lanelet2_map_path" value="$(var map_path)/$(var lanelet2_map_file)"/>
       <arg name="lanelet2_map_loader_param_path"
            value="$(find-pkg-share autoware_launch)/config/map/lanelet2_map_loader.param.yaml"/>
-      <arg name="output_topic" value="/map/vector_map"/>
+      <!-- `lanelet2_map_topic`, not `output_topic`: that is the name the
+           loader actually reads. The old name set a launch configuration
+           nobody consumed. It happened to be harmless because this include
+           sits inside the `map` namespace, where the loader default
+           `vector_map` already resolves to /map/vector_map — but it read as
+           though the topic were being set here, and it was not. -->
+      <arg name="lanelet2_map_topic" value="vector_map"/>
     </include>
   </group>
 </launch>

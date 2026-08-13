@@ -10,7 +10,12 @@
   <arg name="loc_config_path"/>
   <arg name="aruco_tag_map_path"/>
   <arg name="twist_source" default="gyro_odom"/>
-  <arg name="camera_names" default="['left','right','rear']"/>
+  <!-- The camera set is fixed here by the three remaps below and by
+       camera_names in aruco_localizer.param.yaml. There used to be a
+       camera_names argument at this level; it was read by nothing and only
+       advertised a configurability that does not exist. Adding a camera
+       means adding a detector node, a remap and an entry in the param
+       file. -->
   <arg name="use_sim_detector" default="false"
        description="substitute aruco_sim_detector for the real detectors (phase 3D-6)"/>
   <!-- In golfcart_launch, not in golfcart_aruco_detector: ament_cargo installs
