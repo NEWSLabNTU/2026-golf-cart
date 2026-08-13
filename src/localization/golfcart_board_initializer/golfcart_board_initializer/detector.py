@@ -74,6 +74,11 @@ class DetectorParams:
     # Stage 4
     edge_margin_scale: float = 1.5  # multiples of local point spacing
 
+    # Where the board is observed from, used only to orient its normal. A live
+    # scan leaves this at the sensor origin; a merged map has no sensor, so the
+    # anchoring tool passes the room centre instead.
+    viewpoint: Optional[np.ndarray] = None
+
 
 @dataclass
 class Rejection:
@@ -406,7 +411,10 @@ def detect_board(
     clusters = cluster_voxel_grid(kept, params.cluster_tolerance, params.cluster_min_points)
     result.n_clusters = len(clusters)
 
-    sensor_origin = np.zeros(3)
+    sensor_origin = (
+        np.zeros(3) if params.viewpoint is None
+        else np.asarray(params.viewpoint, dtype=np.float64)
+    )
     survivors: List[BoardDetection] = []
     for indices in clusters:
         detection, rejection = _evaluate_cluster(

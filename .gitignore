@@ -5,10 +5,11 @@
 .*~
 \#*#
 
-# colcon
-/build/
-/log/
-/install/
+# colcon. Not anchored to the repo root: running colcon from inside a package
+# creates a nested build/ and install/ there, and those were once committed.
+build/
+log/
+install/
 
 # python
 __pycache__/

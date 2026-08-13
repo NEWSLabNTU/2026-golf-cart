@@ -112,6 +112,15 @@ Full method, board specification, detector retuning, and failure modes:
       defect — see below.**
 - [x] Indoor mapping bag recording script: `just bag-record-indoor`
       (`scripts/rosbag/record_indoor_mapping.sh`).
+- [x] **Anchoring tool** — `ros2 run golfcart_board_initializer
+      anchor_map_to_board <cloud> -o <map dir>`. Finds the board in a finished
+      SLAM cloud, transforms the cloud so the board defines the map frame, and
+      writes the anchored PCD, the transform, the board's Lanelet2 polygon, and
+      a `projector_type: Local` projector file. Tested against synthetic map
+      clouds built from several sensor poses in an arbitrary source frame.
+- [x] **PLY to PCD conversion with intensity preserved** — GLIM exports PLY
+      (field named `scalar_intensity`), Autoware wants PCD, and Open3D drops the
+      channel silently. Handled by `pointcloud_io.py` inside the anchoring tool.
 
 ---
 

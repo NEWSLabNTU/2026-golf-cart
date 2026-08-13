@@ -17,6 +17,8 @@ vehicle pose in the map frame, and calls `/localization/initialize` with
 | `golfcart_board_initializer/detector.py` | Detection. Pure numpy, no `rclpy`. |
 | `golfcart_board_initializer/geometry.py` | Pose composition and covariance. Pure numpy. |
 | `golfcart_board_initializer/vlp32.py` | Beam table, read from the Nebula calibration with an embedded fallback. |
+| `golfcart_board_initializer/anchor.py` | Offline map anchoring. Pure numpy. |
+| `golfcart_board_initializer/pointcloud_io.py` | PLY and PCD, intensity preserved. Pure numpy. |
 | `golfcart_board_initializer/simulation/` | Synthetic VLP-32C scans and scenes. |
 | `golfcart_board_initializer/node.py` | ROS wiring, state machine, diagnostics. |
 | `golfcart_board_initializer/scene_publisher.py` | Publishes synthetic scans for desk testing. |
@@ -63,6 +65,27 @@ abort, and a clean no-candidate respectively.
 `ros2 launch` under a shell `timeout` can leave the publisher running. A stale
 publisher feeding a second scene into the same topic looks exactly like a
 detector bug — check `pgrep -f board_scene_publisher` before believing one.
+
+## Anchoring a map to the board
+
+A SLAM cloud sits in an arbitrary frame — its origin is wherever the vehicle
+happened to be for the first scan. This fixes the frame to the board instead:
+
+```bash
+anchor_map_to_board glim_export.ply -o data/huaxia-indoor
+```
+
+Writes the anchored `pointcloud_map.pcd`, `board_anchor.yaml` (the transform, so
+a rebuild can be compared against it), `board_polygon.osm` (the board's Lanelet2
+landmark), and `map_projector_info.yaml` with `projector_type: Local`.
+
+Detection reuses `detector.py`, so the board pose defining the map and the board
+pose the vehicle computes at startup come from identical code — a detector bias
+cancels instead of appearing as a localization error. Two board-shaped
+retroreflectors in the map abort the run rather than picking one, since anchoring
+to the wrong object shifts the whole map with no later symptom.
+
+`--dry-run` reports the transform without writing.
 
 ## On the vehicle
 

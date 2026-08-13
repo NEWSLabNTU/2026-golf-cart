@@ -27,6 +27,7 @@ setup(
         'console_scripts': [
             'board_pose_initializer = golfcart_board_initializer.node:main',
             'board_scene_publisher = golfcart_board_initializer.scene_publisher:main',
+            'anchor_map_to_board = golfcart_board_initializer.anchor_cli:main',
         ],
     },
 )

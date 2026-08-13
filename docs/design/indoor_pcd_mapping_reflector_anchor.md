@@ -260,7 +260,15 @@ fields; Open3D silently drops intensity and must not be used for this step.
 
 ### 6.4 Anchor the cloud to the board
 
-In the finished cloud:
+Implemented as `anchor_map_to_board` in `golfcart_board_initializer`:
+
+```bash
+ros2 run golfcart_board_initializer anchor_map_to_board glim_export.ply -o data/huaxia-indoor
+```
+
+It writes the anchored `pointcloud_map.pcd`, `board_anchor.yaml` (the transform,
+so a rebuild can be checked against it), `board_polygon.osm`, and
+`map_projector_info.yaml` with `projector_type: Local`. In the finished cloud:
 
 1. Threshold on intensity to isolate retroreflective returns.
 2. Cluster, then reject clusters whose planarity, dimensions, or height above
@@ -272,6 +280,19 @@ In the finished cloud:
 5. Persist the transform.
 
 Step 2 is not optional. See §8.
+
+Two details the implementation settled:
+
+- **The floor fit needs an inlier refit.** Fitting a plane to everything within
+  0.3 m of the lowest points also catches wall bases and floor markings, whose
+  centroid sits above the floor: the first fit came out 8.5 cm high and tilted,
+  and the whole map inherits that. Refitting on points within 5 cm of the
+  current plane pulls it onto the floor.
+- **The map cloud needs different detector gates than a live scan.** Range is
+  measured from an arbitrary origin rather than a sensor, and the density gate's
+  expected return count assumes a single viewpoint. Both are disabled for
+  anchoring; every geometric gate still applies, and those are what separate the
+  board from the exit signage anyway.
 
 ### 6.5 Post-process and tile
 
