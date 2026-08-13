@@ -13,8 +13,11 @@
   <arg name="camera_names" default="['left','right','rear']"/>
   <arg name="use_sim_detector" default="false"
        description="substitute aruco_sim_detector for the real detectors (phase 3D-6)"/>
+  <!-- In golfcart_launch, not in golfcart_aruco_detector: ament_cargo installs
+       the binary and nothing else, so a config file inside the Rust package
+       never reaches install/. -->
   <arg name="detector_config_path"
-       default="$(find-pkg-share golfcart_aruco_detector)/config/aruco_detector.param.yaml"/>
+       default="$(find-pkg-share golfcart_launch)/config/localization/aruco_detector.param.yaml"/>
   <arg name="detector_debug_overlay" default="false"/>
   <arg name="sim_detector_config"
        default="$(find-pkg-share aruco_sim_detector)/config/sim_detector.param.yaml"/>

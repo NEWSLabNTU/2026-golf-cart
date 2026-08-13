@@ -2,13 +2,20 @@
 <!--
   One detector node per camera. The localizer subscribes to all of them and
   solves the vehicle pose jointly over whatever they collectively see.
+
+  This lives in golfcart_launch rather than in golfcart_aruco_detector because
+  that package is built with ament_cargo, which installs the binary and nothing
+  else — no config/, no launch/. Left in the Rust package the files simply do
+  not reach install/, and launch reports "Parameter file path is not a file"
+  while the node silently runs on its compiled-in defaults. Same reason
+  golfcart_vehicle_interface keeps its parameters in golfcart_vehicle_launch.
 -->
 <launch>
   <arg name="camera_name" description="Names the node and its namespace, e.g. front"/>
   <arg name="image_topic"/>
   <arg name="camera_info_topic"/>
   <arg name="param_file"
-       default="$(find-pkg-share golfcart_aruco_detector)/config/aruco_detector.param.yaml"/>
+       default="$(find-pkg-share golfcart_launch)/config/localization/aruco_detector.param.yaml"/>
   <arg name="debug_overlay" default="false"/>
 
   <node pkg="golfcart_aruco_detector" exec="golfcart_aruco_detector"

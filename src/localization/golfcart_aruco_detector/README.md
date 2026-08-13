@@ -80,8 +80,17 @@ stopped running.
 
 ### Parameters
 
-Full set with rationale in [`config/aruco_detector.param.yaml`](config/aruco_detector.param.yaml).
-The ones worth knowing:
+Full set with rationale in
+[`golfcart_launch/config/localization/aruco_detector.param.yaml`](../../launcher/golfcart_launch/config/localization/aruco_detector.param.yaml).
+
+The config and launch files live in `golfcart_launch`, not here. This package
+is built with `ament_cargo`, which installs the compiled binary and nothing
+else — a `config/` or `launch/` directory inside it never reaches `install/`,
+and the node then runs on its compiled-in defaults while launch prints a
+warning that is easy to miss. `golfcart_vehicle_interface` keeps its
+parameters in `golfcart_vehicle_launch` for the same reason.
+
+The parameters worth knowing:
 
 | parameter | default | note |
 |---|---|---|
@@ -96,7 +105,7 @@ The ones worth knowing:
 Standalone, one camera:
 
 ```bash
-ros2 launch golfcart_aruco_detector aruco_detector.launch.xml \
+ros2 launch golfcart_launch aruco_detector.launch.xml \
   camera_name:=left \
   image_topic:=/sensing/camera/left/image_raw/compressed \
   camera_info_topic:=/sensing/camera/left/camera_info
