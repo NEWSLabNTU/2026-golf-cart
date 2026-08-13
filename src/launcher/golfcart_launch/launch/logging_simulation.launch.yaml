@@ -212,7 +212,7 @@ launch:
 
 # System Monitor
 - include:
-    file: "$(find-pkg-share autosdv_system_monitor)/launch/autosdv_system_monitor.launch.yaml"
+    file: "$(find-pkg-share golfcart_system_monitor)/launch/golfcart_system_monitor.launch.yaml"
     arg:
     -
       name: use_gnss

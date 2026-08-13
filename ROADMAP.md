@@ -27,8 +27,8 @@ Strip out AutoSDV leftovers and establish the golf cart baseline. Both groups wo
 
 ### Track B — Tooling & Infrastructure
 1. **Clean up system-level AutoSDV remnants** — Review and decide on:
-   - `src/system/autosdv_runtime` submodule — rename or replace for golf cart?
-   - `src/system/autosdv_system_monitor` submodule — same
+   - ~~`src/system/autosdv_runtime` submodule~~ — renamed to `golfcart_runtime` (2026-08-13)
+   - ~~`src/system/autosdv_system_monitor` submodule~~ — renamed to `golfcart_system_monitor` (2026-08-13)
    - Any AutoSDV-specific configs in `src/launcher/golfcart_launch/`
 2. **Setup script overhaul** — Update `setup.sh` / `setup/` to install golf cart dependencies (play_launch, Nebula driver, u-blox driver, Tamagawa driver, TIER IV camera driver). Remove stale optional components from AutoSDV era.
 3. **Justfile recipes for outdoor ops** — Ensure `play_launch` is the default runtime (already is). Add recipes: `just check-sensors` (health check), verify `just bag-record` covers all needed topics. Clean up `launch-zed` recipe (ZED not used).
@@ -132,8 +132,8 @@ Both groups work together.
 | ZED camera xacro/calibration       | `sensor_kit.xacro`, `sensor_kit_calibration.yaml` | Replace with TIER IV cameras              |
 | Sensor check script                | `scripts/check/sensors.launch.xml`                | Remove Seyond + old camera, keep Velodyne |
 | Seyond/camera rviz configs         | `scripts/check/seyond.rviz`, `camera_c1.rviz`     | Remove or replace                         |
-| `autosdv_runtime` submodule        | `src/system/autosdv_runtime`                      | Review — rename or keep                   |
-| `autosdv_system_monitor` submodule | `src/system/autosdv_system_monitor`               | Review — rename or keep                   |
+| `golfcart_runtime` submodule        | `src/system/golfcart_runtime`                    | Renamed 2026-08-13                        |
+| `golfcart_system_monitor` submodule | `src/system/golfcart_system_monitor`             | Renamed 2026-08-13                        |
 | Custom PWM vehicle interface       | `golfcart_vehicle_interface/`                     | Replace with Turing Drive DBW             |
 | Lexus mesh                         | `golfcart_vehicle_description/mesh/lexus.dae`     | Replace if golf cart model available      |
 | `vehicle_info.param.yaml`          | `golfcart_vehicle_description/config/`            | TODO: measure golf cart dimensions (wheelbase, tread width, overhang, tire radius) before updating |

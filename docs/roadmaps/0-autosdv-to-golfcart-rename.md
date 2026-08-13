@@ -2,9 +2,7 @@
 
 **Goal**: Rename all `autosdv` references to `golfcart` across the project.
 
-**Status**: ✅ **Phases 1-4, 6-8 Complete** | ⏸️ **Phase 5 Deferred, and half-done
-by accident** — the two submodule *directories* were renamed while their package
-names were not, which has already broken two launch paths. See Phase 5.
+**Status**: ✅ **All phases complete** (Phase 5 finished 2026-08-13)
 
 **Summary**:
 - ✅ Renamed `autosdv_launch` package → `golfcart_launch`
@@ -14,7 +12,7 @@ names were not, which has already broken two launch paths. See Phase 5.
 - ✅ Renamed Python classes: `AutoSdvActuator` → `GolfCartActuator`, `AutoSdvVelocityReportNode` → `GolfCartVelocityReportNode`
 - ✅ Updated build/infra: justfile, Docker, CI, setup scripts, versions.yaml, env vars
 - ✅ Updated scripts, hardcoded paths, documentation, logos
-- ⏸️ Deferred: `autosdv_runtime` and `autosdv_system_monitor` submodules (require GitHub repo renames)
+- ✅ Renamed `autosdv_runtime` → `golfcart_runtime` and `autosdv_system_monitor` → `golfcart_system_monitor` submodules
 
 ---
 
@@ -70,50 +68,61 @@ Renamed `autosdv_launch` → `golfcart_launch`:
 
 ---
 
-## Phase 5: System Submodules ⏸️ DEFERRED
+## Phase 5: System Submodules ✅ COMPLETE
 
-**Scope**: Rename `autosdv_runtime` and `autosdv_system_monitor` submodules. Deferred because these require GitHub repository renames.
+**Scope**: Rename the `autosdv_runtime` and `autosdv_system_monitor` submodules.
+**Done 2026-08-13.** The stated blocker had already cleared: both GitHub
+repositories were renamed to `golfcart_*` some time ago, and `.gitmodules`
+pointed at the new URLs. Only the ROS package names inside them were left.
 
 ### Current State
 
-The two submodules are in a **half-renamed state**, which is worse than either
-end of the rename and is where the bugs come from. Their *directories* were
-renamed; their *package names* were not:
+Both submodules are now fully renamed, package names included.
 
-| On disk | `package.xml` name |
-|---------|--------------------|
-| `src/system/golfcart_runtime/` | `autosdv_runtime` |
-| `src/system/golfcart_system_monitor/` | `autosdv_system_monitor` |
+| Submodule | Package name | Python module | Entry point |
+|-----------|--------------|---------------|-------------|
+| `src/system/golfcart_runtime` | `golfcart_runtime` | `golfcart_runtime/` | `golfcart` CLI |
+| `src/system/golfcart_system_monitor` | `golfcart_system_monitor` | `golfcart_system_monitor/` | `golfcart_system_monitor_node.py` |
 
-`find-pkg-share` resolves the package name, not the directory, so anything that
-followed the directory rename is broken. Two instances found and fixed on
-2026-08-13:
+Also renamed in the runtime submodule: the systemd units
+(`golfcart.service`, `golfcart-healthcheck.service`/`.timer`,
+`golfcart-web-control.service`), the journald drop-in, and the launch wrapper.
+`AUTOSDV_WORKSPACE` is still honoured alongside `GOLFCART_WORKSPACE` so an
+existing deployment keeps working until its environment is updated.
+
+### What the half-renamed state had already broken
+
+The directories had been renamed to `golfcart_*` while the package names stayed
+`autosdv_*`. `find-pkg-share` resolves the package name, so anything written to
+match the directory failed:
 
 - `logging_simulation.launch.yaml` and `sensor_only.launch.yaml` included
-  `$(find-pkg-share golfcart_system_monitor)/launch/golfcart_system_monitor.launch.yaml`.
-  Neither the package nor the file exists under that name, and neither include is
-  guarded, so both launches died there. `logging_simulation` is what phase 3B
-  needs for indoor NDT validation.
-- `autosdv_runtime`'s launcher ran `ros2 launch autosdv_launch autosdv.launch.yaml`,
-  from before phase 1 renamed that package and file. Now
-  `golfcart_launch golfcart.launch.yaml`.
+  `$(find-pkg-share golfcart_system_monitor)/...`, which did not resolve. Neither
+  include is guarded, so both launches died there — including the one indoor NDT
+  validation depends on.
+- The runtime launcher ran `ros2 launch autosdv_launch autosdv.launch.yaml`, from
+  before phase 1 renamed that package and file, so the systemd and CLI launch
+  path could not have worked at all.
 
-### Still stale in the runtime submodule
+Both are fixed, and the references now match the packages that exist.
 
-The systemd units hardcode the old workspace location and are not templated:
+### Deliberately left alone
 
-```
-# systemd/autosdv.service
-WorkingDirectory=%h/AutoSDV
-ExecStart=%h/AutoSDV/install/autosdv_runtime/share/autosdv_runtime/scripts/autosdv-launch.sh
-```
+The systemd units still point at `%h/AutoSDV`, which is wrong for a workspace at
+`~/repos/2026-golf-cart` regardless of naming, and the installer copies the units
+without substitution. Correcting it means choosing a deployment layout, which is
+a separate decision from a rename. `just launch` does not go through systemd — it
+runs `ros2 launch golfcart_launch golfcart.launch.yaml` directly — so this
+affects the `golfcart` CLI and service path only.
 
-This repo lives at `~/repos/2026-golf-cart`, so the service path is wrong
-independently of any naming question. Left alone deliberately: correcting it
-means deciding the deployment layout, which is a different call from a rename.
-`just launch` does not go through systemd — it runs
-`ros2 launch golfcart_launch golfcart.launch.yaml` directly — so this affects the
-`golfcart` CLI and service path only.
+### Verification
+
+- Both packages build under their new names and install correct
+  `ament_index/resource_index/packages` entries.
+- `golfcart --help` runs from the installed CLI.
+- `ros2 launch golfcart_system_monitor golfcart_system_monitor.launch.yaml`
+  starts, and its GNSS subscriptions follow `use_gnss`: three under `true`, none
+  under `false`.
 
 References TO these packages are preserved in the main repo:
 - `find-pkg-share autosdv_system_monitor` in `golfcart.launch.yaml`, `sensor_only.launch.yaml`, `logging_simulation.launch.yaml`
