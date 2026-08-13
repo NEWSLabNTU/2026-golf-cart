@@ -162,11 +162,19 @@ competitor to it.
 
 ### Still outstanding from the audit
 
-- `input_regularization_pose_topic` remains hardcoded to
-  `/sensing/gnss/pose_with_covariance` at `cuda_localization.launch.xml:49` and
-  `autoware_localization.launch.xml:39`. Harmless while
-  `ndt_scan_matcher.param.yaml` has `regularization.enable: false`, and a
-  correctness bug the moment corridor degeneracy forces it on.
+- ~~`input_regularization_pose_topic` hardcoded to the GNSS topic.~~ **Fixed**:
+  it is now a `regularization_pose_topic` argument on both cuda_ndt launch files
+  and on the localization component, still defaulting to the GNSS topic so
+  outdoor behaviour is unchanged. Verified the value threads through the include
+  chain.
+
+  Two caveats that outlive the fix. Indoors the replacement must be a
+  **tag-only** pose — the merged pose that feeds the EKF would re-enter NDT
+  whose output re-enters the EKF, and the loop is invisible from either end. And
+  only the `cuda_ndt` branch honours the argument: the standard Autoware branch
+  reaches the setting through `tier4_localization_launch`, which hardcodes the
+  GNSS topic in its own `ndt_scan_matcher.launch.xml`, so with `pose_source:=ndt`
+  indoors regularization must stay disabled until that is forked.
 - `golfcart_system_monitor` still monitors five GNSS topics
   (`config/monitor_topics.yaml:10-15`), so an indoor run will show them all as
   failed. Cosmetic, but it trains operators to ignore the monitor.
