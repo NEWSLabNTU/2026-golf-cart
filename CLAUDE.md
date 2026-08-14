@@ -462,25 +462,54 @@ All dependencies must be ready before localization can work.
 ## System Management
 
 ### Systemd Service Integration
-- Golf Cart now runs as a systemd user service for better process management
-- Service is automatically installed on first `just launch`
-- Provides clean shutdown with no orphan processes
-- Logs accessible via `golfcart status` or `systemctl --user status golfcart`
-- Service is NOT enabled for automatic startup by default (use `golfcart enable` if needed)
+
+Applies to the two-machine deployment. `just launch` (single machine) is
+unaffected and still runs play_launch in the foreground.
+
+Both hosts run the same units, installed per machine with a role:
+
+| Unit | Hosts | Purpose |
+|---|---|---|
+| `golfcart-launch.service` | both | the stack, via play_launch |
+| `golfcart-record.service` | both | rosbag only, independent lifecycle |
+| `golfcart-watchdog.service` | orin | stops everything if the master vanishes |
+
+```bash
+just service-install master            # this machine
+just service-install orin --remote     # the orin, over ssh
+just launch-master                     # starts both; returns immediately
+just stop-master                       # stops both; leaves recording alone
+just logs-master
+just record-start / record-stop        # recording, independent of the launch
+just doctor                            # when topics do not show up
+```
+
+Units are installed but never enabled: they start on demand, not at boot.
+Lingering is required and the installer enables it — without it the user manager
+exits with the last session and takes the units with it.
+
+See [docs/multi-machine.md](docs/multi-machine.md) for operation and
+[docs/design/orin_provisioning_implementation_plan.md](docs/design/orin_provisioning_implementation_plan.md)
+for why it is built this way.
+
+**Note**: earlier revisions of this file described a `golfcart` CLI with
+`golfcart status` / `golfcart enable`, and a service auto-installed on first
+`just launch`. That was inherited from the AutoSDV system and never existed in
+this repository.
 
 ### Process Management
-- The system handles multiple Ctrl-C presses gracefully
-- First Ctrl-C: Graceful shutdown attempt
-- Second Ctrl-C: Force shutdown all processes
-- No orphan processes left after shutdown
+- `just launch` (single machine): Ctrl-C stops it; a second Ctrl-C forces it
+- `just launch-master` (two machines): nothing to Ctrl-C — it returns
+  immediately, and `just stop-master` is the stop verb
+- `KillMode=control-group` in the units is what keeps orphans from surviving
+- play_launch ignores SIGTERM, so the units stop it with `KillSignal=SIGINT`
 
 ### Known Issues and Solutions
 
 #### Journal Logging
-If `journalctl --user` doesn't show logs:
-1. Run `sudo ./enable_journal.sh` to enable persistent journal storage
-2. Log out and back in for group changes to take effect
-3. Alternatively, use `systemctl --user status golfcart` to view logs
+`journalctl --user -u <unit>` works for the golfcart units. If a bare
+`journalctl --user` shows nothing, use `systemctl --user status <unit>`, which
+prints recent lines regardless.
 
 #### Network Monitor Error
 - Network monitor may show socket connection errors

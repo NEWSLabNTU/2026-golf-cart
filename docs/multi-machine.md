@@ -18,13 +18,16 @@ each host records to its own disk instead of streaming images across.
 Everything runs from the master:
 
 ```bash
-just launch-master                  # master stack + the orin's ZED, started over ssh
-just launch-master "record:=true"   # the same, with both hosts recording locally
+just launch-master        # master stack + the orin's ZED, started over ssh
+just logs-master          # follow the log
+just stop-master          # stop both hosts
 ```
 
-Stopping the master (Ctrl-C, or play_launch's stop button) stops the orin too.
-Bags land in `~/rosbags/master_<ts>` and `~/rosbags/orin_<ts>` on their respective
-machines; override the directory with `GOLFCART_BAG_DIR`.
+Both hosts run under systemd now, so `launch-master` **returns immediately** and
+nothing occupies a terminal. Closing your ssh session no longer stops the cart;
+`just stop-master` is the stop verb, and there is no Ctrl-C to press.
+
+`stop-master` deliberately leaves recording alone — that is `just record-stop`.
 
 Single-machine operation is untouched:
 
@@ -32,6 +35,43 @@ Single-machine operation is untouched:
 just launch                         # host:=all, loopback DDS, nothing remote
 GOLFCART_USE_ORIN=0 just launch-master   # master alone, without touching the orin
 ```
+
+## Recording
+
+Recording is independent of the launch. Start it whenever you want, with the
+stack up, down, or half-up:
+
+```bash
+just record-start     # both hosts begin recording to their own local disk
+just record-status
+just record-stop      # both finalize their bags
+```
+
+Bags land in `$GOLFCART_BAG_DIR/master_<ts>` and `.../orin_<ts>` on their
+respective machines — the external SSD (`/mnt/external/rosbags`) when mounted,
+otherwise `~/rosbags`.
+
+What each host records is a plain list, one topic per line:
+
+```
+config/recording/master_topics.txt
+config/recording/orin_topics.txt
+```
+
+Edit those rather than any script. The split is deliberate: both LiDARs are
+cabled to the master at ~30 MB/s each, and only the ZED's *compressed* stream is
+small enough to cross the shared 100 Mb/s LAN, so each host records its own
+sensors locally.
+
+Recording used to be part of the launch (`record:=true`), and that argument no
+longer exists. Two reasons it moved out. You could not start or stop a recording
+without restarting the whole stack; and as a play_launch child, every
+multi-gigabyte bag stopped from the foreground came out with a 0-byte
+`metadata.yaml` (see docs/roadblocks.md). Outside that process tree, play_launch's
+shutdown cannot reach the recorder at all.
+
+If the orin is unreachable, the master still records — the failure is reported
+and `just record-start` exits non-zero.
 
 ## Time sync
 
@@ -176,43 +216,123 @@ clocks were not synced when it was recorded — see *Time sync*.
 To drive the orin by hand:
 
 ```bash
-./scripts/multi_machine/orin_remote.sh start [true|false]   # the argument enables recording
-./scripts/multi_machine/orin_remote.sh status
-./scripts/multi_machine/orin_remote.sh stop
+./scripts/multi_machine/orin_remote.sh start  launch    # or: record, watchdog
+./scripts/multi_machine/orin_remote.sh stop   record
+./scripts/multi_machine/orin_remote.sh status           # no unit = all three
+./scripts/multi_machine/orin_remote.sh ping             # reachability, no wait loop
 ```
+
+`start` also brings the watchdog up; `stop` never takes it down implicitly — it
+exits by itself once nothing is left to guard.
 
 ## What stops the orin, and when
 
 | Failure | What stops it | How long |
 |---|---|---|
-| Master stopped normally | `launch-master`'s EXIT trap runs `orin_remote.sh stop` over ssh | immediate |
-| Master killed, network up | the same trap, if the shell survives; otherwise the watchdog | immediate, or ~42s |
-| Network cut, or master powered off | the orin's own watchdog stops the unit locally | ~42s |
+| `just stop-master` | it runs `orin_remote.sh stop launch` over ssh before stopping the local unit | immediate |
+| Master unit stopped or crashed, network up | nothing stops the orin until someone runs `stop-master`; otherwise the watchdog | ~42s |
+| Network cut, or master powered off | the orin's own watchdog stops **every** `golfcart-*` unit locally | ~42s |
 
 `KillMode=control-group` in the unit is what makes the no-orphan guarantee hold —
 it kills everything play_launch spawned, not just the main process.
 
+The watchdog (`golfcart-watchdog.service`) is independent of the units it guards.
+It has to be: recording can run while the launch is down, so a watchdog scoped to
+the launch unit would be absent exactly when a recording needs stopping. It starts
+alongside the first remote start, stops everything on master loss, and exits once
+no `golfcart-*` unit is left — so it never pings on a machine being used alone.
+
+One consequence to know: a master reboot during a long recording ends that
+recording after ~42 s. One timeout is used for both units deliberately — an
+interrupted recording can be recovered, a full disk cannot.
+
 The orin is never enabled at boot. It is started on demand, because an orin that
 launches its ZED with no master to talk to is just a warm camera.
 
-## One-time provisioning of the orin
+## One-time provisioning
+
+Once per machine, from its own checkout:
+
+Most of it is driven from the master:
 
 ```bash
-# On the orin:
-cd ~/2026-golf-cart
-./setup/scripts/install-orin-host.sh      # systemd user units + lingering
+# On the master:
+echo master > .golfcart-host              # picks the DDS profile; gitignored
+just service-install master               # units + lingering (sudo)
+just ssh-setup                            # dedicated key, copied to the orin
+just service-install orin --remote        # provisions the orin over ssh
+
+# On the orin, once (its own checkout, its own clock and buffers):
+echo orin > .golfcart-host
 ./setup/scripts/configure-cyclonedds-sysctl.sh
 (cd setup && just chrony-orin)            # follow the master's clock
-colcon build --base-paths src --symlink-install \
-    --cmake-args -DCMAKE_BUILD_TYPE=Release
+just build
 
-# On the master, once:
-ssh-copy-id jetson@192.168.125.101
+# Back on the master:
 (cd setup && just chrony-master)          # serve time to the orin
+```
+
+`just service-install` writes a drop-in per unit carrying the resolved repo path
+and this machine's role, so the checkout does not have to live at
+`~/2026-golf-cart`. `just service-remove <role> [--remote]` undoes it.
+
+`--remote` re-invokes the same installer inside the orin's own checkout over ssh,
+so the drop-in it writes points at the orin's path. It is the one command here
+that may prompt — it runs before key-based ssh necessarily exists, and enabling
+lingering needs the orin's sudo. Everything else uses `BatchMode=yes` and fails
+rather than asking.
+
+Check either machine at any time:
+
+```bash
+just doctor           # this host
+just doctor-orin      # the same diagnostic, over ssh
 ```
 
 Key-based ssh is required, not optional: the orchestrator runs non-interactively
 and cannot answer a password prompt.
+
+`just ssh-setup` installs a **dedicated** key at `~/.ssh/golfcart_orin`, never
+touching your own `id_*` keys, and every script passes it explicitly with
+`ssh -i`. That explicitness is the point: ssh only tries the default names by
+itself, so a differently-named key is invisible to it unless an agent happens to
+hold one. That is how the previous key (`~/.ssh/golfcart_slave`, held by the
+desktop keyring) worked by hand and failed under systemd, which has no agent:
+
+```
+$ env -u SSH_AUTH_SOCK ssh -o BatchMode=yes jetson@192.168.125.101 hostname
+jetson@192.168.125.101: Permission denied (publickey,password).
+```
+
+`ssh-setup` verifies agentless afterwards for the same reason — a running agent
+can make the check pass while every unit still fails.
+
+> **Upgrading an existing machine.** The per-host units were replaced by a single
+> `golfcart-launch.service` plus `golfcart-record.service`, and the old
+> `orin_unit_exec.sh` / `master_unit_exec.sh` are gone. A machine provisioned
+> before that has units pointing at deleted scripts and will fail at start. Re-run
+> `just service-install <role>` after pulling.
+
+## Which DDS profile a terminal gets
+
+Each machine binds a different CycloneDDS profile, so a shell on the wrong one
+sees an empty graph while the stack is plainly running. The profile comes from
+`.golfcart-host` — one word, `master` or `orin`, gitignored because it is a
+property of the machine and not of the branch.
+
+```bash
+echo master > .golfcart-host    # then re-enter the directory, or: source scripts/env.sh
+just doctor                     # what got resolved, and from where
+```
+
+Precedence: an explicit `GOLFCART_DDS_PROFILE` wins, then the marker, then
+`loopback`. A marker naming a profile with no `config/cyclonedds/<name>.xml` is
+reported loudly rather than silently ignored.
+
+Shells without direnv get the same environment from `source scripts/env.sh`.
+
+A running `ros2` daemon keeps whatever DDS context it started with, so changing
+the profile does not reach it — `just doctor` says so when one is running.
 
 ## Troubleshooting
 
@@ -237,42 +357,41 @@ there.
 `git@github.com:...` and a non-interactive ssh session carries no agent. Pull
 from an interactive shell on the orin.
 
-**Nothing is discovered between the hosts.** Check the profile actually in use —
-`launch-master` and `launch-orin` set `CYCLONEDDS_URI` themselves, but a plain
-shell falls back to `.envrc`, which defaults to `loopback`. Set
-`GOLFCART_DDS_PROFILE=master` (or `orin`) for manual work.
+**Nothing is discovered between the hosts.** Run `just doctor` — it prints the
+profile that resolved, where it came from, and whether the current shell is
+carrying a different `CYCLONEDDS_URI` than the one the marker now selects. The
+usual cause is a missing `.golfcart-host`, or a shell entered before it existed.
 
 ## Environment variables
 
+Most of these now have a home in a file, and the variable is only an override.
+
 | Variable | Default | Meaning |
 |---|---|---|
-| `GOLFCART_DDS_PROFILE` | `loopback` | which `config/cyclonedds/<name>.xml` `.envrc` exports |
+| `GOLFCART_DDS_PROFILE` | from `.golfcart-host`, else `loopback` | which `config/cyclonedds/<name>.xml` is used |
+| `GOLFCART_HOST` | from `.golfcart-host` | this machine's role; units get it from their drop-in |
 | `GOLFCART_USE_ORIN` | `1` | set to `0` to run the master without the orin |
-| `GOLFCART_ORIN_SSH` | `jetson@192.168.125.101` | ssh destination for the orin |
+| `GOLFCART_ORIN_SSH` | `config/multi_machine.conf` | ssh destination for the orin |
 | `GOLFCART_ORIN_WAIT` | `60` | seconds to wait for the orin before giving up |
-| `GOLFCART_MASTER_IP` | `192.168.125.100` | what the orin's watchdog pings |
-| `GOLFCART_BAG_DIR` | `~/rosbags` | where each host writes its bags |
-| `GOLFCART_WORKSPACE` | `~/2026-golf-cart` | workspace the orin's unit launches from |
+| `GOLFCART_MASTER_IP` | `config/multi_machine.conf` | what the orin's watchdog pings |
+| `GOLFCART_BAG_DIR` | `/mnt/external/rosbags` if mounted, else `~/rosbags` | where each host writes its bags |
+| `GOLFCART_WORKSPACE` | `~/2026-golf-cart` | workspace the units launch from; set by the installer's drop-in |
+| `GOLFCART_LAUNCH_ARGS` | *(empty)* | extra launch arguments for the launch unit |
 
-## A master bag with an empty metadata.yaml
+## A bag with an empty metadata.yaml
 
-Large master-side bags can lose their metadata on shutdown: the `.db3` is
-complete but `metadata.yaml` is 0 bytes, and `ros2 bag info` reports
-`invalid node; first invalid key: "version"`. Observed with a 2.2 GB bag - the
-recorder is killed before it finishes writing. Recover in place:
+Largely historical: recording no longer runs inside play_launch's process tree,
+which is where this came from. If you meet it on an old bag, recovery is lossless:
 
 ```bash
 rm -f <bag>/metadata.yaml
 ros2 bag reindex <bag>
 ```
 
-The reindexed bag is complete; nothing is lost but the original metadata.
-
-The orin side does not have this problem: its recorder is stopped by systemd with
-`KillSignal=SIGINT` and `TimeoutStopSec=30`, which gives it time to finalize. The
-master's recorder is stopped by play_launch, whose grace period is shorter than a
-multi-gigabyte flush needs. Check `metadata.yaml` is non-empty after any long
-master recording.
+The full measurement — two 3 GB bags differing only in how they were stopped — is
+in docs/roadblocks.md. Bag size was never the variable, and the mechanism behind
+it was never identified; taking the recorder out of that process tree sidesteps it
+rather than explaining it.
 
 ## Checking the recorded topic list is still right
 
@@ -282,10 +401,12 @@ quiet", not "the name is wrong". Audit against a running stack:
 
 ```bash
 ros2 topic list > /tmp/live.txt
-grep -oE '^  /[a-z0-9_/]+' src/launcher/golfcart_launch/scripts/record_master.sh \
+grep -vE '^\s*(#|$)' config/recording/master_topics.txt \
   | tr -d ' ' \
   | while read -r t; do grep -qx "$t" /tmp/live.txt || echo "MISSING $t"; done
 ```
+
+Same for `config/recording/orin_topics.txt`, run on the orin.
 
 This caught the Velodyne being under `vlp32/` rather than `top/`, the GNSS being
 the Xsens MTi rather than a u-blox, and the USB cameras publishing no
