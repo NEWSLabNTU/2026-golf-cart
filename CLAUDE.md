@@ -85,7 +85,7 @@ colcon build --base-paths src --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=
 ```
 
 **Important**: Always use `--base-paths src` and other standard flags from `just build` when running colcon commands manually.
-**Important**: Never commit a submodule pointer to a commit that is not yet on GitHub, on a long-lived branch of its NEWSLabNTU fork. Push the submodule first, then the parent pointer — otherwise a fresh clone fails at `git submodule update` and the parent commit cannot say what was meant to be there. See [CONTRIBUTING.md](CONTRIBUTING.md#submodule-workflow).
+**Important**: Push a submodule commit to its fork before committing the parent's pointer to it. See [Submodule Pointer Rule](#submodule-pointer-rule).
 **Important**: Respect the .gitconfig in the repository when committing. Use Conventional Commits format (`feat`, `fix`, `chore`, `docs`, `refactor`, etc.) for commit messages.
 
 ## Architecture
@@ -113,6 +113,36 @@ Submodules:
 - gnss_locator - GNSS positioning
 - ros2_mpu9250_driver - IMU driver (to be replaced with Tamagawa)
 - ros-nmea-reader - NMEA GPS data parser
+
+### Submodule Pointer Rule
+
+**Never commit a submodule pointer to a commit that is not yet on GitHub, on a
+long-lived branch of its NEWSLabNTU fork.**
+
+A superproject commit records a submodule as a bare SHA and cannot describe what
+that SHA should contain. If it is not reachable on the fork, a fresh clone fails
+at `git submodule update` with `upload-pack: not our ref <sha>`, and the parent
+commit is unusable — there is nothing in it to recover the intent from.
+
+The second half is the one that gets missed: **a feature branch is not enough.**
+A pointer whose only home is `feat/…` breaks the moment that branch is deleted
+after merging — routine hygiene that silently invalidates history.
+
+Order of operations:
+
+1. Push the submodule commit to its fork, on a long-lived branch
+   (`main`, `2026-golf`, `2026-golfcart`, … — whichever that repo actually uses).
+2. Then commit and push the parent's pointer update.
+
+Audit every pointer before pushing the parent:
+
+```bash
+git submodule foreach --quiet \
+  'echo "$sm_path $(git branch -r --contains HEAD | tr -d " " | tr "\n" " ")"'
+```
+
+Any submodule printing no remote branch, or only a `feat/…` branch, is not ready
+to be pointed at. Full workflow in [CONTRIBUTING.md](CONTRIBUTING.md#submodule-workflow).
 
 ### Data Structure
 - **data/COSS-map-planning/** - Practice map (from Golf Cart)
