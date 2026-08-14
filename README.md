@@ -14,10 +14,10 @@ This system provides a complete autonomous driving software stack for golf cart 
 ## System Configuration
 
 ### Target Platform
-- **Hardware**: NVIDIA AGX Orin Developer Kit
-- **OS**: JetPack 6.0 (Ubuntu 22.04)
+- **Hardware**: two NVIDIA AGX Orin machines (master + orin) — see [The cart is two machines](#the-cart-is-two-machines)
+- **OS**: JetPack 6.x (Ubuntu 22.04)
 - **ROS**: ROS 2 Humble
-- **Autoware**: Version 2025.02
+- **Autoware**: 1.5.0, installed at `/opt/autoware/1.5.0/`
 
 ### Sensor Configuration
 - **LiDAR**: Velodyne VLP-32C
@@ -25,62 +25,93 @@ This system provides a complete autonomous driving software stack for golf cart 
 - **IMU**: Tamagawa IMU (Autoware recommended)
 - **Cameras**: Multiple USB cameras (future upgrade to Tier IV cameras)
 
-## Quick Start
+## The cart is two machines
 
-Prerequisites: JetPack 6.x on AGX Orin, Autoware 1.5.0 at `/opt/autoware/1.5.0/`.
+This is the part to get straight before anything else. The vehicle runs on **two**
+computers, and the normal deployment uses both:
 
-The **orin** additionally needs the ZED SDK at `/usr/local/zed`, installed by hand
-from the Stereolabs `.run` installer — it is not automated, and `just build`
-silently skips the ZED packages when that directory is absent. Re-run
-`./setup/scripts/configure-cyclonedds-sysctl.sh` afterwards: the SDK drops
-`/etc/sysctl.d/60-zed-buffers.conf`, which lowers `net.core.rmem_max` below the
-10 MB our DDS profiles require, and CycloneDDS then refuses to start on every
-profile. Currently installed: SDK 5.2.3.
+| | runs | records |
+|---|---|---|
+| **master** | the whole Autoware stack and the wired sensors (Velodyne, Falcon, GNSS, IMU, USB cameras) | its own bag, to the external SSD |
+| **orin** | the ZED X camera only | its own bag, locally |
+
+They split because the shared LAN negotiates 100 Mb/s and a single LiDAR stream is
+~30 MB/s. Neither machine records the other's topics.
+
+Both carry the **same repository and the same recipes**. Recipes ending `-up` /
+`-down` act on whichever machine runs them; `launch-all` / `stop-all` act on both,
+by logging into the orin and running its copy of the same recipe. There is no
+separate remote vocabulary to learn.
+
+Running on one machine is also supported, and is covered under
+[Single machine](#single-machine-development-and-bench-testing) below — but it is
+the bench case, not the vehicle.
+
+## Setup
+
+Prerequisites on **both** machines: JetPack 6.x on an AGX Orin, and Autoware 1.5.0
+at `/opt/autoware/1.5.0/`.
+
+### 1. Prepare each machine
+
+Do this on the master **and** on the orin, in each machine's own checkout:
 
 ```bash
-./setup.sh          # dependencies (interactive)
+git clone --recurse-submodules https://github.com/NEWSLabNTU/2026-golf-cart.git
+cd 2026-golf-cart
+./setup.sh                  # dependencies (interactive)
+echo master > config/host   # on the orin: echo orin > config/host
 just build
-just launch         # single machine; web UI at http://localhost:8081
 ```
 
-Launch arguments are one positional string:
+`config/host` is gitignored — it states which machine this checkout is on, and
+selects the DDS profile. Without it a shell falls back to `loopback` and sees no
+cross-machine topics.
+
+### 2. ZED SDK — orin only, by hand
+
+The orin needs the ZED SDK at `/usr/local/zed`, installed from the Stereolabs
+`.run` installer. **This is not automated** — the installer does not script
+cleanly, so it stays a manual step. Currently installed: SDK 5.2.3.
+
+Two consequences that are easy to miss:
+
+- `just build` **silently skips** the ZED packages when `/usr/local/zed` is
+  absent. The build succeeds and the camera simply never appears.
+- The SDK drops `/etc/sysctl.d/60-zed-buffers.conf`, which lowers
+  `net.core.rmem_max` below the 10 MB our DDS profiles require. CycloneDDS then
+  refuses to start on *every* profile, loopback included. Re-run
+  `./setup/scripts/configure-cyclonedds-sysctl.sh` after installing or upgrading
+  the SDK, then `just build` again to pick the ZED packages up.
+
+### 3. Wire the two together, from the master
 
 ```bash
-just launch "gnss_receiver:=ublox camera_model:=usb"
-just launch "use_gnss:=false"          # indoor, no GNSS
+just service-install master     # systemd units + lingering (sudo)
+just ssh-setup                  # dedicated key, copied to the orin
+just service-install-orin       # runs the orin's own installer over ssh
+just doctor && just doctor-orin # confirm both sides
 ```
 
-`just --list` shows everything.
+Time sync matters as much as the rest — two bags cannot be merged if the clocks
+disagree. See *Time sync* in [docs/multi-machine.md](docs/multi-machine.md).
 
-## Two Machines
+## Daily operation
 
-The cart runs on a **master** (Autoware, wired sensors) and an **orin** (ZED X).
-Each machine needs a role marker and its systemd units, once:
+From the master:
 
 ```bash
-echo master > config/host     # or: orin       (gitignored, picks the DDS profile)
-just service-install master      # units + lingering (sudo)
-just ssh-setup                   # key for the orin
-just service-install-orin        # provision the orin over ssh
+just launch-all    # both hosts; returns immediately
+just logs          # follow this host's log
+just stop-all      # stop both hosts
+just doctor        # when topics do not show up
 ```
 
-Then, from the master:
+There is no Ctrl-C to press. Both hosts run under systemd, so closing the terminal
+or dropping the ssh session does not stop the cart — `just stop-all` is the stop
+verb.
 
-```bash
-just launch-all     # both hosts; returns immediately
-just logs
-just stop-all
-just doctor            # when topics do not show up
-```
-
-There is no Ctrl-C to press — both hosts run under systemd, so closing the
-terminal does not stop the cart. `just stop-all` is the stop verb.
-
-Both machines carry the same repository and the same recipes. `launch-up`,
-`launch-down`, `record-up`, `record-down` and `host-status` act on whichever
-machine runs them; the master drives the orin by running them over there.
-
-See [docs/multi-machine.md](docs/multi-machine.md).
+Full operational guide: [docs/multi-machine.md](docs/multi-machine.md).
 
 ## Recording
 
@@ -103,8 +134,30 @@ config/recording/master_topics.txt
 config/recording/orin_topics.txt
 ```
 
-Each host writes locally: both LiDARs are cabled to the master at ~30 MB/s each,
-and only the ZED's compressed stream fits across the shared 100 Mb/s LAN.
+`just stop-all` deliberately leaves a recording running; stopping the stack and
+stopping a recording are separate decisions.
+
+## Single machine (development and bench testing)
+
+For working at a desk, or driving the master alone with no orin attached. This
+runs play_launch in the foreground with the `loopback` DDS profile and involves no
+systemd and no ssh:
+
+```bash
+just launch                              # web UI at http://localhost:8081
+just launch "use_gnss:=false"            # indoor, no GNSS
+just launch "gnss_receiver:=ublox camera_model:=usb"
+```
+
+Launch arguments are one positional string, not `ARGS=...`.
+
+To drive the master alone but still through its systemd unit:
+
+```bash
+GOLFCART_USE_ORIN=0 just launch-all
+```
+
+`just --list` shows every recipe.
 
 ## Development Status
 
