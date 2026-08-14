@@ -106,11 +106,12 @@ exists in the sensor kit calibration.
 These are defects in the tools, not the vehicle. Each is worked around; none is
 fixed at the source.
 
-### play_launch does not finalize large bags
+### play_launch does not finalize bags when stopped from the foreground
 
-Recording through play_launch leaves a complete `.db3` and a **0-byte
-`metadata.yaml`** when the bag is large; `ros2 bag info` then reports
-`invalid node; first invalid key: "version"`. Reproduced at 2.2 GB and 2.5 GB.
+Recording through `just launch-master` and stopping it the way a terminal does
+leaves a complete `.db3` and a `metadata.yaml` that is **0 bytes or missing
+entirely**; `ros2 bag info` then reports
+`invalid node; first invalid key: "version"`. Seen at 2.2 GB, 2.5 GB and 3.3 GB.
 
 Recovery is lossless:
 
@@ -118,13 +119,33 @@ Recovery is lossless:
 rm -f <bag>/metadata.yaml && ros2 bag reindex <bag>
 ```
 
-Cause is play_launch's shutdown grace being shorter than a multi-gigabyte flush
-needs — **not** disk speed: the failure is identical writing to the eMMC and to
-the far faster external SSD. The orin side is unaffected, because systemd stops
-its recorder with `KillSignal=SIGINT` and `TimeoutStopSec=30`.
+**At multi-gigabyte sizes, the stop path decides.** Small bags finalize on either
+path — a 604 MB bag stopped without systemd came out valid. Size alone is
+therefore not the whole story: the two matched 3+ GB runs below were recorded
+minutes apart with the same arguments on the same SSD, and differ only in how
+they were stopped.
 
-Unfixed. Options not yet tried: `--max-bag-size` to force rollover into smaller
-files, or a longer grace period from play_launch.
+| Stop path | Bag | `metadata.yaml` | Stack exit |
+|---|---|---|---|
+| `systemctl --user stop` on a user unit | 3.2 GiB | 10530 bytes, valid | ~1 s |
+| SIGINT to the process group (as Ctrl-C does) | 3.3 GB | absent | still alive after 240 s |
+
+The database survives either way (`PRAGMA quick_check` ok, row count intact), so
+only finalization is lost.
+
+An earlier version of this entry blamed a shutdown grace shorter than a
+multi-gigabyte flush. The equal-size comparison above disproves that: 3.2 GB
+finalized in about a second when systemd did the stopping.
+
+Mechanism still unidentified. The obvious candidate is ruled out — both paths
+deliver SIGINT to every process, since `KillMode=control-group` signals the whole
+cgroup exactly as a terminal signals the foreground process group. The
+unexplained part is the shutdown *duration*; the `just`→bash→`just`→bash layers
+between the signal and play_launch are the next place to look.
+
+Workaround today: stop the master through systemd rather than Ctrl-C (see
+docs/design/orin_provisioning_implementation_plan.md). `--max-bag-size` rollover
+remains untried.
 
 ### play_launch drops `executable:` launch entries
 
