@@ -27,32 +27,76 @@ This system provides a complete autonomous driving software stack for golf cart 
 
 ## Quick Start
 
-### Prerequisites
-- JetPack 6.0 installed on AGX Orin
-- Autoware 2025.02 workspace at `/home/aeon/repos/autoware/2025.02-ws`
-
-### Build and Run
+Prerequisites: JetPack 6.x on AGX Orin, Autoware 1.5.0 at `/opt/autoware/1.5.0/`.
 
 ```bash
-# Install dependencies
-just setup
-
-# Build the workspace
+./setup.sh          # dependencies (interactive)
 just build
-
-# Launch the system
-just launch
+just launch         # single machine; web UI at http://localhost:8081
 ```
 
-### Launch with Specific Configuration
+Launch arguments are one positional string:
 
 ```bash
-# Launch with u-blox GNSS and USB cameras
 just launch "gnss_receiver:=ublox camera_model:=usb"
-
-# Indoor testing without GNSS
-just launch "use_gnss:=false"
+just launch "use_gnss:=false"          # indoor, no GNSS
 ```
+
+`just --list` shows everything.
+
+## Two Machines
+
+The cart runs on a **master** (Autoware, wired sensors) and an **orin** (ZED X).
+Each machine needs a role marker and its systemd units, once:
+
+```bash
+echo master > .golfcart-host     # or: orin       (gitignored, picks the DDS profile)
+just service-install master      # units + lingering (sudo)
+just ssh-setup                   # key for the orin
+just service-install-orin        # provision the orin over ssh
+```
+
+Then, from the master:
+
+```bash
+just launch-master     # both hosts; returns immediately
+just logs-master
+just stop-master
+just doctor            # when topics do not show up
+```
+
+There is no Ctrl-C to press — both hosts run under systemd, so closing the
+terminal does not stop the cart. `just stop-master` is the stop verb.
+
+Both machines carry the same repository and the same recipes. `launch-up`,
+`launch-down`, `record-up`, `record-down` and `host-status` act on whichever
+machine runs them; the master drives the orin by running them over there.
+
+See [docs/multi-machine.md](docs/multi-machine.md).
+
+## Recording
+
+Independent of the launch — start it any time, stack up or down:
+
+```bash
+just record-start      # both hosts record to their own disk
+just record-status
+just record-stop
+
+just bag-fetch-orin    # copy the orin's bags over
+just bag-merge "master_<ts> orin_<ts>"
+just bag-replay
+```
+
+Topics recorded are plain lists, one per line — edit these, not any script:
+
+```
+config/recording/master_topics.txt
+config/recording/orin_topics.txt
+```
+
+Each host writes locally: both LiDARs are cabled to the master at ~30 MB/s each,
+and only the ZED's compressed stream fits across the shared 100 Mb/s LAN.
 
 ## Development Status
 
@@ -94,6 +138,7 @@ The expected structure will be
 ### Active
 - [ROADMAP.md](ROADMAP.md) — Five-phase development plan with parallel tracks (cleanup, sensors, DBW, planning, integration)
 - [CONTRIBUTING.md](CONTRIBUTING.md) — Branching convention (`2026-golfcart`), submodule table, and workflow
+- [docs/multi-machine.md](docs/multi-machine.md) — Two-machine operation: provisioning, launch, recording, troubleshooting
 
 ### Roadblocks
 - [docs/roadblocks.md](docs/roadblocks.md) — Open issues blocking setup, build, or test (JetPack mismatch, duplicate package, missing drivers)
