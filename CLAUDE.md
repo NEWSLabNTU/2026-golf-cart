@@ -114,6 +114,53 @@ Submodules:
 - ros2_mpu9250_driver - IMU driver (to be replaced with Tamagawa)
 - ros-nmea-reader - NMEA GPS data parser
 
+### config/ is the single source of truth
+
+Everything that varies by machine, deployment or session lives in `config/`, and
+no script hardcodes any of it. See [config/README.md](config/README.md).
+
+| File | Decides |
+|---|---|
+| `config/host` | which machine this checkout is (`master`/`orin`). **Gitignored** |
+| `config/multi_machine.conf` | the other host's `user@addr`, repo path, ssh key, master IP |
+| `config/sensors.conf` | `IMU_SOURCE`, `CAMERA_MODEL` — env vars, not launch args |
+| `config/recording/*_topics.txt` | what each host records |
+| `config/cyclonedds/*.xml` | DDS profiles, one per role |
+
+`scripts/env.sh` is the matching single source for the *environment* — Autoware
+sourcing, `CYCLONEDDS_URI`, `RMW_IMPLEMENTATION`, PATH, `GOLFCART_BAG_DIR`.
+`.envrc` sources it, and so do the systemd unit exec scripts. Do not re-derive any
+of that in a new script; source `scripts/env.sh` and let it resolve.
+
+Units state their role with `GOLFCART_ENV_ROLE`, which outranks `config/host`: a
+unit must not depend on a file someone can edit underneath it.
+
+### Recording: first-hand topics only
+
+`config/recording/*_topics.txt` record **driver output**. Topics a node computed
+from other topics — the concatenated cloud, the corrected IMU — are commented out,
+because replay is a logging simulation: the single-machine stack runs with drivers
+disabled against the merged bag and recomputes them with current parameters
+instead of the ones frozen at record time.
+
+A topic that is expected but dead stays listed and records zero messages. An empty
+topic says "this device was expected and was silent"; an absent one says nothing.
+
+NDT needs velocity, via `/vehicle/status/velocity_status` →
+`vehicle_velocity_converter` → `gyro_odometer` → `ekf_localizer`, so the vehicle
+interface must run while recording. The VCU does not need autonomous mode:
+`VelocityReport` comes from the decoded MTR frame and is gated on neither
+`tx_enabled` nor the control mode — but it *is* gated on frame freshness, so check
+`ros2 topic hz` rather than assume.
+
+### The vendor CAN DBC
+
+`golfcart_vehicle_interface` generates CAN bindings from Turing Drive's
+`CAX_ADS_CAN.dbc` at build time. The file is proprietary and gitignored, so only
+the machine it was copied to has it. `just build` **skips the package** when
+neither `CAX_ADS_DBC` nor a DBC in the crate root exists — the orin has no CAN bus
+and needs neither. Do not "fix" that skip; without it the orin cannot build at all.
+
 ### Submodule Pointer Rule
 
 **Never commit a submodule pointer to a commit that is not yet on GitHub, on a
@@ -345,10 +392,19 @@ sensor_suite:=vlp32c             # Velodyne VLP-32C
 
 # Individual sensor overrides
 lidar_model:=vlp32c
-camera_model:=gscam|zedx|none   # env: CAMERA_MODEL
-imu_source:=xsens|zed           # env: IMU_SOURCE
+camera_model:=gscam|zedx|none   # env ONLY - see below
+imu_source:=xsens|zed           # env ONLY - see below
 gnss_receiver:=ublox|septentrio
 ```
+
+**`camera_model` and `imu_source` do NOT work as launch arguments.** They reach
+`golfcart_autoware.launch.xml`, but the path onwards runs through
+`tier4_sensing_component.launch.xml` and `tier4_sensing_launch/sensing.launch.xml`
+— installed Autoware files that forward a fixed set of arguments and drop the
+rest. The sensor kit reads `$(env IMU_SOURCE xsens)` / `$(env CAMERA_MODEL gscam)`
+instead, so `just launch "imu_source:=zed"` looks like it works and does nothing.
+Set them in `config/sensors.conf`, which `scripts/env.sh` sources for both shells
+and units.
 
 #### Localization (pose_source)
 ```bash
@@ -639,7 +695,12 @@ Autoware chain — `imu_corrector` then `gyro_bias_estimator` — which always r
 on the Advantech regardless of source. Launch file:
 `golfcart_sensor_kit_launch/launch/imu.launch.xml`.
 
-### Xsens MTi over CAN (`imu_source:=xsens`, default)
+**Currently `IMU_SOURCE=zed`** (`config/sensors.conf`): the Xsens MTi is broken
+and publishes nothing. Its raw topic stays in the recorded topic list on purpose —
+an empty topic in a bag records that the device was expected and silent, which an
+absent topic does not.
+
+### Xsens MTi over CAN (`imu_source:=xsens`, currently broken)
 - **Driver**: `xsens_mti_can_ros_driver`, launched by `imu.launch.xml`
 - **Raw topic**: `/sensing/imu/xsens/imu_raw`
 - **Frame**: `imu_link`
