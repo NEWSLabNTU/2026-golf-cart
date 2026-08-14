@@ -68,7 +68,27 @@ just build
 selects the DDS profile. Without it a shell falls back to `loopback` and sees no
 cross-machine topics.
 
-### 2. ZED SDK — orin only, by hand
+### 2. Vendor CAN database — master only, by hand
+
+`golfcart_vehicle_interface` generates its CAN bindings from Turing Drive's
+`CAX_ADS_CAN.dbc` at build time. The file is proprietary, gitignored, and cannot
+be fetched automatically — obtain it from Turing Drive and copy it into the crate
+root **on the master**:
+
+```bash
+cp /path/to/CAX_ADS_CAN.dbc \
+   src/vehicle/golfcart_vehicle_launch/golfcart_vehicle_interface/
+```
+
+`CAX_ADS_DBC=/absolute/path/to/file.dbc` works instead, if you would rather keep
+it outside the tree.
+
+**The orin does not need it.** Only the machine wired to the CAN bus runs the
+vehicle interface. `just build` skips `golfcart_vehicle_interface` when no DBC is
+present, rather than failing the whole build — so the orin builds cleanly without
+the vendor file, and starts building the package the moment one appears.
+
+### 3. ZED SDK — orin only, by hand
 
 The orin needs the ZED SDK at `/usr/local/zed`, installed from the Stereolabs
 `.run` installer. **This is not automated** — the installer does not script
@@ -84,7 +104,7 @@ Two consequences that are easy to miss:
   `./setup/scripts/configure-cyclonedds-sysctl.sh` after installing or upgrading
   the SDK, then `just build` again to pick the ZED packages up.
 
-### 3. Wire the two together, from the master
+### 4. Wire the two together, from the master
 
 ```bash
 just service-install master     # systemd units + lingering (sudo)
@@ -136,6 +156,33 @@ config/recording/orin_topics.txt
 
 `just stop-all` deliberately leaves a recording running; stopping the stack and
 stopping a recording are separate decisions.
+
+**The vehicle interface must be running while you record.** NDT needs a velocity
+signal, which reaches it as
+`/vehicle/status/velocity_status` → `vehicle_velocity_converter` →
+`gyro_odometer` → `ekf_localizer`. Without that topic in the bag, a replay has no
+twist and localization will not converge.
+
+The VCU does **not** need to be in autonomous mode for this. `VelocityReport` is
+published from the decoded MTR frame the VCU broadcasts anyway; it depends on
+neither `tx_enabled` nor the control mode, so RX-only is enough:
+
+```bash
+just vehicle-interface     # CAN RX only — the cart cannot be commanded to move
+```
+
+Confirm before a long run — the report is gated on frame freshness, so a silent
+VCU yields a silent topic:
+
+```bash
+ros2 topic hz /vehicle/status/velocity_status
+```
+
+We record first-hand driver output only. Derived topics — the concatenated cloud,
+the corrected IMU — are commented out of the lists, because replay is a logging
+simulation: the single-machine stack runs with drivers disabled against the merged
+bag and recomputes them with current parameters rather than the ones frozen at
+record time.
 
 ## Single machine (development and bench testing)
 
