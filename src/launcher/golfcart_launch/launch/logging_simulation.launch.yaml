@@ -37,8 +37,8 @@ launch:
 
 - arg:
     name: use_gnss
-    default: ""
-    description: "Enable GNSS for outdoor operation - empty string uses suite default"
+    default: "true"
+    description: "Enable GNSS for outdoor operation. Set false indoors."
 
 - arg:
     name: use_ntrip
