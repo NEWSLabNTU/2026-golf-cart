@@ -225,14 +225,25 @@ guessing.
 
 ### 4.4 Remote control and its config
 
-Remote control is **ssh + `systemctl --user`**, the mechanism `orin_remote.sh`
-already uses. A ROS service or topic was rejected: it would only work while DDS
-is healthy and something is running to host it, coupling recording to exactly the
-thing it must be independent of.
+Remote control is **ssh + running the same recipe on the far side**. A ROS service
+or topic was rejected: it would only work while DDS is healthy and something is
+running to host it, coupling recording to exactly the thing it must be
+independent of.
 
-`config/multi_machine.conf` (tracked) holds `ORIN_SSH` and `MASTER_IP`, sourced
-by `orin_remote.sh`, the watchdog and `bag_fetch_orin.sh` — the three places that
-each carry their own hardcoded copy today.
+Revised 2026-08-14, after a first attempt built a 243-line `orin_remote.sh` with
+unit aliases, per-unit failure policies and implied-unit rules. All of it
+duplicated, on the master, decisions the orin can make for itself. Since both
+machines carry the same repository, the whole remote layer is instead
+`scripts/multi_machine/on_orin.sh` — how to log in and where to `cd`, nothing
+else — and orchestration is symmetric per-host recipes (`launch-up`,
+`launch-down`, `record-up`, `record-down`, `host-status`) run locally and then
+over there. The exit status is the remote command's, so callers decide what a
+failure means rather than having a policy imposed on them.
+
+`config/multi_machine.conf` (tracked) holds `ORIN_SSH`, `MASTER_IP`,
+`ORIN_SSH_KEY` and `ORIN_WORKSPACE` — the last accepting `~/path`, expanded by
+the *remote* shell. It is sourced by `on_orin.sh`, the watchdog, `setup_ssh.sh`
+and `bag_fetch_orin.sh`, which previously each carried their own hardcoded copy.
 
 `scripts/multi_machine/setup_ssh.sh` generates a key if absent and runs
 `ssh-copy-id` to the configured remote. Interactive by nature; the maintainer
@@ -323,7 +334,7 @@ original phase 9.
 
 The justfile gained `service-install`, `service-remove`, `service-status`,
 `ssh-setup`, `record-start`, `record-stop`, `record-status` and `doctor`, all
-additive. `launch-master` was updated to the new `orin_remote.sh` verbs and had
+additive. `launch-master` was updated to the new per-host recipes and had
 its `record:=` parsing removed — required, since that argument no longer exists —
 but still runs play_launch in the foreground. Moving it onto the unit is phase 6.
 
@@ -333,8 +344,8 @@ but still runs play_launch in the foreground. Moving it onto the unit is phase 6
   "exits once no `golfcart-*` unit is active" contradict each other at startup:
   the watchdog can reach its first poll before the unit it guards goes active, and
   exit immediately. Resolved with a startup grace window
-  (`GOLFCART_WATCHDOG_STARTUP_GRACE`, 60 s), and `orin_remote.sh start` brings the
-  watchdog up before the unit.
+  (`GOLFCART_WATCHDOG_STARTUP_GRACE`, 60 s), and the orin's watchdog is brought
+  up before the unit it guards.
 - **`golfcart-master.service` was never installed by anything.** §4.2 framed the
   new installer as replacing `install-orin-host.sh` "for parity", but that script
   only ever handled the orin; the master unit was dead code with no installer and

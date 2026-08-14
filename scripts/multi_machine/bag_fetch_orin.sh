@@ -25,7 +25,7 @@ set -eo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CONF="${REPO_ROOT}/config/multi_machine.conf"
-# One tracked copy of the destination, shared with orin_remote.sh and the
+# One tracked copy of the destination, shared with on_orin.sh and the
 # watchdog; an absent conf falls through to the same default it ships with.
 # shellcheck source=/dev/null
 [ -f "${CONF}" ] && . "${CONF}"

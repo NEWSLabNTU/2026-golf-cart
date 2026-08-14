@@ -215,21 +215,31 @@ clocks were not synced when it was recorded — see *Time sync*.
 
 To drive the orin by hand:
 
+Both machines carry the same repository, so there is no separate remote-control
+vocabulary to learn: you run the same recipe over there.
+
 ```bash
-./scripts/multi_machine/orin_remote.sh start  launch    # or: record, watchdog
-./scripts/multi_machine/orin_remote.sh stop   record
-./scripts/multi_machine/orin_remote.sh status           # no unit = all three
-./scripts/multi_machine/orin_remote.sh ping             # reachability, no wait loop
+./scripts/multi_machine/on_orin.sh just launch-up
+./scripts/multi_machine/on_orin.sh just record-down
+./scripts/multi_machine/on_orin.sh just host-status
+./scripts/multi_machine/on_orin.sh systemctl --user is-active golfcart-record.service
 ```
 
-`start` also brings the watchdog up; `stop` never takes it down implicitly — it
-exits by itself once nothing is left to guard.
+`on_orin.sh` is the entire remote layer: it knows how to log in and which
+directory to start in, and nothing else. Anything you can run by hand on the orin
+runs from here unchanged, and the exit status is the remote command's, so the
+caller decides what a failure means.
+
+The per-host recipes are symmetric — `launch-up`, `launch-down`, `record-up`,
+`record-down`, `host-status` act only on the machine they run on. The two-host
+verbs (`launch-master`, `stop-master`, `record-start`, `record-stop`) are just
+each one run locally and then over there.
 
 ## What stops the orin, and when
 
 | Failure | What stops it | How long |
 |---|---|---|
-| `just stop-master` | it runs `orin_remote.sh stop launch` over ssh before stopping the local unit | immediate |
+| `just stop-master` | it runs `just launch-down` on the orin over ssh, then stops the local unit | immediate |
 | Master unit stopped or crashed, network up | nothing stops the orin until someone runs `stop-master`; otherwise the watchdog | ~42s |
 | Network cut, or master powered off | the orin's own watchdog stops **every** `golfcart-*` unit locally | ~42s |
 
@@ -260,7 +270,7 @@ Most of it is driven from the master:
 echo master > .golfcart-host              # picks the DDS profile; gitignored
 just service-install master               # units + lingering (sudo)
 just ssh-setup                            # dedicated key, copied to the orin
-just service-install orin --remote        # provisions the orin over ssh
+just service-install-orin                 # runs the orin's own installer over ssh
 
 # On the orin, once (its own checkout, its own clock and buffers):
 echo orin > .golfcart-host
@@ -274,13 +284,17 @@ just build
 
 `just service-install` writes a drop-in per unit carrying the resolved repo path
 and this machine's role, so the checkout does not have to live at
-`~/2026-golf-cart`. `just service-remove <role> [--remote]` undoes it.
+`~/2026-golf-cart`. `just service-remove <role>` undoes it, on whichever host you run it.
 
-`--remote` re-invokes the same installer inside the orin's own checkout over ssh,
-so the drop-in it writes points at the orin's path. It is the one command here
-that may prompt — it runs before key-based ssh necessarily exists, and enabling
-lingering needs the orin's sudo. Everything else uses `BatchMode=yes` and fails
-rather than asking.
+`just service-install-orin` logs in and runs that same installer from the orin's
+own checkout, so the drop-in it writes points at the orin's path. It is the one
+command here that may prompt — it runs before key-based ssh necessarily exists,
+and enabling lingering needs the orin's sudo. Everything else uses
+`BatchMode=yes` and fails rather than asking.
+
+Where the orin's checkout lives is `ORIN_WORKSPACE` in
+`config/multi_machine.conf`; it accepts `~/path` or an absolute path, and the
+tilde is expanded by the orin's shell, not the master's.
 
 Check either machine at any time:
 

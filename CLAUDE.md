@@ -476,7 +476,7 @@ Both hosts run the same units, installed per machine with a role:
 
 ```bash
 just service-install master            # this machine
-just service-install orin --remote     # the orin, over ssh
+just service-install-orin              # the orin, over ssh
 just launch-master                     # starts both; returns immediately
 just stop-master                       # stops both; leaves recording alone
 just logs-master

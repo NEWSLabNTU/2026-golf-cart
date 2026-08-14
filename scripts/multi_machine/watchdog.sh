@@ -2,7 +2,7 @@
 # watchdog.sh - orin-side; stop the local golfcart units when the master vanishes.
 #
 # Covers the failure the ssh teardown cannot: network cut, AP/switch down, or the
-# master hard powered off. In those cases orin_remote.sh never gets to run its
+# master hard powered off. In those cases the master never gets to run its
 # stop, so without this the orin would keep running the ZED - and, since
 # recording was split into its own unit, keep filling its disk with a bag nobody
 # is left to close.

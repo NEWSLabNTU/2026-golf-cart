@@ -96,21 +96,15 @@ launch ARGS="":
             rviz:=false {{ARGS}}; \
     fi
 
-# Start the master stack and the orin's; returns immediately.
-launch-master ARGS="":
+# ── This host only. The same recipes exist on both machines; the master drives
+# ── the orin by running them over there, not by reimplementing them here.
+
+# Start this host's stack. ARGS are extra launch arguments.
+launch-up ARGS="":
     #!/usr/bin/env bash
     set -uo pipefail
-    # `just stop-master` is the stop verb - nothing blocks a terminal any more.
-    # NOTE: ARGS is positional. `just launch-master ARGS="..."` does NOT work:
-    # just has no NAME=value syntax for recipe parameters, so the whole token
-    # would be passed through as a launch argument.
-    REMOTE="{{justfile_directory()}}/scripts/multi_machine/orin_remote.sh"
-    # Both hosts now run under systemd, so nothing blocks a terminal and no EXIT
-    # trap orchestrates the orin: teardown is `just stop-master`, and the orin's
-    # watchdog covers the case where this machine never gets to run it.
-    #
     # Per-invocation launch arguments reach the unit through the user manager's
-    # environment. set-environment persists, so stop-master clears it - otherwise
+    # environment. set-environment persists, so launch-down clears it - otherwise
     # today's flags silently apply to tomorrow's launch.
     if [ -n "{{ARGS}}" ]; then
         systemctl --user set-environment GOLFCART_LAUNCH_ARGS="{{ARGS}}"
@@ -119,21 +113,70 @@ launch-master ARGS="":
     fi
     # restart, not start: replaces a stale unit left by a previous run.
     if ! systemctl --user restart golfcart-launch.service; then
-        echo "golfcart-launch.service failed to start." >&2
-        echo "Not installed yet?  just service-install master" >&2
+        echo "golfcart-launch.service failed to start on $(hostname)." >&2
+        echo "Not installed yet?  just service-install <role>" >&2
         exit 1
     fi
-    # Recording is NOT started here - it is golfcart-record.service, run when you
-    # want it with `just record-start`, and it outlives this stack deliberately.
+    echo "$(hostname): launch $(systemctl --user is-active golfcart-launch.service)"
+
+# Stop this host's stack. Leaves any recording running.
+launch-down:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    systemctl --user stop golfcart-launch.service
+    RC=$?
+    systemctl --user unset-environment GOLFCART_LAUNCH_ARGS
+    echo "$(hostname): launch $(systemctl --user is-active golfcart-launch.service)"
+    exit $RC
+
+# Start this host's recorder.
+record-up:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    systemctl --user restart golfcart-record.service
+    RC=$?
+    echo "$(hostname): record $(systemctl --user is-active golfcart-record.service)"
+    exit $RC
+
+# Stop this host's recorder and let it finalize its bag.
+record-down:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    systemctl --user stop golfcart-record.service
+    RC=$?
+    echo "$(hostname): record $(systemctl --user is-active golfcart-record.service)"
+    exit $RC
+
+# What this host's golfcart units are doing.
+host-status:
+    #!/usr/bin/env bash
+    for u in golfcart-launch golfcart-record golfcart-watchdog; do
+        state=$(systemctl --user is-active "${u}.service" 2>/dev/null)
+        [ "$state" = "inactive" ] && ! systemctl --user cat "${u}.service" >/dev/null 2>&1 && continue
+        printf '%s: %-18s %s\n' "$(hostname)" "${u#golfcart-}" "$state"
+    done
+
+# ── Both hosts, driven from the master ──────────────────────────────────────
+
+# Start the stack on both hosts; returns immediately.
+launch-master ARGS="":
+    #!/usr/bin/env bash
+    set -uo pipefail
+    # NOTE: ARGS is positional. `just launch-master ARGS="..."` does NOT work:
+    # just has no NAME=value syntax for recipe parameters.
     #
-    # `start launch` is optional-by-policy inside orin_remote.sh: a missing orin
-    # exits 0 there, so a dead orin cannot fail the master.
+    # Both hosts run under systemd, so nothing blocks a terminal and no EXIT trap
+    # orchestrates the orin: teardown is `just stop-master`, and the orin's
+    # watchdog covers the case where this machine never gets to run it.
+    just launch-up "{{ARGS}}" || exit 1
+    # The orin runs the identical recipe from its own checkout. A missing orin
+    # must never fail the master, so its status is reported and discarded.
     if [[ "${GOLFCART_USE_ORIN:-1}" == "1" ]]; then
-        "$REMOTE" start launch
+        ./scripts/multi_machine/on_orin.sh just launch-up "{{ARGS}}" \
+            || echo "WARNING: could not start the orin - continuing without it" >&2
     fi
     echo
-    echo "master: $(systemctl --user is-active golfcart-launch.service)   web UI: http://localhost:8081"
-    echo "  logs: just logs-master        stop: just stop-master"
+    echo "web UI: http://localhost:8081    logs: just logs-master    stop: just stop-master"
 
 # Stop the stack on both hosts. Leaves any recording running.
 stop-master:
@@ -143,12 +186,9 @@ stop-master:
     # The orin first, while this host can still reach it. Recording is deliberately
     # untouched on both sides: `just record-stop` is its own verb.
     if [[ "${GOLFCART_USE_ORIN:-1}" == "1" ]]; then
-        "{{justfile_directory()}}/scripts/multi_machine/orin_remote.sh" stop launch || RC=1
+        ./scripts/multi_machine/on_orin.sh just launch-down || RC=1
     fi
-    systemctl --user stop golfcart-launch.service || RC=1
-    # Clear the per-invocation flags so they cannot leak into the next launch.
-    systemctl --user unset-environment GOLFCART_LAUNCH_ARGS
-    echo "master: $(systemctl --user is-active golfcart-launch.service)"
+    just launch-down || RC=1
     exit $RC
 
 # Follow the master stack's log.
@@ -320,21 +360,25 @@ bag-play:
 # Multi-machine services (systemd user units, one role per machine)
 # ============================================================================
 
-# Install systemd user units. ROLE: master|orin. ARGS: --remote [user@host]
-service-install ROLE ARGS="":
-    ./setup/scripts/install-host-service.sh {{ROLE}} {{ARGS}}
+# Install this host's systemd user units. ROLE: master or orin.
+service-install ROLE:
+    ./setup/scripts/install-host-service.sh {{ROLE}}
 
-# Remove systemd user units. ROLE: master|orin. ARGS: --remote [user@host]
-service-remove ROLE ARGS="":
-    ./setup/scripts/install-host-service.sh {{ROLE}} --remove {{ARGS}}
+# Remove this host's systemd user units. ROLE: master or orin.
+service-remove ROLE:
+    ./setup/scripts/install-host-service.sh {{ROLE}} --remove
 
-# State of this machine's golfcart units, plus the orin's.
+# Provision the orin: log in and run its own installer there.
+# May prompt - this runs before key-based ssh exists, and lingering needs sudo.
+service-install-orin:
+    ./scripts/multi_machine/on_orin.sh --tty just service-install orin
+
+# Unit states on both hosts.
 service-status:
     #!/usr/bin/env bash
-    echo "── this host ──"
-    systemctl --user list-units 'golfcart-*' --all --no-pager --no-legend || true
-    echo "── orin ──"
-    ./scripts/multi_machine/orin_remote.sh status || true
+    just host-status
+    ./scripts/multi_machine/on_orin.sh just host-status \
+        || echo "orin: unreachable" >&2
 
 # Generate an ssh key if needed and copy it to the orin (one password prompt).
 ssh-setup DEST="":
@@ -351,11 +395,11 @@ record-start:
     # Works whether or not the launch service is running: the recorder is its own
     # unit and shares no process tree with play_launch.
     RC=0
-    # Master first: if the orin is unreachable we still want its bag, and the
-    # remote helper reports that failure loudly and exits non-zero for `record`.
-    systemctl --user start golfcart-record.service || RC=1
-    ./scripts/multi_machine/orin_remote.sh start record || RC=1
-    just record-status || true
+    # This host first: if the orin is unreachable we still want this bag. Unlike
+    # the launch, a missing orin IS a failure here - half a recording is a result
+    # you need to know about before you drive.
+    just record-up || RC=1
+    ./scripts/multi_machine/on_orin.sh just record-up || RC=1
     exit $RC
 
 # Stop recording on both hosts and let each finalize its bag.
@@ -364,15 +408,16 @@ record-stop:
     set -o pipefail
     RC=0
     # Stop both even if the first fails - a half-stopped pair is worse than either.
-    systemctl --user stop golfcart-record.service || RC=1
-    ./scripts/multi_machine/orin_remote.sh stop record || RC=1
+    just record-down || RC=1
+    ./scripts/multi_machine/on_orin.sh just record-down || RC=1
     exit $RC
 
 # Is either host recording?
 record-status:
     #!/usr/bin/env bash
-    printf 'master: %s\n' "$(systemctl --user is-active golfcart-record.service)"
-    printf 'orin:   %s\n' "$(./scripts/multi_machine/orin_remote.sh status record 2>&1 | tail -1)"
+    printf '%s: record %s\n' "$(hostname)" "$(systemctl --user is-active golfcart-record.service)"
+    ./scripts/multi_machine/on_orin.sh systemctl --user is-active golfcart-record.service \
+        | sed 's/^/orin: record /' || echo "orin: unreachable" >&2
 
 # Environment, DDS profile, units and disk - run this when topics do not show up.
 doctor:
@@ -380,13 +425,7 @@ doctor:
 
 # The same diagnostic, run on the orin over ssh.
 doctor-orin:
-    #!/usr/bin/env bash
-    set -uo pipefail
-    . config/multi_machine.conf
-    KEY_OPT=()
-    [ -f "${ORIN_SSH_KEY}" ] && KEY_OPT=(-i "${ORIN_SSH_KEY}")
-    ssh "${KEY_OPT[@]}" -o BatchMode=yes -o ConnectTimeout=5 "${ORIN_SSH}" \
-        "cd ~/${ORIN_WORKSPACE} && ./scripts/doctor.sh"
+    ./scripts/multi_machine/on_orin.sh ./scripts/doctor.sh
 
 # Fetch the orin's rosbags to this host. ARGS: --latest, --list, or a bag name.
 bag-fetch-orin ARGS="":

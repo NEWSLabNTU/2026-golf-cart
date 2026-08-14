@@ -3,6 +3,15 @@
 **Status**: Design approved (2026-08-05); amended 2026-08-07 — see *Amendments*
 **Builds on**: commit `f405a3b` — `feat(launch): add host argument for multi-machine deployment`
 
+> **Partly superseded (2026-08-14).** The rationale here still holds — why the
+> hosts split the way they do, why each records locally, why play_launch is
+> stopped with SIGINT. The *mechanism* sections do not: per-host units
+> (`golfcart-orin.service`), the `orin_remote.sh` orchestrator with its EXIT trap,
+> and recording as a launch entry have all been replaced. See
+> [orin_provisioning_implementation_plan.md](orin_provisioning_implementation_plan.md)
+> §4 for what exists now, and [../multi-machine.md](../multi-machine.md) for how
+> to operate it. Treat file names and lifecycle tables below as historical.
+
 ## Amendments
 
 **2026-08-10 — step 5 findings from first bring-up.**

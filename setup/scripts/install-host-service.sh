@@ -2,19 +2,18 @@
 # install-host-service.sh - one-time provisioning of a golf cart host's systemd
 # user units.
 #
-#   install-host-service.sh master|orin [--remove] [--remote [user@host]]
+#   install-host-service.sh master|orin [--remove]
 #
-# One script for both machines, run either locally or - with --remote - against
-# the far side over ssh, where it re-invokes itself inside that machine's own
-# checkout. Replaces install-orin-host.sh, which knew only about the orin: the
-# master's unit had no installer at all and its lingering was never enabled, so
-# its units would have died with the terminal that started them.
+# Runs on the machine being provisioned, always. There is no remote mode: both
+# machines carry the same repository, so provisioning the orin is `just
+# service-install-orin`, which logs in and runs this same script from the orin's
+# own checkout. Keeping the ssh knowledge in one thin runner
+# (scripts/multi_machine/on_orin.sh) means this script never has to reason about
+# which machine it is talking about - only about the one it is on.
 #
-# --remote is deliberately the ONE path here that may prompt. It is the bootstrap
-# step, run before key-based ssh necessarily exists, and enabling lingering on the
-# far side needs that machine's sudo - so it allocates a tty and lets ssh and sudo
-# ask the user directly. Every other script in this repo uses BatchMode=yes and
-# must never prompt.
+# Replaces install-orin-host.sh, which knew only about the orin: the master's unit
+# had no installer at all and its lingering was never enabled, so its units would
+# have died with the terminal that started them.
 #
 # The unit files in setup/files/systemd are role-independent. Everything specific
 # to this machine - which role it plays, and where the repo actually lives - is
@@ -31,63 +30,22 @@ UNIT_SRC="${REPO_DIR}/setup/files/systemd"
 UNIT_DST="${HOME}/.config/systemd/user"
 
 usage() {
-    echo "usage: $(basename "$0") <master|orin> [--remove] [--remote [user@host]]" >&2
+    echo "usage: $(basename "$0") <master|orin> [--remove]" >&2
+    echo "       to provision the orin from here: just service-install-orin" >&2
     exit 2
 }
 
 ROLE=""
 REMOVE=0
-REMOTE=0
-REMOTE_DEST=""
-while [ $# -gt 0 ]; do
-    case "$1" in
-        master|orin) ROLE="$1" ;;
+for arg in "$@"; do
+    case "${arg}" in
+        master|orin) ROLE="${arg}" ;;
         --remove)    REMOVE=1 ;;
-        --remote)
-            REMOTE=1
-            # An optional destination may follow; anything starting with - is the
-            # next flag, not a host.
-            case "${2:-}" in
-                ""|-*) ;;
-                *) REMOTE_DEST="$2"; shift ;;
-            esac
-            ;;
         -h|--help)   usage ;;
-        *)           echo "unknown argument: $1" >&2; usage ;;
+        *)           echo "unknown argument: ${arg}" >&2; usage ;;
     esac
-    shift
 done
 [ -n "${ROLE}" ] || usage
-
-if [ "${REMOTE}" -eq 1 ]; then
-    CONF="${REPO_DIR}/config/multi_machine.conf"
-    # shellcheck source=/dev/null
-    [ -f "${CONF}" ] && . "${CONF}"
-    DEST="${REMOTE_DEST:-${ORIN_SSH:-${GOLFCART_ORIN_SSH:-jetson@192.168.125.101}}}"
-    # The far side has its own checkout; this script runs from THAT copy, so the
-    # drop-in it writes points at the remote path rather than this machine's.
-    REMOTE_REPO="${ORIN_WORKSPACE:-${GOLFCART_ORIN_WORKSPACE:-2026-golf-cart}}"
-
-    echo "Provisioning ${ROLE} on ${DEST} (repo: ~/${REMOTE_REPO})..."
-    echo "You may be asked for ${DEST}'s login password, and for its sudo password."
-    echo
-
-    ARGS="${ROLE}"
-    [ "${REMOVE}" -eq 1 ] && ARGS="${ARGS} --remove"
-
-    # -t: sudo on the far side needs a terminal to prompt on. No BatchMode here,
-    # on purpose - see the header.
-    if ! ssh -t -o StrictHostKeyChecking=accept-new "${DEST}" \
-            "cd ~/${REMOTE_REPO} && ./setup/scripts/install-host-service.sh ${ARGS}"; then
-        echo >&2
-        echo "ERROR: remote provisioning of ${DEST} failed." >&2
-        echo "       Check the repo is at ~/${REMOTE_REPO} there and up to date." >&2
-        exit 1
-    fi
-    echo
-    echo "Remote provisioning of ${DEST} done."
-    exit 0
-fi
 
 # The DDS profile is the same thing launch_unit_exec.sh resolves at start time;
 # checking it here turns a runtime failure into an install-time one.
@@ -168,7 +126,7 @@ systemctl --user daemon-reload
 
 # Without lingering, the user manager exits when the last session closes, taking
 # the units with it - and both hosts are driven over non-interactive ssh sessions
-# (the master by `just`, the orin by orin_remote.sh), which are exactly that.
+# (the master by `just`, the orin by on_orin.sh), which are exactly that.
 if loginctl show-user "${USER}" --property=Linger 2>/dev/null | grep -q 'Linger=yes'; then
     echo "Lingering already enabled for ${USER}."
 else
