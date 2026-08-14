@@ -1,0 +1,31 @@
+[Unit]
+Description=Golf Cart rosbag recorder
+# Deliberately NOT tied to golfcart-launch.service by PartOf/BindsTo/Requires.
+# Recording has its own lifecycle: it must be startable against an already
+# running stack, stoppable without stopping it, and it must survive a launch
+# restart. Coupling the two is what put the recorder under play_launch's
+# shutdown in the first place, which is where the 0-byte metadata.yaml came from.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# See golfcart-launch.service: the installer's drop-in replaces this with the
+# resolved absolute path.
+ExecStart=%h/2026-golf-cart/scripts/recording/record_unit_exec.sh
+KillMode=control-group
+# `ros2 bag record` writes metadata.yaml during its SIGINT shutdown. A SIGKILLed
+# recorder leaves a 0-byte metadata.yaml and an unreadable bag, so the signal
+# matters more here than anywhere else in the stack.
+KillSignal=SIGINT
+# Generous: this is now the only place bag finalization happens, and closing a
+# multi-gigabyte bag (index + metadata over an external SSD) is the one stop in
+# the system that legitimately takes minutes. Overshooting costs a slow
+# `record-stop`; undershooting costs the recording.
+TimeoutStopSec=300
+# No Restart=: a recorder that died mid-bag must not silently start a second one
+# under a new URI - that splits a run across bags nobody knows to merge.
+Restart=no
+
+[Install]
+WantedBy=default.target

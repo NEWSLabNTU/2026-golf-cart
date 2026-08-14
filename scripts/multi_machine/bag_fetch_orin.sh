@@ -16,17 +16,32 @@
 # you have checked the copies.
 #
 # Environment:
-#   GOLFCART_ORIN_SSH   ssh destination (default jetson@192.168.125.101)
+#   GOLFCART_ORIN_SSH   ssh destination, overrides ORIN_SSH from
+#                       config/multi_machine.conf (default jetson@192.168.125.101)
 #   GOLFCART_BAG_DIR    local destination (default ~/rosbags)
 #   GOLFCART_ORIN_BAG_DIR   remote source (default ~/rosbags on the orin)
 
 set -eo pipefail
 
-ORIN="${GOLFCART_ORIN_SSH:-jetson@192.168.125.101}"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CONF="${REPO_ROOT}/config/multi_machine.conf"
+# One tracked copy of the destination, shared with orin_remote.sh and the
+# watchdog; an absent conf falls through to the same default it ships with.
+# shellcheck source=/dev/null
+[ -f "${CONF}" ] && . "${CONF}"
+
+ORIN="${ORIN_SSH:-${GOLFCART_ORIN_SSH:-jetson@192.168.125.101}}"
 LOCAL_DIR="${GOLFCART_BAG_DIR:-${HOME}/rosbags}"
 REMOTE_DIR="${GOLFCART_ORIN_BAG_DIR:-rosbags}"
 
 SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=5)
+
+# Dedicated golf cart key at a fixed, non-default path (see config/multi_machine.conf).
+# ssh only tries the default id_* names on its own, so it has to be named here;
+# added only when present so a host without it keeps its previous behaviour.
+# Note this also reaches rsync, which is invoked as `-e "ssh ${SSH_OPTS[*]}"`.
+ORIN_KEY="${ORIN_SSH_KEY:-${GOLFCART_ORIN_SSH_KEY:-${HOME}/.ssh/golfcart_orin}}"
+[ -f "${ORIN_KEY}" ] && SSH_OPTS+=(-i "${ORIN_KEY}")
 
 remote_bags() {
     # -d with a trailing slash lists the directories themselves, not contents.

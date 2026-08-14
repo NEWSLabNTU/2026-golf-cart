@@ -12,11 +12,6 @@ launch:
     - value: "orin"
     - value: "all"
 
-- arg:
-    name: record
-    default: "false"
-    description: "Record this host's sensor topics to a rosbag on its own local disk"
-
 - let:
     name: is_master
     value: $(eval "'$(var host)' in ('master', 'all')")
@@ -226,32 +221,14 @@ launch:
     - include:
         file: "$(find-pkg-share golfcart_launch)/launch/zed.launch.xml"
 
-# Rosbag recording - one recorder per host, each writing to its own local disk.
-# Declared as node: entries, not executable: entries, so play_launch supervises
-# them and stops them with the stack; see the scripts' headers for why.
-- group:
-    if: $(var is_master)
-    children:
-    - group:
-        if: $(var record)
-        children:
-        - node:
-            pkg: golfcart_launch
-            exec: record_master.sh
-            name: record_master
-            output: screen
-
-- group:
-    if: $(var is_orin)
-    children:
-    - group:
-        if: $(var record)
-        children:
-        - node:
-            pkg: golfcart_launch
-            exec: record_orin.sh
-            name: record_orin
-            output: screen
+# Rosbag recording used to live here, as one `node:` entry per host. It is now a
+# separate systemd unit (golfcart-record.service ->
+# scripts/recording/record_unit_exec.sh, topic lists in config/recording/).
+# Recording deliberately no longer shares play_launch's process tree: as a
+# play_launch child, every multi-gigabyte bag stopped from the foreground came
+# out with a 0-byte metadata.yaml (docs/roadblocks.md). Outside that tree,
+# play_launch's shutdown cannot reach the recorder at all. Do not re-add a
+# recorder here.
 
 # System Monitor
 # - include:

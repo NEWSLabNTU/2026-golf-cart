@@ -1,0 +1,32 @@
+[Unit]
+Description=Golf Cart watchdog (stops local golfcart units when the master disappears)
+# Orin only, and deliberately INDEPENDENT: no PartOf=, no BindsTo=, no Requires=.
+#
+# The previous unit was PartOf=golfcart-orin.service, which only worked while the
+# launch was the single thing running here. With recording split out, both halves
+# of that break:
+#   - scoped to the launch unit, the watchdog is absent exactly when recording
+#     runs alone - and "network cut while the orin records" is the failure that
+#     fills the disk with no master left to call record-stop;
+#   - scoped to both units, it would be torn down when the launch stops while
+#     recording continues.
+# So it owns its own lifecycle instead: started by whichever remote start command
+# runs first, and it exits by itself once no golfcart-* unit is active (see
+# watchdog.sh).
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# See golfcart-launch.service: the installer's drop-in replaces this with the
+# resolved absolute path.
+ExecStart=%h/2026-golf-cart/scripts/multi_machine/watchdog.sh
+# Unlike the other units, this one SHOULD come back: a crashed watchdog is silent
+# and leaves the disk-filling failure uncovered. Its clean exit path (no
+# golfcart-* unit active) is exit 0, which on-failure does not restart.
+Restart=on-failure
+RestartSec=5
+
+# No [Install] section on purpose: this unit is started on demand alongside a
+# launch or a recording, never at boot - at boot there is nothing to stop and
+# nothing to protect, so it would just ping the master forever.

@@ -9,15 +9,10 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
-# Per-host rosbag recorders. Installed into lib/ so they are package executables
-# and can be launched as `node:` entries - play_launch 0.5.1 drops `executable:`
-# entries from its replay, so a recorder declared that way would never run under
-# supervision. See docs/design/multi_machine_deployment.md (Amendments).
-install(PROGRAMS
-  scripts/record_master.sh
-  scripts/record_orin.sh
-  DESTINATION lib/${PROJECT_NAME}
-)
+# The per-host rosbag recorders that used to be installed here are gone: they are
+# no longer package executables launched as `node:` entries, but a standalone
+# systemd unit (scripts/recording/record_unit_exec.sh), so nothing needs them in
+# lib/. See docs/design/orin_provisioning_implementation_plan.md §4.6.
 
 ament_auto_package(
   INSTALL_TO_SHARE

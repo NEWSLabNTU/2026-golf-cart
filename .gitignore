@@ -27,3 +27,11 @@ rosbags/
 
 # downloaded datasets
 data/leodrive-busood/
+
+# per-machine host identity: one word, `master` or `orin`. Deliberately not
+# tracked — which machine this checkout is on is a property of the machine.
+.golfcart-host
+
+# once-only warning stamps dropped by scripts/env.sh
+.envrc.sysctl-warned
+.envrc.host-warned

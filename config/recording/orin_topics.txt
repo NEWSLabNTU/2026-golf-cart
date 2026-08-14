@@ -1,0 +1,31 @@
+# orin_topics.txt — topics recorded by golfcart-record.service on the ORIN.
+#
+# One topic per line. `#` starts a comment, blank lines are ignored. Read by
+# scripts/recording/record_unit_exec.sh, which passes them to `ros2 bag record`.
+#
+# Topic names verified against a running ZED X on 2026-08-07. They follow the
+# zed-ros2-wrapper v5 scheme (rgb/color/rect/image), NOT the v4 scheme
+# (rgb/image_rect_color) that docs/design/multi_machine_deployment.md quotes.
+#
+# WHY THE ORIN RECORDS SEPARATELY: the ZED is cabled to the orin, and only its
+# *compressed* stream (~5 MB/s) would fit across the shared 100 Mb/s LAN at all
+# — the raw stream is ~276 MB/s. Recording it here, onto the orin's own disk,
+# keeps the LAN free for the master's two LiDARs (~30 MB/s each), which are
+# cabled to the master and recorded there.
+#
+# Depth is off: depth.depth_mode is NONE in zed.launch.xml, so nothing publishes
+# on the depth topics. Enable both deliberately if ever needed — depth data is
+# very large.
+
+# ── ZED X — compressed RGB only; the raw image would swamp the disk ─────────
+/sensing/camera/zed/rgb/color/rect/image/compressed
+/sensing/camera/zed/rgb/color/rect/camera_info
+
+# ── ZED IMU and driver health ───────────────────────────────────────────────
+/sensing/camera/zed/imu/data
+/sensing/camera/zed/status/health
+
+# ── Frames ──────────────────────────────────────────────────────────────────
+# tf_static only: the orin publishes no dynamic transforms of its own, and the
+# master's /tf is recorded in the master bag.
+/tf_static

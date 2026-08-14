@@ -1,0 +1,55 @@
+# master_topics.txt — topics recorded by golfcart-record.service on the MASTER.
+#
+# One topic per line. `#` starts a comment, blank lines are ignored. Read by
+# scripts/recording/record_unit_exec.sh, which passes them to `ros2 bag record`.
+#
+# Topic names verified against a running stack on 2026-08-10 with
+# `ros2 topic list`. The list this replaced was inherited from
+# scripts/rosbag/record_outdoor.sh and had the Velodyne under `top/` and the
+# GNSS under `ublox/`; NEITHER NAMESPACE EXISTS HERE, so those entries recorded
+# zero messages while still looking correct in `ros2 bag info`. Re-check with the
+# audit in docs/multi-machine.md after any sensor kit change.
+#
+# WHY THE MASTER/ORIN SPLIT: both LiDARs are cabled to the master and their
+# clouds are ~30 MB/s each, far past the shared 100 Mb/s LAN. Only the ZED's
+# *compressed* stream (~5 MB/s) is small enough to cross it, and even that is
+# recorded on the orin instead. Each host therefore records its own sensors to
+# its own disk; the orin's ZED topics are deliberately absent from this file.
+
+# ── LiDAR — Velodyne VLP-32C (namespace is vlp32, NOT top) ──────────────────
+/sensing/lidar/vlp32/velodyne_points
+/sensing/lidar/vlp32/pointcloud
+/sensing/lidar/concatenated/pointcloud
+
+# ── LiDAR — Falcon (Seyond) ─────────────────────────────────────────────────
+/sensing/lidar/falcon/iv_points
+
+# ── GNSS — Xsens MTi, not the u-blox the design assumed ─────────────────────
+/sensing/gnss/mti/fix
+/sensing/gnss/fixed
+/sensing/gnss/pose
+/sensing/gnss/pose_with_covariance
+
+# ── IMU (Xsens) ─────────────────────────────────────────────────────────────
+/sensing/imu/xsens/imu_raw
+/sensing/imu/imu_data
+
+# ── USB cameras — compressed only, the raw streams are far too large ────────
+# No camera_info: gscam publishes none for these, so those entries were dead.
+/sensing/camera/left/image_raw/compressed
+/sensing/camera/right/image_raw/compressed
+/sensing/camera/rear/image_raw/compressed
+
+# ── Vehicle interface status ────────────────────────────────────────────────
+/vehicle/status/velocity_status
+/vehicle/status/steering_status
+/vehicle/status/gear_status
+/vehicle/status/control_mode
+/vehicle/status/turn_indicators_status
+/vehicle/status/hazard_lights_status
+/vehicle/status/actuation_status
+
+# ── Diagnostics and frames ──────────────────────────────────────────────────
+/diagnostics
+/tf
+/tf_static

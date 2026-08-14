@@ -1,0 +1,40 @@
+[Unit]
+Description=Golf Cart launch stack (play_launch)
+# One unit for both hosts. The role is not baked in here: the installer
+# (setup/scripts/install-host-service.sh) writes a drop-in with
+# GOLFCART_HOST=master|orin plus the resolved repo path, and launch_unit_exec.sh
+# derives the DDS profile and the host:= launch argument from it. Per-host unit
+# files only ever differed in those two strings.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# %h/2026-golf-cart is the fallback for an unprovisioned checkout only. The
+# installer's drop-in resets and replaces this with the absolute resolved path,
+# so a repo cloned anywhere else still starts.
+ExecStart=%h/2026-golf-cart/scripts/multi_machine/launch_unit_exec.sh
+# Default KillMode=control-group is what makes the no-orphan guarantee hold: it
+# kills every process play_launch spawned, not just the MainPID.
+KillMode=control-group
+# play_launch ignores SIGTERM (measured on the orin: systemd's default stop sat
+# in `deactivating` for the full TimeoutStopSec and then SIGKILLed the cgroup,
+# leaving the unit `failed (Result: timeout)`). SIGINT is the path play_launch
+# actually handles - the same one Ctrl-C uses.
+KillSignal=SIGINT
+# Modest on purpose. The old master unit carried 180s "sized for a multi-gigabyte
+# bag flush"; that justification no longer holds on two counts. Phase 0 measured
+# the SIGINT stop completing in about a second, and recording is no longer a
+# play_launch child at all - bag finalization is golfcart-record.service's
+# problem, and its timeout is where that budget now lives. This value is just the
+# SIGKILL backstop for a play_launch that hangs.
+TimeoutStopSec=30
+# No Restart=: if the stack dies, an operator should notice, not have systemd
+# silently paper over it.
+Restart=no
+
+[Install]
+# Present so boot autostart is POSSIBLE (systemctl --user enable), but the
+# installer deliberately does not enable it: on the orin an autostarted stack
+# would bring up sensors with no master to talk to.
+WantedBy=default.target
