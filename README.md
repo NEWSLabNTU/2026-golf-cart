@@ -29,6 +29,14 @@ This system provides a complete autonomous driving software stack for golf cart 
 
 Prerequisites: JetPack 6.x on AGX Orin, Autoware 1.5.0 at `/opt/autoware/1.5.0/`.
 
+The **orin** additionally needs the ZED SDK at `/usr/local/zed`, installed by hand
+from the Stereolabs `.run` installer — it is not automated, and `just build`
+silently skips the ZED packages when that directory is absent. Re-run
+`./setup/scripts/configure-cyclonedds-sysctl.sh` afterwards: the SDK drops
+`/etc/sysctl.d/60-zed-buffers.conf`, which lowers `net.core.rmem_max` below the
+10 MB our DDS profiles require, and CycloneDDS then refuses to start on every
+profile. Currently installed: SDK 5.2.3.
+
 ```bash
 ./setup.sh          # dependencies (interactive)
 just build

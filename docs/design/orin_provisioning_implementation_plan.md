@@ -323,7 +323,7 @@ own environment already.
 | 4 | Recording infra; strip `record:` from the launch file (4.6) | **done** 2026-08-14 |
 | 5 | Independent watchdog (4.5) | **done** 2026-08-14 |
 | 6 | justfile rewire: `launch-master` to the systemd path, `stop-master` | **done** 2026-08-14 |
-| 7 | Orin provisioning: `install-zed-sdk.sh`, `orin` recipe (design §2.1–2.3, revised per §2.2) | blocked: ZED SDK delivery |
+| 7 | ~~`install-zed-sdk.sh`~~ | **dropped** 2026-08-14: the SDK installer does not automate cleanly, so it stays a manual step. Installed on the orin (5.2.3) |
 | 8 | `orin-check` (design §2.5) | **partly done**: `just doctor` / `just doctor-orin` cover every item except the two ZED ones, which need phase 7 |
 | 9 | CLAUDE.md's stale AutoSDV `golfcart` CLI section | **done** 2026-08-14 |
 
@@ -370,10 +370,13 @@ Resolved 2026-08-14: **Ctrl-C semantics** — the master moves fully onto system
 terminal is occupied. `launch-master`'s EXIT trap is gone with it; the orin is
 torn down by `stop-master`, with the watchdog as the backstop for everything else.
 
-Still open:
+Resolved 2026-08-14: **ZED SDK delivery** — neither. The installer does not
+automate cleanly, so installing it stays a documented manual step on the orin,
+and `install-zed-sdk.sh` is dropped. What automation still owes: `just doctor`
+should check `/usr/local/zed` exists and that `install/` carries `zed_wrapper`,
+since without the SDK `just build` skips the ZED packages in silence.
 
-1. **ZED SDK delivery.** Pinned download at install time vs. staging the ~1.5 GB
-   `.run` locally. Blocks phase 7.
+Nothing blocking remains.
 
 ## 8. The ssh key, and why it is named explicitly
 
