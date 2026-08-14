@@ -10,6 +10,13 @@
 # zero messages while still looking correct in `ros2 bag info`. Re-check with the
 # audit in docs/multi-machine.md after any sensor kit change.
 #
+# WHAT BELONGS HERE: first-hand driver output. Topics a node *computed* from
+# other topics — the concatenated cloud, the corrected IMU — are deliberately
+# commented out below. Replay is a logging simulation: the single-machine stack
+# runs with the drivers disabled and consumes the merged bag, so every derived
+# topic is recomputed, with today's parameters rather than the ones frozen at
+# record time. Recording them would both waste the disk and pin the results.
+#
 # WHY THE MASTER/ORIN SPLIT: both LiDARs are cabled to the master and their
 # clouds are ~30 MB/s each, far past the shared 100 Mb/s LAN. Only the ZED's
 # *compressed* stream (~5 MB/s) is small enough to cross it, and even that is
@@ -19,7 +26,12 @@
 # ── LiDAR — Velodyne VLP-32C (namespace is vlp32, NOT top) ──────────────────
 /sensing/lidar/vlp32/velodyne_points
 /sensing/lidar/vlp32/pointcloud
-/sensing/lidar/concatenated/pointcloud
+
+# Concatenated cloud: OFF. It is derived, not measured — the stack rebuilds it
+# from the two LiDAR clouds above during a logging-simulation replay, so
+# recording it costs the largest topic on the vehicle to store an output we can
+# regenerate. Uncomment only to debug the concatenation node itself.
+#/sensing/lidar/concatenated/pointcloud
 
 # ── LiDAR — Falcon (Seyond) ─────────────────────────────────────────────────
 /sensing/lidar/falcon/iv_points
@@ -30,9 +42,21 @@
 /sensing/gnss/pose
 /sensing/gnss/pose_with_covariance
 
-# ── IMU (Xsens) ─────────────────────────────────────────────────────────────
+# ── IMU ─────────────────────────────────────────────────────────────────────
+#
+# The live IMU is the ZED X's, recorded on the orin as
+# /sensing/camera/zed/imu/data (see config/sensors.conf, IMU_SOURCE=zed).
+#
+# The Xsens raw topic stays listed even though the device is currently BROKEN and
+# publishes nothing. A topic present with zero messages says "this device was
+# expected and was silent"; a topic absent from the bag says nothing at all, and
+# months later nobody can tell which it was.
 /sensing/imu/xsens/imu_raw
-/sensing/imu/imu_data
+
+# Corrected IMU: OFF. imu_corrector's output is derived from the raw stream, and
+# the replay recomputes it — with whatever correction parameters are current
+# rather than the ones frozen at record time, which is the point.
+#/sensing/imu/imu_data
 
 # ── USB cameras — compressed only, the raw streams are far too large ────────
 # No camera_info: gscam publishes none for these, so those entries were dead.

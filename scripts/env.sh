@@ -207,6 +207,16 @@ else
     _golfcart_restore_shell_opts
 fi
 
+# ── Sensor selection ─────────────────────────────────────────────────────────
+# IMU_SOURCE / CAMERA_MODEL reach the sensor kit only as environment variables:
+# the launch-argument path is swallowed by two installed Autoware files that
+# forward a fixed set of arguments. See config/sensors.conf.
+if [ -f "${GOLFCART_REPO_ROOT}/config/sensors.conf" ]; then
+    # shellcheck source=/dev/null
+    . "${GOLFCART_REPO_ROOT}/config/sensors.conf"
+    export IMU_SOURCE CAMERA_MODEL
+fi
+
 # The DDS profiles are CycloneDDS XML, so the RMW has to match them. Set
 # unconditionally: the branch above only exports it when Autoware is missing, and
 # a unit that inherits a different RMW would silently ignore CYCLONEDDS_URI.
