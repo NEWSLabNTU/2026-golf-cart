@@ -35,31 +35,27 @@ esac
 
 cd "${WORKSPACE}"
 
-# A systemd user unit gets none of the interactive shell's environment: direnv
-# does not run and ~/.bashrc is not sourced, so the ROS overlay is set up here.
-# shellcheck disable=SC1091
-source /opt/autoware/1.5.0/setup.bash
-# shellcheck disable=SC1091
-source "${WORKSPACE}/install/setup.bash"
+# One environment, one place. scripts/env.sh is what `.envrc` sources too, so the
+# recorder and the terminal you debug it from cannot drift apart. It supplies the
+# Autoware/ROS overlay, RMW_IMPLEMENTATION, the ROS_LOCALHOST_ONLY unset, PATH,
+# CYCLONEDDS_URI and the SSD-preferring GOLFCART_BAG_DIR - all of which this
+# script used to carry its own copy of.
+#
+# The recorder must join the same DDS domain as the stack it is recording: on the
+# wrong profile it discovers nothing and writes an empty bag that still looks
+# plausible until you open it. GOLFCART_ENV_ROLE states the role outright rather
+# than trusting the .golfcart-host marker, which a unit must not depend on.
+export GOLFCART_ENV_ROLE="${ROLE}"
+export GOLFCART_ENV_QUIET=1
+# shellcheck source=/dev/null
+source "${WORKSPACE}/scripts/env.sh"
 
-# The recorder must join the same DDS domain as the stack it is recording. With
-# the default profile it discovers nothing and writes an empty bag that still
-# looks plausible until you open it.
-export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-export CYCLONEDDS_URI="file://${WORKSPACE}/config/cyclonedds/${ROLE}.xml"
-
-# ROS_LOCALHOST_ONLY would confine this host to its own machine — the exact
-# opposite of what a two-machine deployment needs.
-unset ROS_LOCALHOST_ONLY
-
-# Output directory. An explicit GOLFCART_BAG_DIR always wins; otherwise prefer
-# the external SSD. The master's root filesystem sits at ~92% full and recording
-# runs at roughly 15 MB/s, so a bag fills the remainder in minutes. -w as well as
-# -d because an unmounted /mnt/external still leaves a root-owned mountpoint
-# behind, which would silently write to the full root filesystem.
-if [ -z "${GOLFCART_BAG_DIR:-}" ] && [ -d /mnt/external ] && [ -w /mnt/external ]; then
-    GOLFCART_BAG_DIR=/mnt/external/rosbags
+if [ "${GOLFCART_DDS_PROFILE}" != "${ROLE}" ]; then
+    echo "record_unit_exec: no CycloneDDS profile for role '${ROLE}'" >&2
+    echo "                  resolved to '${GOLFCART_DDS_PROFILE}' instead" >&2
+    exit 1
 fi
+
 OUTPUT_DIR="${GOLFCART_BAG_DIR:-${HOME}/rosbags}"
 
 TOPIC_FILE="${WORKSPACE}/config/recording/${ROLE}_topics.txt"

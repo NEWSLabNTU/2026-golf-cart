@@ -43,7 +43,11 @@ printf '%sGolf Cart environment doctor%s  (%s)\n' "$BOLD" "$NC" "$REPO_ROOT"
 # ── 1. Host identity and DDS profile ─────────────────────────────────────────
 section "Host identity and DDS profile"
 
-MARKER="${REPO_ROOT}/.golfcart-host"
+# config/host is the current location; the repo-root dotfile is the older one
+# and is still honoured by scripts/env.sh, so report whichever is in play.
+MARKER="${REPO_ROOT}/config/host"
+[ -f "${MARKER}" ] || MARKER="${REPO_ROOT}/.golfcart-host"
+MARKER_REL="${MARKER#${REPO_ROOT}/}"
 inherited_uri="${CYCLONEDDS_URI:-}"
 
 if [ -f "${REPO_ROOT}/scripts/env.sh" ]; then
@@ -63,15 +67,15 @@ case "${GOLFCART_DDS_PROFILE_SOURCE:-unknown}" in
         info "an explicit environment variable overrides ${MARKER##*/}"
         ;;
     marker)
-        ok "host role: ${GOLFCART_HOST}  (from .golfcart-host)"
+        ok "host role: ${GOLFCART_HOST}  (from ${MARKER_REL})"
         ;;
     fallback)
-        warn "no .golfcart-host marker — falling back to the loopback profile"
+        warn "no config/host marker — falling back to the loopback profile"
         info "Two-machine operation needs one. On this machine run:"
-        info "    echo master > .golfcart-host      # or: orin"
+        info "    echo master > config/host      # or: orin"
         ;;
     invalid-marker)
-        fail ".golfcart-host names a profile with no config/cyclonedds/<name>.xml"
+        fail "${MARKER_REL} names a profile with no config/cyclonedds/<name>.xml"
         info "marker contents: $(tr -d '\n' < "$MARKER" 2>/dev/null)"
         info "available:       $(golfcart_dds_profiles 2>/dev/null | tr '\n' ' ')"
         info "running on the loopback profile instead"

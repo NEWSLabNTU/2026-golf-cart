@@ -161,7 +161,7 @@ launch-scoped watchdog are replaced by the structure below. Design §2.1, §2.5,
 One-time, per machine:
 
 ```bash
-echo master > .golfcart-host      # or: orin        (gitignored, see 4.3)
+echo master > config/host      # or: orin        (gitignored, see 4.3)
 just service-install master       # or: orin
 just service-remove  master       # mirror, same script
 ```
@@ -215,7 +215,7 @@ terminal.
 
 ### 4.3 Host identity: a marker file, not an IP probe
 
-`.golfcart-host` in the repo root, gitignored, containing `master` or `orin`.
+`config/host` in the repo root, gitignored, containing `master` or `orin`.
 `.envrc` reads it and validates the value against `config/cyclonedds/<value>.xml`.
 
 An earlier draft inferred the role from a local `192.168.125.x` address. Rejected:

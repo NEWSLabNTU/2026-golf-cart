@@ -176,7 +176,7 @@ launch-all ARGS="":
             || echo "WARNING: could not start the orin - continuing without it" >&2
     fi
     echo
-    echo "web UI: http://localhost:8081    logs: just logs-master    stop: just stop-all"
+    echo "web UI: http://localhost:8081    logs: just logs    stop: just stop-all"
 
 # Stop the stack on BOTH hosts. Leaves any recording running.
 stop-all:
@@ -191,8 +191,8 @@ stop-all:
     just launch-down || RC=1
     exit $RC
 
-# Follow the master stack's log.
-logs-master:
+# Follow this host's stack log.
+logs:
     journalctl --user -u golfcart-launch.service -f
 
 # Launch Autoware planning simulator with Golf Cart vehicle
@@ -363,9 +363,10 @@ service-install ROLE:
 service-remove ROLE:
     ./setup/scripts/install-host-service.sh {{ROLE}} --remove
 
-# Provision the orin: log in and run its own installer there.
-# May prompt - this runs before key-based ssh exists, and lingering needs sudo.
+# Provision the orin over ssh (may prompt for its password and sudo).
 service-install-orin:
+    # Runs before key-based ssh necessarily exists, and lingering needs the
+    # orin's sudo - hence the tty. Every other remote call is BatchMode=yes.
     ./scripts/multi_machine/on_orin.sh --tty just service-install orin
 
 # Unit states on both hosts.

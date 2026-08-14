@@ -18,9 +18,9 @@ each host records to its own disk instead of streaming images across.
 Everything runs from the master:
 
 ```bash
-just launch-all        # both hosts: this stack + the orin's ZED, over ssh
-just logs-master          # follow the log
-just stop-all          # stop both hosts
+just launch-all    # both hosts: this stack + the orin's ZED, over ssh
+just logs          # follow this host's log
+just stop-all      # stop both hosts
 ```
 
 Both hosts run under systemd now, so `launch-all` **returns immediately** and
@@ -267,13 +267,13 @@ Most of it is driven from the master:
 
 ```bash
 # On the master:
-echo master > .golfcart-host              # picks the DDS profile; gitignored
+echo master > config/host              # picks the DDS profile; gitignored
 just service-install master               # units + lingering (sudo)
 just ssh-setup                            # dedicated key, copied to the orin
 just service-install-orin                 # runs the orin's own installer over ssh
 
 # On the orin, once (its own checkout, its own clock and buffers):
-echo orin > .golfcart-host
+echo orin > config/host
 ./setup/scripts/configure-cyclonedds-sysctl.sh
 (cd setup && just chrony-orin)            # follow the master's clock
 just build
@@ -331,11 +331,11 @@ can make the check pass while every unit still fails.
 
 Each machine binds a different CycloneDDS profile, so a shell on the wrong one
 sees an empty graph while the stack is plainly running. The profile comes from
-`.golfcart-host` — one word, `master` or `orin`, gitignored because it is a
+`config/host` — one word, `master` or `orin`, gitignored because it is a
 property of the machine and not of the branch.
 
 ```bash
-echo master > .golfcart-host    # then re-enter the directory, or: source scripts/env.sh
+echo master > config/host    # then re-enter the directory, or: source scripts/env.sh
 just doctor                     # what got resolved, and from where
 ```
 
@@ -374,7 +374,7 @@ from an interactive shell on the orin.
 **Nothing is discovered between the hosts.** Run `just doctor` — it prints the
 profile that resolved, where it came from, and whether the current shell is
 carrying a different `CYCLONEDDS_URI` than the one the marker now selects. The
-usual cause is a missing `.golfcart-host`, or a shell entered before it existed.
+usual cause is a missing `config/host`, or a shell entered before it existed.
 
 ## Environment variables
 
@@ -382,8 +382,8 @@ Most of these now have a home in a file, and the variable is only an override.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `GOLFCART_DDS_PROFILE` | from `.golfcart-host`, else `loopback` | which `config/cyclonedds/<name>.xml` is used |
-| `GOLFCART_HOST` | from `.golfcart-host` | this machine's role; units get it from their drop-in |
+| `GOLFCART_DDS_PROFILE` | from `config/host`, else `loopback` | which `config/cyclonedds/<name>.xml` is used |
+| `GOLFCART_HOST` | from `config/host` | this machine's role; units get it from their drop-in |
 | `GOLFCART_USE_ORIN` | `1` | set to `0` to run the master without the orin |
 | `GOLFCART_ORIN_SSH` | `config/multi_machine.conf` | ssh destination for the orin |
 | `GOLFCART_ORIN_WAIT` | `60` | seconds to wait for the orin before giving up |

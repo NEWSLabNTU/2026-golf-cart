@@ -29,9 +29,19 @@ export GOLFCART_REPO_ROOT
 # ── DDS profile resolution ───────────────────────────────────────────────────
 #
 # Precedence:
-#   1. an explicitly exported GOLFCART_DDS_PROFILE
-#   2. the `.golfcart-host` marker file in the repo root (one word: master|orin)
-#   3. loopback
+#   1. GOLFCART_ENV_ROLE — the caller states the role outright
+#   2. an explicitly exported GOLFCART_DDS_PROFILE
+#   3. the `config/host` marker file (one word: master|orin); the older
+#      `.golfcart-host` in the repo root is still read if `config/host` is absent
+#   4. loopback
+#
+# GOLFCART_ENV_ROLE exists for the systemd units, which are told their role by an
+# installer-written drop-in (Environment=GOLFCART_HOST=master|orin) and must not
+# depend on the marker file: a unit whose role came from a marker someone edited
+# would silently join the wrong DDS domain. It is deliberately a separate name
+# from GOLFCART_HOST, which this function *exports* — reusing that would make a
+# re-source of this file treat our own previous export as an override and stop
+# tracking marker edits.
 #
 # The chosen name must have a matching config/cyclonedds/<name>.xml. A name
 # without one falls back to loopback *loudly*: silently running the wrong
@@ -40,11 +50,15 @@ export GOLFCART_REPO_ROOT
 # Sets (and exports):
 #   GOLFCART_HOST                  resolved role / profile name
 #   GOLFCART_DDS_PROFILE           same value (kept for existing callers)
-#   GOLFCART_DDS_PROFILE_SOURCE    env | marker | fallback | invalid-env | invalid-marker
+#   GOLFCART_DDS_PROFILE_SOURCE    role | env | marker | fallback | invalid-*
 #   CYCLONEDDS_URI                 file:// URI of the profile XML
 golfcart_resolve_dds_profile() {
     local root="${GOLFCART_REPO_ROOT}"
-    local marker="${root}/.golfcart-host"
+    # config/ is the single place configuration lives; the repo-root dotfile is
+    # the older location and is still honoured so an existing checkout keeps
+    # working after a pull.
+    local marker="${root}/config/host"
+    [ -f "$marker" ] || marker="${root}/.golfcart-host"
     local warn_stamp="${root}/.envrc.host-warned"
     local quiet="${GOLFCART_ENV_QUIET:-0}"
 
@@ -77,6 +91,12 @@ golfcart_resolve_dds_profile() {
         source_of="env"
     fi
 
+    # A stated role outranks everything: the caller knows which machine it is.
+    if [ -n "${GOLFCART_ENV_ROLE:-}" ]; then
+        profile="${GOLFCART_ENV_ROLE}"
+        source_of="role"
+    fi
+
     # Validate: a safe bare token with a matching profile file.
     local xml="${root}/config/cyclonedds/${profile}.xml"
     if ! printf '%s' "$profile" | grep -Eq '^[A-Za-z0-9_-]+$' || [ ! -f "$xml" ]; then
@@ -86,6 +106,7 @@ golfcart_resolve_dds_profile() {
             case "$source_of" in
                 marker) echo "  named by ${marker}" >&2 ;;
                 env)    echo "  named by \$GOLFCART_DDS_PROFILE" >&2 ;;
+                role)   echo "  named by \$GOLFCART_ENV_ROLE" >&2 ;;
             esac
             echo "  no such file: config/cyclonedds/${profile}.xml" >&2
             echo "  available:    $(golfcart_dds_profiles | tr '\n' ' ')" >&2
@@ -98,9 +119,9 @@ golfcart_resolve_dds_profile() {
     fi
 
     if [ "$source_of" = "fallback" ] && [ "$quiet" != "1" ] && [ ! -f "$warn_stamp" ]; then
-        echo "No .golfcart-host marker; using the loopback DDS profile."
+        echo "No config/host marker; using the loopback DDS profile."
         echo "Two-machine operation needs one. On this machine run:"
-        echo "    echo master > .golfcart-host      # or: orin"
+        echo "    echo master > config/host      # or: orin"
         touch "$warn_stamp" 2>/dev/null || true
     fi
 
@@ -186,12 +207,22 @@ else
     _golfcart_restore_shell_opts
 fi
 
+# The DDS profiles are CycloneDDS XML, so the RMW has to match them. Set
+# unconditionally: the branch above only exports it when Autoware is missing, and
+# a unit that inherits a different RMW would silently ignore CYCLONEDDS_URI.
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+
+# ROS_LOCALHOST_ONLY would confine this host to itself, the exact opposite of
+# what a two-machine deployment needs. Autoware's setup.bash unsets it too, but
+# not every path goes through that.
+unset ROS_LOCALHOST_ONLY
+
 # ── CycloneDDS profile ───────────────────────────────────────────────────────
 # GOLFCART_DDS_PROFILE selects config/cyclonedds/<profile>.xml:
 #   loopback  single-machine (default; identical to the old root cyclonedds.xml)
 #   master    cart AGX Orin  on the GolfCart AP (192.168.13.1)
 #   orin      slave Jetson   on the GolfCart AP (192.168.13.2)
-# The profile normally comes from the gitignored `.golfcart-host` marker; see
+# The profile normally comes from the gitignored `config/host` marker; see
 # golfcart_resolve_dds_profile above. The systemd units derive their own URI from
 # GOLFCART_HOST, so this only affects plain shells and `just launch`.
 #
@@ -208,6 +239,14 @@ golfcart_resolve_dds_profile
 if [ -d /mnt/external ] && [ -w /mnt/external ]; then
     export GOLFCART_BAG_DIR="${GOLFCART_BAG_DIR:-/mnt/external/rosbags}"
 fi
+
+# ── PATH ─────────────────────────────────────────────────────────────────────
+# ~/.local/bin holds `just` and `play_launch`. A systemd unit gets no login shell
+# and no ~/.profile, so without this the units cannot find play_launch at all.
+case ":${PATH}:" in
+    *":${HOME}/.local/bin:"*) ;;
+    *) export PATH="${HOME}/.local/bin:${PATH}" ;;
+esac
 
 # ── CUDA ─────────────────────────────────────────────────────────────────────
 # CUDA toolchain (JetPack 6.2 / L4T R36 only) — required by cuda_ffi build.rs

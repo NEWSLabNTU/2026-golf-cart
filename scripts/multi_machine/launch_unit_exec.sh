@@ -24,32 +24,32 @@ WORKSPACE="${GOLFCART_WORKSPACE:-${HOME}/2026-golf-cart}"
 cd "${WORKSPACE}"
 
 HOST="${GOLFCART_HOST:-master}"
-PROFILE="${WORKSPACE}/config/cyclonedds/${HOST}.xml"
-# Fail loudly rather than start with the wrong DDS profile: a typo'd role would
-# otherwise fall through to Cyclone's default (localhost-ish discovery) and
-# produce a stack that runs but cannot see the other machine - the hardest
-# failure in this system to diagnose from the outside.
-if [ ! -f "${PROFILE}" ]; then
+
+# One environment, one place. scripts/env.sh is what `.envrc` sources too, so a
+# unit and the terminal you debug it from cannot drift apart - which they did
+# while this script kept its own copy of the Autoware sourcing, the DDS profile,
+# RMW_IMPLEMENTATION, PATH and the ROS_LOCALHOST_ONLY unset.
+#
+# GOLFCART_ENV_ROLE, not the .golfcart-host marker: a unit is told its role by the
+# installer's drop-in and must not depend on a file someone can edit underneath
+# it. QUIET because the banners belong in a terminal, not the journal.
+#
+# `set -u` is deliberately not enabled: ROS's setup.bash chain reads unbound
+# variables (AMENT_TRACE_SETUP_FILES and friends) and would abort the unit.
+export GOLFCART_ENV_ROLE="${HOST}"
+export GOLFCART_ENV_QUIET=1
+# shellcheck source=/dev/null
+source "${WORKSPACE}/scripts/env.sh"
+
+# Fail loudly rather than start with the wrong DDS profile. env.sh falls back to
+# loopback on an unknown name, which for a unit means a stack that runs but
+# cannot see the other machine - the hardest failure here to diagnose from
+# outside. Catch it at start instead.
+if [ "${GOLFCART_DDS_PROFILE}" != "${HOST}" ]; then
     echo "launch_unit_exec: no CycloneDDS profile for GOLFCART_HOST='${HOST}'" >&2
-    echo "                  expected ${PROFILE}" >&2
+    echo "                  resolved to '${GOLFCART_DDS_PROFILE}' instead" >&2
     exit 1
 fi
-
-# `set -u` is deliberately absent: ROS's setup.bash chain reads unbound variables
-# (AMENT_TRACE_SETUP_FILES and friends) and aborts the unit under -u with
-#   /opt/ros/humble/setup.bash: line 8: AMENT_TRACE_SETUP_FILES: unbound variable
-# shellcheck disable=SC1091
-source /opt/autoware/1.5.0/setup.bash
-# shellcheck disable=SC1091
-source "${WORKSPACE}/install/setup.bash"
-
-export PATH="${HOME}/.local/bin:${PATH}"
-export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-export CYCLONEDDS_URI="file://${PROFILE}"
-
-# ROS_LOCALHOST_ONLY would confine this host to its own machine, which is the
-# exact opposite of what a two-machine deployment needs.
-unset ROS_LOCALHOST_ONLY
 
 # exec so systemd supervises play_launch itself; with a wrapper shell in between,
 # KillMode=control-group still cleans up, but the unit's MainPID would be the

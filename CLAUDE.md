@@ -516,7 +516,7 @@ just service-install master            # this machine
 just service-install-orin              # the orin, over ssh
 just launch-all                     # starts both; returns immediately
 just stop-all                       # stops both; leaves recording alone
-just logs-master
+just logs
 just record-start / record-stop        # recording, independent of the launch
 just doctor                            # when topics do not show up
 ```

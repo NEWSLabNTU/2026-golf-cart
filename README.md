@@ -58,7 +58,7 @@ The cart runs on a **master** (Autoware, wired sensors) and an **orin** (ZED X).
 Each machine needs a role marker and its systemd units, once:
 
 ```bash
-echo master > .golfcart-host     # or: orin       (gitignored, picks the DDS profile)
+echo master > config/host     # or: orin       (gitignored, picks the DDS profile)
 just service-install master      # units + lingering (sudo)
 just ssh-setup                   # key for the orin
 just service-install-orin        # provision the orin over ssh
@@ -68,7 +68,7 @@ Then, from the master:
 
 ```bash
 just launch-all     # both hosts; returns immediately
-just logs-master
+just logs
 just stop-all
 just doctor            # when topics do not show up
 ```
