@@ -75,7 +75,7 @@ log "verifying key-based login (BatchMode, no agent, no prompt possible)..."
 if REMOTE_HOST=$(env -u SSH_AUTH_SOCK ssh -i "${KEY}" -o BatchMode=yes -o ConnectTimeout=5 \
         -o StrictHostKeyChecking=accept-new "${DEST}" hostname 2>/dev/null); then
     log "OK: key-based ssh to ${DEST} works (remote hostname: ${REMOTE_HOST})"
-    log "    just launch-master, record control and bag-fetch-orin can now reach it."
+    log "    just launch-all, record control and bag-fetch-orin can now reach it."
     exit 0
 fi
 

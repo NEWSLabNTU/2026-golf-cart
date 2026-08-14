@@ -158,15 +158,15 @@ host-status:
 
 # ── Both hosts, driven from the master ──────────────────────────────────────
 
-# Start the stack on both hosts; returns immediately.
-launch-master ARGS="":
+# Start the stack on BOTH hosts; returns immediately.
+launch-all ARGS="":
     #!/usr/bin/env bash
     set -uo pipefail
-    # NOTE: ARGS is positional. `just launch-master ARGS="..."` does NOT work:
+    # NOTE: ARGS is positional. `just launch-all ARGS="..."` does NOT work:
     # just has no NAME=value syntax for recipe parameters.
     #
     # Both hosts run under systemd, so nothing blocks a terminal and no EXIT trap
-    # orchestrates the orin: teardown is `just stop-master`, and the orin's
+    # orchestrates the orin: teardown is `just stop-all`, and the orin's
     # watchdog covers the case where this machine never gets to run it.
     just launch-up "{{ARGS}}" || exit 1
     # The orin runs the identical recipe from its own checkout. A missing orin
@@ -176,10 +176,10 @@ launch-master ARGS="":
             || echo "WARNING: could not start the orin - continuing without it" >&2
     fi
     echo
-    echo "web UI: http://localhost:8081    logs: just logs-master    stop: just stop-master"
+    echo "web UI: http://localhost:8081    logs: just logs-master    stop: just stop-all"
 
-# Stop the stack on both hosts. Leaves any recording running.
-stop-master:
+# Stop the stack on BOTH hosts. Leaves any recording running.
+stop-all:
     #!/usr/bin/env bash
     set -uo pipefail
     RC=0
@@ -194,11 +194,6 @@ stop-master:
 # Follow the master stack's log.
 logs-master:
     journalctl --user -u golfcart-launch.service -f
-
-# Launch the orin host profile (ZED X camera only)
-launch-orin ARGS="":
-    CYCLONEDDS_URI="file://{{justfile_directory()}}/config/cyclonedds/orin.xml" \
-        just launch "host:=orin {{ARGS}}"
 
 # Launch Autoware planning simulator with Golf Cart vehicle
 launch-sim-planning:

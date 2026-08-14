@@ -18,22 +18,22 @@ each host records to its own disk instead of streaming images across.
 Everything runs from the master:
 
 ```bash
-just launch-master        # master stack + the orin's ZED, started over ssh
+just launch-all        # both hosts: this stack + the orin's ZED, over ssh
 just logs-master          # follow the log
-just stop-master          # stop both hosts
+just stop-all          # stop both hosts
 ```
 
-Both hosts run under systemd now, so `launch-master` **returns immediately** and
+Both hosts run under systemd now, so `launch-all` **returns immediately** and
 nothing occupies a terminal. Closing your ssh session no longer stops the cart;
-`just stop-master` is the stop verb, and there is no Ctrl-C to press.
+`just stop-all` is the stop verb, and there is no Ctrl-C to press.
 
-`stop-master` deliberately leaves recording alone — that is `just record-stop`.
+`stop-all` deliberately leaves recording alone — that is `just record-stop`.
 
 Single-machine operation is untouched:
 
 ```bash
 just launch                         # host:=all, loopback DDS, nothing remote
-GOLFCART_USE_ORIN=0 just launch-master   # master alone, without touching the orin
+GOLFCART_USE_ORIN=0 just launch-all   # master alone, without touching the orin
 ```
 
 ## Recording
@@ -232,15 +232,15 @@ caller decides what a failure means.
 
 The per-host recipes are symmetric — `launch-up`, `launch-down`, `record-up`,
 `record-down`, `host-status` act only on the machine they run on. The two-host
-verbs (`launch-master`, `stop-master`, `record-start`, `record-stop`) are just
+verbs (`launch-all`, `stop-all`, `record-start`, `record-stop`) are just
 each one run locally and then over there.
 
 ## What stops the orin, and when
 
 | Failure | What stops it | How long |
 |---|---|---|
-| `just stop-master` | it runs `just launch-down` on the orin over ssh, then stops the local unit | immediate |
-| Master unit stopped or crashed, network up | nothing stops the orin until someone runs `stop-master`; otherwise the watchdog | ~42s |
+| `just stop-all` | it runs `just launch-down` on the orin over ssh, then stops the local unit | immediate |
+| Master unit stopped or crashed, network up | nothing stops the orin until someone runs `stop-all`; otherwise the watchdog | ~42s |
 | Network cut, or master powered off | the orin's own watchdog stops **every** `golfcart-*` unit locally | ~42s |
 
 `KillMode=control-group` in the unit is what makes the no-orphan guarantee hold —

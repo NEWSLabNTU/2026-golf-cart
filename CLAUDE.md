@@ -431,7 +431,7 @@ twist_source:=gyro_odom|eagleye            # Override preset twist source
 | [docs/guides/lidar_integration.md](docs/guides/lidar_integration.md) | Velodyne VLP-32C, TensorRT |
 | [docs/guides/control_testing.md](docs/guides/control_testing.md) | Control system testing procedures |
 | [docs/guides/mrm_configuration.md](docs/guides/mrm_configuration.md) | MRM (emergency stop) configuration |
-| [docs/multi-machine.md](docs/multi-machine.md) | Two-machine operation: `just launch-master`, per-host DDS profiles, orin lifecycle, recording |
+| [docs/multi-machine.md](docs/multi-machine.md) | Two-machine operation: `just launch-all`, per-host DDS profiles, orin lifecycle, recording |
 | [docs/design/zed_camera_integration.md](docs/design/zed_camera_integration.md) | ZED X launch structure, published topics, TF ownership split between the ZED driver and Autoware, IMU source selection |
 | [docs/roadmaps/2-zed-camera-integration.md](docs/roadmaps/2-zed-camera-integration.md) | ZED integration phase: work items, acceptance criteria, deferred field measurements |
 | [docs/guides/isaac_vslam_testing.md](docs/guides/isaac_vslam_testing.md) | Isaac SLAM testing |
@@ -514,8 +514,8 @@ Both hosts run the same units, installed per machine with a role:
 ```bash
 just service-install master            # this machine
 just service-install-orin              # the orin, over ssh
-just launch-master                     # starts both; returns immediately
-just stop-master                       # stops both; leaves recording alone
+just launch-all                     # starts both; returns immediately
+just stop-all                       # stops both; leaves recording alone
 just logs-master
 just record-start / record-stop        # recording, independent of the launch
 just doctor                            # when topics do not show up
@@ -536,8 +536,8 @@ this repository.
 
 ### Process Management
 - `just launch` (single machine): Ctrl-C stops it; a second Ctrl-C forces it
-- `just launch-master` (two machines): nothing to Ctrl-C — it returns
-  immediately, and `just stop-master` is the stop verb
+- `just launch-all` (two machines): nothing to Ctrl-C — it returns
+  immediately, and `just stop-all` is the stop verb
 - `KillMode=control-group` in the units is what keeps orphans from surviving
 - play_launch ignores SIGTERM, so the units stop it with `KillSignal=SIGINT`
 

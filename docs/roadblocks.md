@@ -7,7 +7,7 @@
 
 ## Sensor status (observed 2026-08-10)
 
-Measured from a live two-host run of `just launch-master "record:=true"` and the
+Measured from a live two-host run of `just launch-all "record:=true"` and the
 resulting 150s bag. Counts are messages recorded; rates are `ros2 topic hz` over
 ~10s while the stack ran.
 
@@ -108,7 +108,7 @@ fixed at the source.
 
 ### play_launch does not finalize bags when stopped from the foreground
 
-Recording through `just launch-master` and stopping it the way a terminal does
+Recording through `just launch-all` and stopping it the way a terminal does
 leaves a complete `.db3` and a `metadata.yaml` that is **0 bytes or missing
 entirely**; `ros2 bag info` then reports
 `invalid node; first invalid key: "version"`. Seen at 2.2 GB, 2.5 GB and 3.3 GB.

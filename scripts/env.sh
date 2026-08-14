@@ -192,8 +192,8 @@ fi
 #   master    cart AGX Orin  on the GolfCart AP (192.168.13.1)
 #   orin      slave Jetson   on the GolfCart AP (192.168.13.2)
 # The profile normally comes from the gitignored `.golfcart-host` marker; see
-# golfcart_resolve_dds_profile above. just launch-master / launch-orin set the
-# URI themselves, so this only affects plain shells and `just launch`.
+# golfcart_resolve_dds_profile above. The systemd units derive their own URI from
+# GOLFCART_HOST, so this only affects plain shells and `just launch`.
 #
 # No `ros2 daemon stop` here on purpose: a daemon's DDS context is fixed when it
 # starts, so this file cannot repair a running one, and stopping it would be a

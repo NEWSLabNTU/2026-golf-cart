@@ -113,7 +113,7 @@ foreground process group.
 
 Run immediately afterwards with every variable held constant except the
 supervision path: same `record:=true use_gnss:=false`, no orin, same SSD
-directory, same session. Started through the old `just launch-master` under
+directory, same session. Started through the old `just launch-all` under
 `setsid`, then stopped with `kill -INT -<pgid>` — SIGINT to the whole process
 group, which is what a terminal does on Ctrl-C.
 
@@ -169,8 +169,8 @@ just service-remove  master       # mirror, same script
 Daily driving — launch only, no recording:
 
 ```bash
-just launch-master        # starts the launch unit here + the orin's over ssh
-just stop-master
+just launch-all        # starts the launch unit here + the orin's over ssh
+just stop-all
 ```
 
 Recording — independent, start any time, stack up or down:
@@ -322,7 +322,7 @@ own environment already.
 | 3 | `config/multi_machine.conf`, `setup_ssh.sh`, remote control rewire (4.4) | **done** 2026-08-14 |
 | 4 | Recording infra; strip `record:` from the launch file (4.6) | **done** 2026-08-14 |
 | 5 | Independent watchdog (4.5) | **done** 2026-08-14 |
-| 6 | justfile rewire: `launch-master` to the systemd path, `stop-master` | **done** 2026-08-14 |
+| 6 | justfile rewire: `launch-all` to the systemd path, `stop-all` | **done** 2026-08-14 |
 | 7 | ~~`install-zed-sdk.sh`~~ | **dropped** 2026-08-14: the SDK installer does not automate cleanly, so it stays a manual step. Installed on the orin (5.2.3) |
 | 8 | `orin-check` (design §2.5) | **partly done**: `just doctor` / `just doctor-orin` cover every item except the two ZED ones, which need phase 7 |
 | 9 | CLAUDE.md's stale AutoSDV `golfcart` CLI section | **done** 2026-08-14 |
@@ -334,7 +334,7 @@ original phase 9.
 
 The justfile gained `service-install`, `service-remove`, `service-status`,
 `ssh-setup`, `record-start`, `record-stop`, `record-status` and `doctor`, all
-additive. `launch-master` was updated to the new per-host recipes and had
+additive. `launch-all` was updated to the new per-host recipes and had
 its `record:=` parsing removed — required, since that argument no longer exists —
 but still runs play_launch in the foreground. Moving it onto the unit is phase 6.
 
@@ -366,9 +366,9 @@ recording as a systemd unit, removed from the launch file (4.6); no daemon
 automation (4.7).
 
 Resolved 2026-08-14: **Ctrl-C semantics** — the master moves fully onto systemd.
-`launch-master` returns immediately, `just stop-master` is the stop verb, and no
-terminal is occupied. `launch-master`'s EXIT trap is gone with it; the orin is
-torn down by `stop-master`, with the watchdog as the backstop for everything else.
+`launch-all` returns immediately, `just stop-all` is the stop verb, and no
+terminal is occupied. `launch-all`'s EXIT trap is gone with it; the orin is
+torn down by `stop-all`, with the watchdog as the backstop for everything else.
 
 Resolved 2026-08-14: **ZED SDK delivery** — neither. The installer does not
 automate cleanly, so installing it stays a documented manual step on the orin,

@@ -1,0 +1,51 @@
+# record_topics.txt — Velodyne + Seyond Falcon + ZED X calibration recording
+#
+# Topic names verified against a live graph on 2026-08-12, with all three
+# drivers launched STANDALONE:
+#   ros2 launch nebula_ros velodyne_launch_all_hw.xml ...   -> /velodyne_points
+#   ros2 launch golfcart_sensor_kit_launch seyond_start.py  -> /iv_points
+#   ros2 launch golfcart_launch zed.launch.xml              -> /sensing/camera/zed/...
+#
+# Launched through the sensor kit instead, the two LiDARs land at
+# /sensing/lidar/top/pointcloud_raw and /sensing/lidar/falcon/iv_points. Use
+# whichever matches how you actually start them — these are the standalone names.
+#
+# RUN THE RECORDER ON THE MASTER. Both LiDARs are cabled there and their clouds
+# are ~30 MB/s each; only the ZED's *compressed* stream (~5 MB/s) is small enough
+# to cross the shared 100 Mb/s LAN. Recording on the orin would reverse that and
+# saturate the link.
+
+# ── Velodyne VLP-32C (master) ───────────────────────────────────────────────
+/velodyne_points
+
+# Raw packets: lets you re-decode the cloud later with different range/angle
+# settings without re-recording. ~1 MB/s. Drop if you do not need that.
+/velodyne_packets
+
+# ── Seyond Falcon (master) ──────────────────────────────────────────────────
+/iv_points
+
+# ── ZED X (orin), zed-ros2-wrapper v5 topic scheme ──────────────────────────
+# Compressed, not raw: the raw stream is ~276 MB/s and cannot cross the LAN.
+# If your calibrator refuses compressed input, record a separate ZED-only bag on
+# the orin with /sensing/camera/zed/rgb/color/rect/image instead.
+/sensing/camera/zed/rgb/color/rect/image/compressed
+
+# Intrinsics. Both are published; the first is the wrapper's own, the second is
+# the image_transport sibling of the image topic. Tiny — record both and let the
+# calibration tool take whichever it expects.
+/sensing/camera/zed/rgb/color/rect/camera_info
+/sensing/camera/zed/rgb/color/rect/image/camera_info
+
+# ZED IMU — not needed for a LiDAR-camera solve, but free, and useful if you
+# later want to sanity-check the camera's orientation.
+/sensing/camera/zed/imu/data
+
+# ── Frames ──────────────────────────────────────────────────────────────────
+# With standalone launches these are likely empty (nebula publishes no TF, and
+# the Seyond node has transform_enable: false). Recorded anyway so the bag is
+# self-describing if you later launch via the sensor kit, which does populate
+# tf_static from sensor_kit_calibration.yaml.
+/tf_static
+/tf
+

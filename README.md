@@ -67,14 +67,14 @@ just service-install-orin        # provision the orin over ssh
 Then, from the master:
 
 ```bash
-just launch-master     # both hosts; returns immediately
+just launch-all     # both hosts; returns immediately
 just logs-master
-just stop-master
+just stop-all
 just doctor            # when topics do not show up
 ```
 
 There is no Ctrl-C to press — both hosts run under systemd, so closing the
-terminal does not stop the cart. `just stop-master` is the stop verb.
+terminal does not stop the cart. `just stop-all` is the stop verb.
 
 Both machines carry the same repository and the same recipes. `launch-up`,
 `launch-down`, `record-up`, `record-down` and `host-status` act on whichever
