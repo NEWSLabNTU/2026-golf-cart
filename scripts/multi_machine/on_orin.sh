@@ -72,7 +72,19 @@ fi
 # reliably put it on PATH: on the orin, `bash -lc just` fails with
 # "just: command not found" because its ~/.profile only extends PATH for
 # interactive shells. Prepending it here is what makes `on_orin.sh just ...` work.
-REMOTE_CMD='export PATH="$HOME/.local/bin:$PATH"; '"${REMOTE_CD} && $*"
+# Quote each argument separately rather than joining with "$*". `$*` flattens the
+# argument vector into one space-separated string, so the far side re-splits it
+# on spaces and a single argument that CONTAINS spaces arrives as several:
+#
+#   on_orin.sh just launch-up "tx=on rviz:=false"
+#     $*   -> just launch-up tx=on rviz:=false   # two arguments, just errors out
+#     "$@" -> just launch-up tx\=on\ rviz\:\=false
+#
+# That is the whole reason `just launch-all "<several args>"` did nothing on the
+# orin while working on the master. No caller passes a shell snippet expecting it
+# to be parsed remotely, so quoting every argument costs nothing.
+printf -v REMOTE_ARGV '%q ' "$@"
+REMOTE_CMD='export PATH="$HOME/.local/bin:$PATH"; '"${REMOTE_CD} && ${REMOTE_ARGV% }"
 
 # The whole command has to survive TWO parsers: ssh concatenates its arguments and
 # hands the result to a shell on the far side, which re-splits them. Quoting it
