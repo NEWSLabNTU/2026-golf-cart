@@ -37,15 +37,32 @@ launch:
     default: ""
     description: "LiDAR model (vlp32c) - empty string uses suite default"
 
+# camera_model and imu_source default from the ENVIRONMENT, not "".
+#
+# Both are forwarded unconditionally to golfcart_autoware.launch.xml below. An
+# empty default was survivable only by accident: the installed Autoware sensing
+# files forward a fixed set of arguments and dropped these, so the sensor kit
+# fell back to its own $(env ...) default and got the right answer anyway.
+#
+# play_launch 0.8.2's Rust parser resolves the chain without that drop, so the
+# empty string reaches the sensor kit and wins over the env default. imu_source
+# then builds a parameter path with a hole in it and the launch dies before any
+# node starts:
+#
+#   Failed to load and resolve parameter file '.../imu_corrector_.param.yaml'
+#
+# Reading the same environment here makes the forwarded value correct whether or
+# not the chain drops it. config/sensors.conf remains the single source; see
+# config/README.md.
 - arg:
     name: camera_model
-    default: ""
-    description: "Camera model (usb or none) - empty string uses suite default"
+    default: "$(env CAMERA_MODEL gscam)"
+    description: "Camera driver: gscam | zedx | none. Defaults to $CAMERA_MODEL (config/sensors.conf)"
 
 - arg:
     name: imu_source
-    default: ""
-    description: "IMU source (tamagawa) - empty string uses suite default"
+    default: "$(env IMU_SOURCE xsens)"
+    description: "IMU source: xsens | zed. Defaults to $IMU_SOURCE (config/sensors.conf)"
 
 - arg:
     name: gnss_receiver
