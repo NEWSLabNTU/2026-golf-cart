@@ -32,8 +32,8 @@ computers, and the normal deployment uses both:
 
 | | runs | records |
 |---|---|---|
-| **master** | the whole Autoware stack and the wired sensors (Velodyne, Falcon, GNSS, IMU, USB cameras) | its own bag, to the external SSD |
-| **orin** | the ZED X camera only | its own bag, locally |
+| **master** | the whole Autoware stack and the wired sensors (Velodyne, Falcon, GNSS, IMU, USB cameras) | its own bag, to the external SSD when mounted — [see below](#where-the-bag-lands) |
+| **orin** | the ZED X camera only | its own bag, locally in `~/rosbags` |
 
 They split because the shared LAN negotiates 100 Mb/s and a single LiDAR stream is
 ~30 MB/s. Neither machine records the other's topics.
@@ -153,6 +153,62 @@ Topics recorded are plain lists, one per line — edit these, not any script:
 config/recording/master_topics.txt
 config/recording/orin_topics.txt
 ```
+
+### Where the bag lands
+
+Each host writes to its own disk, into `$GOLFCART_BAG_DIR`, one directory per
+run named `<role>_<YYYYmmdd_HHMMSS>`:
+
+| host | directory | example |
+|---|---|---|
+| master | external SSD if mounted, else `~/rosbags` | `/mnt/external/rosbags/master_20260814_152605` |
+| orin | `~/rosbags` (it has no SSD) | `~/rosbags/orin_20260814_152603` |
+
+`scripts/env.sh` resolves `GOLFCART_BAG_DIR`: `/mnt/external/rosbags` when
+`/mnt/external` is mounted and writable, otherwise `~/rosbags`. An explicit
+`GOLFCART_BAG_DIR` still wins.
+
+**Check which one you got before a long run.** The root filesystem has a couple
+of GB free and recording runs at roughly 15–30 MB/s, so a bag fills it in
+minutes — and the fallback to `~/rosbags` is silent:
+
+```bash
+source scripts/env.sh; echo "$GOLFCART_BAG_DIR"   # what the next run will use
+df -h "$GOLFCART_BAG_DIR"
+```
+
+The recorder also logs its exact output path on the line it starts with:
+
+```bash
+systemctl --user status golfcart-record.service | grep record_unit_exec:
+# record_unit_exec: role=master writing /home/ubuntu/rosbags/master_20260814_152605 (27 topics)
+
+just record-status                       # active/inactive, both hosts
+ls -dt "$GOLFCART_BAG_DIR"/*_*  | head    # most recent bags, newest first
+```
+
+Use `systemctl --user status`, not `journalctl --user -u golfcart-record.service`
+— on this machine the latter prints `-- No entries --` for these units.
+
+A finished bag is a directory holding `metadata.yaml` plus one or more
+`<name>_N.db3` files (sqlite3, the ROS 2 Humble default). `ros2 bag info <dir>`
+is the check that it finalized — see [docs/roadblocks.md](docs/roadblocks.md) if
+`metadata.yaml` is 0 bytes.
+
+### Getting both halves onto one machine
+
+```bash
+just bag-fetch-orin        # rsync the orin's orin_* bags into this host's $GOLFCART_BAG_DIR
+just bag-merge "master_20260814_152605 orin_20260814_152603"
+```
+
+`bag-merge` writes `merged_<timestamp>` next to the first input unless you pass
+`-o /path/to/output`. The merged bag is roughly the sum of its inputs, so point
+`-o` at the SSD if the inputs are large.
+
+> The legacy single-machine recipes are a **different** location: `just
+> bag-record` writes to `<repo>/rosbags/outdoor_<timestamp>` and `just bag-play`
+> reads from there. Only the systemd recorder above uses `GOLFCART_BAG_DIR`.
 
 `just stop-all` deliberately leaves a recording running; stopping the stack and
 stopping a recording are separate decisions.
