@@ -85,6 +85,7 @@ colcon build --base-paths src --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=
 ```
 
 **Important**: Always use `--base-paths src` and other standard flags from `just build` when running colcon commands manually.
+**Important**: Never commit a submodule pointer to a commit that is not yet on GitHub, on a long-lived branch of its NEWSLabNTU fork. Push the submodule first, then the parent pointer — otherwise a fresh clone fails at `git submodule update` and the parent commit cannot say what was meant to be there. See [CONTRIBUTING.md](CONTRIBUTING.md#submodule-workflow).
 **Important**: Respect the .gitconfig in the repository when committing. Use Conventional Commits format (`feat`, `fix`, `chore`, `docs`, `refactor`, etc.) for commit messages.
 
 ## Architecture

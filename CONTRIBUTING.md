@@ -71,6 +71,34 @@ Examples:
 
 ## Submodule Workflow
 
+**Rule: push the submodule before you push the pointer.**
+
+A superproject commit records a submodule as a bare SHA. If that SHA only exists
+on someone's laptop, every fresh clone fails at `git submodule update` with
+
+```
+fatal: remote error: upload-pack: not our ref <sha>
+```
+
+and the superproject commit is unusable — the parent repo cannot tell you what
+was supposed to be there. So, in order:
+
+1. Push the submodule commit to its NEWSLabNTU fork on GitHub.
+2. Push it to a **long-lived branch**, not just a feature branch. A pointer whose
+   only home is `feat/…` breaks the moment that branch is deleted after merging —
+   normal hygiene that silently invalidates history.
+3. Only then commit and push the parent's pointer update.
+
+Check before pushing the parent:
+
+```bash
+# every pointer, and which remote branches contain it
+git submodule foreach --quiet \
+  'echo "$sm_path $(git branch -r --contains HEAD | tr -d " " | tr "\n" " ")"'
+```
+
+Anything printing no remote branch, or only a feature branch, is not ready.
+
 ```bash
 # Initialize all submodules (first time)
 just checkout
@@ -78,7 +106,8 @@ just checkout
 # Update submodules to latest tracked commit
 git submodule update --remote
 
-# After changing a submodule, commit the parent repo pointer update
+# After changing a submodule: push it FIRST, then the parent pointer
+git -C src/sensor_kit/golfcart_sensor_kit_launch push origin HEAD:main
 git add src/sensor_kit/golfcart_sensor_kit_launch
 git commit -m "chore: update golfcart_sensor_kit_launch submodule"
 ```
