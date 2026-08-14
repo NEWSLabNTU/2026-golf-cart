@@ -27,6 +27,7 @@ just build              # Build all packages
 just test               # Run tests
 just launch             # Launch system (web UI: http://localhost:8081)
 just launch "..."  # Launch with parameters
+just launch tx=on       # ⚠️ CAN TX live: this can drive the cart
 just clean              # Remove build artifacts
 just checkout           # Update git submodules
 just --list             # Show all available commands
@@ -124,6 +125,7 @@ no script hardcodes any of it. See [config/README.md](config/README.md).
 | `config/host` | which machine this checkout is (`master`/`orin`). **Gitignored** |
 | `config/multi_machine.conf` | the other host's `user@addr`, repo path, ssh key, master IP |
 | `config/sensors.conf` | `IMU_SOURCE`, `CAMERA_MODEL` — env vars, not launch args |
+| `config/vehicle.conf` | `GOLFCART_TX_ENABLED` — CAN TX master enable, same reason |
 | `config/recording/*_topics.txt` | what each host records |
 | `config/cyclonedds/*.xml` | DDS profiles, one per role |
 
@@ -397,7 +399,7 @@ imu_source:=xsens|zed           # env ONLY - see below
 gnss_receiver:=ublox|septentrio
 ```
 
-**`camera_model` and `imu_source` do NOT work as launch arguments.** They reach
+**`camera_model`, `imu_source` and `tx_enabled` do NOT work as launch arguments.** They reach
 `golfcart_autoware.launch.xml`, but the path onwards runs through
 `tier4_sensing_component.launch.xml` and `tier4_sensing_launch/sensing.launch.xml`
 — installed Autoware files that forward a fixed set of arguments and drop the
@@ -405,6 +407,20 @@ rest. The sensor kit reads `$(env IMU_SOURCE xsens)` / `$(env CAMERA_MODEL gscam
 instead, so `just launch "imu_source:=zed"` looks like it works and does nothing.
 Set them in `config/sensors.conf`, which `scripts/env.sh` sources for both shells
 and units.
+
+`tx_enabled` is the same story one branch over: `tier4_vehicle_launch/vehicle.launch.xml`
+forwards only `vehicle_id`, `raw_vehicle_cmd_converter_param_path` and
+`initial_engage_state`. `vehicle_interface.launch.xml` reads
+`$(env GOLFCART_TX_ENABLED false)`; `config/vehicle.conf` holds the resting value,
+and `just launch tx=on` / `just launch-up tx=on` / `just launch-all tx=on` set it
+per invocation (`scripts/tx_switch.sh` strips the token). Not sticky on purpose:
+an invocation without `tx=`, and `just launch-down`, both clear it.
+`just vehicle-interface tx=on` is a separate path that bypasses Autoware and
+passes the launch argument for real.
+
+`launch-all` applies TX to the **master only** — it does not forward the token to
+the orin, which has no CAN bus. `just host-status` / `just service-status` print
+the effective value and where it came from (`unit-env` or `config/vehicle.conf`).
 
 #### Localization (pose_source)
 ```bash

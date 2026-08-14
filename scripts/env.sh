@@ -217,6 +217,16 @@ if [ -f "${GOLFCART_REPO_ROOT}/config/sensors.conf" ]; then
     export IMU_SOURCE CAMERA_MODEL
 fi
 
+# ── Vehicle interface ────────────────────────────────────────────────────────
+# GOLFCART_TX_ENABLED is an environment variable for the same forced reason:
+# the installed tier4_vehicle_launch/vehicle.launch.xml forwards three arguments
+# to our vehicle_interface.launch.xml and drops the rest. See config/vehicle.conf.
+if [ -f "${GOLFCART_REPO_ROOT}/config/vehicle.conf" ]; then
+    # shellcheck source=/dev/null
+    . "${GOLFCART_REPO_ROOT}/config/vehicle.conf"
+    export GOLFCART_TX_ENABLED
+fi
+
 # The DDS profiles are CycloneDDS XML, so the RMW has to match them. Set
 # unconditionally: the branch above only exports it when Autoware is missing, and
 # a unit that inherits a different RMW would silently ignore CYCLONEDDS_URI.

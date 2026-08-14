@@ -9,6 +9,7 @@ changing a value here changes it for every consumer on both hosts.
 | `host` | one word (`master` or `orin`) | which machine this checkout is on. Selects the DDS profile. **Gitignored** — it is a property of the machine, not the branch |
 | `multi_machine.conf` | shell assignments | the other host's `user@addr`, its repo path, the ssh key, the master's IP |
 | `sensors.conf` | shell assignments | which IMU and camera driver the sensor kit uses (`IMU_SOURCE`, `CAMERA_MODEL`) |
+| `vehicle.conf` | shell assignments | whether the vehicle interface may transmit on CAN (`GOLFCART_TX_ENABLED`) |
 | `recording/master_topics.txt`<br>`recording/orin_topics.txt` | one topic per line, `#` comments | what each host records |
 | `cyclonedds/{master,orin,loopback}.xml` | CycloneDDS XML | DDS network profiles, one per role |
 
@@ -58,6 +59,50 @@ actually reads.
 
 Currently `IMU_SOURCE=zed` — the ZED X's built-in IMU, published by the orin —
 because the Xsens MTi is broken.
+
+## Turning CAN TX on
+
+`vehicle.conf` holds `GOLFCART_TX_ENABLED`. With it `false` — the default — the
+vehicle interface only listens: `/vehicle/status/*` and `/diagnostics` fill in
+normally and nothing we publish can move the cart.
+
+It is an environment variable for the same forced reason as `IMU_SOURCE`: the
+one installed Autoware file in between,
+`tier4_vehicle_launch/vehicle.launch.xml`, forwards exactly `vehicle_id`,
+`raw_vehicle_cmd_converter_param_path` and `initial_engage_state` to our
+`vehicle_interface.launch.xml` and drops the rest. `just launch
+"tx_enabled:=true"` looks like it works and does nothing.
+
+Use the `tx=` token instead — the justfile strips it out of the launch
+arguments and puts it in the environment:
+
+```bash
+just launch tx=on          # single machine, foreground
+just launch-up tx=on       # this host, via systemd
+just launch-all tx=on      # both hosts; TX applies to the master only
+```
+
+⚠️  `tx=on` puts real frames on `can0` and the cart can be commanded into motion.
+
+`launch-all` splits the token off and forwards only the remaining launch
+arguments to the orin. CAN is the master's alone — the orin has no bus, and
+`golfcart.launch.yaml` gates the vehicle group on `is_master` — so the orin's
+`launch-up` runs without `tx=` and therefore clears `GOLFCART_TX_ENABLED` in its
+own user manager rather than inheriting a value from an earlier run.
+
+`just host-status` (and `just service-status`, which runs it on both hosts)
+prints the effective setting next to the unit states, and names where it came
+from: `unit-env` when `launch-up` set it for this run, `config/vehicle.conf`
+when nothing is set.
+
+TX is deliberately **not sticky**. `launch-up` writes it into the user manager's
+environment for that invocation only: an invocation that does not say `tx=`
+clears it, and `launch-down` clears it too. Editing `vehicle.conf` changes the
+resting default for the machine and does make it apply to every launch, which is
+why the file is the wrong place to switch it on for one test.
+
+`just vehicle-interface tx=on` is a different path — it bypasses Autoware
+entirely and passes `tx_enabled:=` as a real launch argument.
 
 ## Changing what is recorded
 
