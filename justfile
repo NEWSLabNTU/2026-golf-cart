@@ -25,31 +25,37 @@ build *FLAGS="":
         just clean --yes
     fi
     just build_seyond
-    # The ZED packages need the ZED SDK headers/libs; the master has no SDK, so
-    # skip them there instead of failing the whole build.
-    ZED_IGNORE=()
+    # Packages a given host cannot build get skipped rather than failing the
+    # whole build. One list, not one per reason: colcon's --packages-ignore
+    # takes the LAST occurrence and discards earlier ones, so passing the flag
+    # twice silently drops the first set. That is not hypothetical — the ZED
+    # skip stopped working the moment the DBC skip was added below it.
+    IGNORE_PKGS=()
+    # The ZED packages need the ZED SDK headers/libs; the master has no SDK.
     if [[ ! -d /usr/local/zed ]]; then
         echo "→ ZED SDK not found at /usr/local/zed — skipping ZED packages"
-        ZED_IGNORE=(--packages-ignore zed_components zed_wrapper zed_ros2 zed_debug)
+        IGNORE_PKGS+=(zed_components zed_wrapper zed_ros2 zed_debug)
     fi
     # golfcart_vehicle_interface generates its CAN bindings from the vendor DBC at
     # build time, and that file is proprietary and gitignored. Only the machine
     # wired to the CAN bus needs the package at all, so a host without the DBC
-    # skips it rather than failing the whole build - the same treatment the ZED
-    # packages get above. Put the DBC in place and it builds again automatically.
-    DBC_IGNORE=()
+    # skips it. Put the DBC in place and it builds again automatically.
     VEHICLE_IF=src/vehicle/golfcart_vehicle_launch/golfcart_vehicle_interface
     if [[ -z "${CAX_ADS_DBC:-}" && ! -f "{{justfile_directory()}}/${VEHICLE_IF}/CAX_ADS_CAN.dbc" ]]; then
         echo "→ CAX_ADS_CAN.dbc not found — skipping golfcart_vehicle_interface"
         echo "  (needed only on the machine driving the CAN bus; see README)"
-        DBC_IGNORE=(--packages-ignore golfcart_vehicle_interface)
+        IGNORE_PKGS+=(golfcart_vehicle_interface)
+    fi
+    IGNORE_ARGS=()
+    if [[ ${#IGNORE_PKGS[@]} -gt 0 ]]; then
+        IGNORE_ARGS=(--packages-ignore "${IGNORE_PKGS[@]}")
     fi
     colcon build \
         --base-paths src \
         --symlink-install \
         --cmake-args -DCMAKE_BUILD_TYPE=Release \
         --cargo-args --release \
-        "${ZED_IGNORE[@]}" "${DBC_IGNORE[@]}"
+        "${IGNORE_ARGS[@]}"
 
 build_seyond:
     cd src/sensor_component/external/seyond_ros_driver && ./build.bash
