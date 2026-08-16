@@ -507,6 +507,11 @@ bag-record:
 bag-record-indoor:
     ./scripts/rosbag/record_indoor_mapping.sh
 
+# Replay a merged NTU campus bag into the logging simulation (see
+# ntu_logging_sim.launch.xml). SET is CSIE-1, CSIE-2 or BLVD-1.
+bag-play-ntu SET="CSIE-1" ARGS="":
+    ./scripts/rosbag/play_ntu_sim.sh {{SET}} {{ARGS}}
+
 # Audit launch files for silently-ignored arguments and unparseable comments.
 audit-launch:
     python3 ./scripts/check/audit_launch.py

@@ -1,0 +1,96 @@
+<?xml version="1.0"?>
+<!--
+  NDT localization against the merged NTU campus map, driven by a replayed bag.
+
+  Bring this up first, then play the bag:
+
+    ros2 launch golfcart_launch ntu_logging_sim.launch.xml
+    just bag-play-ntu CSIE-1
+
+  What these recordings do NOT contain, and what this file does about it:
+
+  - GNSS was switched off. The topics are in the bag with zero messages, so
+    use_gnss is false and initialization is manual (2D Pose Estimate in RViz, or
+    an /initialpose3d publish). Nothing here will guess a pose for you: with no
+    GNSS and no ArUco, an automatic first guess would be fiction.
+
+  - The XSens IMU was not working, and there is no imu topic from it in the bag
+    at all. imu_source is `zed`, which the sensor kit already supports — it
+    points imu_corrector at /sensing/camera/zed/imu/data rather than launching a
+    driver.
+
+  - The ZED IMU reports frame `zed_imu_link`, which is absent from the recorded
+    /tf_static. It is NOT missing: the ZED driver publishes it on /tf as a
+    dynamic transform, and the bag carries 43k of them. That matters because the
+    obvious fix — a static_transform_publisher here — puts two authorities on
+    the same parent/child pair and throws away the small factory rotation the
+    driver reports (translation [0, -0.0356, -0.0001], about 0.4 degrees of
+    tilt). Replay supplies the frame; nothing needs to add it.
+
+    Worth knowing anyway, because the failure it would cause is silent:
+    gyro_odometer drops every IMU message it cannot transform, every node stays
+    healthy, and the EKF simply never receives a twist.
+-->
+<launch>
+  <arg name="map_path" default="/home/aeon/Downloads/2026-04_ntu_map/merged"
+       description="merged r01 + r02 NTU map; see scripts/map/merge_maps.py"/>
+  <arg name="vehicle_id" default="default"/>
+  <arg name="rviz" default="true"/>
+  <arg name="launch_perception" default="false"/>
+  <arg name="launch_planning" default="false"/>
+  <arg name="launch_control" default="false"/>
+
+  <include file="$(find-pkg-share golfcart_launch)/launch/golfcart_autoware.launch.xml">
+    <arg name="vehicle_model" value="golfcart_vehicle"/>
+    <arg name="sensor_model" value="golfcart_sensor_kit"/>
+    <arg name="vehicle_id" value="$(var vehicle_id)"/>
+    <arg name="map_path" value="$(var map_path)"/>
+    <arg name="data_path" value="/opt/autoware/1.5.0/data"/>
+
+    <!-- Replay drives every sensor topic, so no driver may open hardware. -->
+    <arg name="launch_sensing" value="true"/>
+    <arg name="launch_sensing_driver" value="false"/>
+    <arg name="launch_vehicle" value="true"/>
+    <arg name="launch_vehicle_interface" value="false"/>
+
+    <arg name="launch_map" value="true"/>
+    <arg name="launch_localization" value="true"/>
+    <arg name="launch_perception" value="$(var launch_perception)"/>
+    <arg name="launch_planning" value="$(var launch_planning)"/>
+    <arg name="launch_control" value="$(var launch_control)"/>
+    <arg name="launch_system" value="true"/>
+    <arg name="system_run_mode" value="logging_simulation"/>
+    <arg name="launch_system_monitor" value="false"/>
+    <arg name="launch_dummy_diag_publisher" value="false"/>
+
+    <arg name="pose_source" value="ndt"/>
+    <arg name="twist_source" value="gyro_odom"/>
+    <arg name="imu_source" value="zed"/>
+
+    <!-- GNSS was off for these runs. gnss_receiver still needs a real value:
+         the sensor kit resolves its topic through a dict lookup that raises
+         KeyError on an empty string and takes the whole launch down with it,
+         even when no driver is started. -->
+    <arg name="use_gnss" value="false"/>
+    <arg name="gnss_receiver" value="ublox"/>
+
+    <arg name="camera_model" value="none"/>
+
+    <!-- VLP32 as the primary LiDAR for NDT, by feeding NDT its cloud directly
+         rather than the fused one.
+
+         Not done by narrowing the concatenator to one input: that component
+         rejects a single topic outright — "Only one topic given. Need at least
+         two topics to continue." — and the whole preprocessing chain then fails
+         to load, leaving NDT with no cloud at all. Bypassing it is the only way
+         to have one LiDAR drive the match.
+
+         velodyne_points rather than the vlp32/pointcloud topic: it is the
+         higher-rate stream in these recordings (~7 Hz against ~4 Hz), which
+         matters for a scan matcher. -->
+    <arg name="input_pointcloud" value="/sensing/lidar/vlp32/velodyne_points"/>
+
+    <arg name="rviz" value="$(var rviz)"/>
+    <arg name="use_sim_time" value="true"/>
+  </include>
+</launch>
