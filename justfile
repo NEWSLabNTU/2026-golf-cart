@@ -21,6 +21,7 @@ setup:
 build *FLAGS="":
     #!/usr/bin/env bash
     set -e
+    source "{{justfile_directory()}}/scripts/_env_guard.sh"
     if [[ "{{FLAGS}}" == *"--clean"* ]]; then
         just clean --yes
     fi
@@ -63,6 +64,7 @@ build_seyond:
 # Run tests for packages in src/ directory
 test:
     #!/usr/bin/env bash
+    source "{{justfile_directory()}}/scripts/_env_guard.sh"
     colcon test \
         --base-paths src \
         --return-code-on-test-failure; \
