@@ -119,9 +119,34 @@ sudo apt update
 sudo apt install -y "$TEMP_DEB"
 
 # Run setup-prerequisites.sh
+#
+# Left to itself this script asks its own two questions — ROS 2 Humble, and
+# SpConv/Cumm — partway through ours, which is a second interactive session
+# arriving after the user thought they had answered everything. It accepts
+# flags for both, so the answers are collected in our menu and passed through;
+# see AUTOWARE_PREREQ_* in setup.sh.
+#
+# Defaults when the variables are unset (i.e. this script run directly):
+#   ROS 2  -> --no-ros, because `just setup` installs ROS 2 itself, before
+#             this step. Letting the nested script install it again is at best
+#             redundant and at worst a different configuration.
+#   SpConv -> --no-spconv, matching the nested script's own default. It is
+#             needed only by perception models this stack does not use
+#             (BEVFusion and friends).
 if [ -f /usr/share/autoware/setup-prerequisites.sh ]; then
-    echo "  Running /usr/share/autoware/setup-prerequisites.sh..."
-    sudo /usr/share/autoware/setup-prerequisites.sh
+    PREREQ_ARGS=()
+    if [ "${AUTOWARE_PREREQ_ROS:-n}" = "y" ]; then
+        PREREQ_ARGS+=(--install-ros)
+    else
+        PREREQ_ARGS+=(--no-ros)
+    fi
+    if [ "${AUTOWARE_PREREQ_SPCONV:-n}" = "y" ]; then
+        PREREQ_ARGS+=(--spconv)
+    else
+        PREREQ_ARGS+=(--no-spconv)
+    fi
+    echo "  Running /usr/share/autoware/setup-prerequisites.sh ${PREREQ_ARGS[*]}..."
+    sudo /usr/share/autoware/setup-prerequisites.sh "${PREREQ_ARGS[@]}"
 else
     echo "  Warning: /usr/share/autoware/setup-prerequisites.sh not found. Skipping."
 fi

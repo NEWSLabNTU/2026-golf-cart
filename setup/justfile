@@ -33,7 +33,7 @@ default:
     @just --list
 
 # Full setup (runs all steps in order)
-setup: _init ros2 ros2-dev-tools gdown geographiclib pacmod dev-tools _setup-autoware-debian _setup-isaac-ros python-deps nebula-driver ublox-driver ublox-udev tier4-camera gscam _setup-cyclonedds-sysctl _setup-turbovnc-virtualgl _setup-hardware-config _setup-otocam _setup-linuxptp ros-deps
+setup: _init ros2 ros2-dev-tools gdown geographiclib pacmod dev-tools _setup-autoware-debian _setup-autoware-data _setup-tensorrt-engines _setup-isaac-ros python-deps nebula-driver ublox-driver ublox-udev tier4-camera gscam _setup-cyclonedds-sysctl _setup-turbovnc-virtualgl _setup-hardware-config _setup-otocam _setup-linuxptp ros-deps
     @printf "{{green}}✓ Setup complete!{{nc}}\n"
 
 # Conditional Autoware Debian install (based on SKIP_AUTOWARE_DEBIAN env var)
@@ -43,6 +43,38 @@ _setup-autoware-debian:
         printf "{{yellow}}⊘{{nc}} autoware-debian skipped (user choice)\n"
     else
         just autoware-debian
+    fi
+
+# Writable Autoware data dir (based on SETUP_AUTOWARE_DATA env var).
+#
+# Must run AFTER autoware-debian: it mirrors whatever /opt/autoware/*/data the
+# package installed. Cheap (symlinks, under a second) and it is what lets
+# TensorRT cache its engines at all — the packaged directory is root-owned, so
+# without this every model fails to write its .engine and rebuilds, and fails,
+# on every launch.
+_setup-autoware-data:
+    #!/usr/bin/env bash
+    if [[ "${SETUP_AUTOWARE_DATA:-n}" != "y" ]]; then
+        printf "{{yellow}}⊘{{nc}} autoware-data skipped (user choice)\n"
+    elif [[ ! -d /opt/autoware ]]; then
+        printf "{{yellow}}⊘{{nc}} autoware-data skipped (no /opt/autoware — install Autoware first)\n"
+    else
+        {{justfile_directory()}}/../scripts/setup_autoware_data.sh
+    fi
+
+# Pre-compile TensorRT engines (based on BUILD_TENSORRT_ENGINES env var).
+#
+# ~11 minutes on an Orin, dominated by the YOLOX traffic-light detector (~8 of
+# them). Skipping is legitimate — the first launch will build them instead —
+# but it does so INSIDE each node's constructor, so perception is unavailable
+# until it finishes.
+_setup-tensorrt-engines:
+    #!/usr/bin/env bash
+    if [[ "${BUILD_TENSORRT_ENGINES:-n}" != "y" ]]; then
+        printf "{{yellow}}⊘{{nc}} tensorrt-engines skipped (built on first launch instead)\n"
+    else
+        printf "{{green}}→{{nc}} Compiling TensorRT engines (~11 min)...\n"
+        ( cd {{justfile_directory()}}/.. && just build-engines )
     fi
 
 # Conditional CycloneDDS sysctl configuration (based on CONFIGURE_CYCLONEDDS_SYSCTL env var)
