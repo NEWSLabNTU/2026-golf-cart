@@ -49,8 +49,8 @@ launch:
 
 - arg:
     name: gnss_receiver
-    default: ""
-    description: "GNSS receiver type (ublox, septentrio, or garmin) - empty string uses suite default"
+    default: "$(env GNSS_RECEIVER ublox)"
+    description: "GNSS receiver: ublox | septentrio | garmin. Defaults to $GNSS_RECEIVER."
 
 - arg:
     name: use_gnss

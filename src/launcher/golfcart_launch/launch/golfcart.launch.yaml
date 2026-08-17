@@ -64,10 +64,22 @@ launch:
     default: "$(env IMU_SOURCE xsens)"
     description: "IMU source: xsens | zed. Defaults to $IMU_SOURCE (config/sensors.conf)"
 
+# gnss_receiver defaults to a REAL receiver, not "", for the same reason
+# camera_model and imu_source do above — and this one was not survivable by
+# accident. `""` is forwarded unconditionally and reaches the sensor kit, whose
+# gnss.launch.xml resolves the topic with a dict lookup:
+#
+#   $(eval "{'ublox': ..., 'septentrio': ..., 'garmin': ...}['$(var gnss_receiver)']")
+#
+# An empty key is a KeyError, and it aborts the WHOLE launch — measured with
+# stock `ros2 launch`, which got 27 nodes up and then died with
+# `Caught exception in launch: ''`. The description claiming "empty string uses
+# suite default" was never true: an <arg> forwarded with value="" overrides the
+# sensor kit's own `default="ublox"` rather than deferring to it.
 - arg:
     name: gnss_receiver
-    default: ""
-    description: "GNSS receiver type (ublox, septentrio, or garmin) - empty string uses suite default"
+    default: "$(env GNSS_RECEIVER ublox)"
+    description: "GNSS receiver: ublox | septentrio | garmin. Defaults to $GNSS_RECEIVER."
 
 - arg:
     name: use_gnss
