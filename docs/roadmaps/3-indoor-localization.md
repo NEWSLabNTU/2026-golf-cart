@@ -23,7 +23,7 @@ This phase was previously "AR tags correct a primary NDT estimator." It is now
 | **B — indoor mapping** | **Deleted.** No point cloud map is needed. |
 | **C — tag map building** | **Deleted.** Poses are measured by hand, not bootstrapped from an NDT drive. |
 | **D — runtime integration** | **Rewritten.** See the spec; the phase doc's task list is stale. |
-| **E — board pose initializer** | **Premise superseded.** Built to seed NDT, which is gone. Retire, or repurpose as an out-of-channel integrity check — see its doc. |
+| **E — board pose initializer** | **Retired 2026-08-17,** package deleted. Built to seed NDT, which is gone. Recoverable from `486bf5b` if the integrity-check argument ever turns — see its doc. |
 
 Also deleted: NDT regularization and its feedback-loop hazard, the
 `golfcart_pose_merger`, the separate initializer node, tag-map staleness

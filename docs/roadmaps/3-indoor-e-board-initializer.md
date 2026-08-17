@@ -4,19 +4,20 @@ Part of [Phase 3 indoor localization](3-indoor-localization.md).
 Design: [board_pose_initializer.md](../design/board_pose_initializer.md)
 Map contract: [indoor_pcd_mapping_reflector_anchor.md](../design/indoor_pcd_mapping_reflector_anchor.md)
 
-> **PREMISE SUPERSEDED 2026-08-17 — the code works, the job it was for is gone.**
+> **RETIRED 2026-08-17. The package is deleted; this doc is history.**
 >
-> This sub-phase existed to replace GNSS for **NDT cold start** indoors. The
-> ArUco indoor localizer
-> ([spec](../superpowers/specs/2026-08-10-aruco-indoor-localizer-design.md))
-> makes ArUco boards the sole pose source and removes NDT indoors, so there is
-> no scan matcher to seed. Initialization is now a mode inside that localizer
-> publishing to `/initialpose3d`, gated on ≥2 markers and 5 agreeing solves
-> (spec §4.3).
+> Built to replace GNSS for **NDT cold start** indoors. The ArUco localizer
+> ([spec](../superpowers/specs/2026-08-10-aruco-indoor-localizer-design.md)) made
+> ArUco boards the sole indoor pose source and removed NDT, so nothing was left
+> to seed — initialization is a mode inside that localizer, publishing to
+> `/initialpose3d` once ≥2 markers and 5 agreeing solves pass its gates.
 >
-> The detector, the simulator and the anchoring tool are implemented and tested;
-> nothing here is broken. What is gone is the reason to run it. See
-> *Where this leaves the work* before scheduling anything below.
+> `src/localization/golfcart_board_initializer/` is gone as of the commit after
+> `486bf5b`, which is where to look for the detector, the VLP-32C simulator, the
+> map anchoring tool and the intensity-preserving PLY/PCD conversion. Nothing was
+> broken; the job went away. The option of repurposing it as an out-of-channel
+> integrity check is written up below, and remains available from that commit if
+> the coverage argument ever turns.
 
 **Status: Implemented and passing in simulation. Not scheduled — its caller was
 removed with NDT; see the banner above and *Where this leaves the work* below.**

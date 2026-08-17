@@ -1,6 +1,12 @@
 # Reflective Board Pose Initializer — Design
 
-**Status**: Implemented, sub-phase 3E stages 1-5; see the phase doc for what remains
+**Status**: **Retired 2026-08-17. The package is deleted; this is history.**
+The ArUco localizer made ArUco boards the sole indoor pose source and removed
+NDT, so there was no scan matcher left to seed. The implementation — detector,
+VLP-32C simulator, anchoring tool, PLY/PCD conversion — lives in `486bf5b`.
+Kept because the measurements below outlive the package: the VLP-32C
+retroreflector band, the 3 m minimum range that follows from the beam table, and
+the blooming behaviour are properties of the sensor, not of this design.
 **Date**: 2026-08-12 (updated after implementation)
 **Phase doc**: [3-indoor-e-board-initializer.md](../roadmaps/3-indoor-e-board-initializer.md)
 **Depends on**: [indoor_pcd_mapping_reflector_anchor.md](indoor_pcd_mapping_reflector_anchor.md)

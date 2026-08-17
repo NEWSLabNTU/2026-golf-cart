@@ -245,8 +245,8 @@ and stay:
   3D-7 has its own `record_aruco.sh` for its purposes; this one remains the
   recipe for a run that also wants LiDAR.
 
-Two are **dormant, not dead**: `anchor_map_to_board` and the intensity-preserving
-PLY↔PCD conversion in `golfcart_board_initializer`. They only matter if a point
-cloud map is ever wanted again — for perception, for a NDT second opinion, or if
-the ArUco-only architecture is revisited. They are tested and self-contained, so
-that decision stays cheap.
+`anchor_map_to_board` and the intensity-preserving PLY↔PCD conversion lived in
+`golfcart_board_initializer`, which was **deleted with sub-phase 3E on
+2026-08-17**. They were tested and self-contained, and are recoverable from
+`486bf5b` if a point cloud map is ever wanted again — for perception, for an NDT
+second opinion, or if the ArUco-only architecture is revisited.

@@ -1,6 +1,10 @@
 # Indoor PCD Map Creation with a Reflector-Anchored Origin — Design
 
-**Status**: Draft, pending review
+**Status**: **Superseded 2026-08-17.** Sub-phase B is deleted — the ArUco
+localizer needs no point cloud map — and the anchoring tool this describes went
+with the `golfcart_board_initializer` package in the commit after `486bf5b`.
+Kept for the reasoning: if a point cloud map is ever wanted again, the
+anchored-origin argument and the GLIM findings still apply.
 **Date**: 2026-08-11
 **Phase docs**: [3-indoor-b-indoor-mapping.md](../roadmaps/3-indoor-b-indoor-mapping.md),
 [3-indoor-localization.md](../roadmaps/3-indoor-localization.md)
