@@ -111,6 +111,19 @@ launch:
       several consecutive agreeing solves, which works while moving. Turning it
       on is a commissioning policy choice.
 
+# Where Autoware's model data lives. NOT the packaged /opt/autoware/<ver>/data:
+# that is root-owned, and TensorRT writes each .engine next to its .onnx, so a
+# read-only tree makes every model fail to cache and rebuild (and fail) on every
+# launch. `just setup-autoware-data` builds a writable symlink farm here;
+# `just build-engines` fills it in advance.
+#
+# Relative, like map_path above, so it resolves against the directory the launch
+# is started from — the repository root in every supported workflow.
+- arg:
+    name: data_path
+    default: "./data/autoware_data"
+    description: "Autoware model/artifact directory. Must be WRITABLE: TensorRT caches .engine files here."
+
 - arg:
     name: launch_perception
     default: "false"
@@ -155,7 +168,7 @@ launch:
       value: ./data/COSS-map-planning
     -
       name: data_path
-      value: /opt/autoware/1.5.0/data
+      value: $(var data_path)
     -
       name: launch_vehicle
       value: "true"

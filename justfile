@@ -58,6 +58,81 @@ build *FLAGS="":
         --cargo-args --release \
         "${IGNORE_ARGS[@]}"
 
+# Symlink the packaged Autoware models into a writable tree so TensorRT can
+# write its .engine files beside them. See scripts/setup_autoware_data.sh.
+#
+# just --list shows only the LAST comment line, so the description goes here.
+# Link Autoware model data into data/autoware_data (writable, for TensorRT)
+setup-autoware-data:
+    ./scripts/setup_autoware_data.sh
+
+# Compile the TensorRT engines this stack needs, ahead of the first launch.
+#
+# Autoware compiles an .onnx into a .engine inside the NODE'S CONSTRUCTOR the
+# first time it runs. On the Orin that is minutes per model — measured, 94 s for
+# the small traffic-light classifier alone — during which the node is not up and
+# perception is unavailable. Doing it here turns that into a provisioning step.
+#
+# Engines are specific to the TensorRT version AND the GPU, so this must run ON
+# THE TARGET BOARD. It cannot be baked into an image built elsewhere, and it
+# must be re-run after an Autoware or JetPack upgrade.
+#
+# The model set below is the one `perception_preset:=camera_lidar_fusion`
+# actually resolves to — derived by resolving the launch and listing every node
+# that references a .onnx. Re-derive it if the preset changes:
+#
+#     play_launch resolve golfcart_launch golfcart.launch.yaml \
+#       launch_perception:=true perception_preset:=camera_lidar_fusion -o /tmp/m.yaml
+#
+# `autoware_shape_estimation` is deliberately absent: it uses TensorRT but ships
+# no `build_only` argument, so its pointnet engine is still built on first use.
+# That is one model rather than six, and it succeeds now that the directory is
+# writable.
+#
+# just --list shows only the LAST comment line, so the description goes here.
+# Compile TensorRT engines ahead of time (minutes; run on the target board)
+build-engines:
+    #!/usr/bin/env bash
+    # No `set -u`: ROS's own setup.bash reads unbound variables and dies under
+    # it (AMENT_TRACE_SETUP_FILES). No `set -e` either — one model failing must
+    # not hide the rest, and the summary at the end reports what actually
+    # landed.
+    set -o pipefail
+    just setup-autoware-data
+    source /opt/ros/humble/setup.bash
+    source /opt/autoware/1.5.0/setup.bash
+    DATA="${GOLFCART_DATA_PATH:-{{justfile_directory()}}/data/autoware_data}"
+
+    # Each entry: <package> <launch file> [extra args]. `build_only:=true` makes
+    # the node exit as soon as its engine is written — an Autoware-provided
+    # argument, so the builder settings match what the node will later expect.
+    # Building with trtexec by hand would not guarantee that.
+    build() {
+        local pkg="$1" launch="$2"; shift 2
+        echo "=== ${pkg} ${launch}"
+        local start=$SECONDS
+        # Stream the TensorRT lines rather than piping into `tail`, which
+        # buffers the whole build and shows nothing for minutes — on a step
+        # that takes minutes per model, silence is indistinguishable from a
+        # hang. `--line-buffered` matters for the same reason.
+        #
+        # Not fatal on failure: one model failing must not hide the others, and
+        # the summary below reports what actually landed.
+        ros2 launch "${pkg}" "${launch}" data_path:="${DATA}" build_only:=true "$@" 2>&1 \
+            | grep --line-buffered -iE "engine generation|engine build|error|fail" \
+            | sed -u 's/^/    /' || true
+        echo "    (${pkg}: $((SECONDS - start))s)"
+    }
+
+    build autoware_lidar_centerpoint lidar_centerpoint.launch.xml model_name:=centerpoint_tiny
+    build autoware_traffic_light_classifier car_traffic_light_classifier.launch.xml
+    build autoware_traffic_light_classifier pedestrian_traffic_light_classifier.launch.xml
+    build autoware_traffic_light_fine_detector traffic_light_fine_detector.launch.xml
+
+    echo
+    echo "=== engines in ${DATA}"
+    find "${DATA}" -name '*.engine' -type f -printf '  %P  %s bytes\n' | sort
+
 build_seyond:
     cd src/sensor_component/external/seyond_ros_driver && ./build.bash
 
