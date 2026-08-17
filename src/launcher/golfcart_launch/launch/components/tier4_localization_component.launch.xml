@@ -5,6 +5,10 @@
   <arg name="pose_source" default="ndt" description="select pose_estimator: aruco, ndt, cuda_ndt, yabloc, eagleye"/>
   <arg name="aruco_tag_map_path" default="" description="hand-surveyed board map; required when pose_source:=aruco"/>
   <arg name="twist_source" default="gyro_odom" description="select twist_estimator: gyro_odom, eagleye"/>
+  <!-- Overridable so a tuning run can swap NDT parameters without editing the
+       shipped file. Defaults to it, so nothing changes unless asked. -->
+  <arg name="ndt_param_file"
+       default="$(var loc_config_path)/ndt_scan_matcher/ndt_scan_matcher.param.yaml"/>
   <arg name="input_pointcloud" default="/sensing/lidar/concatenated/pointcloud" description="The topic will be used in the localization util module"/>
   <arg name="localization_pointcloud_container_name" default="/pointcloud_container" description="The target container to which pointcloud preprocessing nodes in localization be attached"/>
   <arg name="initial_pose" default="[]" description="initial pose (x, y, z, quat_x, quat_y, quat_z, quat_w)"/>

@@ -519,6 +519,18 @@ bag-record-indoor:
 bag-play-ntu SET="CSIE-1" ARGS="":
     ./scripts/rosbag/play_ntu_sim.sh {{SET}} {{ARGS}}
 
+# Re-apply a captured initial pose so an NTU replay starts unattended.
+ntu-sim-init SET="CSIE-1":
+    python3 ./scripts/localization/set_initial_pose.py {{SET}}
+
+# Capture the current converged pose for a set, after placing one in RViz.
+ntu-sim-capture SET="CSIE-1":
+    python3 ./scripts/localization/capture_initial_pose.py {{SET}}
+
+# Score a running NDT replay on pose quality (scatter, yaw step), not on NVTL.
+ntu-sim-report ARGS="":
+    python3 ./scripts/localization/ndt_quality_report.py {{ARGS}}
+
 # Audit launch files for silently-ignored arguments and unparseable comments.
 audit-launch:
     python3 ./scripts/check/audit_launch.py
