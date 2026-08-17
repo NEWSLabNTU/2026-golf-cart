@@ -89,6 +89,15 @@ launch:
     description: "Localization preset: default, eagleye"
 
 # Include perception preset (defines perception_mode, use_traffic_light_recognition, etc.)
+# Autoware model/artifact directory. NOT the packaged /opt/autoware/<ver>/data:
+# that is root-owned, and TensorRT writes each .engine next to its .onnx, so a
+# read-only tree makes every model fail to cache and rebuild on every launch.
+# `just setup-autoware-data` creates this; `just build-engines` fills it.
+- arg:
+    name: data_path
+    default: "./data/autoware_data"
+    description: "Autoware model/artifact directory. Must be WRITABLE: TensorRT caches .engine files here."
+
 - include:
     file: "$(find-pkg-share golfcart_launch)/config/perception/preset/$(var perception_preset)_preset.yaml"
 
@@ -114,7 +123,7 @@ launch:
       value: ./data/COSS-map-planning
     -
       name: data_path
-      value: /opt/autoware/1.5.0/data
+      value: $(var data_path)
     -
       name: launch_vehicle
       value: "false"
