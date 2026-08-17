@@ -15,13 +15,7 @@ Prerequisite for [Phase 3 indoor localization](3-indoor-localization.md).
 Design spec: [§2 B](../superpowers/specs/2026-07-27-indoor-artag-localization-design.md#b--indoor-mapping-contract-for-d)
 Mapping method: [indoor_pcd_mapping_reflector_anchor.md](../design/indoor_pcd_mapping_reflector_anchor.md)
 
-**Status: Tooling done, field work not started.** The GNSS audit, the mapping-run
-recorder, the anchoring tool, and the PLY-to-PCD conversion all exist and are
-tested. Everything remaining needs the mapping bag, which needs a site, a mounted
-board, and a vehicle. Still blocks sub-phases C and D; NDT validation is
-additionally blocked by DBW.
-
-Last updated: 2026-08-13
+Last updated: 2026-08-17 (superseded)
 
 ---
 
@@ -229,3 +223,30 @@ tag map that agrees with the poor map, and the failure presents at runtime as a
 tag problem rather than a map problem.
 
 Take the time here. It is cheaper than debugging it in D.
+
+
+---
+
+## What survives the deletion
+
+The mapping run, the PCD map, the Lanelet2 route and the NDT validation are all
+gone with the sub-phase. Three things built along the way are independent of it
+and stay:
+
+- **The GNSS-dependency fixes.** `gnss_enabled` following `use_gnss`, and the
+  regularization topic becoming an argument, were about the launch tree rather
+  than about mapping. The first still matters: any GNSS-denied operation needs
+  it, ArUco or not. The second is now moot in the same way NDT is — kept because
+  a hardcoded topic is wrong regardless.
+- **The system monitor following `use_gnss`.** Same reasoning, and it is what
+  turned up the broken monitor include that would have killed
+  `logging_simulation`.
+- **`just bag-record-indoor`.** Records LiDAR, IMU and all three cameras. Phase
+  3D-7 has its own `record_aruco.sh` for its purposes; this one remains the
+  recipe for a run that also wants LiDAR.
+
+Two are **dormant, not dead**: `anchor_map_to_board` and the intensity-preserving
+PLY↔PCD conversion in `golfcart_board_initializer`. They only matter if a point
+cloud map is ever wanted again — for perception, for a NDT second opinion, or if
+the ArUco-only architecture is revisited. They are tested and self-contained, so
+that decision stays cheap.

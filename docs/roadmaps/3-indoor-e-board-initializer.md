@@ -4,10 +4,24 @@ Part of [Phase 3 indoor localization](3-indoor-localization.md).
 Design: [board_pose_initializer.md](../design/board_pose_initializer.md)
 Map contract: [indoor_pcd_mapping_reflector_anchor.md](../design/indoor_pcd_mapping_reflector_anchor.md)
 
-**Status: Implemented and passing in simulation. On-vehicle and replay validation
-blocked by the indoor map (sub-phase B) and the DBW velocity stub.**
+> **PREMISE SUPERSEDED 2026-08-17 — the code works, the job it was for is gone.**
+>
+> This sub-phase existed to replace GNSS for **NDT cold start** indoors. The
+> ArUco indoor localizer
+> ([spec](../superpowers/specs/2026-08-10-aruco-indoor-localizer-design.md))
+> makes ArUco boards the sole pose source and removes NDT indoors, so there is
+> no scan matcher to seed. Initialization is now a mode inside that localizer
+> publishing to `/initialpose3d`, gated on ≥2 markers and 5 agreeing solves
+> (spec §4.3).
+>
+> The detector, the simulator and the anchoring tool are implemented and tested;
+> nothing here is broken. What is gone is the reason to run it. See
+> *Where this leaves the work* before scheduling anything below.
 
-Last updated: 2026-08-12
+**Status: Implemented and passing in simulation. Not scheduled — its caller was
+removed with NDT; see the banner above and *Where this leaves the work* below.**
+
+Last updated: 2026-08-17 (premise superseded)
 
 ---
 
@@ -15,7 +29,8 @@ Last updated: 2026-08-12
 
 Detect the single retroreflective board from a stationary LiDAR scan, compute the
 vehicle pose in the map frame, and hand it to `autoware_pose_initializer` as an
-initial guess. This is the GNSS replacement for cold start indoors.
+initial guess. This *was* the GNSS replacement for cold start indoors, when NDT
+was the indoor pose source.
 
 ---
 
@@ -29,8 +44,8 @@ proceeds in parallel.
 |------|------------|
 | Simulator, detector, unit tests | Nothing |
 | Node wiring, service call, diagnostics | Nothing |
-| End-to-end replay validation | Indoor map from [sub-phase B](3-indoor-b-indoor-mapping.md) |
-| On-vehicle validation | Sub-phase B, and the DBW velocity stub (see [3-indoor-localization.md](3-indoor-localization.md)) |
+| End-to-end replay validation | ~~Indoor map from sub-phase B~~ — that sub-phase is deleted, so this is not blocked, it is moot |
+| On-vehicle validation | Same. There is no NDT to initialize |
 
 ---
 
@@ -127,8 +142,8 @@ proceeds in parallel.
 - [x] Diagnostics distinguish "no detection", "ambiguous", and "service failed".
 - [x] `detector.py` runs, and its tests pass, with no ROS installed. 30 tests,
       about one second.
-- [ ] Node initializes localization end to end in replay, with no GNSS and no
-      manual RViz input. **Blocked on the sub-phase B indoor map.**
+- [ ] ~~Node initializes localization end to end in replay~~ — moot. There is no
+      NDT indoors to initialize, and the sub-phase B map it needed is deleted.
 
 ---
 
@@ -229,3 +244,56 @@ Two smaller findings from the same session:
   requirement loose enough to be achievable.
 - `autoware_lidar_marker_localizer` cannot be reused for initialization: it
   associates detections using the EKF pose that cold start does not yet have.
+
+
+---
+
+## Where this leaves the work
+
+Two honest options, and the choice is not obvious.
+
+### Retire it
+
+The straightforward reading. NDT is gone indoors, the ArUco localizer initializes
+itself, and a LiDAR board detector that seeds nothing is a package to maintain
+for no current caller. The code stays in git history and `anchor_map_to_board`
+remains useful independently (see the [3B note](3-indoor-b-indoor-mapping.md)).
+
+### Repurpose it as the second opinion the new architecture lacks
+
+The ArUco spec is candid that removing NDT removed the fallback, and names the
+resulting failure precisely (§0, §6):
+
+> A board that was mistyped or has been knocked askew will place the vehicle
+> confidently in the wrong place, with nothing to disagree.
+
+Its defence is redundancy *between markers* — per-marker residuals from the joint
+solve, RAIM-style fault exclusion. That catches one bad board among several. It
+cannot catch a systematic error, because every check lives inside the same
+measurement channel: the same cameras, the same hand-measured map, the same
+solver.
+
+A retroreflective board detected by the **LiDAR** is a different channel end to
+end — different sensor, different physics, different failure modes, and a pose
+derived from geometry rather than from the tag map. It does not need to localize
+the vehicle. Publishing "I am 6.0 m from the board, the ArUco solution says
+5.4 m" is enough to turn a silent wrong-place failure into a loud disagreement,
+which is the whole gap §6 is working around.
+
+What that would take, roughly:
+
+- The detector, already built and tested, running against the live scan.
+- One board's pose in the same frame the ArUco map uses — hand-measured like the
+  rest, not NDT-derived, so the deleted bootstrap is not resurrected.
+- A residual published as a diagnostic, with **no** path into the EKF. It is a
+  check, not a pose source; feeding it into the filter would recreate the fusion
+  complexity this architecture deliberately dropped.
+
+Cost is small because the detection half exists. The real question is whether the
+integrity gap is worth one more mounted object and one more node — a call for
+whoever owns the safety case, not one to make by default.
+
+### Not an option
+
+Keeping this doc as-is. It currently reads as scheduled work on the critical
+path, and it is neither.

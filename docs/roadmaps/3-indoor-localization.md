@@ -23,6 +23,7 @@ This phase was previously "AR tags correct a primary NDT estimator." It is now
 | **B — indoor mapping** | **Deleted.** No point cloud map is needed. |
 | **C — tag map building** | **Deleted.** Poses are measured by hand, not bootstrapped from an NDT drive. |
 | **D — runtime integration** | **Rewritten.** See the spec; the phase doc's task list is stale. |
+| **E — board pose initializer** | **Premise superseded.** Built to seed NDT, which is gone. Retire, or repurpose as an out-of-channel integrity check — see its doc. |
 
 Also deleted: NDT regularization and its feedback-loop hazard, the
 `golfcart_pose_merger`, the separate initializer node, tag-map staleness
@@ -58,14 +59,6 @@ Removing NDT removed the fallback. Three consequences, all covered in the spec:
 
 See [3-indoor-a-camera-calibration.md](3-indoor-a-camera-calibration.md).
 Hard blockers it must clear:
-
-| Sub-phase | Doc | Status |
-|-----------|-----|--------|
-| A — Camera calibration | [3-indoor-a-camera-calibration.md](3-indoor-a-camera-calibration.md) | Not started |
-| B — Indoor mapping | [3-indoor-b-indoor-mapping.md](3-indoor-b-indoor-mapping.md) | Tooling done and tested; field work waits on a site |
-| C — Tag map building | [3-indoor-c-tag-map-building.md](3-indoor-c-tag-map-building.md) | Not started |
-| D — Runtime integration | [3-indoor-d-runtime-integration.md](3-indoor-d-runtime-integration.md) | Design complete, not started |
-| E — Board pose initializer | [3-indoor-e-board-initializer.md](3-indoor-e-board-initializer.md) | Implemented, passing in simulation; replay validation blocked by B |
 
 - **No `*_optical_link` frames exist in the URDF.** PnP returns optical-convention
   poses; composing through the body-frame links rotates every observation ~90°.
@@ -118,19 +111,21 @@ pose and the tag map, so the entire solve can be built and validated against
 exact ground truth before a real image is processed — and against faults that
 can be dialled in, which no rosbag provides.
 
-### E — Board pose initializer, added 2026-08-12
+### E — Board pose initializer, added 2026-08-12, premise superseded 2026-08-17
 
-Sub-phase E replaces GNSS for **cold start only**, using a LiDAR-detected
-retroreflective board rather than a camera-detected tag. It exists because the
-indoor map is anchored to that board
-([mapping design §4](../design/indoor_pcd_mapping_reflector_anchor.md)), which
-makes the map origin physically re-findable and the initial pose exact by
-construction.
+Sub-phase E replaced GNSS for **NDT cold start** using a LiDAR-detected
+retroreflective board. With NDT gone indoors there is nothing to seed:
+initialization is now a mode inside the ArUco localizer, publishing to
+`/initialpose3d` once ≥2 markers and 5 agreeing solves pass its gates.
 
-E is largely independent of A–D: its detector and simulator need no camera, no
-map, and no vehicle, so it can proceed in parallel while the Orin work continues
-elsewhere. It does not replace D — the board is not visible from most of the
-route, so bounding drift remains the tags' job.
+The code is implemented and tested and nothing about it is broken — only its
+caller is gone. Two options, set out in
+[3-indoor-e-board-initializer.md](3-indoor-e-board-initializer.md): retire it, or
+repurpose it as the second opinion this architecture openly lacks. Marker-to-marker
+residuals catch one bad board among several, but every such check shares one
+measurement channel — the same cameras, the same hand-measured map, the same
+solver. A LiDAR-detected board disagrees from outside that channel, at the cost of
+one more mounted object and one more node.
 
 ---
 
