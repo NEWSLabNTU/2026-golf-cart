@@ -33,7 +33,14 @@ build *FLAGS="":
     # skip stopped working the moment the DBC skip was added below it.
     IGNORE_PKGS=()
     # The ZED packages need the ZED SDK headers/libs; the master has no SDK.
-    if [[ ! -d /usr/local/zed ]]; then
+    #
+    # Test for the CMake config, not the directory. An uninstalled SDK can still
+    # leave /usr/local/zed behind holding only `resources/`, and the directory
+    # test then passes while `find_package(ZED)` fails -- zed_components dies
+    # mid-build instead of being skipped, which is what happens on this
+    # workstation today.
+    if ! compgen -G "/usr/local/zed/zed-config*.cmake" > /dev/null \
+       && ! compgen -G "/usr/local/zed/lib/libsl_zed*" > /dev/null; then
         echo "→ ZED SDK not found at /usr/local/zed — skipping ZED packages"
         IGNORE_PKGS+=(zed_components zed_wrapper zed_ros2 zed_debug)
     fi

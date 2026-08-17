@@ -112,15 +112,27 @@ def referenced_names(path, depth=0):
     allow_substs and one level of nested include.
     """
     names = set()
+    complete = True
     try:
         text = open(path, encoding="utf-8").read()
     except OSError:
-        return None
+        return None, False
     names |= set(re.findall(r"\$\(var\s+([^)\s]+)\s*\)", text))
     names |= set(re.findall(r"LaunchConfiguration\(\s*['\"]([^'\"]+)", text))
     names |= set(re.findall(r"DeclareLaunchArgument\(\s*['\"]([^'\"]+)", text))
+    # Python launch files commonly wrap DeclareLaunchArgument in a local helper.
+    # Missing that shape reported base_frame as unread in
+    # pointcloud_preprocessor.launch.py, which declares it as
+    # add_launch_arg("base_frame", "base_link") -- a false positive that would
+    # have had someone "fix" a working argument.
+    names |= set(re.findall(r"add_launch_arg\(\s*['\"]([^'\"]+)", text))
     names |= set(re.findall(r'<arg\s+name="([^"]+)"', text))
-    if depth < 2:
+    # Depth 4, not 2. A top-level launch hands an argument to a component
+    # launch, which hands it to a sensing launch, which hands it to the file
+    # that finally reads it -- imu_source travels exactly that far, and at
+    # depth 2 it was reported unread despite imu_corrector demonstrably
+    # subscribing to the ZED topic because of it.
+    if depth < 4:
         for expr in re.findall(r'<param\s+from="([^"]+)"', text):
             # `<param from="$(var config_file)">` is the common shape, and the
             # names it consumes live in the file that arg defaults to. Without
@@ -145,10 +157,17 @@ def referenced_names(path, depth=0):
         for expr in re.findall(r'<include\s+file="([^"]+)"', text):
             target = resolve(expr, path)
             if target and os.path.exists(target):
-                nested = referenced_names(target, depth + 1)
+                nested, nested_complete = referenced_names(target, depth + 1)
                 if nested:
                     names |= nested
-    return names
+                complete = complete and nested_complete
+            else:
+                # An include this tool cannot follow -- most often
+                # `$(find-pkg-share $(var some_pkg))`, where the package name is
+                # itself a configuration. Everything below it is invisible, so
+                # absence of a name here is not evidence the name is unread.
+                complete = False
+    return names, complete
 
 
 def declared_args(path):
@@ -219,16 +238,28 @@ def check_include_args(path, text):
         if not os.path.exists(target):
             report("BUG", path, f"includes a file that does not exist: {target_expr}")
             continue
-        readable = referenced_names(target)
-        if readable is None:
+        result = referenced_names(target)
+        if result is None:
             continue
+        readable, complete = result
         passed = re.findall(r'<arg\s+name="([^"]+)"', body)
         for name in passed:
             if name not in readable:
-                report("BUG", path,
-                       f"passes '{name}' to {os.path.basename(target)}, which never reads "
-                       f"that name -- the value is set and nobody consumes it, so the "
-                       f"target's own default silently wins")
+                # Only a BUG when the whole chain below the target was visible.
+                # Otherwise the name may well be read somewhere this tool could
+                # not reach, and calling it a bug invites someone to delete a
+                # working argument -- which nearly happened with imu_source.
+                if complete:
+                    report("BUG", path,
+                           f"passes '{name}' to {os.path.basename(target)}, which never "
+                           f"reads that name -- the value is set and nobody consumes it, "
+                           f"so the target's own default silently wins")
+                else:
+                    report("WARN", path,
+                           f"passes '{name}' to {os.path.basename(target)}, and nothing "
+                           f"visible from here reads it. Part of that chain could not be "
+                           f"followed (an include whose package is itself a variable), so "
+                           f"this may well be consumed deeper -- check before removing it")
 
 
 def check_param_files(path, text):
