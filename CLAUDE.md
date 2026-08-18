@@ -530,6 +530,7 @@ twist_source:=gyro_odom|eagleye            # Override preset twist source
 | [docs/guides/isaac_vslam_testing.md](docs/guides/isaac_vslam_testing.md) | Isaac SLAM testing |
 | [docs/design/isaac_vslam_integration.md](docs/design/isaac_vslam_integration.md) | Isaac SLAM architecture |
 | [docs/research/localization/ndt_parameter_tuning_coss_map.md](docs/research/localization/ndt_parameter_tuning_coss_map.md) | NDT tuning research |
+| [docs/research/localization/ndt_tuning_ntu_campus.md](docs/research/localization/ndt_tuning_ntu_campus.md) | NTU NDT tuning: crop range, voxel size, why the NVTL gate is not portable, and the traps |
 | [docs/research/safety/assurance-2.0-for-autoware-llm.md](docs/research/safety/assurance-2.0-for-autoware-llm.md) | Assurance 2.0 survey: formal safety case for Autoware + LM integration tiers |
 | [docs/design/lm_driving_tuning_workflow.md](docs/design/lm_driving_tuning_workflow.md) | LM driving integration: BEV-token input, zone-mask output, verifier-gated tuning workflow |
 | [docs/superpowers/specs/2026-07-27-indoor-artag-localization-design.md](docs/superpowers/specs/2026-07-27-indoor-artag-localization-design.md) | Indoor AR-tag + NDT localization design: tags replace GNSS for init, EKF correction, and NDT regularization |
