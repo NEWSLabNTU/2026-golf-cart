@@ -28,6 +28,17 @@ set working-directory := '..'
 default:
     @just --list ntu-test
 
+# Runs the five steps below in the one order that works, waiting on each stage
+# rather than sleeping: bag (paused, /clock only) -> stack -> RViz -> resume ->
+# seed NDT. Holds until Ctrl-C, then tears everything down.
+#
+#   just ntu-test run              # CSIE-1, with RViz
+#   just ntu-test run CSIE-2       # another set
+#   just ntu-test run CSIE-1 rviz=off
+# Run the whole NDT replay end to end (bag, stack, RViz, init pose)
+run SET="CSIE-1" RVIZ="on":
+    ./scripts/rosbag/ntu_sim_run.sh {{SET}} {{RVIZ}}
+
 # 1. Start a merged NTU bag PAUSED, publishing /clock only.
 bag SET="CSIE-1" ARGS="":
     ./scripts/rosbag/ntu_sim_bag.sh {{SET}} {{ARGS}}

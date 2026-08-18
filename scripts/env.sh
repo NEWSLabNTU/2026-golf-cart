@@ -182,29 +182,84 @@ else
         unset ROS_LOCALHOST_ONLY
     fi
 
-    # CycloneDDS Configuration - Check sysctl (warn once)
-    # Check if values are sufficient (not exact equality)
-    rmem_max=$(sysctl -n net.core.rmem_max 2>/dev/null || echo "0")
-    ipfrag_time=$(sysctl -n net.ipv4.ipfrag_time 2>/dev/null || echo "999")
-    ipfrag_thresh=$(sysctl -n net.ipv4.ipfrag_high_thresh 2>/dev/null || echo "0")
-
-    if [ "$rmem_max" -lt 2147483647 ] || \
-       [ "$ipfrag_time" -gt 3 ] || \
-       [ "$ipfrag_thresh" -lt 134217728 ]; then
-        if [ ! -f "${GOLFCART_REPO_ROOT}/.envrc.sysctl-warned" ]; then
-            echo "┌────────────────────────────────────────────────────────────┐"
-            echo "│ WARNING: CycloneDDS kernel buffers not configured         │"
-            echo "│ You may experience packet loss with high-bandwidth data   │"
-            echo "│ To fix: cd setup && just cyclonedds-sysctl                │"
-            echo "└────────────────────────────────────────────────────────────┘"
-            touch "${GOLFCART_REPO_ROOT}/.envrc.sysctl-warned" 2>/dev/null || true
-        fi
-    fi
-
     # Source ROS 2 Humble
     _golfcart_relax_shell_opts
     source /opt/ros/humble/setup.bash
     _golfcart_restore_shell_opts
+fi
+
+# ── CycloneDDS host requirements ─────────────────────────────────────────────
+#
+# Deliberately OUTSIDE the Autoware if/else above. This check used to live in the
+# `else` branch -- the one taken only when /opt/autoware is ABSENT -- so on every
+# correctly provisioned machine it was dead code. That is why no one had ever
+# seen its warning, and why .envrc.sysctl-warned did not exist on a host whose
+# buffers were in fact too small to create a DDS domain.
+# Two separate thresholds, and conflating them is what made this bite:
+#
+#   FATAL       every profile in config/cyclonedds/ declares
+#               <SocketReceiveBufferSize min="10MB"/>, and CycloneDDS treats
+#               `min` as a hard requirement. Below it EVERY ros2 process dies
+#               at startup with "rmw_create_node: failed to create domain".
+#               The loopback profile additionally pins `lo`, which then also
+#               needs the MULTICAST flag.
+#
+#   SUBOPTIMAL  the tuned values (2GB buffer, ipfrag settings) prevent packet
+#               loss with high-bandwidth data. Worth having, not fatal.
+#
+# The old code checked only the tuned values, called the result a warning,
+# and silenced it permanently with a .envrc.sysctl-warned marker. So a host
+# that could not create a DDS domain at all reported "you may experience
+# packet loss" -- once -- and then said nothing ever again. The failure that
+# follows is unrecognisable: the bag player dies, `ros2 topic list` shows
+# nothing, and it reads as a broken bag or a broken launch.
+rmem_max=$(sysctl -n net.core.rmem_max 2>/dev/null || echo "0")
+ipfrag_time=$(sysctl -n net.ipv4.ipfrag_time 2>/dev/null || echo "999")
+ipfrag_thresh=$(sysctl -n net.ipv4.ipfrag_high_thresh 2>/dev/null || echo "0")
+
+_golfcart_dds_fatal=""
+if [ "$rmem_max" -lt 10485760 ]; then
+    _golfcart_dds_fatal="${_golfcart_dds_fatal}
+  - net.core.rmem_max is ${rmem_max}; the DDS profile requires at least 10485760"
+fi
+if [ "${CYCLONEDDS_URI:-}" != "${CYCLONEDDS_URI#*loopback.xml}" ] \
+   && ! ip link show lo 2>/dev/null | grep -q MULTICAST; then
+    _golfcart_dds_fatal="${_golfcart_dds_fatal}
+  - the loopback profile pins the lo interface, and lo has no MULTICAST flag"
+fi
+
+if [ -n "${_golfcart_dds_fatal}" ] && [ -z "${GOLFCART_SKIP_DDS_CHECK:-}" ]; then
+    echo "" >&2
+    echo "ERROR: this host cannot run ROS with the configured DDS profile." >&2
+    echo "${_golfcart_dds_fatal}" >&2
+    echo "" >&2
+    echo "  Every ros2 process would fail with:" >&2
+    echo "      rmw_create_node: failed to create domain, error Error" >&2
+    echo "" >&2
+    echo "  Fix it with the setup script:" >&2
+    echo "      ./setup.sh                 # menu -> Network configuration (DDS)" >&2
+    echo "      ./setup.sh network-dds     # or just this one step" >&2
+    echo "" >&2
+    echo "  Both persist across reboots. To bypass this check (it will not" >&2
+    echo "  make ROS work): export GOLFCART_SKIP_DDS_CHECK=1" >&2
+    echo "" >&2
+    unset _golfcart_dds_fatal
+    return 1
+fi
+unset _golfcart_dds_fatal
+
+# Suboptimal-but-usable: still only worth saying once.
+if [ "$rmem_max" -lt 2147483647 ] || \
+   [ "$ipfrag_time" -gt 3 ] || \
+   [ "$ipfrag_thresh" -lt 134217728 ]; then
+    if [ ! -f "${GOLFCART_REPO_ROOT}/.envrc.sysctl-warned" ]; then
+        echo "┌────────────────────────────────────────────────────────────┐"
+        echo "│ NOTE: CycloneDDS kernel buffers are not fully tuned        │"
+        echo "│ ROS works; high-bandwidth topics may drop packets.         │"
+        echo "│ To tune: ./setup.sh cyclonedds-sysctl                     │"
+        echo "└────────────────────────────────────────────────────────────┘"
+        touch "${GOLFCART_REPO_ROOT}/.envrc.sysctl-warned" 2>/dev/null || true
+    fi
 fi
 
 # ── Sensor selection ─────────────────────────────────────────────────────────

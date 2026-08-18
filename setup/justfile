@@ -33,7 +33,7 @@ default:
     @just --list
 
 # Full setup (runs all steps in order)
-setup: _init ros2 ros2-dev-tools gdown geographiclib pacmod dev-tools _setup-autoware-debian _setup-autoware-data _setup-tensorrt-engines _setup-isaac-ros python-deps nebula-driver ublox-driver ublox-udev tier4-camera gscam _setup-cyclonedds-sysctl _setup-turbovnc-virtualgl _setup-hardware-config _setup-otocam _setup-linuxptp ros-deps
+setup: _init ros2 ros2-dev-tools gdown geographiclib pacmod dev-tools _setup-autoware-debian _setup-autoware-data _setup-tensorrt-engines _setup-isaac-ros python-deps nebula-driver ublox-driver ublox-udev tier4-camera gscam _setup-cyclonedds-sysctl _setup-multicast-lo _setup-turbovnc-virtualgl _setup-hardware-config _setup-otocam _setup-linuxptp ros-deps
     @printf "{{green}}✓ Setup complete!{{nc}}\n"
 
 # Conditional Autoware Debian install (based on SKIP_AUTOWARE_DEBIAN env var)
@@ -80,11 +80,20 @@ _setup-tensorrt-engines:
 # Conditional CycloneDDS sysctl configuration (based on CONFIGURE_CYCLONEDDS_SYSCTL env var)
 _setup-cyclonedds-sysctl:
     #!/usr/bin/env bash
-    if [[ "${CONFIGURE_CYCLONEDDS_SYSCTL}" == "y" ]]; then
+    if [[ "${CONFIGURE_CYCLONEDDS_SYSCTL:-n}" == "y" ]]; then
         just cyclonedds-sysctl
     else
         printf "{{yellow}}⊘{{nc}} cyclonedds-sysctl skipped (user choice)\n"
         printf "{{yellow}}Note:{{nc}} Run 'just cyclonedds-sysctl' to configure later\n"
+    fi
+
+_setup-multicast-lo:
+    #!/usr/bin/env bash
+    if [[ "${CONFIGURE_MULTICAST_LO:-n}" == "y" ]]; then
+        just multicast-lo
+    else
+        printf "{{yellow}}⊘{{nc}} multicast-lo skipped (user choice)\n"
+        printf "{{yellow}}Note:{{nc}} Without it, lo loses multicast on reboot and ROS cannot start\n"
     fi
 
 # Conditional Isaac ROS install (based on INSTALL_ISAAC_ROS env var, ARM64 only)
@@ -317,9 +326,19 @@ ublox-udev: _init
     printf "{{green}}✓{{nc}} ublox-udev done\n"
     printf "{{yellow}}Note:{{nc}} Log out and back in for dialout group to take effect.\n"
 
-# Configure CycloneDDS kernel buffers (system-wide)
-cyclonedds-sysctl: _init ros2
+# Both halves of the DDS network requirement. Either alone leaves a host that
+# cannot create a DDS domain, so the umbrella recipe is what the menu and the
+# error message in scripts/env.sh both point at.
+# Configure the host network for CycloneDDS (kernel buffers + lo multicast)
+network-dds: cyclonedds-sysctl multicast-lo
+
+# Configure CycloneDDS kernel buffers (system-wide, persistent)
+cyclonedds-sysctl: _init
     @just _run cyclonedds-sysctl "{{scripts_dir}}/configure-cyclonedds-sysctl.sh"
+
+# Enable multicast on lo, persistently (systemd unit)
+multicast-lo: _init
+    @just _run multicast-lo "{{scripts_dir}}/configure-multicast-lo.sh"
 
 # Install ROS dependencies for workspace packages
 ros-deps: _init ros2-dev-tools
