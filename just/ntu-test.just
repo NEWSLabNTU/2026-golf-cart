@@ -68,6 +68,14 @@ init SET="CSIE-1":
 capture SET="CSIE-1":
     python3 ./scripts/localization/capture_initial_pose.py {{SET}}
 
+# Audit the two signals the EKF prior is built from -- IMU and VelocityReport --
+# for coordinates (REP-103 axes, gravity sign, gyro sign), scale (integrated
+# against the NDT pose, not the EKF, which is downstream of both) and quality
+# (rate, gaps, stationary bias and noise).
+# Check IMU and VelocityReport: coordinates, scale and quality
+check-inputs ARGS="":
+    python3 ./scripts/localization/check_imu_velocity.py {{ARGS}}
+
 # Record NDT's internal signals against bag time and plot them: NVTL, transform
 # probability, iteration count, init->result distance, exe time, speed and yaw
 # rate on one clock. Built to answer "which signal moved first" when the pose
