@@ -64,6 +64,11 @@ golfcart_require_dds || exit 1
 SET_NAME="${1:-CSIE-1}"
 RVIZ="${2:-on}"
 [ "${RVIZ}" = "rviz=off" ] && RVIZ=off
+# Anything after the first two arguments is forwarded verbatim to the launch, so
+# a run can be pointed at a different map or parameter file without editing
+# either. Word-split on purpose: callers pass one string of launch arguments.
+shift 2 2>/dev/null || true
+LAUNCH_ARGS="$*"
 LOG_DIR="${REPO_ROOT}/log/ntu-test"
 mkdir -p "${LOG_DIR}"
 
@@ -119,8 +124,9 @@ wait_for 60 "/clock" has_topic /clock \
 
 # ── 2. stack, now born on bag time ──────────────────────────────────────────
 say "2/5  bringing up the logging simulation (sensor drivers off)"
+# shellcheck disable=SC2086
 ( cd "${REPO_ROOT}" && play_launch launch --parser python --web-addr 0.0.0.0:8081 \
-      golfcart_launch ntu_logging_sim.launch.xml rviz:=false ) > "${STACK_LOG}" 2>&1 &
+      golfcart_launch ntu_logging_sim.launch.xml rviz:=false ${LAUNCH_ARGS} ) > "${STACK_LOG}" 2>&1 &
 # The initialize service is the real readiness signal: it appears only once
 # pose_initializer is up, which is the thing step 5 talks to.
 wait_for 240 "/localization/initialize" has_service /localization/initialize \

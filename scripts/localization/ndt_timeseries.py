@@ -211,6 +211,41 @@ def main() -> int:
     png2 = args.out + "_path.png"
     fig2.savefig(png2, dpi=110, bbox_inches="tight")
 
+    # Summary, so configurations can be compared without opening the figures.
+    # Ranked on what moves FIRST: iteration_num saturates well before NVTL
+    # crosses its gate, so it is the early warning and the score is the lagging
+    # one.
+    import statistics as st
+
+    def med(vals):
+        vals = [v for v in vals if v is not None and not (isinstance(v, float) and math.isnan(v))]
+        return st.median(vals) if vals else float("nan")
+
+    sp = col("speed")
+    it = col("iters")
+    nv = col("nvtl")
+    i2 = col("i2r")
+    moving = [i for i, s_ in enumerate(sp) if s_ > 0.5]
+    parked = [i for i, s_ in enumerate(sp) if s_ <= 0.5]
+    first = lambda idxs: (t[idxs[0]], rows[idxs[0]]["x"], rows[idxs[0]]["y"]) if idxs else None  # noqa: E731
+    cap = [i for i in range(len(t)) if it[i] and it[i] >= 30]
+    dead = [i for i in range(len(t)) if t[i] > 5 and it[i] == 0 and nv[i] == 0]
+
+    print()
+    for name, ev in (("motion starts", first(moving)),
+                     ("iterations hit cap", first(cap)),
+                     ("NDT flatlines", first(dead))):
+        if ev:
+            print(f"  {name:20s} t={ev[0]:6.1f}s  at ({ev[1]:.0f},{ev[2]:.0f})")
+        else:
+            print(f"  {name:20s} never")
+    for name, idxs in (("parked", parked), ("moving", moving)):
+        if not idxs:
+            continue
+        print(f"    {name:7s} NVTL {med([nv[i] for i in idxs]):5.2f}   "
+              f"iters {med([it[i] for i in idxs]):5.1f}   "
+              f"init->result {med([i2[i] for i in idxs]):5.2f} m")
+    print()
     print(f"  {len(rows)} samples over {t[-1]:.0f} s of bag time")
     print(f"  csv  {csv_path}")
     print(f"  plot {png}")

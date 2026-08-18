@@ -36,8 +36,8 @@ default:
 #   just ntu-test run CSIE-2       # another set
 #   just ntu-test run CSIE-1 rviz=off
 # Run the whole NDT replay end to end (bag, stack, RViz, init pose)
-run SET="CSIE-1" RVIZ="on":
-    ./scripts/rosbag/ntu_sim_run.sh {{SET}} {{RVIZ}}
+run SET="CSIE-1" RVIZ="on" ARGS="":
+    ./scripts/rosbag/ntu_sim_run.sh {{SET}} {{RVIZ}} {{ARGS}}
 
 # 1. Start a merged NTU bag PAUSED, publishing /clock only.
 bag SET="CSIE-1" ARGS="":
