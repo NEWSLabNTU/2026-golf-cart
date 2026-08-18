@@ -19,22 +19,26 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TEMPLATES="${SCRIPT_DIR}/templates"
-VENDOR_DIR="/usr/local/bin/otocam"
+TEMPLATES="${SCRIPT_DIR}/modules"
 KVER="$(uname -r)"
 EXTRA_DIR="/lib/modules/${KVER}/extra/otocam"
 EXTLINUX="/boot/extlinux/extlinux.conf"
 DTBO="/usr/local/bin/otocam/agxorin/oto.dtbo"
-DTB="/boot/dtb/kernel_tegra234-p3737-0000+p3701-0005-nv.dtb"
+DTB="/boot/dtb/otocam-merged.dtb"
 
 # 1. Precheck vendor blob
 echo "[1/6] Checking vendor blob..."
 for f in "${VENDOR_DIR}/max9296.ko" "${VENDOR_DIR}/nv_imx390.ko" "${DTBO}"; do
   if [ ! -f "$f" ]; then
     echo "ERROR: Missing $f. Install OTOCAM vendor package first." >&2
-    exit 1
+    exit 2
   fi
 done
+
+if [ ! -f "$DTB" ]; then
+    echo "ERROR: Missing the merged dtb. Merge the file by yourself first."
+    exit 2
+fi
 
 # 2. Remove stock kernel modules if present (override with vendor variants)
 echo "[2/6] Removing stock max9295/max9296/nv_imx390 from /lib/modules..."
@@ -42,21 +46,20 @@ STOCK_DIR="/lib/modules/${KVER}/updates/drivers/media/i2c"
 for m in max9295.ko max9296.ko nv_imx390.ko; do
   if [ -f "${STOCK_DIR}/${m}" ]; then
     rm -f "${STOCK_DIR}/${m}"
-    echo "  removed ${STOCK_DIR}/${m}"
+    echo "  removed stock module ${STOCK_DIR}/${m}"
   fi
 done
 
 # 3. Stage vendor .ko via symlinks into module tree
 echo "[3/6] Symlinking vendor kmods into ${EXTRA_DIR}..."
-mkdir -p "${EXTRA_DIR}"
-ln -sf "${VENDOR_DIR}/max9296.ko"  "${EXTRA_DIR}/max9296.ko"
-ln -sf "${VENDOR_DIR}/nv_imx390.ko" "${EXTRA_DIR}/nv_imx390.ko"
-depmod -a "${KVER}"
+sudo install -D -m 0644 "${VENDOR_DIR}/max9296.ko"  "${EXTRA_DIR}/max9296.ko"
+sudo install -D -m 0644 "${VENDOR_DIR}/nv_imx390.ko" "${EXTRA_DIR}/nv_imx390.ko"
+sudo depmod -a "${KVER}"
 
 # 4. Install modules-load + modprobe configs
-echo "[4/6] Installing /etc/modules-load.d/otocam.conf + /etc/modprobe.d/otocam.conf..."
-install -m 0644 "${TEMPLATES}/otocam.conf"         /etc/modules-load.d/otocam.conf
-install -m 0644 "${TEMPLATES}/otocam-options.conf" /etc/modprobe.d/otocam.conf
+echo "[4/6] Installing /etc/systemd/system/otocam.service + /etc/modprobe.d/otocam.conf..."
+sudo install -m 0644 "${TEMPLATES}/otocam.service" /etc/systemd/system/otocam.service
+sudo install -m 0644 "${TEMPLATES}/otocam.modprobe.conf" /etc/modprobe.d/otocam.conf
 
 # 5. Patch extlinux.conf (idempotent — grep before insert, backup first)
 echo "[5/6] Patching ${EXTLINUX}..."

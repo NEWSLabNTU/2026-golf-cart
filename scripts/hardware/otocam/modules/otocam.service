@@ -1,0 +1,16 @@
+# -> /etc/systemd/system/otocam.service
+[Unit]
+Description=Load OTOCAM GMSL camera modules
+After=multi-user.target systemd-udev-settle.service
+Wants=systemd-udev-settle.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/sbin/modprobe max9296 clk_en=1
+ExecStart=/sbin/modprobe nv_imx390
+ExecStop=/sbin/modprobe -r nv_imx390
+ExecStop=/sbin/modprobe -r max9296
+
+[Install]
+WantedBy=multi-user.target
