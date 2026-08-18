@@ -313,7 +313,7 @@ Visualization Manager:
       Name: PointCloudMap
       Position Transformer: XYZ
       Selectable: false
-      Size (Pixels): 1
+      Size (Pixels): 3
       Size (m): 0.15
       Style: Points
       Topic:
