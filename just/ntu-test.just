@@ -68,6 +68,13 @@ init SET="CSIE-1":
 capture SET="CSIE-1":
     python3 ./scripts/localization/capture_initial_pose.py {{SET}}
 
+# Measure how well the live scan actually sits on the map (nearest-neighbour
+# residual), independently of NDT's own score. Answers "did it converge" and
+# "is tracking holding" separately, by splitting stationary from moving frames.
+# Score scan-to-map alignment: residual of the live scan against the map
+align ARGS="":
+    python3 ./scripts/localization/ndt_alignment_report.py {{ARGS}}
+
 # Score a running NDT replay on pose quality (scatter, yaw step), not on NVTL.
 report ARGS="":
     python3 ./scripts/localization/ndt_quality_report.py {{ARGS}}
