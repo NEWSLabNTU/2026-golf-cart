@@ -33,6 +33,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import time
 
 DEFAULT_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -61,11 +62,37 @@ def main() -> int:
 
     import rclpy
     from rclpy.node import Node
+    from rclpy.parameter import Parameter
     from geometry_msgs.msg import PoseWithCovarianceStamped
     from autoware_localization_msgs.srv import InitializeLocalization
 
     rclpy.init()
-    node = Node("set_initial_pose")
+    # use_sim_time is not optional here, and getting it wrong fails silently.
+    #
+    # A replay stack runs on bag time. These recordings are days older than now,
+    # so a node stamping with the wall clock hands NDT an initial pose whose
+    # timestamp is days away from every scan it holds. NDT validates the pose
+    # against the sensor timestamp, rejects it, and then reports exactly what a
+    # healthy-but-idle matcher reports: iteration_num 0, NVTL 0.0, sub-millisecond
+    # exe_time, and no pose output at all -- while the EKF happily dead-reckons on
+    # IMU and velocity, so the vehicle still moves and nothing looks broken.
+    node = Node(
+        "set_initial_pose",
+        parameter_overrides=[Parameter("use_sim_time", Parameter.Type.BOOL, True)],
+    )
+
+    # The clock has to actually arrive before the stamp is read; a fresh sim-time
+    # node reports 0 until the first /clock message lands.
+    deadline = time.time() + args.timeout
+    while node.get_clock().now().nanoseconds == 0 and time.time() < deadline:
+        rclpy.spin_once(node, timeout_sec=0.1)
+    if node.get_clock().now().nanoseconds == 0:
+        print("no /clock after waiting — is the bag playing with --clock?", file=sys.stderr)
+        print("  Start playback first: just bag-play-ntu <SET>", file=sys.stderr)
+        node.destroy_node()
+        rclpy.shutdown()
+        return 1
+
     client = node.create_client(InitializeLocalization, "/localization/initialize")
     if not client.wait_for_service(timeout_sec=args.timeout):
         print("/localization/initialize never appeared — is the stack up?", file=sys.stderr)
