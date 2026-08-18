@@ -151,7 +151,9 @@ MENU_ITEMS=(
   "AUTOWARE_DATA|y|0|Writable Autoware data dir|Seconds. Without it TensorRT cannot cache engines and perception fails."
   "TENSORRT_ENGINES|n|1|└ compile TensorRT engines now|~11 min on an Orin. Otherwise the first launch pays it, with perception down."
   "ISAAC_ROS|y|0|Isaac ROS Visual Localization|cuVSLAM + cuVGL. Camera-only localization without LiDAR/GNSS. Jetson only."
-  "CYCLONEDDS_SYSCTL|y|0|CycloneDDS kernel buffers|Writes /etc/sysctl.d/10-cyclone-max.conf (system-wide)."
+  "NETWORK_DDS|y|0|Network configuration (DDS)|REQUIRED to run ROS here. Both sub-steps below; scripts/env.sh refuses to load without them."
+  "CYCLONEDDS_SYSCTL|y|1|└ kernel socket buffers|net.core.rmem_max=2GB + ipfrag. Writes /etc/sysctl.d/99-cyclonedds-max.conf. Below 10MB no ros2 node can start."
+  "MULTICAST_LO|y|1|└ multicast on lo (persistent)|Installs multicast-lo.service. Without it lo loses MULTICAST on reboot and the loopback profile dies."
   "TURBOVNC_VIRTUALGL|y|0|TurboVNC + VirtualGL|GPU-accelerated rendering over VNC."
   "HARDWARE_CONFIG|n|0|Hardware configs (CAN + LiDAR network)|Vehicle computer only — matches specific MAC addresses."
   "OTOCAM|n|0|OTOCAM GMSL camera kmods|Needs vendor blob and kernel 5.15.148-tegra. Reboot required."
@@ -326,7 +328,15 @@ interactive_setup() {
     export SETUP_AUTOWARE_DATA="${MENU_STATE[AUTOWARE_DATA]}"
     export BUILD_TENSORRT_ENGINES="${MENU_STATE[TENSORRT_ENGINES]}"
     export INSTALL_ISAAC_ROS="${MENU_STATE[ISAAC_ROS]}"
-    export CONFIGURE_CYCLONEDDS_SYSCTL="${MENU_STATE[CYCLONEDDS_SYSCTL]}"
+    # Sub-steps are meaningless when the parent is off; menu_parent_on() dims
+    # them in the UI but does not clear them, so gate them here too.
+    if [[ "${MENU_STATE[NETWORK_DDS]}" == "y" ]]; then
+        export CONFIGURE_CYCLONEDDS_SYSCTL="${MENU_STATE[CYCLONEDDS_SYSCTL]}"
+        export CONFIGURE_MULTICAST_LO="${MENU_STATE[MULTICAST_LO]}"
+    else
+        export CONFIGURE_CYCLONEDDS_SYSCTL="n"
+        export CONFIGURE_MULTICAST_LO="n"
+    fi
     export INSTALL_TURBOVNC_VIRTUALGL="${MENU_STATE[TURBOVNC_VIRTUALGL]}"
     export INSTALL_HARDWARE_CONFIG="${MENU_STATE[HARDWARE_CONFIG]}"
     export INSTALL_OTOCAM="${MENU_STATE[OTOCAM]}"
@@ -369,7 +379,8 @@ main() {
         local k
         for k in SKIP_AUTOWARE_DEBIAN AUTOWARE_PREREQ_ROS AUTOWARE_PREREQ_SPCONV \
                  SETUP_AUTOWARE_DATA BUILD_TENSORRT_ENGINES INSTALL_ISAAC_ROS \
-                 CONFIGURE_CYCLONEDDS_SYSCTL INSTALL_TURBOVNC_VIRTUALGL \
+                 CONFIGURE_CYCLONEDDS_SYSCTL CONFIGURE_MULTICAST_LO \
+                 INSTALL_TURBOVNC_VIRTUALGL \
                  INSTALL_HARDWARE_CONFIG INSTALL_OTOCAM INSTALL_LINUXPTP; do
             printf "  %-32s %s\n" "$k" "${!k}"
         done
