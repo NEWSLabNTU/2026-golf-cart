@@ -1,3 +1,11 @@
+# 0.5 m, NOT the Autoware default of 3.0. Deliberate: measured on CSIE-1 with the
+# crop box already widened to +-60 m, stationary scan-to-map residual
+#
+#   voxel 0.5   p50 0.145 m   p95 0.468 m   beyond 3 m  0.0%
+#   voxel 3.0   p50 0.682 m   p95 2.590 m   beyond 3 m 12.1%
+#
+# 3.0 m voxels average away the structure NDT matches on. This is one AutoSDV
+# value that was right, and it stays.
 /**:
   ros__parameters:
     # Golf Cart: Voxel downsampling before random downsample
