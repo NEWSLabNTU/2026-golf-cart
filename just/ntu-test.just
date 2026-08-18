@@ -68,6 +68,14 @@ init SET="CSIE-1":
 capture SET="CSIE-1":
     python3 ./scripts/localization/capture_initial_pose.py {{SET}}
 
+# Record NDT's internal signals against bag time and plot them: NVTL, transform
+# probability, iteration count, init->result distance, exe time, speed and yaw
+# rate on one clock. Built to answer "which signal moved first" when the pose
+# walks off the map. Writes <out>.csv, <out>.png and <out>_path.png.
+# Plot NDT internals over time (NVTL, iterations, init->result, speed)
+timeseries ARGS="":
+    python3 ./scripts/localization/ndt_timeseries.py {{ARGS}}
+
 # Measure how well the live scan actually sits on the map (nearest-neighbour
 # residual), independently of NDT's own score. Answers "did it converge" and
 # "is tracking holding" separately, by splitting stationary from moving frames.
