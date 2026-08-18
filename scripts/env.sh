@@ -217,36 +217,71 @@ rmem_max=$(sysctl -n net.core.rmem_max 2>/dev/null || echo "0")
 ipfrag_time=$(sysctl -n net.ipv4.ipfrag_time 2>/dev/null || echo "999")
 ipfrag_thresh=$(sysctl -n net.ipv4.ipfrag_high_thresh 2>/dev/null || echo "0")
 
-_golfcart_dds_fatal=""
-if [ "$rmem_max" -lt 10485760 ]; then
-    _golfcart_dds_fatal="${_golfcart_dds_fatal}
-  - net.core.rmem_max is ${rmem_max}; the DDS profile requires at least 10485760"
-fi
-if [ "${CYCLONEDDS_URI:-}" != "${CYCLONEDDS_URI#*loopback.xml}" ] \
-   && ! ip link show lo 2>/dev/null | grep -q MULTICAST; then
-    _golfcart_dds_fatal="${_golfcart_dds_fatal}
+# Kept as a function so the two audiences get different treatment. Sourcing
+# env.sh only WARNS -- `just build`, `just test` and an ordinary shell have no
+# use for a DDS domain and must not be blocked by one. Commands that actually
+# start ROS call golfcart_require_dds and refuse to run.
+golfcart_dds_problems() {
+    local problems="" rmem
+    rmem=$(sysctl -n net.core.rmem_max 2>/dev/null || echo 0)
+    if [ "${rmem}" -lt 10485760 ]; then
+        problems="${problems}
+  - net.core.rmem_max is ${rmem}; the DDS profile requires at least 10485760"
+    fi
+    if [ "${CYCLONEDDS_URI:-}" != "${CYCLONEDDS_URI#*loopback.xml}" ] \
+       && ! ip link show lo 2>/dev/null | grep -q MULTICAST; then
+        problems="${problems}
   - the loopback profile pins the lo interface, and lo has no MULTICAST flag"
-fi
-
-if [ -n "${_golfcart_dds_fatal}" ] && [ -z "${GOLFCART_SKIP_DDS_CHECK:-}" ]; then
-    echo "" >&2
-    echo "ERROR: this host cannot run ROS with the configured DDS profile." >&2
-    echo "${_golfcart_dds_fatal}" >&2
-    echo "" >&2
-    echo "  Every ros2 process would fail with:" >&2
-    echo "      rmw_create_node: failed to create domain, error Error" >&2
-    echo "" >&2
-    echo "  Fix it with the setup script:" >&2
-    echo "      ./setup.sh                 # menu -> Network configuration (DDS)" >&2
-    echo "      ./setup.sh network-dds     # or just this one step" >&2
-    echo "" >&2
-    echo "  Both persist across reboots. To bypass this check (it will not" >&2
-    echo "  make ROS work): export GOLFCART_SKIP_DDS_CHECK=1" >&2
-    echo "" >&2
-    unset _golfcart_dds_fatal
+    fi
+    [ -n "${problems}" ] || return 0
+    printf '%s\n' "${problems}"
     return 1
+}
+
+# Call this from anything that starts ROS nodes:
+#
+#     golfcart_require_dds || exit 1
+#
+# Returns non-zero, and explains, when the host cannot create a DDS domain.
+golfcart_require_dds() {
+    local problems
+    problems=$(golfcart_dds_problems) && return 0
+    [ -n "${GOLFCART_SKIP_DDS_CHECK:-}" ] && return 0
+    {
+        echo ""
+        echo "ERROR: this host cannot run ROS with the configured DDS profile."
+        echo "${problems}"
+        echo ""
+        echo "  Every ros2 process would fail with:"
+        echo "      rmw_create_node: failed to create domain, error Error"
+        echo ""
+        echo "  Fix it with the setup script:"
+        echo "      ./setup.sh                 # menu -> Network configuration (DDS)"
+        echo "      ./setup.sh network-dds     # or just this one step"
+        echo ""
+        echo "  Both persist across reboots. To bypass (it will not make ROS"
+        echo "  work): export GOLFCART_SKIP_DDS_CHECK=1"
+        echo ""
+    } >&2
+    return 1
+}
+
+# Warn on load. NOT silenced by a marker file, unlike the tuning note below: a
+# host in this state cannot run ROS at all, and the previous once-ever warning
+# is precisely how that went unnoticed until a bag replay failed with what
+# looked like a missing /clock.
+if [ "${GOLFCART_ENV_QUIET:-0}" != "1" ] && [ -z "${GOLFCART_SKIP_DDS_CHECK:-}" ]; then
+    if ! _golfcart_dds_problems=$(golfcart_dds_problems); then
+        {
+            echo ""
+            echo "WARNING: this host cannot create a DDS domain — ROS will not start."
+            echo "${_golfcart_dds_problems}"
+            echo "  Builds are unaffected. Fix before launching: ./setup.sh network-dds"
+            echo ""
+        } >&2
+    fi
+    unset _golfcart_dds_problems
 fi
-unset _golfcart_dds_fatal
 
 # Suboptimal-but-usable: still only worth saying once.
 if [ "$rmem_max" -lt 2147483647 ] || \

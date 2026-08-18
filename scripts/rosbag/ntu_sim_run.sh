@@ -52,13 +52,14 @@ REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # variables (AMENT_TRACE_SETUP_FILES among them).
 set +u
 # shellcheck source=/dev/null
-if ! source "${REPO_ROOT}/scripts/env.sh"; then
-    # env.sh returns non-zero when the host cannot create a DDS domain and has
-    # already printed what to run. Stop here rather than starting a bag that
-    # would die on rmw_create_node, which surfaces as a misleading "no /clock".
-    exit 1
-fi
+source "${REPO_ROOT}/scripts/env.sh"
 set -u
+
+# env.sh only warns about a host that cannot create a DDS domain, because builds
+# and ordinary shells do not need one. This does: every process below is a ROS
+# node. Refuse now rather than start a bag that dies on rmw_create_node, which
+# surfaces two minutes later as a misleading "no /clock".
+golfcart_require_dds || exit 1
 
 SET_NAME="${1:-CSIE-1}"
 RVIZ="${2:-on}"
