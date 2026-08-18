@@ -56,7 +56,7 @@ fi
 # shell and its exit status would be the shell's - and KillSignal=SIGINT would
 # reach the shell, not play_launch.
 #
-# Headless always: RViz stays an interactive tool (`just tool-rviz`), since a
+# Headless always: RViz stays an interactive tool (`just tool rviz`), since a
 # unit has no display to draw on.
 # shellcheck disable=SC2086
 exec play_launch launch \

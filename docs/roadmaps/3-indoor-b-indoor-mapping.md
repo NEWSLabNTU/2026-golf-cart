@@ -116,7 +116,7 @@ Full method, board specification, detector retuning, and failure modes:
       board anchoring, projector config — all offline.
 - [x] GNSS-dependency audit of the launch tree. **Done, and it found a real
       defect — see below.**
-- [x] Indoor mapping bag recording script: `just bag-record-indoor`
+- [x] Indoor mapping bag recording script: `just bag record-indoor`
       (`scripts/rosbag/record_indoor_mapping.sh`).
 - [x] **Anchoring tool** — `ros2 run golfcart_board_initializer
       anchor_map_to_board <cloud> -o <map dir>`. Finds the board in a finished
@@ -241,7 +241,7 @@ and stay:
 - **The system monitor following `use_gnss`.** Same reasoning, and it is what
   turned up the broken monitor include that would have killed
   `logging_simulation`.
-- **`just bag-record-indoor`.** Records LiDAR, IMU and all three cameras. Phase
+- **`just bag record-indoor`.** Records LiDAR, IMU and all three cameras. Phase
   3D-7 has its own `record_aruco.sh` for its purposes; this one remains the
   recipe for a run that also wants LiDAR.
 

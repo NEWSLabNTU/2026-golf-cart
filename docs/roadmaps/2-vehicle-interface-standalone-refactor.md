@@ -17,7 +17,7 @@ Branch off `main` (== `origin/main` == `origin/2026-golf` == `dbfc812`), land th
 fixes, fast-forward `main`, push, bump the submodule pointer here.
 
 - [x] **F1 tty guard** — `terminal_reader.hpp`: `isatty(STDIN_FILENO)` + check the
-      `tcgetattr` return. No tty → `RCLCPP_ERROR` pointing at `just manual-control`,
+      `tcgetattr` return. No tty → `RCLCPP_ERROR` pointing at `just vehicle manual-control`,
       skip the key thread instead of spinning on EOF.
 - [x] **F2 limits as parameters** — `max_speed`, `step_speed`, `max_steer_angle`,
       `step_steer_angle`, replacing the `#define`s at `keyboard_control.cpp:9-12`
@@ -45,7 +45,7 @@ and silently do nothing in the other.
 - [x] **W-1 `run_in_tmux.sh`** — built, verified (exit 0, exit 3, duplicate-session
       refusal, SIGINT teardown), then **removed** along with its install rule and
       the `autoware_manual_control` exec_depend it justified.
-- [x] **W-2 `just manual-control`** — runs `ros2 run autoware_manual_control
+- [x] **W-2 `just vehicle manual-control`** — runs `ros2 run autoware_manual_control
       keyboard_control` directly, so it owns the terminal it is typed in. Passes
       `mode_backend:=control_mode`, the `/control/command/*` topics, and the cart's
       limits (`max_speed:=5.0`, `step_speed:=0.25`, `max_steer_angle:=0.349`,
@@ -57,7 +57,7 @@ and silently do nothing in the other.
       (`can0`), `tx_enabled` (`false`), `vehicle_description` (`false`),
       `velocity_converter` (`false`). Includes `vehicle_interface.launch.xml`
       unchanged. Vehicle interface only — no keyboard node, see step 2.
-- [x] **L-2 keyboard group** — *dropped, superseded by `just manual-control`.*
+- [x] **L-2 keyboard group** — *dropped, superseded by `just vehicle manual-control`.*
 - [x] **L-3 description + converter groups** — `robot_state_publisher` and
       `autoware_vehicle_velocity_converter`, lifted from `basic_control.launch.xml:13-33`.
 
@@ -66,7 +66,7 @@ and silently do nothing in the other.
 - [x] **J-1 single `vehicle-interface` recipe** — `KEY=VALUE` options
       (`can`, `tx`, `converter`), order-free, unknown keys rejected, defaults
       `can0 / off / off`. `tx=on` prints a warning banner and counts down 3 s.
-      Keyboard control lives in `just manual-control` (step 2).
+      Keyboard control lives in `just vehicle manual-control` (step 2).
 - [x] **J-2 remove superseded recipes** — `control-vehicle-test`,
       `control-teleop-real`, `control-basic`, `control-keyboard`, `manual-control`.
 - [x] **J-3 rewire `can-test`** — point at `vehicle_interface_standalone.launch.xml`
@@ -93,13 +93,13 @@ and silently do nothing in the other.
       held the deleted `basic_control.launch.xml`.
 - [x] **V-2 launch parses** — `--show-args` lists the four arguments with their
       defaults, and no keyboard-related ones.
-- [x] **V-3 bench smoke, keys off** — `just vehicle-interface can=vcan0` against
+- [x] **V-3 bench smoke, keys off** — `just vehicle interface can=vcan0` against
       `mock_vcu --auto` on an isolated `ROS_DOMAIN_ID`: `/vehicle/status/velocity_status`
       published, `/vehicle/status/control_mode` = 1 (AUTONOMOUS), and `candump`
       showed only the mock's four `VCU_ADS_*` IDs — no `ADS_VCU_*` frames, i.e. TX
       really is off.
-- [x] **V-4 keyboard smoke** — `just manual-control` in a second terminal, against
-      `just vehicle-interface can=vcan0`: help menu plus
+- [x] **V-4 keyboard smoke** — `just vehicle manual-control` in a second terminal, against
+      `just vehicle interface can=vcan0`: help menu plus
       `Limits: speed <= 5 m/s (step 0.25), steer <= 19.9962 deg` (F2 live); keys
       `x u u u l` produced `/control/command/control_cmd` (velocity 0.75, steering
       -0.0174) and `gear_cmd` command 2 = DRIVE; `s` printed
@@ -134,9 +134,9 @@ Complete, verified on the bench 2026-08-12 (`vcan0` + `mock_vcu`, isolated
 ```bash
 sudo ./scripts/can/up-vcan0.sh vcan0
 ros2 run golfcart_vehicle_interface mock_vcu --interface vcan0 --auto &
-just vehicle-interface can=vcan0
-# second terminal: just manual-control, then x / u / j
-just can-test
+just vehicle interface can=vcan0
+# second terminal: just vehicle manual-control, then x / u / j
+just can test
 ```
 
 Untested and out of scope: whether `play_launch` preserves `launch-prefix`. Only
@@ -151,6 +151,6 @@ uses plain `ros2 launch`. Real-bus (`can0`, `tx=on`) driving is field-test work.
   dropping `executable:` entries.
 - **Deleting `basic_control.launch.xml`** — `control-straight` / `control-circle`
   assume that stack is already up. Their comments must point at
-  `just vehicle-interface converter=on`.
+  `just vehicle interface converter=on`.
 - **Submodule pointer** — the bump must not land before the fork's `main` is pushed,
   or a fresh `just checkout` breaks for everyone else.

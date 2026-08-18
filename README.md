@@ -107,10 +107,10 @@ Two consequences that are easy to miss:
 ### 4. Wire the two together, from the master
 
 ```bash
-just service-install master     # systemd units + lingering (sudo)
-just ssh-setup                  # dedicated key, copied to the orin
-just service-install-orin       # runs the orin's own installer over ssh
-just doctor && just doctor-orin # confirm both sides
+just service install master     # systemd units + lingering (sudo)
+just service ssh-setup                  # dedicated key, copied to the orin
+just service install-orin       # runs the orin's own installer over ssh
+just service doctor && just service doctor-orin # confirm both sides
 ```
 
 Time sync matters as much as the rest — two bags cannot be merged if the clocks
@@ -124,7 +124,7 @@ From the master:
 just launch-all    # both hosts; returns immediately
 just logs          # follow this host's log
 just stop-all      # stop both hosts
-just doctor        # when topics do not show up
+just service doctor        # when topics do not show up
 ```
 
 There is no Ctrl-C to press. Both hosts run under systemd, so closing the terminal
@@ -138,13 +138,13 @@ Full operational guide: [docs/multi-machine.md](docs/multi-machine.md).
 Independent of the launch — start it any time, stack up or down:
 
 ```bash
-just record-start      # both hosts record to their own disk
-just record-status
-just record-stop
+just record start      # both hosts record to their own disk
+just record status
+just record stop
 
-just bag-fetch-orin    # copy the orin's bags over
-just bag-merge "master_<ts> orin_<ts>"
-just bag-replay
+just bag fetch-orin    # copy the orin's bags over
+just bag merge "master_<ts> orin_<ts>"
+just bag replay
 ```
 
 Topics recorded are plain lists, one per line — edit these, not any script:
@@ -183,7 +183,7 @@ The recorder also logs its exact output path on the line it starts with:
 systemctl --user status golfcart-record.service | grep record_unit_exec:
 # record_unit_exec: role=master writing /home/ubuntu/rosbags/master_20260814_152605 (27 topics)
 
-just record-status                       # active/inactive, both hosts
+just record status                       # active/inactive, both hosts
 ls -dt "$GOLFCART_BAG_DIR"/*_*  | head    # most recent bags, newest first
 ```
 
@@ -198,8 +198,8 @@ is the check that it finalized — see [docs/roadblocks.md](docs/roadblocks.md) 
 ### Getting both halves onto one machine
 
 ```bash
-just bag-fetch-orin        # rsync the orin's orin_* bags into this host's $GOLFCART_BAG_DIR
-just bag-merge "master_20260814_152605 orin_20260814_152603"
+just bag fetch-orin        # rsync the orin's orin_* bags into this host's $GOLFCART_BAG_DIR
+just bag merge "master_20260814_152605 orin_20260814_152603"
 ```
 
 `bag-merge` writes `merged_<timestamp>` next to the first input unless you pass
@@ -207,7 +207,7 @@ just bag-merge "master_20260814_152605 orin_20260814_152603"
 `-o` at the SSD if the inputs are large.
 
 > The legacy single-machine recipes are a **different** location: `just
-> bag-record` writes to `<repo>/rosbags/outdoor_<timestamp>` and `just bag-play`
+> bag-record` writes to `<repo>/rosbags/outdoor_<timestamp>` and `just bag play`
 > reads from there. Only the systemd recorder above uses `GOLFCART_BAG_DIR`.
 
 `just stop-all` deliberately leaves a recording running; stopping the stack and
@@ -224,7 +224,7 @@ published from the decoded MTR frame the VCU broadcasts anyway; it depends on
 neither `tx_enabled` nor the control mode, so RX-only is enough:
 
 ```bash
-just vehicle-interface     # CAN RX only — the cart cannot be commanded to move
+just vehicle interface     # CAN RX only — the cart cannot be commanded to move
 ```
 
 Confirm before a long run — the report is gated on frame freshness, so a silent
@@ -325,7 +325,7 @@ The expected structure will be
 - [docs/roadmaps/0-autosdv-to-golfcart-rename.md](docs/roadmaps/0-autosdv-to-golfcart-rename.md) — AutoSDV→golfcart naming rename status (completed)
 - [docs/roadmaps/2-vehicle-interface-hardening.md](docs/roadmaps/2-vehicle-interface-hardening.md) — golfcart_vehicle_interface fixes vs Autoware pacmod_interface reference
 - [docs/roadmaps/2-vehicle-interface-fault-handling.md](docs/roadmaps/2-vehicle-interface-fault-handling.md) — ROS-sub / CAN-msg drop handling
-- [docs/design/vehicle_interface_standalone.md](docs/design/vehicle_interface_standalone.md) — one `just vehicle-interface` recipe for standalone bench testing, with `tx=` / `keyboard=` options
+- [docs/design/vehicle_interface_standalone.md](docs/design/vehicle_interface_standalone.md) — one `just vehicle interface` recipe for standalone bench testing, with `tx=` / `keyboard=` options
 - [docs/roadmaps/2-xsens-driver-hardening.md](docs/roadmaps/2-xsens-driver-hardening.md) — Xsens MTi CAN driver hardening
 
 ## License

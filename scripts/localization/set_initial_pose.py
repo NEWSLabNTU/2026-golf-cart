@@ -88,7 +88,7 @@ def main() -> int:
         rclpy.spin_once(node, timeout_sec=0.1)
     if node.get_clock().now().nanoseconds == 0:
         print("no /clock after waiting — is the bag playing with --clock?", file=sys.stderr)
-        print("  Start playback first: just bag-play-ntu <SET>", file=sys.stderr)
+        print("  Start playback first: just bag play-ntu <SET>", file=sys.stderr)
         node.destroy_node()
         rclpy.shutdown()
         return 1

@@ -31,7 +31,7 @@ Strip out AutoSDV leftovers and establish the golf cart baseline. Both groups wo
    - ~~`src/system/autosdv_system_monitor` submodule~~ — renamed to `golfcart_system_monitor` (2026-08-13)
    - Any AutoSDV-specific configs in `src/launcher/golfcart_launch/`
 2. **Setup script overhaul** — Update `setup.sh` / `setup/` to install golf cart dependencies (play_launch, Nebula driver, u-blox driver, Tamagawa driver, TIER IV camera driver). Remove stale optional components from AutoSDV era.
-3. **Justfile recipes for outdoor ops** — Ensure `play_launch` is the default runtime (already is). Add recipes: `just check-sensors` (health check), verify `just bag-record` covers all needed topics. Clean up `launch-zed` recipe (ZED not used).
+3. **Justfile recipes for outdoor ops** — Ensure `play_launch` is the default runtime (already is). Add recipes: `just check-sensors` (health check), verify `just bag record` covers all needed topics. Clean up `launch-zed` recipe (ZED not used).
 4. **Version control setup** — Create project branches in all forked submodule repos. Currently several submodules point to `NEWSLabNTU` forks — establish a consistent branching convention (e.g., `2026-golfcart` branches). Document in README or CONTRIBUTING.
 5. **Vehicle description update** — Measure golf cart dimensions (wheelbase, width, overhang, tire radius) and update `vehicle_info.param.yaml`. Replace the Lexus mesh (`golfcart_vehicle_description/mesh/lexus.dae`) if a golf cart model is available.
 

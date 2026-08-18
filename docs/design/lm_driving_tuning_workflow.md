@@ -125,7 +125,7 @@ the LM throughout — full finetuning is neither affordable nor necessary (BEVDr
 ### Stage 0 — Data
 - **Sim**: CARLA (LangAuto, Bench2Drive routes) + our COSS Park scenario for domain-matched
   low-speed data. LMDrive's 15k instruction sequences bootstrap instruction following.
-- **Real**: `just bag-record` campus drives → BEV frames + ego + (later) driver commentary.
+- **Real**: `just bag record` campus drives → BEV frames + ego + (later) driver commentary.
 - **Auto-labeling**: a large hosted VLM (e.g., Claude with vision) generates scene captions,
   driving QA (DriveLM-style perception→prediction→planning chains), risk-zone polygon labels
   over rendered BEV images, and counterfactuals ("what if the pedestrian steps out") —

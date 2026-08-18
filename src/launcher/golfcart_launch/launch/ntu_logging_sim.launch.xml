@@ -5,7 +5,7 @@
   Bring this up first, then play the bag:
 
     ros2 launch golfcart_launch ntu_logging_sim.launch.xml
-    just bag-play-ntu CSIE-1
+    just bag play-ntu CSIE-1
 
   What these recordings do NOT contain, and what this file does about it:
 

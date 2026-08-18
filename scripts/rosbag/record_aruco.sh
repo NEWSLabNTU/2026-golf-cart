@@ -3,8 +3,8 @@
 # nothing else.
 #
 # Usage:
-#   just bag-record-aruco                       # auto-named bag
-#   just bag-record-aruco bench_static_1board_3m
+#   just bag record-aruco                       # auto-named bag
+#   just bag record-aruco bench_static_1board_3m
 #   scripts/rosbag/record_aruco.sh bench_static_1board_3m
 #
 # COMPRESSED, not raw. Three 1920x1280 streams at 30 Hz is roughly 2 GB per

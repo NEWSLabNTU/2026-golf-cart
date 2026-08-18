@@ -38,7 +38,7 @@ Recording against the current list captures nothing.
       /vehicle/status/velocity_status        # zeros for now, record anyway
       /diagnostics
       ```
-- [x] `just bag-record-aruco` recipe.
+- [x] `just bag record-aruco` recipe.
 - [x] Fix or retire the stale `front` topics in `record_outdoor.sh` and
       `record_localization.sh` while in there.
 
@@ -153,7 +153,7 @@ and the mounted boards; none of that can be produced from a workstation.
 
 ### Recording
 
-- `scripts/rosbag/record_aruco.sh`, `just bag-record-aruco <scenario>`.
+- `scripts/rosbag/record_aruco.sh`, `just bag record-aruco <scenario>`.
   Records the three compressed camera streams with their `camera_info`, IMU, TF,
   velocity status and `/diagnostics`, plus the detector output if it happens to
   be running.
@@ -178,7 +178,7 @@ and the mounted boards; none of that can be produced from a workstation.
 
 ### Analysis
 
-`scripts/analysis/aruco_bag_report.py`, `just bag-report-aruco <bag>`. Three
+`scripts/analysis/aruco_bag_report.py`, `just bag report-aruco <bag>`. Three
 reports, matching the three questions in this phase:
 
 - **corner sigma** — per-board standard deviation of corner pixel positions,

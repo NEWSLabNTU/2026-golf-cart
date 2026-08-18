@@ -146,7 +146,7 @@ def main() -> int:
 
     print(f"captured -> {path}")
     print(f"  x={x:.2f} y={y:.2f} z={z:.2f}  drift while sampling {drift:.3f} m")
-    print(f"  replay unattended with: just ntu-sim-init {args.name}")
+    print(f"  replay unattended with: just ntu-test init {args.name}")
     return 0
 
 

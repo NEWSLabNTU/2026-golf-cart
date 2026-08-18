@@ -33,21 +33,43 @@ just checkout           # Update git submodules
 just --list             # Show all available commands
 ```
 
+### Command modules
+
+Grouped families live in `just/*.just` and are reached as `just <module> <recipe>`
+(or `just <module>::<recipe>`). A bare `just <module>` lists that module:
+
+| module | covers |
+|---|---|
+| `ntu-test` | NTU campus NDT replay — run `just ntu-test` for the ordered sequence |
+| `bag` | rosbag record, play, merge, fetch |
+| `record` | recording lifecycle, independent of the launch |
+| `service` | multi-machine systemd units, `doctor`, `host-status` |
+| `vehicle` | vehicle interface bring-up, manual control, control tests |
+| `can` | CAN record, replay, decode |
+| `tool` | RViz, PlotJuggler, TUI, keyboard controller |
+
+`build`, `test`, `clean`, `launch*`, `stop-all` and `logs` stay at the root —
+they are the daily verbs, and a module may not share a name with a recipe
+(`mod launch` beside `launch:` is a hard error that breaks the whole justfile).
+
+`just --list` expands modules because the default recipe passes
+`--list-submodules`; without it each module collapses to one line.
+
 ### Tools
 ```bash
-just tool-rviz          # Launch RViz
-just tool-plotjuggler   # PlotJuggler visualization
-just tool-controller    # Keyboard manual control
-just tool-tui           # Drive monitor TUI (pose, speed, states)
+just tool rviz          # Launch RViz
+just tool plotjuggler   # PlotJuggler visualization
+just tool controller    # Keyboard manual control
+just tool tui           # Drive monitor TUI (pose, speed, states)
 ```
 
 ### Vehicle Interface (standalone, no Autoware)
 ```bash
-just vehicle-interface                       # CAN RX only on can0 — cart cannot move
-just vehicle-interface can=vcan0             # bench, against mock_vcu
-just vehicle-interface converter=on          # + robot_state_publisher + velocity converter
-just vehicle-interface tx=on                 # ⚠️ CAN TX live: this can drive the cart
-just manual-control                          # keyboard teleop — SECOND terminal
+just vehicle interface                       # CAN RX only on can0 — cart cannot move
+just vehicle interface can=vcan0             # bench, against mock_vcu
+just vehicle interface converter=on          # + robot_state_publisher + velocity converter
+just vehicle interface tx=on                 # ⚠️ CAN TX live: this can drive the cart
+just vehicle manual-control                          # keyboard teleop — SECOND terminal
 ```
 Options are `KEY=VALUE`, any order: `can=`, `tx=on|off`, `converter=on|off`.
 `tx` defaults to `off` on every path. Keyboard control is a separate recipe
@@ -56,14 +78,14 @@ inside a launch file (play_launch does not support `launch-prefix` either).
 
 ### Control Testing
 ```bash
-just control-straight   # Run 10m straight trajectory (needs: just vehicle-interface converter=on)
-just control-circle     # Run circular trajectory
+just vehicle control-straight   # Run 10m straight trajectory (needs: just vehicle interface converter=on)
+just vehicle control-circle     # Run circular trajectory
 ```
 
 ### Rosbag
 ```bash
-just bag-record         # Record outdoor sensor topics
-just bag-play           # Play most recent recording
+just bag record         # Record outdoor sensor topics
+just bag play           # Play most recent recording
 ```
 
 ### Simulation
@@ -414,11 +436,11 @@ forwards only `vehicle_id`, `raw_vehicle_cmd_converter_param_path` and
 and `just launch tx=on` / `just launch-up tx=on` / `just launch-all tx=on` set it
 per invocation (`scripts/tx_switch.sh` strips the token). Not sticky on purpose:
 an invocation without `tx=`, and `just launch-down`, both clear it.
-`just vehicle-interface tx=on` is a separate path that bypasses Autoware and
+`just vehicle interface tx=on` is a separate path that bypasses Autoware and
 passes the launch argument for real.
 
 `launch-all` applies TX to the **master only** — it does not forward the token to
-the orin, which has no CAN bus. `just host-status` / `just service-status` print
+the orin, which has no CAN bus. `just service host-status` / `just service status` print
 the effective value and where it came from (`unit-env` or `config/vehicle.conf`).
 
 #### Localization (pose_source)
@@ -580,13 +602,13 @@ Both hosts run the same units, installed per machine with a role:
 | `golfcart-watchdog.service` | orin | stops everything if the master vanishes |
 
 ```bash
-just service-install master            # this machine
-just service-install-orin              # the orin, over ssh
+just service install master            # this machine
+just service install-orin              # the orin, over ssh
 just launch-all                     # starts both; returns immediately
 just stop-all                       # stops both; leaves recording alone
 just logs
-just record-start / record-stop        # recording, independent of the launch
-just doctor                            # when topics do not show up
+just record start / record-stop        # recording, independent of the launch
+just service doctor                            # when topics do not show up
 ```
 
 Units are installed but never enabled: they start on demand, not at boot.

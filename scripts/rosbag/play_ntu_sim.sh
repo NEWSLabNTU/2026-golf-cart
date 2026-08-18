@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # play_ntu_sim.sh - replay a merged NTU campus bag into the logging simulation.
 #
-#   just bag-play-ntu CSIE-1            # or CSIE-2, BLVD-1
-#   just bag-play-ntu CSIE-1 "--rate 0.5 --start-offset 30"
+#   just bag play-ntu CSIE-1            # or CSIE-2, BLVD-1
+#   just bag play-ntu CSIE-1 "--rate 0.5 --start-offset 30"
 #
 # --clock is not optional. The stack is launched with use_sim_time:=true, so
 # without a clock publisher every node blocks forever on a time that never
@@ -19,7 +19,7 @@ if [ ! -d "${BAG}" ]; then
     echo "Available:" >&2
     ls -1 "${MERGED_DIR}" 2>/dev/null | sed 's/^/  /' >&2
     echo >&2
-    echo "Merge one with:  just bag-merge -o ${MERGED_DIR}/<SET> <master_bag> <orin_bag>" >&2
+    echo "Merge one with:  just bag merge -o ${MERGED_DIR}/<SET> <master_bag> <orin_bag>" >&2
     exit 1
 fi
 

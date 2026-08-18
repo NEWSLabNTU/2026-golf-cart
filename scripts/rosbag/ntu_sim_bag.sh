@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ntu_sim_bag.sh - start a merged NTU bag PAUSED, publishing /clock only.
 #
-#   just ntu-sim-bag CSIE-1
+#   just ntu-test bag CSIE-1
 #
 # Paused on purpose, and the ordering it enables is the whole point.
 #
@@ -21,7 +21,7 @@
 #
 # Starting paused publishes /clock at the bag's first timestamp without moving
 # any sensor data, so everything launched afterwards is born on bag time.
-# Resume with `just ntu-sim-resume` once the stack is up.
+# Resume with `just ntu-test resume` once the stack is up.
 set -eo pipefail
 
 MERGED_DIR="${GOLFCART_NTU_BAGS:-/home/aeon/Downloads/2026-08-14_NTU-campus/merged}"
@@ -40,8 +40,8 @@ REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 [ -f "${REPO_ROOT}/install/setup.bash" ] && source "${REPO_ROOT}/install/setup.bash"
 
 echo "Starting ${BAG} PAUSED (clock only)."
-echo "  next: just ntu-sim-up      # stack, now born on bag time"
-echo "        just ntu-sim-resume  # let the sensors flow"
+echo "  next: just ntu-test up      # stack, now born on bag time"
+echo "        just ntu-test resume  # let the sensors flow"
 echo
 
 # read-ahead raised because the default queue starves on this bag and delays

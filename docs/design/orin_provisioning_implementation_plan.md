@@ -162,8 +162,8 @@ One-time, per machine:
 
 ```bash
 echo master > config/host      # or: orin        (gitignored, see 4.3)
-just service-install master       # or: orin
-just service-remove  master       # mirror, same script
+just service install master       # or: orin
+just service remove  master       # mirror, same script
 ```
 
 Daily driving — launch only, no recording:
@@ -176,11 +176,11 @@ just stop-all
 Recording — independent, start any time, stack up or down:
 
 ```bash
-just record-start         # both hosts begin recording to their own disks
-just record-status
-just record-stop          # both finalize
-just bag-fetch-orin       # existing, unchanged
-just bag-merge <a> <b>    # existing, unchanged
+just record start         # both hosts begin recording to their own disks
+just record status
+just record stop          # both finalize
+just bag fetch-orin       # existing, unchanged
+just bag merge <a> <b>    # existing, unchanged
 ```
 
 Terminal:
@@ -188,7 +188,7 @@ Terminal:
 ```bash
 cd ~/2026-golf-cart       # direnv resolves the DDS profile from the marker
 ros2 topic list           # sees the live graph on either machine
-just doctor               # resolved profile, host role, unit states, bag dir
+just service doctor               # resolved profile, host role, unit states, bag dir
 ```
 
 ### 4.2 Units and scripts
@@ -208,7 +208,7 @@ path, which also retires the `%h/2026-golf-cart` hardcode (design §2.4).
 `GOLFCART_HOST`.
 
 Installer: `setup/scripts/install-host-service.sh <master|orin> [--remove]`,
-replacing `install-orin-host.sh`; recipes `just service-install|service-remove
+replacing `install-orin-host.sh`; recipes `just service install|service-remove
 ROLE`. It installs units, `daemon-reload`s, and enables lingering — required on
 the master, which currently has `Linger=no` and would lose its units with the
 terminal.
@@ -285,7 +285,7 @@ interrupted recording is recoverable, a full disk is not.
 | Topic lists | `config/recording/master_topics.txt`, `orin_topics.txt` |
 | Recorder entry point | `scripts/recording/record_unit_exec.sh` |
 | Unit | `golfcart-record.service` |
-| Both-sides control | `just record-start` / `record-stop` / `record-status` |
+| Both-sides control | `just record start` / `record-stop` / `record-status` |
 
 Topic-list format follows the existing `scripts/testing/rosbag/record_topics.txt`
 (one topic per line, `#` comments), which is folded in as the seed rather than
@@ -305,7 +305,7 @@ never blocks the master.
 
 `.envrc` resolves the profile from the marker file. No daemon automation: a
 daemon's DDS context is fixed when it starts, so `.envrc` cannot repair a running
-one. `just doctor` instead reports that a daemon is running and says to
+one. `just service doctor` instead reports that a daemon is running and says to
 `ros2 daemon stop` when the graph looks wrong — a warning, not a side effect.
 
 A sourceable `scripts/env.sh` covers bare (non-direnv) shells; units set their
@@ -318,13 +318,13 @@ own environment already.
 | # | Work | State |
 |---|---|---|
 | 1 | Consolidated installer + `golfcart-launch.service` + `launch_unit_exec.sh` (4.2) | **done** 2026-08-14 |
-| 2 | Marker file, `.envrc` resolution, `scripts/env.sh`, `just doctor` (4.3, 4.7) | **done** 2026-08-14 |
+| 2 | Marker file, `.envrc` resolution, `scripts/env.sh`, `just service doctor` (4.3, 4.7) | **done** 2026-08-14 |
 | 3 | `config/multi_machine.conf`, `setup_ssh.sh`, remote control rewire (4.4) | **done** 2026-08-14 |
 | 4 | Recording infra; strip `record:` from the launch file (4.6) | **done** 2026-08-14 |
 | 5 | Independent watchdog (4.5) | **done** 2026-08-14 |
 | 6 | justfile rewire: `launch-all` to the systemd path, `stop-all` | **done** 2026-08-14 |
 | 7 | ~~`install-zed-sdk.sh`~~ | **dropped** 2026-08-14: the SDK installer does not automate cleanly, so it stays a manual step. Installed on the orin (5.2.3) |
-| 8 | `orin-check` (design §2.5) | **partly done**: `just doctor` / `just doctor-orin` cover every item except the two ZED ones, which need phase 7 |
+| 8 | `orin-check` (design §2.5) | **partly done**: `just service doctor` / `just service doctor-orin` cover every item except the two ZED ones, which need phase 7 |
 | 9 | CLAUDE.md's stale AutoSDV `golfcart` CLI section | **done** 2026-08-14 |
 
 Phases 1–5 landed together. `docs/multi-machine.md` was rewritten with them
@@ -372,7 +372,7 @@ torn down by `stop-all`, with the watchdog as the backstop for everything else.
 
 Resolved 2026-08-14: **ZED SDK delivery** — neither. The installer does not
 automate cleanly, so installing it stays a documented manual step on the orin,
-and `install-zed-sdk.sh` is dropped. What automation still owes: `just doctor`
+and `install-zed-sdk.sh` is dropped. What automation still owes: `just service doctor`
 should check `/usr/local/zed` exists and that `install/` carries `zed_wrapper`,
 since without the SDK `just build` skips the ZED packages in silence.
 

@@ -27,7 +27,7 @@ Both hosts run under systemd now, so `launch-all` **returns immediately** and
 nothing occupies a terminal. Closing your ssh session no longer stops the cart;
 `just stop-all` is the stop verb, and there is no Ctrl-C to press.
 
-`stop-all` deliberately leaves recording alone — that is `just record-stop`.
+`stop-all` deliberately leaves recording alone — that is `just record stop`.
 
 ### Letting the cart move
 
@@ -37,8 +37,8 @@ the cart. Turn TX on with the `tx=` token:
 
 ```bash
 just launch-all tx=on     # ⚠️  real frames on can0 — the cart can move
-just host-status          # shows "can tx  ENABLED" and where that came from
-just service-status       # the same, for both hosts
+just service host-status          # shows "can tx  ENABLED" and where that came from
+just service status       # the same, for both hosts
 ```
 
 TX applies to the **master only**. `launch-all` strips the token before calling
@@ -67,9 +67,9 @@ Recording is independent of the launch. Start it whenever you want, with the
 stack up, down, or half-up:
 
 ```bash
-just record-start     # both hosts begin recording to their own local disk
-just record-status
-just record-stop      # both finalize their bags
+just record start     # both hosts begin recording to their own local disk
+just record status
+just record stop      # both finalize their bags
 ```
 
 Bags land in `$GOLFCART_BAG_DIR/master_<ts>` and `.../orin_<ts>` on their
@@ -96,7 +96,7 @@ multi-gigabyte bag stopped from the foreground came out with a 0-byte
 shutdown cannot reach the recorder at all.
 
 If the orin is unreachable, the master still records — the failure is reported
-and `just record-start` exits non-zero.
+and `just record start` exits non-zero.
 
 ## Time sync
 
@@ -149,10 +149,10 @@ Each host records to its own disk, so a session leaves two bags on two machines.
 Bring the orin's side over afterwards:
 
 ```bash
-just bag-fetch-orin              # everything not already here
-just bag-fetch-orin "--latest"   # only the newest
-just bag-fetch-orin "--list"     # show what is on the orin, copy nothing
-just bag-fetch-orin "orin_20260810_112836"   # one by name
+just bag fetch-orin              # everything not already here
+just bag fetch-orin "--latest"   # only the newest
+just bag fetch-orin "--list"     # show what is on the orin, copy nothing
+just bag fetch-orin "orin_20260810_112836"   # one by name
 ```
 
 Nothing is deleted from the orin — re-running is safe and resumes a partial
@@ -170,8 +170,8 @@ the database. The corruption only appeared later, during a merge.
 ## Merging the two hosts' bags into one
 
 ```bash
-just bag-merge "master_20260810_123019 orin_20260810_122949"
-just bag-merge "-o /mnt/external/rosbags/session1 <bag> <bag>"
+just bag merge "master_20260810_123019 orin_20260810_122949"
+just bag merge "-o /mnt/external/rosbags/session1 <bag> <bag>"
 ```
 
 Bare names are resolved under `GOLFCART_BAG_DIR`; paths work too. The inputs are
@@ -192,9 +192,9 @@ carry an empty `storage_id` in their metadata, and convert will not infer it.
 ### Replaying with RViz
 
 ```bash
-just bag-replay                                    # newest merged bag, or newest master bag
-just bag-replay "" "start_offset:=40.0"            # skip the orin-only opening
-just bag-replay merged_20260810_1230 "rate:=2.0 play_args:=--loop"
+just bag replay                                    # newest merged bag, or newest master bag
+just bag replay "" "start_offset:=40.0"            # skip the orin-only opening
+just bag replay merged_20260810_1230 "rate:=2.0 play_args:=--loop"
 ```
 
 Brings up the bag player, `robot_state_publisher` and RViz together. The fused
@@ -245,8 +245,8 @@ vocabulary to learn: you run the same recipe over there.
 
 ```bash
 ./scripts/multi_machine/on_orin.sh just launch-up
-./scripts/multi_machine/on_orin.sh just record-down
-./scripts/multi_machine/on_orin.sh just host-status
+./scripts/multi_machine/on_orin.sh just record down
+./scripts/multi_machine/on_orin.sh just service host-status
 ./scripts/multi_machine/on_orin.sh systemctl --user is-active golfcart-record.service
 ```
 
@@ -293,9 +293,9 @@ Most of it is driven from the master:
 ```bash
 # On the master:
 echo master > config/host              # picks the DDS profile; gitignored
-just service-install master               # units + lingering (sudo)
-just ssh-setup                            # dedicated key, copied to the orin
-just service-install-orin                 # runs the orin's own installer over ssh
+just service install master               # units + lingering (sudo)
+just service ssh-setup                            # dedicated key, copied to the orin
+just service install-orin                 # runs the orin's own installer over ssh
 
 # On the orin, once (its own checkout, its own clock and buffers):
 echo orin > config/host
@@ -307,11 +307,11 @@ just build
 (cd setup && just chrony-master)          # serve time to the orin
 ```
 
-`just service-install` writes a drop-in per unit carrying the resolved repo path
+`just service install` writes a drop-in per unit carrying the resolved repo path
 and this machine's role, so the checkout does not have to live at
-`~/2026-golf-cart`. `just service-remove <role>` undoes it, on whichever host you run it.
+`~/2026-golf-cart`. `just service remove <role>` undoes it, on whichever host you run it.
 
-`just service-install-orin` logs in and runs that same installer from the orin's
+`just service install-orin` logs in and runs that same installer from the orin's
 own checkout, so the drop-in it writes points at the orin's path. It is the one
 command here that may prompt — it runs before key-based ssh necessarily exists,
 and enabling lingering needs the orin's sudo. Everything else uses
@@ -324,14 +324,14 @@ tilde is expanded by the orin's shell, not the master's.
 Check either machine at any time:
 
 ```bash
-just doctor           # this host
-just doctor-orin      # the same diagnostic, over ssh
+just service doctor           # this host
+just service doctor-orin      # the same diagnostic, over ssh
 ```
 
 Key-based ssh is required, not optional: the orchestrator runs non-interactively
 and cannot answer a password prompt.
 
-`just ssh-setup` installs a **dedicated** key at `~/.ssh/golfcart_orin`, never
+`just service ssh-setup` installs a **dedicated** key at `~/.ssh/golfcart_orin`, never
 touching your own `id_*` keys, and every script passes it explicitly with
 `ssh -i`. That explicitness is the point: ssh only tries the default names by
 itself, so a differently-named key is invisible to it unless an agent happens to
@@ -350,7 +350,7 @@ can make the check pass while every unit still fails.
 > `golfcart-launch.service` plus `golfcart-record.service`, and the old
 > `orin_unit_exec.sh` / `master_unit_exec.sh` are gone. A machine provisioned
 > before that has units pointing at deleted scripts and will fail at start. Re-run
-> `just service-install <role>` after pulling.
+> `just service install <role>` after pulling.
 
 ## Which DDS profile a terminal gets
 
@@ -361,7 +361,7 @@ property of the machine and not of the branch.
 
 ```bash
 echo master > config/host    # then re-enter the directory, or: source scripts/env.sh
-just doctor                     # what got resolved, and from where
+just service doctor                     # what got resolved, and from where
 ```
 
 Precedence: an explicit `GOLFCART_DDS_PROFILE` wins, then the marker, then
@@ -371,7 +371,7 @@ reported loudly rather than silently ignored.
 Shells without direnv get the same environment from `source scripts/env.sh`.
 
 A running `ros2` daemon keeps whatever DDS context it started with, so changing
-the profile does not reach it — `just doctor` says so when one is running.
+the profile does not reach it — `just service doctor` says so when one is running.
 
 ## Troubleshooting
 
@@ -396,7 +396,7 @@ there.
 `git@github.com:...` and a non-interactive ssh session carries no agent. Pull
 from an interactive shell on the orin.
 
-**Nothing is discovered between the hosts.** Run `just doctor` — it prints the
+**Nothing is discovered between the hosts.** Run `just service doctor` — it prints the
 profile that resolved, where it came from, and whether the current shell is
 carrying a different `CYCLONEDDS_URI` than the one the marker now selects. The
 usual cause is a missing `config/host`, or a shell entered before it existed.

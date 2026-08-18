@@ -31,7 +31,7 @@ UNIT_DST="${HOME}/.config/systemd/user"
 
 usage() {
     echo "usage: $(basename "$0") <master|orin> [--remove]" >&2
-    echo "       to provision the orin from here: just service-install-orin" >&2
+    echo "       to provision the orin from here: just service install-orin" >&2
     exit 2
 }
 

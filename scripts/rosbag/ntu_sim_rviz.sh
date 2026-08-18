@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ntu_sim_rviz.sh - RViz for the NTU replay, on bag time, with a visible map.
 #
-#   just ntu-sim-rviz
+#   just ntu-test rviz
 #
 # Started separately from the stack rather than with rviz:=true, for two reasons.
 #
@@ -13,7 +13,7 @@
 #
 # 2. Timing. RViz must be born on bag time. Start it before /clock exists and it
 #    latches the maps at t=0, then the clock jumps ~4 days when playback starts
-#    and the displays are dropped. `just ntu-sim-bag` runs the player paused
+#    and the displays are dropped. `just ntu-test bag` runs the player paused
 #    first precisely so this can start with a correct clock.
 #
 # The vehicle parameters below are NOT optional and their absence is silent-ish:

@@ -33,7 +33,7 @@ that we already use, so most port verbatim.
 
 - [x] **T-7 Port `control_test` package** — Already ported earlier (commit `595c649 Eliminate AutoSDV refs`). Reverified: `keyboard_control.py`, `control_command_service.py`, `trajectory_player.py`, `circle.yaml`, `straight_10m.yaml` all present and building. PCA9685-only tools never copied.
 - [x] **T-8 Adapt keyboard_control presets** — Default flipped to `Direct` (`/control/command/*`); `External (Standard)` preset removed (no `vehicle_cmd_gate` external selector in Golf Cart chain). `Custom` retained. README + launch comment updated. `basic_control.launch.xml` rewritten to include `golfcart_vehicle_launch/launch/vehicle_interface.launch.xml` (the AutoSDV stub nodes `velocity_report` / `actuator` no longer exist).
-- [x] **T-9 Port drive TUI** — `scripts/testing/drive/run.py` already in tree, wired into justfile as `just tool-tui`. adapi-only, vehicle-neutral; works against current launch.
+- [x] **T-9 Port drive TUI** — `scripts/testing/drive/run.py` already in tree, wired into justfile as `just tool tui`. adapi-only, vehicle-neutral; works against current launch.
 - [x] **T-10 Port rosbag recording** — `scripts/rosbag/record_outdoor.sh` activated with Golf Cart sensor topic list (VLP-32C, u-blox, Tamagawa, USB front camera, vehicle_interface status + `/diagnostics`, TF). Removed the `exit 1` guard.
 
 ## Tier 3: Golf-Cart-specific test additions
@@ -44,7 +44,7 @@ diagnostic surface.
 - [ ] **T-11 `can_replay` node** — Plays a `candump -L` capture against `vcan0`. Captures real drives once, replays forever for regression. Located in `control_test/can_replay.py` or as Rust bin.
 - [ ] **T-12 `diag_watcher`** — Subscribes `/diagnostics`, asserts no `vehicle_interface/*` entry exceeds threshold level for N seconds. Returns non-zero exit on assertion failure — usable in CI.
 - [ ] **T-13 `fsm_assert`** — Scripted scenario runner. Drives `~/control_mode_request` + `control_cmd` through a YAML-defined sequence; verifies `ControlModeReport` transitions match expected. Integrates with `mock_vcu` for fault injection.
-- [x] **T-14 Justfile entries** — collapsed into a single `just vehicle-interface` with `can=` / `tx=` / `keyboard=` / `converter=` options instead of a recipe per rig; `just vehicle-interface can=vcan0` is the bench entry (pair with `mock_vcu`), `just can-test` still drives the replay rig. See [2-vehicle-interface-standalone-refactor.md](2-vehicle-interface-standalone-refactor.md). `test-fsm` remains open, blocked on T-13.
+- [x] **T-14 Justfile entries** — collapsed into a single `just vehicle interface` with `can=` / `tx=` / `keyboard=` / `converter=` options instead of a recipe per rig; `just vehicle interface can=vcan0` is the bench entry (pair with `mock_vcu`), `just can test` still drives the replay rig. See [2-vehicle-interface-standalone-refactor.md](2-vehicle-interface-standalone-refactor.md). `test-fsm` remains open, blocked on T-13.
 
 ## Scenario coverage matrix
 

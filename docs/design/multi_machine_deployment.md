@@ -233,7 +233,7 @@ supervised and die with the stack:
   (depth off by default — enable deliberately, it is very large).
 
 Both scripts `exec ros2 bag record …` so SIGTERM reaches the recorder directly and
-bags finalize cleanly. `just bag-fetch-orin` rsyncs orin bags to the master over the AP.
+bags finalize cleanly. `just bag fetch-orin` rsyncs orin bags to the master over the AP.
 chrony (master = stratum-10 server on the AP, orin = client) keeps the two bags'
 timestamps aligned to ~ms.
 
@@ -267,7 +267,7 @@ just launch-master                  # starts master stack + orin ZED remotely
 just launch-master record:=true     # + recording on both hosts
 # Ctrl-C / stop  → orin unit stopped over ssh; watchdog covers hard failures.
 
-just bag-fetch-orin                 # pull orin bags over the AP
+just bag fetch-orin                 # pull orin bags over the AP
 
 # Single-box workflows are unchanged:
 just launch                         # host:=all, loopback DDS, no remote anything
@@ -292,7 +292,7 @@ just launch                         # host:=all, loopback DDS, no remote anythin
 4. **DDS over AP**: `ros2 topic list` on master shows `/sensing/camera/zed/...`; `ros2 topic hz .../rgb/camera_info` works cross-host; wlan throughput stays low.
 5. **Remote lifecycle**: `just launch-master` → orin unit + watchdog active; Ctrl-C on master → both inactive, no ZED/play_launch processes left on orin.
 6. **Watchdog**: `kill -9` master play_launch or AP off → orin units stop within ~30–45 s.
-7. **Recording end-to-end**: two bags (`master_<ts>`, `orin_<ts>`) with overlapping time ranges; `chronyc tracking` offset < 10 ms; `just bag-fetch-orin` retrieves.
+7. **Recording end-to-end**: two bags (`master_<ts>`, `orin_<ts>`) with overlapping time ranges; `chronyc tracking` offset < 10 ms; `just bag fetch-orin` retrieves.
 8. **Degradation**: orin powered off → `orin_remote` retries 60 s, errors out; master stack unaffected.
 
 ## 7. Open items

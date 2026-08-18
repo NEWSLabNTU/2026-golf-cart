@@ -22,7 +22,7 @@ them directly and we do not want to generate them.
 
 ```bash
 echo master > config/host      # or: orin
-just doctor                    # confirms what resolved, and from where
+just service doctor                    # confirms what resolved, and from where
 ```
 
 Precedence, highest first: `GOLFCART_ENV_ROLE` (how the systemd units state their
@@ -90,7 +90,7 @@ arguments to the orin. CAN is the master's alone — the orin has no bus, and
 `launch-up` runs without `tx=` and therefore clears `GOLFCART_TX_ENABLED` in its
 own user manager rather than inheriting a value from an earlier run.
 
-`just host-status` (and `just service-status`, which runs it on both hosts)
+`just service host-status` (and `just service status`, which runs it on both hosts)
 prints the effective setting next to the unit states, and names where it came
 from: `unit-env` when `launch-up` set it for this run, `config/vehicle.conf`
 when nothing is set.
@@ -101,7 +101,7 @@ clears it, and `launch-down` clears it too. Editing `vehicle.conf` changes the
 resting default for the machine and does make it apply to every launch, which is
 why the file is the wrong place to switch it on for one test.
 
-`just vehicle-interface tx=on` is a different path — it bypasses Autoware
+`just vehicle interface tx=on` is a different path — it bypasses Autoware
 entirely and passes `tx_enabled:=` as a real launch argument.
 
 ## Changing what is recorded

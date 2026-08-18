@@ -50,7 +50,7 @@ Directory rename done (commit `b073f4d`), but internal package names were not ch
 
 ### Done
 - [x] `just check-sensors` recipe added (`justfile:150-151`)
-- [x] `just bag-record` recipe added (`justfile:158-159`), wired to `scripts/rosbag/record_outdoor.sh`
+- [x] `just bag record` recipe added (`justfile:158-159`), wired to `scripts/rosbag/record_outdoor.sh`
 - [x] `launch-zed` recipe removed (no longer in justfile)
 - [x] `play_launch` is the default runtime (already was)
 - [x] `just check-sensors` pre-build guard — `scripts/check/run.sh` checks for `install/setup.bash` before sourcing, exits with helpful error if missing (verified on target)

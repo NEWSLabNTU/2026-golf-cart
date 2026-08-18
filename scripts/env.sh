@@ -248,7 +248,7 @@ unset ROS_LOCALHOST_ONLY
 #
 # No `ros2 daemon stop` here on purpose: a daemon's DDS context is fixed when it
 # starts, so this file cannot repair a running one, and stopping it would be a
-# surprising side effect of opening a shell. `just doctor` reports it instead.
+# surprising side effect of opening a shell. `just service doctor` reports it instead.
 golfcart_resolve_dds_profile
 
 # ── Recording ────────────────────────────────────────────────────────────────

@@ -57,7 +57,7 @@ publish_rate: 30.0
    it. Confirm with:
    ```bash
    ros2 topic echo --once /vehicle/status/control_mode   # mode: 1 == AUTONOMOUS
-   # or use: just tool-tui
+   # or use: just tool tui
    ```
    If a fault is latched (`mode: 5`, DISENGAGED), clear it after fixing the
    cause:
@@ -107,8 +107,8 @@ schema.
 **Bench (vcan0) smoke**:
 ```bash
 sudo ./scripts/can/up-vcan0.sh vcan0
-just vehicle-interface can=vcan0 converter=on
-just manual-control                             # second terminal, for teleop
+just vehicle interface can=vcan0 converter=on
+just vehicle manual-control                             # second terminal, for teleop
 ```
 
 **Trajectory regression**:

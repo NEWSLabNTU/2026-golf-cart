@@ -211,7 +211,7 @@ no `~/.local/bin` on PATH, so everything is set explicitly:
 - `exec play_launch launch --web-addr 0.0.0.0:8081 golfcart_launch
   golfcart.launch.yaml host:=master rviz:=false record:=${GOLFCART_RECORD:-false}
   ${GOLFCART_MASTER_ARGS:-}` — `exec` so systemd supervises play_launch itself.
-  Headless always; RViz remains an interactive tool (`just tool-rviz`).
+  Headless always; RViz remains an interactive tool (`just tool rviz`).
 
 `orin_start_if_enabled.sh` is a three-line wrapper: exit 0 unless
 `GOLFCART_USE_ORIN` (default 1), else `orin_remote.sh start

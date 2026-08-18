@@ -20,7 +20,7 @@
       4. Have the driver switch the vehicle to autonomous on its own
          controls; golfcart_vehicle_interface transmits commands only while
          all four VCU subsystem states report autonomous. Check
-         /vehicle/status/control_mode (or the drive TUI: just tool-tui)
+         /vehicle/status/control_mode (or the drive TUI: just tool tui)
       5. Press 'x' for DRIVE gear
       6. Use arrow keys to control
 

@@ -37,7 +37,7 @@ Specific defects:
 1. **Duplicated node definition.** `vehicle_interface_test.launch.xml` repeats the
    node block and all 14 remaps of `vehicle_interface.launch.xml` verbatim; only
    the comments differ. Two places to keep in sync, silently.
-2. **Undeclared arguments.** `just vehicle-interface` passed `can_interface:=` and
+2. **Undeclared arguments.** `just vehicle interface` passed `can_interface:=` and
    `tx_enabled:=` to `golfcart_autoware.launch.xml`, which declares neither
    (`golfcart_autoware.launch.xml:19-33`). It worked only because a command-line
    argument leaks into included scopes as a launch configuration. A child that
@@ -57,11 +57,11 @@ Specific defects:
 ### Recipes
 
 ```
-just vehicle-interface                  # RX only
-just vehicle-interface tx=on            # drives the cart
-just vehicle-interface can=vcan0        # bench, against mock_vcu
-just vehicle-interface converter=on     # + robot_state_publisher + velocity converter
-just manual-control                     # keyboard teleop, second terminal
+just vehicle interface                  # RX only
+just vehicle interface tx=on            # drives the cart
+just vehicle interface can=vcan0        # bench, against mock_vcu
+just vehicle interface converter=on     # + robot_state_publisher + velocity converter
+just vehicle manual-control                     # keyboard teleop, second terminal
 ```
 
 Options are `KEY=VALUE`, order-free, unknown keys rejected. Defaults:
@@ -70,7 +70,7 @@ terminal-ownership reason below.
 
 Named options rather than positional parameters: `just` has no `NAME=value` syntax
 for recipe parameters, so positional arguments silently shift when one is omitted —
-`just vehicle-interface can1 false` reads fine but `just vehicle-interface false`
+`just vehicle interface can1 false` reads fine but `just vehicle interface false`
 sets the *interface* to `false`. Parsing `KEY=VALUE` inside the recipe body avoids
 that whole class of mistake and makes `tx=on` self-documenting at the call site.
 
@@ -125,8 +125,8 @@ launch`. So the launch file starts the vehicle interface and nothing else, and
 the controller is its own recipe:
 
 ```bash
-just vehicle-interface        # terminal 1
-just manual-control           # terminal 2
+just vehicle interface        # terminal 1
+just vehicle manual-control           # terminal 2
 ```
 
 `manual-control` runs the node directly, so it owns the terminal it is typed in —
@@ -187,11 +187,11 @@ controller can override that.
 
 | Old | New |
 |---|---|
-| `just vehicle-interface can0 true` | `just vehicle-interface tx=on` |
-| `just control-vehicle-test vcan0` | `just vehicle-interface can=vcan0` |
-| `just control-teleop-real can0` | `just vehicle-interface tx=on` + `just manual-control` |
-| `just control-keyboard` / old `just manual-control` | `just manual-control` (now parameterized for the cart) |
-| `just control-basic` | `just vehicle-interface converter=on` |
+| `just vehicle interface can0 true` | `just vehicle interface tx=on` |
+| `just control-vehicle-test vcan0` | `just vehicle interface can=vcan0` |
+| `just control-teleop-real can0` | `just vehicle interface tx=on` + `just vehicle manual-control` |
+| `just control-keyboard` / old `just vehicle manual-control` | `just vehicle manual-control` (now parameterized for the cart) |
+| `just control-basic` | `just vehicle interface converter=on` |
 
 ## Consequences
 
@@ -213,7 +213,7 @@ Implemented and verified on the bench 2026-08-12 (`vcan0` + `mock_vcu`, isolated
 
 - `tx=off` — interface publishes `/vehicle/status/*`, reports `AUTONOMOUS`, and
   puts no `ADS_VCU_*` frames on the bus.
-- `just manual-control` in a second terminal — shows the golf-cart limits
+- `just vehicle manual-control` in a second terminal — shows the golf-cart limits
   (5 m/s in 0.25 m/s steps, 20° in 1° steps), keys produce
   `/control/command/control_cmd` (0.75 m/s, -0.0174 rad after `u u u l`) and
   `gear_cmd` = 2 (DRIVE), and `s` reports `Vehicle:Autonomous Gear:D` — the

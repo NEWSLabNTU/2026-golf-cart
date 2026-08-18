@@ -1,0 +1,66 @@
+# NTU campus NDT replay test
+#
+# Run these in order, each in its own terminal (bag, up and rviz stay running):
+#
+#   just ntu-test bag CSIE-1     # 1. bag PAUSED -- publishes /clock only
+#   just ntu-test up             # 2. stack, sensor drivers off, no RViz
+#   just ntu-test rviz           # 3. RViz on bag time, map visible
+#   just ntu-test resume         # 4. let the sensors flow
+#   just ntu-test init CSIE-1    # 5. seed NDT, once LiDAR is flowing
+#   just ntu-test report         # 6. score it
+#   just ntu-test down           # stop everything
+#
+# The order is not cosmetic. The bag leads so everything after it is born on
+# bag time; the pose comes last so NDT has scans to match against. Getting
+# either wrong fails silently and still looks like it is working -- see the
+# comment at the top of scripts/rosbag/ntu_sim_bag.sh.
+#
+# Recipes here run from the REPO ROOT, not from just/. Without this a module
+# recipe runs with its cwd set to this directory, and every `./scripts/...` path
+# in the repo breaks with "not found".
+set working-directory := '..'
+
+# just runs a module's FIRST recipe when the module is named with no recipe,
+# so without this `just vehicle` would bring up the vehicle interface and
+# `just ntu-test` would start a bag. Naming it `default` makes the harmless
+# thing the accident.
+# List this module's recipes
+default:
+    @just --list ntu-test
+
+# 1. Start a merged NTU bag PAUSED, publishing /clock only.
+bag SET="CSIE-1" ARGS="":
+    ./scripts/rosbag/ntu_sim_bag.sh {{SET}} {{ARGS}}
+
+# 2. Bring up the logging simulation (sensor drivers off, no RViz).
+up ARGS="":
+    play_launch launch --parser python --web-addr 0.0.0.0:8081 \
+        golfcart_launch ntu_logging_sim.launch.xml rviz:=false {{ARGS}}
+
+# 3. RViz with the point cloud map rendered visibly, on bag time.
+rviz:
+    ./scripts/rosbag/ntu_sim_rviz.sh
+
+# 4. Release the paused player so sensor data starts flowing.
+resume:
+    ros2 service call /rosbag2_player/resume rosbag2_interfaces/srv/Resume
+
+# Pause playback again (to inspect a frame, or to re-seed the pose).
+pause:
+    ros2 service call /rosbag2_player/pause rosbag2_interfaces/srv/Pause
+
+# 5. Re-apply a captured initial pose so an NTU replay starts unattended.
+init SET="CSIE-1":
+    python3 ./scripts/localization/set_initial_pose.py {{SET}}
+
+# Capture the current converged pose for a set, after placing one in RViz.
+capture SET="CSIE-1":
+    python3 ./scripts/localization/capture_initial_pose.py {{SET}}
+
+# Score a running NDT replay on pose quality (scatter, yaw step), not on NVTL.
+report ARGS="":
+    python3 ./scripts/localization/ndt_quality_report.py {{ARGS}}
+
+# Stop the replay stack, the player and RViz.
+down:
+    ./scripts/rosbag/ntu_sim_down.sh

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ntu_sim_down.sh - stop the NTU replay: stack, bag player and RViz.
 #
-#   just ntu-sim-down
+#   just ntu-test down
 #
 # Matches on argv[0] rather than on the process name, for two reasons that both
 # cost real debugging time to find:

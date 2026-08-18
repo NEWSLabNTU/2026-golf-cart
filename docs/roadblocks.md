@@ -166,7 +166,7 @@ subscribing with matching QoS, subscribing before playback started, and with an
 explicit message type — all received nothing.
 
 Consequence: a bag alone cannot place `velodyne`- or `seyond`-stamped clouds.
-`just bag-replay` works around it by running `robot_state_publisher` from the
+`just bag replay` works around it by running `robot_state_publisher` from the
 vehicle description, which is arguably better anyway since it reflects current
 calibration rather than the calibration of the recording day.
 

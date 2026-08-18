@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # on_orin.sh - run a command in the orin's checkout, over ssh.
 #
-#   on_orin.sh just record-up          # the same recipe this host would run
-#   on_orin.sh --tty just service-install orin
+#   on_orin.sh just record up          # the same recipe this host would run
+#   on_orin.sh --tty just service install orin
 #   on_orin.sh systemctl --user is-active golfcart-record.service
 #
 # This is the whole remote-control layer, on purpose. It replaced a script that
