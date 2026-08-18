@@ -519,7 +519,49 @@ bag-record-indoor:
 bag-play-ntu SET="CSIE-1" ARGS="":
     ./scripts/rosbag/play_ntu_sim.sh {{SET}} {{ARGS}}
 
-# Re-apply a captured initial pose so an NTU replay starts unattended.
+# ── NTU NDT replay test ─────────────────────────────────────────────────────
+#
+# Run these in order, each in its own terminal (1-3 stay running):
+#
+#   just ntu-sim-bag CSIE-1     # 1. bag PAUSED — publishes /clock only
+#   just ntu-sim-up             # 2. stack, no RViz
+#   just ntu-sim-rviz           # 3. RViz, point cloud actually visible
+#   just ntu-sim-resume         # 4. let the sensors flow
+#   just ntu-sim-init CSIE-1    # 5. seed NDT, once LiDAR is flowing
+#   just ntu-sim-report         # 6. score it
+#   just ntu-sim-down           # stop everything
+#
+# The order is not cosmetic. The bag leads so that everything after it is born
+# on bag time; the pose comes last so NDT has scans to match against. Getting
+# either wrong fails silently and still looks like it is working — see the
+# comment at the top of scripts/rosbag/ntu_sim_bag.sh.
+
+# 1. Start a merged NTU bag PAUSED, publishing /clock only.
+ntu-sim-bag SET="CSIE-1" ARGS="":
+    ./scripts/rosbag/ntu_sim_bag.sh {{SET}} {{ARGS}}
+
+# 2. Bring up the logging simulation (sensor drivers off, no RViz).
+ntu-sim-up ARGS="":
+    play_launch launch --parser python --web-addr 0.0.0.0:8081 \
+        golfcart_launch ntu_logging_sim.launch.xml rviz:=false {{ARGS}}
+
+# 3. RViz with the point cloud map rendered visibly, on bag time.
+ntu-sim-rviz:
+    ./scripts/rosbag/ntu_sim_rviz.sh
+
+# 4. Release the paused player so sensor data starts flowing.
+ntu-sim-resume:
+    ros2 service call /rosbag2_player/resume rosbag2_interfaces/srv/Resume
+
+# Pause playback again (to inspect a frame, or to re-seed the pose).
+ntu-sim-pause:
+    ros2 service call /rosbag2_player/pause rosbag2_interfaces/srv/Pause
+
+# Stop the replay stack, the player and RViz.
+ntu-sim-down:
+    ./scripts/rosbag/ntu_sim_down.sh
+
+# 5. Re-apply a captured initial pose so an NTU replay starts unattended.
 ntu-sim-init SET="CSIE-1":
     python3 ./scripts/localization/set_initial_pose.py {{SET}}
 
