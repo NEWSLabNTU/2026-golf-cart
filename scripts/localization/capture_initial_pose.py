@@ -13,13 +13,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Capture a converged localization pose so a replay can be re-initialised
-without a human.
+"""Capture a localization pose so a replay can be re-initialised without a human.
 
     python3 scripts/localization/capture_initial_pose.py CSIE-1
 
 Place the pose once in RViz, wait for NDT to settle, run this, and every
 subsequent replay of that set can start unattended.
+
+The written file records WHICH of the two sources it came from, because they are
+worth very different things and look identical once saved. Under the planning
+simulator this topic is simple_planning_simulator reporting its own ground truth,
+so the pose is the click unchanged; under a replay it is NDT agreeing with the
+map. Both are usable as a seed, only the second is a measurement.
 
 This exists because tuning needs repetition. Re-deriving NDT parameters means
 running the same bag many times and comparing, and a hand-placed pose makes
@@ -84,6 +89,7 @@ def main() -> int:
     deadline = time.time() + args.settle
     while time.time() < deadline:
         rclpy.spin_once(node, timeout_sec=0.1)
+    node_names = node.get_node_names_and_namespaces()
     node.destroy_node()
     rclpy.shutdown()
 
@@ -107,11 +113,29 @@ def main() -> int:
         return 1
 
     x, y, z, qx, qy, qz, qw = samples[-1]
+
+    # Where the pose came from decides what it is worth, and the two cases are
+    # indistinguishable once written to a file. In the planning simulator
+    # /localization/kinematic_state is simple_planning_simulator echoing its own
+    # ground truth, so it returns the click unchanged and never touches the point
+    # cloud map -- a seed. Only a replay run has NDT actually agreeing with the
+    # map. Recording "converged" for both is how a click ends up quoted as a
+    # measurement, so detect it and say which one this is.
+    simulated = any("simple_planning_simulator" in n for n, _ in node_names)
+
     os.makedirs(args.out_dir, exist_ok=True)
     path = os.path.join(args.out_dir, f"{args.name}.yaml")
     with open(path, "w", encoding="utf-8") as f:
-        f.write(f"# Initial pose for the {args.name} replay, captured from a converged\n")
-        f.write("# /localization/kinematic_state after a hand-placed RViz estimate.\n")
+        f.write(f"# Initial pose for the {args.name} replay.\n")
+        if simulated:
+            f.write("#\n# SOURCE: planning simulator -- simple_planning_simulator was\n")
+            f.write("# running, so this is the clicked pose echoed back as ground truth,\n")
+            f.write("# not a pose NDT matched against the map. Treat it as a seed for\n")
+            f.write("# method AUTO. A zero drift and a round yaw are expected here.\n#\n")
+        else:
+            f.write("#\n# SOURCE: replay -- captured from /localization/kinematic_state\n")
+            f.write("# with no simulator running, i.e. after NDT converged against the\n")
+            f.write("# point cloud map.\n#\n")
         f.write(f"# {len(samples)} samples, drift {drift:.3f} m while sampling.\n")
         f.write("#\n")
         f.write("# Frame: map (MGRS 51RUH, matching the merged NTU map).\n")

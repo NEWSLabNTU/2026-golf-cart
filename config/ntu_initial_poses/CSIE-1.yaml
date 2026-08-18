@@ -1,0 +1,33 @@
+# Initial pose for the CSIE-1 replay.
+#
+# PROVENANCE -- read before trusting the precision of these digits.
+#
+# This came from a hand-placed RViz "2D Pose Estimate" in the PLANNING
+# SIMULATOR, not from an NDT-converged replay. In the planning simulator
+# /localization/kinematic_state is simple_planning_simulator echoing its own
+# ground truth, so it reports back exactly what was clicked. It was never
+# matched against the point cloud map.
+#
+# Two numbers below give that away and are not to be read as measurements:
+#   drift while sampling  0.000 m over 121 samples -- a simulated vehicle is
+#                         perfectly static; a real estimator never is
+#   yaw                   exactly 90.00 deg -- an artifact of clicking, not a
+#                         heading the map agreed to
+#
+# So this is a SEED, not a survey. That is the right shape for the job:
+# set_initial_pose.py calls /localization/initialize with method AUTO, which
+# hands the pose to NDT as a starting guess and lets it settle against the map.
+# Re-capture from a converged NDT replay to get a pose worth quoting to
+# centimetres, and this file will be replaced by one whose header says so.
+#
+# Frame: map (MGRS 51RUH), matching data/ntu-campus-merged. The clicked point
+# sits inside the merged map extent -- checked, not assumed.
+initial_pose:
+  x: 52814.5195
+  y: 67883.9375
+  z: 12.5353
+  qx: 0.002845
+  qy: -0.002845
+  qz: 0.707101
+  qw: 0.707101
+  yaw_deg: 90.00
