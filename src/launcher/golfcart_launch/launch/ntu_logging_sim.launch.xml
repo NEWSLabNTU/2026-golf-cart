@@ -40,12 +40,21 @@
   <arg name="launch_planning" default="false"/>
   <arg name="launch_control" default="false"/>
 
+  <!-- Autoware model/artifact directory. NOT the packaged /opt/autoware/<ver>/data:
+       that tree is root-owned, and TensorRT writes each .engine next to its .onnx,
+       so pointing here read-only makes every model fail to cache and rebuild on
+       every launch. `just setup-autoware-data` creates it; `just build-engines`
+       fills it. Matters here even though launch_perception defaults to false,
+       because flipping that argument is the whole point of it existing. -->
+  <arg name="data_path" default="./data/autoware_data"
+       description="Autoware model/artifact directory. Must be WRITABLE."/>
+
   <include file="$(find-pkg-share golfcart_launch)/launch/golfcart_autoware.launch.xml">
     <arg name="vehicle_model" value="golfcart_vehicle"/>
     <arg name="sensor_model" value="golfcart_sensor_kit"/>
     <arg name="vehicle_id" value="$(var vehicle_id)"/>
     <arg name="map_path" value="$(var map_path)"/>
-    <arg name="data_path" value="/opt/autoware/1.5.0/data"/>
+    <arg name="data_path" value="$(var data_path)"/>
 
     <!-- Replay drives every sensor topic, so no driver may open hardware. -->
     <arg name="launch_sensing" value="true"/>
@@ -70,7 +79,9 @@
     <!-- GNSS was off for these runs. gnss_receiver still needs a real value:
          the sensor kit resolves its topic through a dict lookup that raises
          KeyError on an empty string and takes the whole launch down with it,
-         even when no driver is started. -->
+         even when no driver is started. golfcart.launch.yaml has since been
+         given a real default for the same reason (78cec65); this stays
+         explicit so the replay does not inherit whatever that default becomes. -->
     <arg name="use_gnss" value="false"/>
     <arg name="gnss_receiver" value="ublox"/>
 
