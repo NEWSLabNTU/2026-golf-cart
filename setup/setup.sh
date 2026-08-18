@@ -25,6 +25,7 @@ Golf Cart Setup Script
 
 Usage:
   ./setup.sh              Run interactive setup
+  ./setup.sh --dry-run    Pick components and print the selection, install nothing
   ./setup.sh status       Show setup status
   ./setup.sh <recipe>     Run specific recipe (ros2, dev-tools, etc.)
   ./setup.sh --help       Show this help
@@ -173,9 +174,15 @@ menu_parent_on() {
     return 0
 }
 
+# Rendering is cursor-driven: the block is drawn once, then redrawn in place
+# by moving the cursor back up over it. Clearing the whole screen instead would
+# throw away whatever the user was looking at before running setup.
+MENU_LINES=0
+
 menu_render() {
-    local i key label note indent mark dim
+    local i key label note indent mark dim pointer lines=0
     printf "\n${BLUE}Golf Cart Setup${NC}  —  core (ROS 2, dev tools, GeographicLib, Python deps) is always installed\n\n"
+    lines=$(( lines + 3 ))
     for i in "${!MENU_ITEMS[@]}"; do
         key=$(menu_field "${MENU_ITEMS[$i]}" 1)
         indent=$(menu_field "${MENU_ITEMS[$i]}" 3)
@@ -190,18 +197,78 @@ menu_render() {
             dim="${YELLOW}"
             mark="-"
         fi
-        if [[ "$indent" == "1" ]]; then
-            printf "  %2d  [%b] %b    %s${NC}\n" "$((i + 1))" "$mark" "$dim" "$label"
+
+        # The cursor line is marked by a caret and reverse video rather than by
+        # colour alone: colour is what a dimmed sub-option already uses, so a
+        # second colour would collide with it.
+        if (( i == MENU_CURSOR )); then
+            pointer="${BLUE}❯${NC}"
         else
-            printf "  %2d  [%b] %b%s${NC}\n" "$((i + 1))" "$mark" "$dim" "$label"
+            pointer=" "
         fi
-        [[ -n "$note" ]] && printf "         %b%s${NC}\n" "${dim:-$YELLOW}" "$note"
+
+        if [[ "$indent" == "1" ]]; then
+            printf " %b [%b] %b    %s${NC}\n" "$pointer" "$mark" "$dim" "$label"
+        else
+            printf " %b [%b] %b%s${NC}\n" "$pointer" "$mark" "$dim" "$label"
+        fi
+        lines=$(( lines + 1 ))
+        if [[ -n "$note" ]]; then
+            printf "        %b%s${NC}\n" "${dim:-$YELLOW}" "$note"
+            lines=$(( lines + 1 ))
+        fi
     done
-    printf "\n  ${BLUE}number${NC} toggle   ${BLUE}a${NC} all   ${BLUE}n${NC} none   ${BLUE}ENTER${NC} continue   ${BLUE}q${NC} quit\n"
+    printf "\n  ${BLUE}↑↓${NC} move   ${BLUE}SPACE${NC} toggle   ${BLUE}a${NC} all   ${BLUE}n${NC} none   ${BLUE}ENTER${NC} continue   ${BLUE}q${NC} quit\n"
+    lines=$(( lines + 2 ))
+    MENU_LINES=$lines
+}
+
+# Move back over the block just drawn so the next render overwrites it.
+menu_rewind() {
+    (( MENU_LINES > 0 )) || return 0
+    printf '\033[%dA\033[J' "$MENU_LINES"
+}
+
+# One keypress, with arrow keys decoded. Arrows arrive as ESC [ A/B, and the
+# trailing reads are given a timeout so a bare ESC does not block.
+menu_read_key() {
+    local key rest
+    IFS= read -rsn1 key || return 1
+    if [[ "$key" == $'\033' ]]; then
+        read -rsn2 -t 0.05 rest || rest=""
+        case "$rest" in
+            '[A') printf 'up' ;;
+            '[B') printf 'down' ;;
+            '[C') printf 'right' ;;
+            '[D') printf 'left' ;;
+            *)    printf 'esc' ;;
+        esac
+        return 0
+    fi
+    case "$key" in
+        '')      printf 'enter' ;;
+        ' ')     printf 'space' ;;
+        k|K)     printf 'up' ;;
+        j|J)     printf 'down' ;;
+        *)       printf '%s' "$key" ;;
+    esac
+}
+
+menu_toggle_current() {
+    local key indent
+    key=$(menu_field "${MENU_ITEMS[$MENU_CURSOR]}" 1)
+    indent=$(menu_field "${MENU_ITEMS[$MENU_CURSOR]}" 3)
+    # A sub-option whose parent is off cannot be turned on from here: the run
+    # would drop it anyway, so accepting the keystroke would be a lie.
+    if [[ "$indent" == "1" ]] && ! menu_parent_on "$MENU_CURSOR"; then
+        return 0
+    fi
+    [[ "${MENU_STATE[$key]}" == "y" ]] && MENU_STATE[$key]="n" || MENU_STATE[$key]="y"
 }
 
 interactive_setup() {
-    local i key def
+    local i key def action
+
     for i in "${!MENU_ITEMS[@]}"; do
         key=$(menu_field "${MENU_ITEMS[$i]}" 1)
         def=$(menu_field "${MENU_ITEMS[$i]}" 2)
@@ -212,28 +279,36 @@ interactive_setup() {
         MENU_STATE["$key"]="$def"
     done
 
-    while true; do
-        menu_render
-        printf "${BLUE}?${NC} "
-        read -r reply || { printf "\n${YELLOW}Cancelled${NC}\n"; exit 130; }
-        case "${reply,,}" in
-            "") break ;;
-            q|quit|exit) printf "${YELLOW}Cancelled${NC}\n"; exit 0 ;;
-            a|all)  for key in "${!MENU_STATE[@]}"; do MENU_STATE[$key]="y"; done ;;
-            n|none) for key in "${!MENU_STATE[@]}"; do MENU_STATE[$key]="n"; done ;;
-            *)
-                # Accept "1 3 5" and "1,3,5" alike.
-                for tok in ${reply//,/ }; do
-                    if [[ "$tok" =~ ^[0-9]+$ ]] && (( tok >= 1 && tok <= ${#MENU_ITEMS[@]} )); then
-                        key=$(menu_field "${MENU_ITEMS[$((tok - 1))]}" 1)
-                        [[ "${MENU_STATE[$key]}" == "y" ]] && MENU_STATE[$key]="n" || MENU_STATE[$key]="y"
-                    else
-                        printf "${RED}Not a listed number: %s${NC}\n" "$tok"
-                    fi
-                done
-                ;;
-        esac
-    done
+    MENU_CURSOR=0
+
+    # Without a terminal there are no keystrokes to read. Take the defaults and
+    # say so, rather than blocking on a read that will never return.
+    if [[ ! -t 0 ]]; then
+        printf "${YELLOW}Not a terminal — using default component selection.${NC}\n"
+    else
+        # The cursor is hidden for the duration and restored however we leave,
+        # including Ctrl-C: a terminal left without a cursor is a bad parting gift.
+        printf '\033[?25l'
+        trap 'printf "\033[?25h"' EXIT
+
+        while true; do
+            menu_render
+            action=$(menu_read_key) || { printf '\033[?25h'; printf "\n${YELLOW}Cancelled${NC}\n"; exit 130; }
+            case "$action" in
+                up)    (( MENU_CURSOR > 0 )) && MENU_CURSOR=$(( MENU_CURSOR - 1 )) ;;
+                down)  (( MENU_CURSOR < ${#MENU_ITEMS[@]} - 1 )) && MENU_CURSOR=$(( MENU_CURSOR + 1 )) ;;
+                space) menu_toggle_current ;;
+                a|A)   for key in "${!MENU_STATE[@]}"; do MENU_STATE[$key]="y"; done ;;
+                n|N)   for key in "${!MENU_STATE[@]}"; do MENU_STATE[$key]="n"; done ;;
+                enter) menu_rewind; menu_render; break ;;
+                q|Q)   printf '\033[?25h'; printf "${YELLOW}Cancelled${NC}\n"; exit 0 ;;
+            esac
+            menu_rewind
+        done
+
+        printf '\033[?25h'
+        trap - EXIT
+    fi
 
     # A sub-option whose parent ended up off must not leak into the run.
     for i in "${!MENU_ITEMS[@]}"; do
@@ -282,6 +357,22 @@ main() {
     # Handle --help/-h
     if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
         show_usage
+        exit 0
+    fi
+
+    # --dry-run drives the menu and prints what would be installed without
+    # touching the machine. Worth having on its own terms, and it is the only
+    # way to exercise the menu without running a multi-gigabyte install.
+    if [[ "$1" == "--dry-run" ]]; then
+        interactive_setup
+        printf "${BLUE}Dry run — nothing installed. Selection:${NC}\n"
+        local k
+        for k in SKIP_AUTOWARE_DEBIAN AUTOWARE_PREREQ_ROS AUTOWARE_PREREQ_SPCONV \
+                 SETUP_AUTOWARE_DATA BUILD_TENSORRT_ENGINES INSTALL_ISAAC_ROS \
+                 CONFIGURE_CYCLONEDDS_SYSCTL INSTALL_TURBOVNC_VIRTUALGL \
+                 INSTALL_HARDWARE_CONFIG INSTALL_OTOCAM INSTALL_LINUXPTP; do
+            printf "  %-32s %s\n" "$k" "${!k}"
+        done
         exit 0
     fi
 
