@@ -144,9 +144,33 @@ wait_for 120 "NDT input cloud" has_data /localization/util/downsample/pointcloud
     || die "no cloud on /localization/util/downsample/pointcloud"
 
 # ── 5. seed NDT ─────────────────────────────────────────────────────────────
+#
+# Retried, and verified against ndt_scan_matcher rather than against the
+# service's own return code, because /localization/initialize reports success
+# on a path that leaves NDT switched OFF.
+#
+# pose_initializer does: deactivate NDT -> align -> reactivate. The align fails
+# whenever an input is missing (no map in NDT, no accepted scan, no TF), and
+# LocalizationModule::align_pose THROWS on that -- so the reactivate never runs.
+# is_activated_ is written only by that trigger service, so nothing turns it back
+# on later. Meanwhile the EKF dead-reckons on IMU and velocity: kinematic_state
+# keeps publishing at 40 Hz and the vehicle drives across the map, while NDT
+# contributes nothing. See scripts/localization/check_ndt_activated.py.
 say "5/5  seeding NDT from the captured pose"
-python3 "${REPO_ROOT}/scripts/localization/set_initial_pose.py" "${SET_NAME}" \
-    || die "initialization failed"
+seeded=0
+for attempt in 1 2 3; do
+    python3 "${REPO_ROOT}/scripts/localization/set_initial_pose.py" "${SET_NAME}" \
+        || die "initialization request failed"
+    if python3 "${REPO_ROOT}/scripts/localization/check_ndt_activated.py" --timeout 20; then
+        seeded=1
+        break
+    fi
+    printf '    attempt %d: NDT did not activate, retrying\n' "${attempt}"
+    # A scan the matcher will accept is the usual missing input, so give playback
+    # a moment to deliver more before asking again.
+    sleep 5
+done
+[ "${seeded}" = "1" ] || die "NDT never activated -- it is latched off and will not recover on its own"
 
 wait_for 60 "localization to converge" has_data /localization/kinematic_state \
     || printf '    (no kinematic_state yet -- check NDT score against its threshold)\n'
