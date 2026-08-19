@@ -95,13 +95,27 @@ kills the USB ports, and the UYVY-to-RGB/JPEG conversion for which no GPU
 GStreamer element was found, forcing it onto the CPU once per camera. Both belong under *Sensors*, and both feed the compute-budget story
 that runs through the thermal photo, the htop photo and the governor.
 
+## Vehicle interface material
+
+See `notes-vcu.md`. Source is the Roots CAN test bench on the NAS
+(`logs/2026 Golf Cart/2026-06-28 VCU manual/Roots_can_test_0811.zip`): a Python
+virtual ADS driving the real VCU over can0, built against the same
+`CAX_ADS_CAN.dbc` that `golfcart_vehicle_interface` generates its bindings from.
+
+The headline is a blocker for step 5, and it is a vendor question rather than one
+of ours: after a VCU restart the brake and driving states come up `Invalid`, and
+nothing sent from the CAN side reliably clears them — only a brake-pedal press
+was observed to. If that press is genuinely required, unattended autonomous
+start-up is blocked.
+
 ## Open questions to resolve before finalising
 
 - Status of each of the five steps — the repo shows evidence for sensors,
   system and vehicle interface, but "ready" vs "in progress" is a judgement the
   team should make, not one to infer from commits.
 - Whether the autonomous run has been attempted at all, and if so what stopped
-  it.
+  it. PARTIAL ANSWER: the VCU brake/driving state entry is a known blocker for
+  unattended start-up — see notes-vcu.md. Confirm whether it was hit in practice.
 - Whether TSN belongs in this deck or is future work shown separately.
   RESOLVED: moved to `tsn_setup.typ`.
 - gmslcam: RESOLVED — migration is planned, not done. Present as intended fix.
