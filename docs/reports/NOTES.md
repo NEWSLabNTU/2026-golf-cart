@@ -104,9 +104,7 @@ that runs through the thermal photo, the htop photo and the governor.
   it.
 - Whether TSN belongs in this deck or is future work shown separately.
   RESOLVED: moved to `tsn_setup.typ`.
-- Whether the cart now runs `gmslcam` or still the gscam pipeline. The configs
-  in the sensor kit still say gscam; do not claim a migration that has not
-  landed.
+- gmslcam: RESOLVED — migration is planned, not done. Present as intended fix.
 - Whether the Seyond Falcon is still fitted. It is in the master recording list
   and recorded 4208 messages in CSIE-1, but the localization story is
   VLP-32C-only.

@@ -36,29 +36,40 @@ vendor-script driven, in `scripts/hardware/otocam/`
 `5.15.148-tegra`, so a kernel upgrade breaks the load, and a JetPack OTA can
 reinstall the stock modules and silently undo it. `just otocam` re-applies.
 
-## 2. gscam cannot take the camera's encoding
+## 2. Nothing on the accelerated path would take the camera's encoding
 
-The cameras output **UYVY**. Two separate problems followed:
+The cameras output **UYVY** — confirmed in the repo, not from memory: the
+pipeline in `camera_{left,right,rear}.yaml` states
+`video/x-raw,format=UYVY,width=1920,height=1280,framerate=30/1`.
 
-- `gscam` does not support that input encoding directly.
-- The NVIDIA converter (`nvvidconv`) does not recognise the encoding either, so
-  the accelerated path was unavailable.
+Two separate problems followed:
 
-The fallback was the **CPU** `videoconvert` GStreamer element — which works and
-drains the machine. On a box already running three cameras and two LiDARs, that
-is exactly the budget the multi-host split and the startup governor exist to
-protect.
+- `gscam` does not know that input encoding.
+- NVIDIA's DeepStream video convert does not support it either, so the
+  accelerated conversion path was unavailable.
+
+The fallback was the **CPU** `videoconvert` GStreamer element. It works, and it
+drains the machine — a colour conversion per camera, three cameras, 1920×1280 at
+30 fps. On a box already carrying three cameras and two LiDARs, that is exactly
+the budget the multi-host split and the startup governor exist to protect.
 
 **Workaround:** <https://github.com/newslabntu/gmslcam>, written to take the
 camera's format without a CPU conversion stage.
 
 ## Status in this repo
 
-`camera_{left,right,rear}.yaml` still carry a `gscam` pipeline using `nvvidconv`
-and `nvjpegenc`; the sensor kit's `camera_model` still offers `gscam | zedx |
-none`. **Confirm before presenting** whether the cart now runs `gmslcam` and the
-configs are stale, or whether gmslcam is not yet wired in. Do not claim a
-migration that has not landed.
+**The gmslcam migration is planned, not done.** Present it as the intended fix,
+not as the current state.
+
+`camera_{left,right,rear}.yaml` carry a `gscam` pipeline (`v4l2src` → `nvvidconv`
+→ `nvjpegenc`) and the sensor kit's `camera_model` offers `gscam | zedx | none`.
+gmslcam is neither a submodule here nor checked out locally.
+
+One detail to get right if it reaches a slide: the element named in the repo
+pipeline is `nvvidconv`, while the element reported as not supporting UYVY is
+DeepStream's video convert (`nvvideoconvert`). They are different elements with
+different format support. Say "NVIDIA's accelerated converter" unless someone
+can confirm which was tried.
 
 ## Why this belongs in the deck
 
