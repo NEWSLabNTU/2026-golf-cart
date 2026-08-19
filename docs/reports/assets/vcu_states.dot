@@ -11,8 +11,8 @@ digraph vcu {
   edge [fontname="Helvetica", fontsize=11, color="#5a5a5a", arrowsize=0.8];
 
   { rank=same;
-    i1 [label="MTR · EPS\nInvalid"];
-    i2 [label="BRK · Drv\nInvalid", color="#DB4437", fillcolor="#FBE9E7",
+    i1 [label="MTR + EPS\nInvalid"];
+    i2 [label="BRK + Drv\nInvalid", color="#DB4437", fillcolor="#FBE9E7",
         fontcolor="#C5372C", penwidth=1.7];
   }
   { rank=same;

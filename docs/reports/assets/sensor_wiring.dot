@@ -83,7 +83,7 @@ digraph sensors {
   // ── the virtual link ──────────────────────────────────────────────────────
   // Not a cable. The IMU the stack actually uses crosses it, and so does the
   // GNSS fix -- which is why its latency matters to localization.
-  orin -> adv [label="  DDS over wifi\l  IMU · camera · GNSS\l",
+  orin -> adv [label="  DDS over wifi\l  IMU, camera, GNSS\l",
                style=bold, color="#4285F4", fontcolor="#4285F4",
                penwidth=2.4, constraint=false];
   adv  -> orin [label="  ssh: start / stop\l",

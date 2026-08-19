@@ -1,4 +1,4 @@
-// Golf Cart progress — Autoware LSV meeting, 30 minutes.
+// Golf Cart progress, for the Autoware LSV meeting, 30 minutes.
 //
 //   typst compile docs/reports/2026-08_golfcart_progress.typ
 //
@@ -21,7 +21,7 @@
 // the four logos are extracted from that file into assets/.
 //
 //   accent1 #4285F4   accent4 #FFAB40   accent5 #0097A7   lt2 #535353
-//   major Helvetica · minor Arial
+//   major Helvetica, minor Arial
 
 #let accent = rgb("#4285F4")
 #let ink    = rgb("#000000")
@@ -102,7 +102,7 @@
         #v(0.35em)
         #text(size: 19pt, weight: "bold")[National Taiwan University]
         #v(0.25em)
-        #text(size: 15pt, fill: muted)[Autoware LSV meeting · August 2026]
+        #text(size: 15pt, fill: muted)[Autoware LSV meeting, August 2026]
       ],
     )
     #v(1fr)
@@ -130,8 +130,8 @@
 
       #v(0.3em)
       #note[
-        sensors · two-host system · vehicle interface ·
-        data collection · autonomous run
+        sensors, two-host system, vehicle interface,
+        data collection, autonomous run
       ]
 
       #v(0.7em)
@@ -162,11 +162,11 @@
   #v(0.6em)
   #set list(spacing: 1.0em)
   - *GMSL cameras need a vendor kernel module and a device tree overlay.*
-    The `.ko` files are ABI-bound to kernel `5.15.148-tegra` — a JetPack OTA
+    The `.ko` files are ABI-bound to kernel `5.15.148-tegra`, so a JetPack OTA
     reinstalls the stock modules and silently undoes it.
 
   - *The Xsens IMU cable broke, and is being remade.* Meanwhile the stack runs
-    on the #strong[ZED X built-in IMU] — which sits on the other machine and
+    on the #strong[ZED X built-in IMU], which sits on the other machine and
     crosses the network at 100 Hz.
 
   - *The u-blox GNSS is on the Orin*, because the Advantech is short of USB
@@ -233,7 +233,7 @@
       #v(0.35em)
       #set text(size: 15pt)
       #set list(spacing: 0.55em)
-      - #strong[play_launch] cleans up orphans when the launch dies — and starts
+      - #strong[play_launch] cleans up orphans when the launch dies, and starts
         the stack in #strong[~20 s] against #strong[~60 s] for `ros2 launch`
       - #strong[systemd user units] around it: singleton by construction,
         `KillMode=control-group` takes the whole tree down
@@ -246,7 +246,7 @@
       #set list(spacing: 0.55em)
       - one CycloneDDS profile per role, plus a `config/host` marker file
       - `scripts/env.sh` reads it, and every shell and every unit sources it
-      - so a terminal on either box is correct the moment it opens — nobody has
+      - so a terminal on either box is correct the moment it opens. Nobody has
         to remember which machine they are on
     ],
   )
@@ -260,12 +260,12 @@
     [
       #set text(size: 14.5pt)
       play_launch is fast #emph[because] it spawns as fast as it can. On a box
-      already at its limit, that is a thundering herd — and the machine locks up
+      already at its limit, that is a thundering herd, and the machine locks up
       hard enough to need a power cycle.
 
       #v(0.6em)
       *Pacing the spawns is the obvious fix. We measured it losing:* about 10%
-      fewer runnable tasks for more than double the startup time — spending the
+      fewer runnable tasks for more than double the startup time, spending the
       exact advantage we adopted the tool for.
 
       #v(0.6em)
@@ -287,7 +287,7 @@
     image("assets/vcu_lineage.png", height: 9.2cm),
     [
       #v(0.6em)
-      Not written from a specification — grown from the vendor's own test code,
+      Not written from a specification. Grown from the vendor's own test code,
       and every step exists in the repo.
 
       #v(0.9em)
@@ -296,19 +296,19 @@
       #v(0.35em)
       #set text(size: 15.5pt)
       #set list(spacing: 0.6em)
-      - target speed can never go negative — reverse is gear `R`
+      - target speed can never go negative, reverse is gear `R`
       - gear `P` pins speed and angle to zero, re-applied every cycle
       - ESTOP release is never a key the terminal cannot send
 
       #v(0.8em)
-      #note[CAN bindings generate from the vendor DBC at build time — the same
+      #note[CAN bindings generate from the vendor DBC at build time, the same
       file the bench decodes with.]
     ],
   )
 ]
 
 // ── 10 ───────────────────────────────────────────────────────────────────────
-#slide[Engage is the VCU's decision — and one door we cannot open][
+#slide[Engage is the VCU's decision, and one door we cannot open][
   #align(center)[#image("assets/vcu_states.png", width: 76%)]
   #v(0.55em)
   #set text(size: 14pt)
@@ -316,8 +316,8 @@
     columns: (1fr, 1fr), column-gutter: 1.4em,
     [
       There is no `vehicle_cmd_gate` external selector. The interface commands
-      nothing until all four subsystems report autonomous — #strong[no service
-      call can force it].
+      nothing until all four subsystems report autonomous. #strong[No service
+      call can force it.]
     ],
     [
       After a VCU restart, #strong[BRK and Drv come up `Invalid`], and only a
@@ -337,8 +337,8 @@
     image("assets/vehicle_csie_init.jpg", height: 8.6cm),
     [
       #set text(size: 15.5pt)
-      Three runs at NTU. #strong[Both hosts record separately] — each writes the
-      topics for the devices it owns — and the bags merge afterwards.
+      Three runs at NTU. #strong[Both hosts record separately]: each writes the
+      topics for the devices it owns, and the bags merge afterwards.
 
       #v(0.7em)
       Only #strong[first-hand driver output] is recorded. Anything a node
@@ -346,8 +346,8 @@
       rather than the ones frozen at record time.
 
       #v(0.7em)
-      #note[Replay is one command: `just ntu-test run` — bag paused for
-      `/clock`, stack, RViz, initial pose, in the only order that works.]
+      #note[Replay is one command: `just ntu-test run`. Bag paused for
+      `/clock`, then stack, RViz, initial pose, in the only order that works.]
     ],
   )
 ]
@@ -360,7 +360,7 @@
     [
       #set text(size: 14.5pt)
       We tuned it and measured it on #strong[scan-to-map residual], not on the
-      NVTL score — the change that helped accuracy most actually *lowered* NVTL.
+      NVTL score. The change that helped accuracy most actually *lowered* NVTL.
 
       #v(0.55em)
       It converges parked, to 0.14 m. It #strong[degrades a few seconds after
@@ -395,7 +395,7 @@
     [fragmented LiDAR scans; the Xsens cable is being remade],
 
     [Two-host system], [#chip("ready")],
-    [—],
+    [none],
 
     [Vehicle interface], [#chip("wip")],
     [the VCU will not enter its autonomous state from CAN alone],
@@ -422,5 +422,5 @@
     conversion out.
 
   #v(0.8em)
-  #note[TSN is a separate track — happy to cover it if there is interest.]
+  #note[TSN is a separate track, happy to cover it if there is interest.]
 ]
