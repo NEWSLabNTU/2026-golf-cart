@@ -24,7 +24,7 @@ Rules for building it:
 | 4 | Sensors: what bit us | bullets | oToCam DT overlay, ABI-bound to the kernel · Xsens dead, running on the ZED IMU · GNSS on the Orin, short of USB ports |
 | 5 | **GMSL cameras cost CPU** | bullets | cameras emit UYVY at 3 × 1920×1280 @ 30 fps, consumers want RGB/JPEG. We tried `nvvidconv`; the conversion still costs CPU per camera. `gmslcam` is the fix |
 | 6 | The machine is at its limit | `thermal_fan_cooling.jpg` | slide 5 is one reason. Hence two machines: compute, driver conflict, ZEDLink is Orin-only |
-| 7 | Launching across two hosts | `multihost_launch_diagram.png` | ROS 2 has no `machine` tag; orchestration is ours |
+| 7 | Launching across two hosts | `multihost_launch_diagram.png` | two problems, two answers — see below |
 | 8 | **Startup governor** | `htop_before_governor.jpg` | 144 processes can kill the host. Pacing measured and **rejected**; a 1 GiB `MemAvailable` floor ships |
 | 9 | Vehicle interface: how it was built | `vcu_lineage.png` | vendor script → our safety rules → drove it → interface → test suite |
 | 10 | **Engage, and the blocker** | `vcu_states.png` | the VCU decides. BRK/Drv leave `Invalid` only on a pedal press — not reproducible from CAN, so unattended start-up is blocked |
@@ -32,6 +32,29 @@ Rules for building it:
 | 12 | **NDT: attempted, and it breaks** | `ndt_slide_chart.png` | one page. Tuned it, converges parked, degrades once moving. Root cause is the recording — fragmented scans, stale by 376 ms, no raw packets to re-decode |
 | 13 | **Status board** | table | the five steps, ready / in progress, one blocker each |
 | 14 | Next | bullets | raw packets · VCU state entry with the vendor · gmslcam |
+
+### Slide 7 — the two problems worth naming
+
+ROS 2 dropped ROS 1's `machine` tag, so orchestration is ours. What that turns
+into, concretely:
+
+1. **One instance, and nothing left behind.** Two hosts make both failures worse:
+   a second launch racing the first, and orphaned nodes surviving a crash and
+   quietly poisoning the next run. **systemd user units** answer both —
+   singleton by construction, and `KillMode=control-group` takes the whole tree
+   down. `KillSignal=SIGINT` because play_launch ignores SIGTERM.
+
+2. **CycloneDDS has to be configured on both sides, and then lived with.** One
+   XML profile per role in `config/cyclonedds/`, and a `config/host` marker file
+   naming the role — read by `scripts/env.sh`, which every shell and every unit
+   sources, so a terminal on either box is correct the moment it opens.
+   `.envrc` wires it into direnv. Units pass `GOLFCART_ENV_ROLE`, which outranks
+   the marker, because a unit must not depend on a file someone can edit
+   underneath it.
+
+The second one is the unglamorous half and worth a sentence out loud: most of
+the multi-host work was making the *terminal experience* not require anyone to
+remember which machine they were on.
 
 **Slides 5 → 6 → 8 are one argument, in order:** a per-camera CPU colour
 conversion is part of why the box runs hot, which is part of why there are two
