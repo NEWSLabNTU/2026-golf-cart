@@ -1,352 +1,375 @@
-// Golf Cart progress report.
+// Golf Cart progress — Autoware LSV meeting, 30 minutes.
 //
 //   typst compile docs/reports/2026-08_golfcart_progress.typ
 //
-// Text and figures for the multi-host, TSN and CAN sections come from the
-// 2026-08-05 draft deck; the localization section is new. Figures live in
-// assets/ and were extracted from that draft rather than recreated, so the
-// photographs and hand diagrams are the originals.
+// Fourteen slides for a thirty-minute slot, about two minutes each. The rules
+// this deck is built to, from docs/reports/OUTLINE.md:
+//
+//   - a figure or a photograph carries the slide wherever one exists
+//   - where none exists, short bullets, never paragraphs
+//   - no diagram for a detail a sentence covers
+//
+// The audience knows Autoware. Nothing here explains the architecture, the
+// launch system or NDT; the time goes to what is specific to this vehicle.
+//
+// TSN lives in tsn_setup.typ. Detail cut from these slides is held in NOTES.md,
+// notes-otocam.md, notes-usb-ports.md and notes-vcu.md for questions.
 
-#set page(paper: "presentation-16-9", margin: (x: 2.4cm, y: 1.8cm))
+#set page(paper: "presentation-16-9", margin: (x: 2.2cm, y: 1.5cm))
 #set text(font: ("Liberation Sans", "DejaVu Sans"), size: 19pt)
-#set par(justify: false, leading: 0.75em)
+#set par(justify: false, leading: 0.72em)
 
 #let accent = rgb("#1f5c99")
-#let muted = rgb("#5a5a5a")
+#let muted  = rgb("#5a5a5a")
+#let good   = rgb("#3f6030")
+#let bad    = rgb("#a04040")
+#let warn   = rgb("#8a5f20")
 
-// A normal content slide.
 #let slide(title, body) = {
-  text(size: 27pt, weight: "regular")[#title]
-  v(0.3em)
+  text(size: 26pt, weight: "regular")[#title]
+  v(0.25em)
   line(length: 100%, stroke: 0.6pt + accent.lighten(45%))
   v(0.45em)
-  block(width: 100%)[
-    #set text(size: 17pt)
-    #body
-  ]
+  set text(size: 17pt)
+  body
   pagebreak(weak: true)
 }
 
-// A section divider, matching the draft's centred dividers.
-#let section(name) = {
-  align(center + horizon)[
-    #text(size: 40pt, fill: accent)[#name]
-  ]
-  pagebreak(weak: true)
+#let note(body) = text(size: 14pt, fill: muted)[#body]
+
+// Status chip. Colour carries the state so the board reads at a glance.
+#let chip(state) = {
+  let (fill, stroke, label) = if state == "ready" {
+    (rgb("#eef4ea"), good, "ready")
+  } else if state == "wip" {
+    (rgb("#fdf8f0"), warn, "in progress")
+  } else if state == "flawed" {
+    (rgb("#fdf8f0"), warn, "done, data flawed")
+  } else {
+    (rgb("#fdf3f3"), bad, "not started")
+  }
+  box(
+    fill: fill, stroke: 0.8pt + stroke, radius: 3pt,
+    inset: (x: 0.5em, y: 0.28em),
+  )[#text(size: 13pt, fill: stroke, weight: "medium")[#label]]
 }
 
-#let note(body) = block(inset: (left: 1.1em, top: 0.2em), width: 100%)[
-  #text(size: 14pt, fill: muted)[#body]
-]
-
-// ── title ───────────────────────────────────────────────────────────────────
+// ── 1 ────────────────────────────────────────────────────────────────────────
 #align(center + horizon)[
-  #text(size: 40pt)[Golf Cart Progress]
-  #v(0.4em)
-  #text(size: 22pt, fill: muted)[Sensors, System, Vehicle Interface, Localization]
+  #text(size: 40pt)[Golf Cart]
+  #v(0.3em)
+  #text(size: 21pt, fill: muted)[Bring-up progress — sensors, two-host system,
+  vehicle interface, localization]
   #v(1.6em)
-  #text(size: 17pt, fill: muted)[NEWSLab NTU · August 2026]
+  #text(size: 16pt, fill: muted)[NEWSLab NTU · Autoware LSV meeting · August 2026]
 ]
 #pagebreak(weak: true)
 
-#slide[Overview][
-  #set text(size: 19pt)
-  + *Multi-host setup* — splitting the stack across Advantech and AGX Orin
-  + *IMU CAN bus* — wiring failure and the remake
-  + *Localization* — NTU campus logging simulation and NDT tuning
-
-  #v(1.2em)
-  #note[
-    First three sections continue the 2026-08-05 report. Localization is new
-    work since then.
-  ]
-]
-
-// ── multi-host ──────────────────────────────────────────────────────────────
-#section[Multi-host setup]
-
-#slide[Multi-host Setup (WIP)][
+// ── 2 ────────────────────────────────────────────────────────────────────────
+#slide[The vehicle][
   #grid(
-    columns: (1.55fr, 1fr), gutter: 1.2em, align: horizon,
-    image("assets/multihost_photo.jpg", height: 8.6cm),
+    columns: (1.35fr, 1fr), column-gutter: 1.1em,
+    image("assets/vehicle_blvd_init.jpg", height: 9.4cm),
     [
-      #image("assets/safety_island.jpg", height: 6.6cm)
+      A low-speed campus vehicle on a #strong[Turing Drive VCU], with an
+      Autoware stack across #strong[two machines].
+
+      #v(0.5em)
+      Bring-up in five steps:
+
       #v(0.3em)
-      #note[NXP CANHUBK344 \ Safety Island]
+      #note[
+        sensors · two-host system · vehicle interface ·
+        data collection · autonomous run
+      ]
+
+      #v(0.7em)
+      Running at NTU today. The 華夏科大 campus is the destination.
     ],
   )
 ]
 
-#slide[The rationale behind the multi-host setup][
-  *Constrained computation power*
-  #note[
-    The Advantech drives three mono oToBrite cameras and two LiDARs. It burns.
-    The ZED X stereo + depth camera moves to the AGX Orin.
-  ]
-
-  #v(0.5em)
-  *Driver conflict*
-  #note[
-    The oToBrite and ZED camera drivers cannot be installed together on one
-    machine — they share the same kernel module name.
-  ]
-
-  #v(0.5em)
-  *Hardware limitation*
-  #note[
-    The ZED camera requires a ZEDLink capture card, which only works on Orin.
-  ]
+// ── 3 ────────────────────────────────────────────────────────────────────────
+#slide[Where we are][
+  #align(center)[#image("assets/sensor_wiring.png", height: 8.3cm)]
+  #v(0.45em)
+  #align(center)[#grid(
+    columns: (auto, auto, auto, auto, auto),
+    column-gutter: 0.75em, align: center,
+    [#text(size: 12pt)[sensors] #h(0.3em) #chip("ready")],
+    [#text(size: 12pt)[two-host] #h(0.3em) #chip("ready")],
+    [#text(size: 12pt)[vehicle interface] #h(0.3em) #chip("wip")],
+    [#text(size: 12pt)[data collection] #h(0.3em) #chip("flawed")],
+    [#text(size: 12pt)[autonomous run] #h(0.3em) #chip("none")],
+  )]
 ]
 
-#slide[Sensors across the two machines][
-  #align(center)[#image("assets/sensor_wiring.png", height: 9.4cm)]
-]
-
-#slide[Challenges][
-  *Lack of multi-host support in ROS 2*
-  #note[
-    ROS 2 launch files are designed for a single machine. ROS 1 supported
-    `machine` tags in launch files; ROS 2 dropped it, moving the multi-host
-    responsibility to the user side.
-  ]
-
-  #v(0.5em)
-  *Non-standard RMW setup*
-  #note[
-    Autoware's recommended Cyclone DDS and Zenoh settings no longer fit. Node
-    and topic discovery has to work across both machines.
-  ]
-
-  #v(0.5em)
-  *Orchestration work is needed*
-  #note[
-    Advantech and Orin run disjoint sets of nodes that together make up
-    Autoware. Start and stop must be synchronous and singleton, with no orphans
-    left after termination.
-  ]
-]
-
-#slide[Multi-host launch method][
-  *Add a host argument to launch files*
-  #note[`host:=…` switches each node on or off per machine.]
-
-  #v(0.5em)
-  *Employ systemd services*
-  #note[
-    The launch command is wrapped in a systemd user unit,
-    `golfcart-orin.service`. systemd gives singleton startup, clean
-    termination and full logs.
-  ]
-
-  #v(0.5em)
-  *Orphan prevention using cgroups*
-  #note[
-    Spawned nodes stay in a control group jail — nothing escapes it, and
-    `systemctl stop` captures them all.
-  ]
+// ── 4 ────────────────────────────────────────────────────────────────────────
+#slide[Sensors: what bit us][
+  All sensors publish. Three things are worth knowing before you copy this.
 
   #v(0.6em)
-  #note[
-    #text(fill: accent)[Since the draft:] a watchdog unit on the Orin stops the
-    stack if the master disappears, and `just service-install` provisions both
-    hosts.
-  ]
+  #set list(spacing: 1.0em)
+  - *GMSL cameras need a vendor kernel module and a device tree overlay.*
+    The `.ko` files are ABI-bound to kernel `5.15.148-tegra` — a JetPack OTA
+    reinstalls the stock modules and silently undoes it.
+
+  - *The Xsens MTi on CAN is not working.* The stack runs on the
+    #strong[ZED X built-in IMU] instead — which sits on the other machine and
+    crosses the network at 100 Hz.
+
+  - *The u-blox GNSS is on the Orin*, because the Advantech is short of USB
+    ports. So a second localization input is remote too, for an unrelated reason.
 ]
 
-#slide[Multi-host launch][
-  #align(center)[#image("assets/multihost_launch_diagram.png", height: 9.6cm)]
-]
-
-#slide[Startup governor: not bricking the machine][
-  #grid(
-    columns: (1fr, 1.1fr), gutter: 1.1em, align: top,
-    [
-      #image("assets/htop_before_governor.jpg", height: 7.4cm)
-      #v(0.35em)
-      #text(size: 13pt, fill: muted)[
-        All 12 cores at 100%, load average 128, during bring-up — before the
-        governor.
-      ]
-    ],
-    [
-      #set text(size: 15pt)
-      *Pacing the spawns was tried, measured, rejected*
-      #note[
-        Capping at 12 spawns made startup *worse* — 10.6 s → 23.8 s — for ~10%
-        fewer runnable tasks. The storm is not contention over fixed work, it
-        *is* the work. Throughput gates ship *off*.
-      ]
-
-      #v(0.4em)
-      *What ships on: a memory floor*
-      #note[
-        1 GiB `MemAvailable`, capped at a quarter of RAM. Never blocks while
-        memory is plentiful; serialises only once it falls through — the
-        condition that used to end in a dead desktop.
-      ]
-    ],
-  )
-]
-
-// ── CAN ─────────────────────────────────────────────────────────────────────
-#section[IMU CAN bus fixing]
-
-#slide[The CAN bus wiring issue][
-  #grid(
-    columns: (1fr, 1fr), gutter: 1.4em, align: horizon,
-    [
-      #image("assets/can_connector_broken.jpg", height: 8.0cm)
-      #v(0.2em)
-      #align(center)[#note[Broken CAN bus connector]]
-    ],
-    [
-      #image("assets/can_wire_remake.jpg", height: 8.0cm)
-      #v(0.2em)
-      #align(center)[#note[The CAN wire remake]]
-    ],
-  )
-]
-
-#slide[CAN wiring remake][
-  *Rationale*
-  #note[
-    The IMU's CAN bus connector had exposed resistors and connection points,
-    which were damaged while tidying up the chassis wiring.
-  ]
-
-  #v(0.5em)
-  *Remake*
-  #note[
-    A manufacturer will redo the entire wiring, replacing it with
-    plastic-coated, less easily damaged cable.
-  ]
-
-  #v(0.5em)
-  *Connector change*
-  #note[
-    The wiring moves to an RS232 female connector, with a fabricated RS232 male
-    connector on the host side.
-  ]
-]
-
-// ── localization ────────────────────────────────────────────────────────────
-#section[Localization: NDT on the NTU map]
-
-#slide[NTU campus logging simulation][
-  Two recorded runs per session — Advantech and Orin — merged into one bag, and
-  replayed against a merged r01 + r02 point cloud map.
-
-  #v(0.6em)
-  #set text(size: 17pt)
-  #table(
-    columns: (auto, 1fr),
-    stroke: none, inset: (x: 0.4em, y: 0.5em), row-gutter: 0.1em,
-    [*Sets*], [CSIE-1, CSIE-2, BLVD-1],
-    [*Map*], [6.6 M points, MGRS 51RUH, r01 + r02 merged],
-    [*LiDAR*], [Velodyne VLP-32C, primary for NDT],
-    [*IMU*], [ZED X built-in — the XSens was not working during the runs],
-    [*GNSS*], [switched off; initialization is a saved pose],
-  )
-
-  #v(0.6em)
-  #note[
-    One command runs it end to end: `just ntu-test run CSIE-1` brings up the
-    bag, the stack, RViz and the initial pose in the required order.
-  ]
-]
-
-#slide[NDT tuning: what the crop range was costing][
-  Ranked on *scan-to-map residual* — the distance from each live scan point to
-  the nearest map point — not on NDT's own score.
-
-  #v(0.5em)
-  #set text(size: 17pt)
-  #table(
-    columns: (auto, auto, auto, auto, auto, auto),
-    stroke: none, inset: (x: 0.5em, y: 0.45em),
-    align: (right, right, right, right, right, right),
-    table.hline(stroke: 0.5pt),
-    [*crop*], [*voxel*], [*gate*], [*p50*], [*p95*], [*\> 3 m*],
-    table.hline(stroke: 0.5pt),
-    [±20 m], [0.5], [2.3], [0.210 m], [1.661 m], [0.0%],
-    [*±60 m*], [*0.5*], [*1.3*], [*0.144 m*], [*0.469 m*], [*0.0%*],
-    [±60 m], [3.0], [2.3], [0.682 m], [2.590 m], [12.1%],
-    table.hline(stroke: 0.5pt),
-  )
-
-  #v(0.5em)
-  #note[
-    The ±20 m crop was inherited from AutoSDV and clipped real structure — our
-    returns reach ~29 m. Restoring Autoware's ±60 m cut p95 by 72%. The
-    convergence threshold had to move with it: NVTL is a mean per-point score,
-    so it fell while accuracy *improved*.
-  ]
-]
-
-#slide[NDT internals: where tracking breaks][
-  #grid(
-    columns: (1.5fr, 1fr), gutter: 1.1em, align: horizon,
-    image("assets/ndt_slide_chart.png", height: 8.8cm),
-    [
-      #set text(size: 15pt)
-      Convergence while parked is good — 0.14 m residual.
-
-      #v(0.45em)
-      Degradation starts *3.5 s after the vehicle first moves*, not at the turn.
-      Iterations hit their cap and the correction NDT applies per scan grows
-      from 0.09 m to about 1 m.
-
-      #v(0.45em)
-      #note[
-        NVTL crosses its gate ~50 s later, so the score is a lagging indicator —
-        iteration count is the earlier warning.
-      ]
-    ],
-  )
-]
-
-#slide[Root cause: the recordings, not the tuning][
-  *45% of scans are partial rotations*
-  #note[
-    Measured over 300 scans: 55% cover 357°, but 45% cover only ~162° and span
-    2.1 ms. Which half of the world they cover changes frame to frame, so the
-    geometry constraining the fit rotates with it.
-  ]
-
-  #v(0.55em)
-  *Scans arrive 376 ms stale*
-  #note[
-    The EKF stamps its poses at the current time; each cloud reaches NDT 376 ms
-    after its own timestamp — 1.9 m of travel at 5 m/s. Autoware reports this as
-    "Couldn't interpolate pose", which is what drives the degraded state in RViz.
-  ]
-
-  #v(0.55em)
-  *Neither is fixable in these bags*
-  #note[
-    The recordings contain decoded clouds only — no raw Velodyne packets — so
-    they cannot be re-decoded with a corrected driver configuration.
-  ]
-]
-
-#slide[Status and next steps][
-  #set text(size: 18pt)
-  #table(
-    columns: (auto, auto, 1fr),
-    stroke: none, inset: (x: 0.45em, y: 0.5em), row-gutter: 0.1em,
-    [*Multi-host*], [working], [systemd units on both hosts, cgroup cleanup, watchdog],
-    [*TSN*], [design], [Orin ready via I226; Advantech NIC is the blocker],
-    [*IMU CAN*], [in progress], [wiring remake ordered, RS232 connector change],
-    [*NDT*], [partial], [converges and tracks; degrades from input defects],
-  )
+// ── 5 ────────────────────────────────────────────────────────────────────────
+#slide[GMSL cameras cost CPU][
+  #set list(spacing: 0.9em)
+  - Three cameras, #strong[1920×1280 at 30 fps], emitting #strong[UYVY].
+  - The consuming nodes want #strong[RGB or JPEG]. Something must convert.
+  - We tried #strong[`nvvidconv`]. The conversion still costs us CPU, per camera.
 
   #v(0.9em)
-  *Next*
+  #line(length: 100%, stroke: 0.6pt + accent.lighten(60%))
+  #v(0.6em)
+
+  A colour conversion per camera, always on, on a box that also carries two
+  LiDARs and the whole Autoware stack.
+
+  #v(0.5em)
   #note[
-    - Record raw Velodyne packets, so bags can be re-decoded after a driver fix
-    - Check the VLP-32C rotation configuration against the hardware
-    - Locate where the 376 ms scan latency accrues
+    Fix in progress: #link("https://github.com/newslabntu/gmslcam")[`gmslcam`],
+    to take that stage out. The sensor kit migrates to it.
   ]
 ]
 
-#section[Q&A]
+// ── 6 ────────────────────────────────────────────────────────────────────────
+#slide[So the machine sits at its limit][
+  #grid(
+    columns: (1fr, 1.15fr), column-gutter: 1.1em,
+    [
+      #v(0.4em)
+      This is a fan, held against the cabinet by hand, to keep the box running.
+
+      #v(0.9em)
+      Hence #strong[two machines]:
+
+      #v(0.35em)
+      #set list(spacing: 0.65em)
+      #set text(size: 16pt)
+      - compute headroom
+      - a shared kernel module name the two camera stacks fight over
+      - ZEDLink only works on the Orin
+
+      #v(0.9em)
+      #note[Splitting the load solved the thermals. It bought a distributed
+      system in exchange.]
+    ],
+    image("assets/thermal_fan_cooling.jpg", height: 9.4cm),
+  )
+]
+
+// ── 7 ────────────────────────────────────────────────────────────────────────
+#slide[Launching across two hosts][
+  ROS 2 dropped ROS 1's `machine` tag. Orchestration is ours. Two problems:
+
+  #v(0.6em)
+  #grid(
+    columns: (1fr, 1fr), column-gutter: 1.4em,
+    [
+      *One instance, nothing left behind*
+
+      #v(0.35em)
+      #set text(size: 15pt)
+      #set list(spacing: 0.55em)
+      - #strong[play_launch] cleans up orphans when the launch dies — and starts
+        the stack in #strong[~20 s] against #strong[~60 s] for `ros2 launch`
+      - #strong[systemd user units] around it: singleton by construction,
+        `KillMode=control-group` takes the whole tree down
+    ],
+    [
+      *DDS configured on both sides, then lived with*
+
+      #v(0.35em)
+      #set text(size: 15pt)
+      #set list(spacing: 0.55em)
+      - one CycloneDDS profile per role, plus a `config/host` marker file
+      - `scripts/env.sh` reads it, and every shell and every unit sources it
+      - so a terminal on either box is correct the moment it opens — nobody has
+        to remember which machine they are on
+    ],
+  )
+]
+
+// ── 8 ────────────────────────────────────────────────────────────────────────
+#slide[The bill for that speed][
+  #grid(
+    columns: (1.1fr, 1fr), column-gutter: 1.1em,
+    image("assets/htop_before_governor.jpg", height: 6.8cm),
+    [
+      #set text(size: 14.5pt)
+      play_launch is fast #emph[because] it spawns as fast as it can. On a box
+      already at its limit, that is a thundering herd — and the machine locks up
+      hard enough to need a power cycle.
+
+      #v(0.6em)
+      *Pacing the spawns is the obvious fix. We measured it losing:* about 10%
+      fewer runnable tasks for more than double the startup time — spending the
+      exact advantage we adopted the tool for.
+
+      #v(0.6em)
+      What ships is a #strong[1 GiB `MemAvailable` floor]. Nothing on a healthy
+      boot; holds back only when the machine is about to die.
+
+      #v(0.45em)
+      #text(size: 13pt, fill: muted)[Gate on the resource that runs out, not on
+      the rate.]
+    ],
+  )
+]
+
+// ── 9 ────────────────────────────────────────────────────────────────────────
+#slide[Vehicle interface: how it was built][
+  #grid(
+    columns: (0.8fr, 1.25fr), column-gutter: 1.4em,
+    align: (center, left),
+    image("assets/vcu_lineage.png", height: 9.2cm),
+    [
+      #v(0.6em)
+      Not written from a specification — grown from the vendor's own test code,
+      and every step exists in the repo.
+
+      #v(0.9em)
+      The safety rules are ours:
+
+      #v(0.35em)
+      #set text(size: 15.5pt)
+      #set list(spacing: 0.6em)
+      - target speed can never go negative — reverse is gear `R`
+      - gear `P` pins speed and angle to zero, re-applied every cycle
+      - ESTOP release is never a key the terminal cannot send
+
+      #v(0.8em)
+      #note[CAN bindings generate from the vendor DBC at build time — the same
+      file the bench decodes with.]
+    ],
+  )
+]
+
+// ── 10 ───────────────────────────────────────────────────────────────────────
+#slide[Engage is the VCU's decision — and one door we cannot open][
+  #align(center)[#image("assets/vcu_states.png", width: 76%)]
+  #v(0.55em)
+  #set text(size: 14pt)
+  #grid(
+    columns: (1fr, 1fr), column-gutter: 1.4em,
+    [
+      There is no `vehicle_cmd_gate` external selector. The interface commands
+      nothing until all four subsystems report autonomous — #strong[no service
+      call can force it].
+    ],
+    [
+      After a VCU restart, #strong[BRK and Drv come up `Invalid`], and only a
+      brake-pedal press was seen to clear them. Not reproducible from CAN.
+
+      #v(0.4em)
+      #text(fill: bad)[*Unattended autonomous start-up is blocked.*] A vendor
+      question, not more software on our side.
+    ],
+  )
+]
+
+// ── 11 ───────────────────────────────────────────────────────────────────────
+#slide[Data collection][
+  #grid(
+    columns: (1.15fr, 1fr), column-gutter: 1.1em,
+    image("assets/vehicle_csie_init.jpg", height: 8.6cm),
+    [
+      #set text(size: 15.5pt)
+      Three runs at NTU. #strong[Both hosts record separately] — each writes the
+      topics for the devices it owns — and the bags merge afterwards.
+
+      #v(0.7em)
+      Only #strong[first-hand driver output] is recorded. Anything a node
+      computed is left out, so replay recomputes it with today's parameters
+      rather than the ones frozen at record time.
+
+      #v(0.7em)
+      #note[Replay is one command: `just ntu-test run` — bag paused for
+      `/clock`, stack, RViz, initial pose, in the only order that works.]
+    ],
+  )
+]
+
+// ── 12 ───────────────────────────────────────────────────────────────────────
+#slide[NDT: tuned, and it still breaks][
+  #grid(
+    columns: (1.25fr, 1fr), column-gutter: 1.1em,
+    image("assets/ndt_slide_chart.png", height: 7.6cm),
+    [
+      #set text(size: 14.5pt)
+      We tuned it and measured it on #strong[scan-to-map residual], not on the
+      NVTL score — the change that helped accuracy most actually *lowered* NVTL.
+
+      #v(0.55em)
+      It converges parked, to 0.14 m. It #strong[degrades a few seconds after
+      the vehicle starts moving].
+
+      #v(0.55em)
+      *The cause is upstream of NDT, in the recording:* 45% of scans are
+      fragments of a revolution, and scans arrive #strong[376 ms stale].
+
+      #v(0.45em)
+      #text(size: 13pt, fill: muted)[No raw LiDAR packets were recorded, so
+      these bags cannot be re-decoded. Next run records them.]
+    ],
+  )
+]
+
+// ── 13 ───────────────────────────────────────────────────────────────────────
+#slide[Status][
+  #v(0.3em)
+  #set text(size: 16pt)
+  #table(
+    columns: (auto, auto, 1fr),
+    stroke: none,
+    inset: (x: 0.5em, y: 0.7em),
+    row-gutter: 0.1em,
+    align: (left, left, left),
+
+    [*Step*], [*State*], [*What stands in the way*],
+    table.hline(stroke: 0.6pt + accent.lighten(50%)),
+
+    [Sensors], [#chip("ready")],
+    [fragmented LiDAR scans; the Xsens IMU is dead],
+
+    [Two-host system], [#chip("ready")],
+    [—],
+
+    [Vehicle interface], [#chip("wip")],
+    [the VCU will not enter its autonomous state from CAN alone],
+
+    [Data collection], [#chip("flawed")],
+    [the bags carry the sensor defects above],
+
+    [Autonomous run], [#chip("none")],
+    [gated on the vehicle interface blocker],
+  )
+]
+
+// ── 14 ───────────────────────────────────────────────────────────────────────
+#slide[Next][
+  #set list(spacing: 1.0em)
+  - *Ask Turing Drive what clears the `Invalid` brake state after a restart.*
+    Everything else on the autonomous run waits behind this.
+
+  - *Record raw LiDAR packets*, and check the VLP-32C rotation configuration
+    against the hardware. Then re-run the localization work on data that is not
+    already broken.
+
+  - *Migrate the sensor kit to `gmslcam`*, and take the per-camera CPU
+    conversion out.
+
+  #v(0.8em)
+  #note[TSN is a separate track — happy to cover it if there is interest.]
+]
