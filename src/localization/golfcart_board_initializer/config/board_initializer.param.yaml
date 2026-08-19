@@ -41,9 +41,10 @@
     density_check_enabled: true
     azimuth_step_rad: 0.0035          # 0.2 deg at 600 rpm / 10 Hz
 
-    # Identity rotation at the board's mounting height: the map is anchored to
-    # the board, so this is exact rather than surveyed.
-    board_pose_in_map: [0.0, 0.0, 1.600, 0.0, 0.0, 0.0, 1.0]
+    # [x, y, z, roll, pitch, yaw]. Rotation is intrinsic Rz(yaw) @ Ry(pitch)
+    # @ Rx(roll); angles are radians. This config drives both runtime init and
+    # offline anchoring, so map and pose guess cannot drift apart.
+    board_pose_in_map: [0.0, 0.0, 1.600, 0.0, 0.0, 0.0]
 
     # Loose on purpose. The service is called with method=AUTO, so NDT align
     # refines the guess; an over-tight covariance makes it search too small a

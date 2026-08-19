@@ -28,6 +28,7 @@ from .geometry import (
     covariance_from_detection,
     make_transform,
     map_pose_from_detection,
+    matrix_from_euler_rpy,
     matrix_from_quaternion,
     quaternion_from_matrix,
 )
@@ -146,8 +147,8 @@ class BoardPoseInitializer(Node):
         self.declare_parameter("density_check_enabled", defaults.density_check_enabled)
         self.declare_parameter("azimuth_step_rad", defaults.azimuth_step_rad)
 
-        # Identity rotation, board centre height: the map is anchored to the board.
-        self.declare_parameter("board_pose_in_map", [0.0, 0.0, 1.075, 0.0, 0.0, 0.0, 1.0])
+        # [x, y, z, roll, pitch, yaw], with angles in radians.
+        self.declare_parameter("board_pose_in_map", [0.0, 0.0, 1.075, 0.0, 0.0, 0.0])
 
         self.declare_parameter("sigma_xy_base", 0.15)
         self.declare_parameter("sigma_xy_per_metre", 0.03)
@@ -180,7 +181,12 @@ class BoardPoseInitializer(Node):
 
     def _board_pose_in_map(self) -> np.ndarray:
         values = self.get_parameter("board_pose_in_map").value
-        rotation = matrix_from_quaternion(values[3:7])
+        if len(values) != 6:
+            raise ValueError(
+                "board_pose_in_map must be [x, y, z, roll, pitch, yaw] "
+                "with angles in radians"
+            )
+        rotation = matrix_from_euler_rpy(values[3:6])
         return make_transform(rotation, values[0:3])
 
     # -- callbacks ----------------------------------------------------------

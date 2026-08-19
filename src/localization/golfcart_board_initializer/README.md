@@ -172,11 +172,13 @@ board instead.
 ```bash
 # Inspect board detection and transform; writes nothing.
 ros2 run golfcart_board_initializer anchor_map_to_board \
-  /path/to/slam_export.ply -o /path/to/map --dry-run
+  /path/to/slam_export.ply -o /path/to/map \
+  --config /path/to/board_initializer.param.yaml --dry-run
 
 # Write anchored map artifacts.
 ros2 run golfcart_board_initializer anchor_map_to_board \
-  /path/to/slam_export.ply -o /path/to/map
+  /path/to/slam_export.ply -o /path/to/map \
+  --config /path/to/board_initializer.param.yaml
 ```
 
 ### Command options
@@ -186,15 +188,13 @@ ros2 run golfcart_board_initializer anchor_map_to_board \
 | `cloud` | required | Input `.ply` or `.pcd`; must carry `intensity`. |
 | `-o`, `--output-dir` | required | Directory for generated map artifacts. |
 | `--name` | `pointcloud_map.pcd` | Output cloud filename. |
-| `--board-width` | `0.8` m | Reflective face width. |
-| `--board-height` | `1.0` m | Reflective face height. |
-| `--board-centre-height` | `1.075` m | Board centre height above floor. |
-| `--intensity-threshold` | `110.0` | Retroreflector intensity cut. |
+| `--config` | package `board_initializer.param.yaml` | Shared runtime/anchoring board parameters. |
 | `--dry-run` | off | Report result; do not write files. |
 
-Pass physical board values explicitly when they differ from tool defaults. Use
-same width, height, centre height, and intensity threshold in runtime parameter
-configuration.
+`--config` is source of truth. It supplies detector gates, physical board
+dimensions, and `board_pose_in_map`; do not duplicate them as CLI overrides.
+Omit it only when the installed package config is intended. Pass the exact YAML
+loaded by `board_pose_initializer` when building a deployment map.
 
 Writes the anchored `pointcloud_map.pcd`, `board_anchor.yaml` (the transform, so
 a rebuild can be compared against it), `board_polygon.osm` (the board's Lanelet2
@@ -208,12 +208,14 @@ to the wrong object shifts the whole map with no later symptom.
 
 ### Map contract
 
-- **Anchored map:** origin is on floor below board centre; +x is board outward
-  normal and +z is up. Set `board_pose_in_map` to
-  `[0, 0, board_centre_height, 0, 0, 0, 1]`. Generated
-  `map_projector_info.yaml` must use `projector_type: Local`.
-- **Unanchored map:** supported only when `board_pose_in_map` specifies full
-  board translation and rotation in that arbitrary map frame.
+- **Anchored map:** tool places board exactly at YAML `board_pose_in_map`.
+  Format is `[x, y, z, roll, pitch, yaw]`; angles are radians and rotation is
+  `Rz(yaw) @ Ry(pitch) @ Rx(roll)`. Generated `map_projector_info.yaml` must
+  use `projector_type: Local`.
+- **Height fields differ:** `board_centre_height` is detector's expected physical
+  mounting height above local floor. `board_pose_in_map[2]` is configured map
+  coordinate. Keep them equal for a floor-level map; deliberately differ only
+  when map frame has an offset.
 - **Infrastructure change:** moving board, changing its face dimensions, or
   rebuilding map invalidates old pose/configuration. Re-anchor map or resurvey
   `board_pose_in_map`, then repeat real-bag validation.
@@ -234,7 +236,7 @@ cart settings.
 | `range_min` / `range_max` | `3.0` / `18.0` | Valid sensor range bounds for detection (avoid <3m due to sparse VLP-32C bottom beam gap). |
 | `height_min` / `height_max` | `1.0` / `2.2` | Accepted candidate-centre height in `base_link`, metres. |
 | `planarity_max_thickness` | `0.04` | Maximum eigenvalue thickness ($\sqrt{\lambda_3}$) for plane fit. Relaxed to 0.04m to accommodate real-world hardware point scatter. |
-| `board_pose_in_map` | `[0, 0, 1.6, 0, 0, 0, 1]` | Board pose in map frame; identity rotation is valid only for anchored map. |
+| `board_pose_in_map` | `[0, 0, 1.6, 0, 0, 0]` | Board map pose: `[x, y, z, roll, pitch, yaw]`, angles in radians. |
 | `accumulate_scans` / `max_attempts` | `10` / `5` | Scan count per attempt / attempts before terminal failure. |
 | `fallback_to_user_defined_pose` | `false` | Keep false unless an explicit, reviewed fallback policy exists. |
 
