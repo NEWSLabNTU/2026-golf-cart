@@ -26,22 +26,37 @@ Rules for building it:
 
 ## The 14
 
-| # | Slide | Carried by | Notes |
-|---|---|---|---|
-| 1 | Title | — | |
-| 2 | The vehicle | `vehicle_blvd_init.jpg` | what it is, where it runs |
-| 3 | **Progress overview** | `sensor_wiring.png` + status badges | **the spine** — what exists, what works |
-| 4 | Sensors: what bit us | bullets | oToCam DT overlay, ABI-bound to the kernel · Xsens dead, running on the ZED IMU · GNSS on the Orin, short of USB ports |
-| 5 | **GMSL cameras cost CPU** | bullets | cameras emit UYVY at 3 × 1920×1280 @ 30 fps, consumers want RGB/JPEG. We tried `nvvidconv`; the conversion still costs CPU per camera. `gmslcam` is the fix |
-| 6 | The machine is at its limit | `thermal_fan_cooling.jpg` | slide 5 is one reason. Hence two machines: compute, driver conflict, ZEDLink is Orin-only |
-| 7 | Launching across two hosts | `multihost_launch_diagram.png` | two problems, two answers — see below |
-| 8 | **Startup governor: the bill for slide 7** | `htop_before_governor.jpg` | the speed *is* the problem — spawning that fast bricks the machine. Pacing measured and **rejected**; a 1 GiB `MemAvailable` floor ships |
-| 9 | Vehicle interface: how it was built | `vcu_lineage.png` | vendor script → our safety rules → drove it → interface → test suite |
-| 10 | **Engage, and the blocker** | `vcu_states.png` | the VCU decides. BRK/Drv leave `Invalid` only on a pedal press — not reproducible from CAN, so unattended start-up is blocked |
-| 11 | Data collection | `vehicle_csie_init.jpg` | 3 NTU runs, two hosts, merged; replay in one command |
-| 12 | **NDT: attempted, and it breaks** | `ndt_slide_chart.png` | one page. Tuned it, converges parked, degrades once moving. Root cause is the recording — fragmented scans, stale by 376 ms, no raw packets to re-decode |
-| 13 | **Status board** | table | the five steps, ready / in progress, one blocker each |
-| 14 | Next | bullets | raw packets · VCU state entry with the vendor · gmslcam |
+| # | Slide | Carried by |
+|---|---|---|
+| | **what works** | |
+| 1 | Title | template band, logos |
+| 2 | The vehicle | `vehicle_blvd_init.jpg` |
+| 3 | Where we are | `sensor_wiring.png` + status chips |
+| 4 | Sensors are up | table: sensor, host, what it feeds |
+| 5 | Two machines, one stack | play_launch + systemd, DDS + host marker |
+| 6 | The interface drives the cart | `vcu_lineage.png` |
+| 7 | Data collection works | `vehicle_csie_init.jpg` |
+| | **what needs fixing** | |
+| 8 | What bit us | oToCam overlay, Xsens cable, GNSS on the Orin |
+| 9 | The machine is at its limit | `thermal_fan_cooling.jpg`, UYVY on CPU |
+| 10 | The bill for that speed | `htop_before_governor.jpg` |
+| 11 | Engage, and the door we cannot open | `vcu_states.png` |
+| 12 | NDT still breaks | `ndt_slide_chart.png` |
+| | **close** | |
+| 13 | Status | table |
+| 14 | Next | bullets |
+
+**The order is the point.** Achievement first, caveats second. Do not move a
+problem up into slides 2 to 7 "for context": the room should hear what runs
+before it hears what is wrong with it. Slide 8 is where the tone turns, and it
+turns once.
+
+Two arcs survive the split and should still be said out loud:
+
+- slide 5 sells play_launch's speed, and **slide 10 collects the bill for it**.
+  The governor is not a separate hardening job; it is what that speed cost.
+- slide 9's per-camera CPU conversion is one reason the box is at its limit,
+  which is one reason there are two machines at all.
 
 ### Slide 7 — the two problems worth naming
 
