@@ -39,6 +39,19 @@
   <arg name="launch_perception" default="false"/>
   <arg name="launch_planning" default="false"/>
   <arg name="launch_control" default="false"/>
+  <arg name="pose_source" default="ndt" description="ndt or cuda_ndt"/>
+
+  <!-- Which recorded cloud NDT matches against. The bag carries two VLP32
+       topics and they are NOT interchangeable:
+
+         vlp32/velodyne_points  ~7 Hz, the driver's RAW output
+         vlp32/pointcloud       ~4 Hz, the driver container's processed output
+
+       Distortion correction lives in that container, which a replay never
+       starts, so the raw topic reaches NDT motion-distorted. Measured on CSIE-1,
+       moving: iterations 29 -> 20 and init->result 1.27 -> 0.91 m when switching
+       to the processed topic. Lower rate, better geometry. -->
+  <arg name="input_pointcloud" default="/sensing/lidar/vlp32/pointcloud"/>
 
   <!-- Autoware model/artifact directory. NOT the packaged /opt/autoware/<ver>/data:
        that tree is root-owned, and TensorRT writes each .engine next to its .onnx,
@@ -72,7 +85,7 @@
     <arg name="launch_system_monitor" value="false"/>
     <arg name="launch_dummy_diag_publisher" value="false"/>
 
-    <arg name="pose_source" value="ndt"/>
+    <arg name="pose_source" value="$(var pose_source)"/>
     <arg name="twist_source" value="gyro_odom"/>
     <arg name="imu_source" value="zed"/>
 
@@ -99,7 +112,7 @@
          velodyne_points rather than the vlp32/pointcloud topic: it is the
          higher-rate stream in these recordings (~7 Hz against ~4 Hz), which
          matters for a scan matcher. -->
-    <arg name="input_pointcloud" value="/sensing/lidar/vlp32/velodyne_points"/>
+    <arg name="input_pointcloud" value="$(var input_pointcloud)"/>
 
     <arg name="rviz" value="$(var rviz)"/>
     <arg name="use_sim_time" value="true"/>
