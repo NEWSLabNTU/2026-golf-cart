@@ -4,6 +4,50 @@ Source: `Roots_can_test_0811.zip` on the NAS, at
 `autoveh/logs/2026 Golf Cart/2026-06-28 VCU manual/`. A Python test bench written
 against the real VCU, plus its README recording what the bench runs established.
 
+## Lineage — this is the through-line for the slide
+
+The vehicle interface was not written from a specification. It was grown from
+the vendor's own test code:
+
+1. **Turing Drive supplied a CAN test script.**
+2. **We modified it and added safety measures** — the bench's clamps are ours:
+   target speed can never go negative (a negative target upsets the VCU; reverse
+   is gear `R`), gear `P` pins speed and angle to zero and re-applies that every
+   cycle so nothing can leak onto the bus, and the ESTOP release key falls back
+   to `CTRL+SPACE` on terminals that cannot report `SHIFT+SPACE`, "so ESTOP is
+   never a state you cannot leave".
+3. **We drove the vehicle from that script** — the bench is not a desk exercise,
+   it moved the cart.
+4. **`golfcart_vehicle_interface` is based on it**, and generates its CAN
+   bindings from the same `CAX_ADS_CAN.dbc` at build time.
+5. **A full test suite sits on top**, in `control_test`, built on a modified
+   Autoware manual control (`NEWSLabNTU/autoware_manual_control`, forked from
+   `evshary/autoware_manual_control`).
+
+That is a good story for the deck: vendor script → hardened with our safety
+rules → driven → productionised into the interface → covered by a test suite.
+Each step is a thing that exists in the repo, not a claim.
+
+## The test suite
+
+`src/vehicle/control_test/` drives `golfcart_vehicle_interface` through Autoware
+command topics:
+
+- `keyboard_control` — Tkinter GUI manual control, arrow keys to `Control` and
+  `GearCommand`, live readout from `/vehicle/status/*`; speed and steering steps,
+  limits (`max_speed_ms`, `max_steer_deg 22.5`) in config
+- `control_command_service` — service-driven publisher
+- `trajectory_player` — open-loop trajectory replay, with `straight_10m.yaml`
+  and `circle.yaml` supplied
+
+**The engage workflow is the part worth showing**, because it is where the VCU
+state machine meets our side:
+
+> Golf Cart has no `vehicle_cmd_gate` external selector. The driver switches the
+> vehicle to autonomous on its own controls; `golfcart_vehicle_interface`
+> commands nothing until all four VCU subsystem states (MTR, BRK, EPS, Drv)
+> report autonomous — **no service call can force it**.
+
 ## What the bench is
 
 A **virtual ADS**: it sends the four `RX_ADS_VCU_*` messages the VCU expects from
