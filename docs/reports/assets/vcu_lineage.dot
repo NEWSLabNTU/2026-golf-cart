@@ -1,0 +1,23 @@
+// Slide: how the vehicle interface was built. A chain, so draw the chain --
+// vertically, because horizontally five boxes make a 13:1 strip whose text is
+// unreadable at slide scale. Vertical leaves the right half of the slide for
+// prose.
+//   dot -Tpng -Gdpi=150 vcu_lineage.dot -o vcu_lineage.png
+digraph lineage {
+  rankdir=TB; bgcolor="white"; nodesep=0.3; ranksep=0.45;
+  fontname="Helvetica";
+  node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=14,
+        color="#9fb6cc", fillcolor="#f4f8fb", penwidth=1.2, margin="0.26,0.16",
+        width=3.6];
+  edge [color="#1f5c99", arrowsize=0.9, penwidth=1.6];
+
+  a [label="Turing Drive\nCAN test script", fillcolor="#eef2f6"];
+  b [label="+ our safety rules", color="#7a9e6a", fillcolor="#f2f7ef",
+     fontcolor="#3f6030", penwidth=1.6];
+  c [label="drove the vehicle", fillcolor="#eef2f6"];
+  d [label="golfcart_vehicle_interface", shape=box, style="filled",
+     fillcolor="#1f5c99", fontcolor="white", color="#1f5c99"];
+  e [label="test suite"];
+
+  a -> b -> c -> d -> e;
+}
