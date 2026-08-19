@@ -3,81 +3,90 @@
 //   dot -Tpng -Gdpi=150 sensor_wiring.dot -o sensor_wiring.png
 //
 // Ownership is taken from config/recording/{master,orin}_topics.txt, which is
-// the authoritative record of which host publishes what. Connection types come
-// from the sensor kit configs: Velodyne and Falcon are Ethernet, the GMSL
-// cameras are MIPI capture, u-blox is USB serial, and the IMU and VCU are CAN.
+// the authoritative record of which host publishes what.
 //
-// The u-blox sits on the ORIN, not the Advantech. That is a consequence, not a
-// preference: the Advantech has no USB port left. Its ports are taken by the
-// keyboard, the mouse, a phone tethering for internet, and an external disk that
-// exists because the on-board eMMC is too small. The GNSS is the fifth device
-// and there is no fifth port, so it moved to the machine that had one.
+// LABELS ARE DELIBERATELY SHORT. An earlier version put the interface, the IP
+// address, the topic names and the reason-for-placement inside the node cards,
+// which forced the font down until nothing was readable from the back of a
+// room. Anything that is not the device's name now lives on an edge or in what
+// the presenter says out loud. Do not put it back.
+//
+// Facts that are no longer written on the picture:
+//   - Velodyne 192.168.7.10, Falcon UDP 8010
+//   - the ZED IMU topic is /sensing/camera/zed/imu/data at 100 Hz
+//   - the u-blox is on the Orin because the Advantech has no free USB port --
+//     keyboard, mouse, phone tethering, external disk. See notes-usb-ports.md
+//   - the Xsens cable is broken and being remade; the stack runs on the ZED's
+//     built-in IMU meanwhile, so the IMU in use crosses the wifi link
 
 digraph sensors {
   rankdir=LR;
   bgcolor="white";
   compound=true;
-  nodesep=0.22;
-  ranksep=0.85;
+  nodesep=0.30;
+  ranksep=1.05;
   fontname="Helvetica";
-  node  [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=11,
-         color="#9fb6cc", fillcolor="#f4f8fb", penwidth=1.1, margin="0.12,0.07"];
-  edge  [fontname="Helvetica", fontsize=9, color="#5a5a5a", arrowsize=0.7];
+  node  [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=16,
+         color="#B7C7DA", fillcolor="#f4f8fb", penwidth=1.3,
+         margin="0.22,0.13"];
+  edge  [fontname="Helvetica", fontsize=13, color="#5a5a5a", arrowsize=0.8];
 
   // ── Advantech ─────────────────────────────────────────────────────────────
   subgraph cluster_master {
-    label="Advantech AFE-R750  (role: master)";
-    fontsize=13; fontname="Helvetica-Bold";
-    color="#1f5c99"; penwidth=1.6; style=rounded; bgcolor="#fbfdff";
-    margin=14;
+    label="Advantech";
+    fontsize=19; fontname="Helvetica-Bold";
+    color="#4285F4"; penwidth=1.8; style=rounded; bgcolor="#fbfdff";
+    margin=18;
 
-    vlp    [label="Velodyne VLP-32C\nEthernet · 192.168.7.10"];
-    falcon [label="Seyond Falcon\nEthernet · UDP 8010"];
-    cams   [label="3 × GMSL cameras\nleft · right · rear\nMIPI capture"];
-    xsens  [label="Xsens MTi IMU\nCAN · not working", color="#c06060",
-            fillcolor="#fdf3f3", fontcolor="#a04040",
+    vlp    [label="Velodyne VLP-32C"];
+    falcon [label="Seyond Falcon"];
+    cams   [label="3 × GMSL cameras"];
+    xsens  [label="Xsens IMU\ncable being remade", color="#FFAB40",
+            fillcolor="#FFF6E8", fontcolor="#A85F00",
             style="rounded,filled,dashed"];
-    vcu    [label="VCU · Turing Drive\nCAN  can0", fillcolor="#eef4ea",
-            color="#7a9e6a", fontcolor="#3f6030"];
+    vcu    [label="VCU", fillcolor="#E4F4F6", color="#0097A7",
+            fontcolor="#00707C"];
 
-    adv    [label="Autoware stack\nlidar · camera · vehicle IF\nlocalization · planning · control",
-            shape=box, style="filled", fillcolor="#1f5c99", fontcolor="white",
-            color="#1f5c99", fontsize=11];
+    adv    [label="Autoware stack", shape=box, style="filled",
+            fillcolor="#4285F4", fontcolor="white", color="#4285F4",
+            fontsize=17];
 
-    vlp    -> adv;
-    falcon -> adv;
-    cams   -> adv;
-    xsens  -> adv [color="#c06060", style=dashed];
-    vcu    -> adv [dir=both, color="#7a9e6a", penwidth=1.4];
+    vlp    -> adv [label="  ethernet"];
+    falcon -> adv [label="  ethernet"];
+    cams   -> adv [label="  MIPI"];
+    xsens  -> adv [label="  can1", color="#FFAB40",
+                   fontcolor="#A85F00", style=dashed];
+    vcu    -> adv [label="  can0", dir=both, color="#0097A7",
+                   fontcolor="#00707C", penwidth=1.6];
   }
 
   // ── Orin ──────────────────────────────────────────────────────────────────
   subgraph cluster_orin {
-    label="AGX Orin  (role: orin)";
-    fontsize=13; fontname="Helvetica-Bold";
-    color="#1f5c99"; penwidth=1.6; style=rounded; bgcolor="#fbfdff";
-    margin=14;
+    label="AGX Orin";
+    fontsize=19; fontname="Helvetica-Bold";
+    color="#4285F4"; penwidth=1.8; style=rounded; bgcolor="#fbfdff";
+    margin=18;
 
-    zedl [label="ZEDLink capture card"];
-    gnss [label="u-blox GNSS\nUSB serial\nmoved here: no free USB port\nleft on the Advantech",
-          color="#c08a3e", fillcolor="#fdf8f0", fontcolor="#8a5f20"];
-    orin [label="ZED driver + GNSS\n/sensing/camera/zed/*\n/sensing/gnss/*",
-          shape=box, style="filled", fillcolor="#1f5c99", fontcolor="white",
-          color="#1f5c99", fontsize=11];
+    zed  [label="ZED X\nstereo + IMU"];
+    zedl [label="ZEDLink card"];
+    gnss [label="u-blox GNSS"];
 
-    zed  [label="ZED X\nstereo + IMU\nGMSL"];
+    orin [label="sensor drivers", shape=box, style="filled",
+          fillcolor="#4285F4", fontcolor="white", color="#4285F4",
+          fontsize=17];
+
     zed  -> zedl;
-    zedl -> orin [label="PCIe"];
-    gnss -> orin [color="#c08a3e"];
+    zedl -> orin [label="  PCIe"];
+    gnss -> orin [label="  USB"];
   }
 
   // ── the virtual link ──────────────────────────────────────────────────────
-  // Not a cable: ROS 2 topics over DDS on the GolfCart wifi AP. The IMU the
-  // stack actually uses crosses this link, which is why its latency matters.
-  orin -> adv [label="  DDS over GolfCart wifi\l  /sensing/camera/zed/imu/data  100 Hz\l  rgb · camera_info · health\l  /sensing/gnss/*\l",
-               style=bold, color="#1f5c99", fontcolor="#1f5c99",
-               penwidth=2.0, constraint=false];
-  adv  -> orin [label="  ssh: start / stop unit\l",
+  // Not a cable. The IMU the stack actually uses crosses it, and so does the
+  // GNSS fix -- which is why its latency matters to localization.
+  orin -> adv [label="  DDS over wifi\l  IMU · camera · GNSS\l",
+               style=bold, color="#4285F4", fontcolor="#4285F4",
+               penwidth=2.4, constraint=false];
+  adv  -> orin [label="  ssh: start / stop\l",
                 style=dashed, color="#8a8a8a", fontcolor="#8a8a8a",
                 constraint=false];
 }

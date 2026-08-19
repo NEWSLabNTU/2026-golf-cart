@@ -15,21 +15,53 @@
 // TSN lives in tsn_setup.typ. Detail cut from these slides is held in NOTES.md,
 // notes-otocam.md, notes-usb-ports.md and notes-vcu.md for questions.
 
-#set page(paper: "presentation-16-9", margin: (x: 2.2cm, y: 1.5cm))
-#set text(font: ("Liberation Sans", "DejaVu Sans"), size: 19pt)
+// Theme is lifted from the lab's own PowerPoint template
+// (20251029_Progress.pptx): its colour scheme, its fonts, its blue title
+// treatment with no rule beneath, and its logo furniture. The band image and
+// the four logos are extracted from that file into assets/.
+//
+//   accent1 #4285F4   accent4 #FFAB40   accent5 #0097A7   lt2 #535353
+//   major Helvetica · minor Arial
+
+#let accent = rgb("#4285F4")
+#let ink    = rgb("#000000")
+#let muted  = rgb("#535353")
+#let teal   = rgb("#0097A7")
+#let amber  = rgb("#A85F00")
+#let red    = rgb("#C5372C")
+
+// Bottom furniture, on every slide but the title: our two lab marks on the
+// left, the foundation on the right, exactly as the template places them.
+#let furniture = context {
+  if counter(page).get().first() > 1 {
+    pad(x: 1.0cm, bottom: 0.15cm)[
+      #grid(
+        columns: (auto, auto, 1fr, auto), column-gutter: 0.5em,
+        align: bottom + left,
+        image("assets/logo_ntu.png", height: 0.44cm),
+        image("assets/logo_newslab.png", height: 0.40cm),
+        [],
+        image("assets/logo_autoware_small.png", height: 0.46cm),
+      )
+    ]
+  }
+}
+
+#set page(
+  paper: "presentation-16-9",
+  margin: (x: 2.0cm, top: 1.3cm, bottom: 1.9cm),
+  footer: furniture,
+  footer-descent: 0.5em,
+)
+#set text(font: ("Arial", "Liberation Sans", "DejaVu Sans"), size: 19pt,
+          fill: ink)
 #set par(justify: false, leading: 0.72em)
 
-#let accent = rgb("#1f5c99")
-#let muted  = rgb("#5a5a5a")
-#let good   = rgb("#3f6030")
-#let bad    = rgb("#a04040")
-#let warn   = rgb("#8a5f20")
-
+// The template's titles are blue, bold, and carry no rule under them.
 #let slide(title, body) = {
-  text(size: 26pt, weight: "regular")[#title]
-  v(0.25em)
-  line(length: 100%, stroke: 0.6pt + accent.lighten(45%))
-  v(0.45em)
+  text(font: ("Helvetica", "Liberation Sans"), size: 27pt, weight: "bold",
+       fill: accent)[#title]
+  v(0.55em)
   set text(size: 17pt)
   body
   pagebreak(weak: true)
@@ -40,13 +72,13 @@
 // Status chip. Colour carries the state so the board reads at a glance.
 #let chip(state) = {
   let (fill, stroke, label) = if state == "ready" {
-    (rgb("#eef4ea"), good, "ready")
+    (rgb("#E4F4F6"), teal, "ready")
   } else if state == "wip" {
-    (rgb("#fdf8f0"), warn, "in progress")
+    (rgb("#FFF6E8"), amber, "in progress")
   } else if state == "flawed" {
-    (rgb("#fdf8f0"), warn, "done, data flawed")
+    (rgb("#FFF6E8"), amber, "done, data flawed")
   } else {
-    (rgb("#fdf3f3"), bad, "not started")
+    (rgb("#FBE9E7"), red, "not started")
   }
   box(
     fill: fill, stroke: 0.8pt + stroke, radius: 3pt,
@@ -54,16 +86,35 @@
   )[#text(size: 13pt, fill: stroke, weight: "medium")[#label]]
 }
 
-// ── 1 ────────────────────────────────────────────────────────────────────────
-#align(center + horizon)[
-  #text(size: 40pt)[Golf Cart]
-  #v(0.3em)
-  #text(size: 21pt, fill: muted)[Bring-up progress — sensors, two-host system,
-  vehicle interface, localization]
-  #v(1.6em)
-  #text(size: 16pt, fill: muted)[NEWSLab NTU · Autoware LSV meeting · August 2026]
+// ── 1 ─────────────────────────────────────────────────────────────────────
+#page(margin: 0pt, footer: none)[
+  #let band = image("assets/theme_band.png", width: 100%, height: 3.15cm,
+                    fit: "cover")
+  #stack(dir: ttb, spacing: 0pt,
+  band,
+  block(width: 100%, height: 10.4cm, fill: white, inset: (x: 1.6cm, y: 0.9cm))[
+    #grid(
+      columns: (auto, 1fr), column-gutter: 1.6em, align: horizon,
+      image("assets/logo_autoware.png", height: 3.0cm),
+      [
+        #text(font: ("Helvetica", "Liberation Sans"), size: 30pt,
+              weight: "bold", fill: accent)[Golf Cart bring-up progress]
+        #v(0.35em)
+        #text(size: 19pt, weight: "bold")[National Taiwan University]
+        #v(0.25em)
+        #text(size: 15pt, fill: muted)[Autoware LSV meeting · August 2026]
+      ],
+    )
+    #v(1fr)
+    #grid(
+      columns: (auto, auto), column-gutter: 0.6em, align: bottom + left,
+      image("assets/logo_ntu.png", height: 0.62cm),
+      image("assets/logo_newslab.png", height: 0.56cm),
+    )
+  ],
+  band,
+  )
 ]
-#pagebreak(weak: true)
 
 // ── 2 ────────────────────────────────────────────────────────────────────────
 #slide[The vehicle][
@@ -84,14 +135,14 @@
       ]
 
       #v(0.7em)
-      Running at NTU today. The 華夏科大 campus is the destination.
+      Running at NTU today.
     ],
   )
 ]
 
 // ── 3 ────────────────────────────────────────────────────────────────────────
 #slide[Where we are][
-  #align(center)[#image("assets/sensor_wiring.png", height: 8.3cm)]
+  #align(center)[#image("assets/sensor_wiring.png", height: 8.9cm)]
   #v(0.45em)
   #align(center)[#grid(
     columns: (auto, auto, auto, auto, auto),
@@ -114,8 +165,8 @@
     The `.ko` files are ABI-bound to kernel `5.15.148-tegra` — a JetPack OTA
     reinstalls the stock modules and silently undoes it.
 
-  - *The Xsens MTi on CAN is not working.* The stack runs on the
-    #strong[ZED X built-in IMU] instead — which sits on the other machine and
+  - *The Xsens IMU cable broke, and is being remade.* Meanwhile the stack runs
+    on the #strong[ZED X built-in IMU] — which sits on the other machine and
     crosses the network at 100 Hz.
 
   - *The u-blox GNSS is on the Orin*, because the Advantech is short of USB
@@ -273,7 +324,7 @@
       brake-pedal press was seen to clear them. Not reproducible from CAN.
 
       #v(0.4em)
-      #text(fill: bad)[*Unattended autonomous start-up is blocked.*] A vendor
+      #text(fill: red)[*Unattended autonomous start-up is blocked.*] A vendor
       question, not more software on our side.
     ],
   )
@@ -341,7 +392,7 @@
     table.hline(stroke: 0.6pt + accent.lighten(50%)),
 
     [Sensors], [#chip("ready")],
-    [fragmented LiDAR scans; the Xsens IMU is dead],
+    [fragmented LiDAR scans; the Xsens cable is being remade],
 
     [Two-host system], [#chip("ready")],
     [—],
