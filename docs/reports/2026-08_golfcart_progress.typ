@@ -43,7 +43,7 @@
 #align(center + horizon)[
   #text(size: 40pt)[Golf Cart Progress]
   #v(0.4em)
-  #text(size: 22pt, fill: muted)[CAN, Networking and Localization]
+  #text(size: 22pt, fill: muted)[Sensors, System, Vehicle Interface, Localization]
   #v(1.6em)
   #text(size: 17pt, fill: muted)[NEWSLab NTU · August 2026]
 ]
@@ -52,7 +52,6 @@
 #slide[Overview][
   #set text(size: 19pt)
   + *Multi-host setup* — splitting the stack across Advantech and AGX Orin
-  + *TSN* — target architecture and what each machine can support
   + *IMU CAN bus* — wiring failure and the remake
   + *Localization* — NTU campus logging simulation and NDT tuning
 
@@ -154,45 +153,32 @@
   #align(center)[#image("assets/multihost_launch_diagram.png", height: 9.6cm)]
 ]
 
-// ── TSN ─────────────────────────────────────────────────────────────────────
-#section[TSN setup]
+#slide[Startup governor: not bricking the machine][
+  Bringing up 144 processes at once can kill the host. Every spawn and
+  composable load now passes one admission governor.
 
-#slide[Target Time-Sensitive Network architecture][
-  #align(center)[#image("assets/tsn_architecture.png", height: 9.6cm)]
-]
-
-#slide[Design options towards TSN][
-  All hosts in the TSN must have a network card with TSN features:
-
-  #v(0.4em)
+  #v(0.45em)
+  *Pacing the spawns was tried, measured, rejected*
   #note[
-    - *gPTP* — generalized precision time protocol
-    - *802.1Qbv* — enhancements for scheduled traffic
-    - *802.1Qav* — credit-based shaper
+    12-core AGX Orin: 484 runnable tasks, load1 203. Capping at 12 spawns made
+    startup *worse* — 10.6 s → 23.8 s — for ~10% fewer runnable tasks. The storm
+    is not contention over fixed work, it *is* the work. Throughput gates ship
+    *off*.
   ]
 
-  #v(0.8em)
-  A TSN switch is necessary because there are three machines in the network.
+  #v(0.45em)
+  *What ships on: a memory floor*
+  #note[
+    1 GiB `MemAvailable`, capped at a quarter of RAM. Never blocks while memory
+    is plentiful; serialises only once it falls through the floor — the
+    condition that used to end in a dead desktop.
+  ]
 
-  #v(0.3em)
-  #note[The switch cannot be replaced by a normal hub, due to PTP requirements.]
-]
-
-#slide[TSN support on the machines we have][
-  #set text(size: 18pt)
-  #table(
-    columns: (auto, 1fr),
-    stroke: none,
-    inset: (x: 0.4em, y: 0.55em),
-    row-gutter: 0.15em,
-    [*AGX Orin*], [I226 NIC attached on the PCIe slot],
-    [*Advantech*], [NIC does not support TSN. PCIe is not available and may
-                    require slot extension.],
-    [*NXP safety island*], [Ethernet T1 socket requires a converter to standard
-                            Ethernet TX.],
-    [*AGX Thor*], [Supports built-in TSN, but has no PCIe slot. A candidate to
-                   replace the AGX Orin.],
-  )
+  #v(0.35em)
+  #note[
+    Sized from this stack: largest launch-owned process 274 MiB, p99 across the
+    machine 116 MiB.
+  ]
 ]
 
 // ── CAN ─────────────────────────────────────────────────────────────────────
