@@ -159,7 +159,29 @@
 
 // ── 3 ────────────────────────────────────────────────────────────────────────
 #slide[Where we are][
-  #align(center)[#image("assets/sensor_wiring.png", height: 8.4cm)]
+  // The legend sits BESIDE the figure, not under it. The figure is about 2:1 on
+  // a 2.3:1 hole, so there is spare width and no spare height; a legend under it
+  // would have to come out of the figure's height, and the figure is scaled down
+  // enough already. Legend text is Typst, so it stays at slide size while the
+  // figure shrinks.
+  #let key(fill, stroke, dash, label) = grid(
+    columns: (auto, auto), column-gutter: 0.45em, align: horizon,
+    box(width: 0.6cm, height: 0.33cm, radius: 2pt,
+        fill: fill, stroke: (paint: stroke, thickness: 1pt, dash: dash)),
+    text(size: 11.5pt)[#label],
+  )
+  #grid(
+    columns: (1fr, auto), column-gutter: 0.9em, align: (center, left + horizon),
+    image("assets/sensor_wiring.png", height: 8.5cm),
+    [
+      #stack(dir: ttb, spacing: 0.75em,
+        key(rgb("#f4f8fb"), rgb("#B7C7DA"), "solid", "sensor"),
+        key(accent, accent, "solid", "software"),
+        key(rgb("#E4F4F6"), teal, "solid", "vehicle control"),
+        key(rgb("#FFF6E8"), rgb("#FFAB40"), "dashed", "not in service"),
+      )
+    ],
+  )
 ]
 
 // ── 4 ────────────────────────────────────────────────────────────────────────
