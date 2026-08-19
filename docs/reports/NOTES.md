@@ -88,6 +88,13 @@ drawing because the IMU the stack actually uses crosses that link at 100 Hz,
 which is why its latency is a localization concern rather than a networking
 detail.
 
+## Sensor integration material
+
+See `notes-otocam.md` for the oToCam GMSL cameras — the device tree overlay that
+kills the USB ports, and the UYVY encoding that neither gscam nor nvvidconv
+would take. Both belong under *Sensors*, and both feed the compute-budget story
+that runs through the thermal photo, the htop photo and the governor.
+
 ## Open questions to resolve before finalising
 
 - Status of each of the five steps — the repo shows evidence for sensors,
@@ -96,3 +103,12 @@ detail.
 - Whether the autonomous run has been attempted at all, and if so what stopped
   it.
 - Whether TSN belongs in this deck or is future work shown separately.
+  RESOLVED: moved to `tsn_setup.typ`.
+- Whether the cart now runs `gmslcam` or still the gscam pipeline. The configs
+  in the sensor kit still say gscam; do not claim a migration that has not
+  landed.
+- Whether the Seyond Falcon is still fitted. It is in the master recording list
+  and recorded 4208 messages in CSIE-1, but the localization story is
+  VLP-32C-only.
+- Whether the u-blox GNSS is fitted at all right now. It is drawn as present
+  hardware in the wiring diagram but was switched off for the NTU runs.
