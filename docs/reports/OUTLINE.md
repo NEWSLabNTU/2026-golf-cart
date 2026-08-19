@@ -21,17 +21,22 @@ Rules for building it:
 | 1 | Title | — | |
 | 2 | The vehicle | `vehicle_blvd_init.jpg` | what it is, where it runs |
 | 3 | **Progress overview** | `sensor_wiring.png` + status badges | **the spine** — what exists, what works |
-| 4 | Sensors: what bit us | bullets | oToCam DT overlay · UYVY→JPEG on CPU · Xsens dead, running on the ZED IMU · GNSS on the Orin, short of USB ports |
-| 5 | Why two machines | `thermal_fan_cooling.jpg` | compute limit, driver conflict, ZEDLink is Orin-only |
-| 6 | How we launch across two hosts | `multihost_launch_diagram.png` | ROS 2 has no `machine` tag; orchestration is ours |
-| 7 | **Startup governor** | `htop_before_governor.jpg` | 144 processes can kill the host. Pacing measured and **rejected**; a 1 GiB `MemAvailable` floor ships |
-| 8 | Vehicle interface: how it was built | `vcu_lineage.png` | vendor script → our safety rules → drove it → interface → test suite |
-| 9 | **Engage, and the blocker** | `vcu_states.png` | the VCU decides. BRK/Drv leave `Invalid` only on a pedal press — not reproducible from CAN, so unattended start-up is blocked |
-| 10 | Data collection | `vehicle_csie_init.jpg` | 3 NTU runs, two hosts, merged; replay in one command |
-| 11 | NDT: where tracking breaks | `ndt_slide_chart.png` | converges parked, degrades 3.5 s after motion |
-| 12 | NDT: root cause is the recording | bullets | 45% of scans are 162° fragments over 2.1 ms; 376 ms stale; no raw packets recorded |
+| 4 | Sensors: what bit us | bullets | oToCam DT overlay, ABI-bound to the kernel · Xsens dead, running on the ZED IMU · GNSS on the Orin, short of USB ports |
+| 5 | **GMSL cameras cost CPU** | bullets | cameras emit UYVY, consumers want RGB/JPEG, no GPU element found to convert → CPU `videoconvert`, once per camera, 3 × 1920×1280 @ 30 fps. `gmslcam` is the planned fix |
+| 6 | The machine is at its limit | `thermal_fan_cooling.jpg` | slide 5 is one reason. Hence two machines: compute, driver conflict, ZEDLink is Orin-only |
+| 7 | Launching across two hosts | `multihost_launch_diagram.png` | ROS 2 has no `machine` tag; orchestration is ours |
+| 8 | **Startup governor** | `htop_before_governor.jpg` | 144 processes can kill the host. Pacing measured and **rejected**; a 1 GiB `MemAvailable` floor ships |
+| 9 | Vehicle interface: how it was built | `vcu_lineage.png` | vendor script → our safety rules → drove it → interface → test suite |
+| 10 | **Engage, and the blocker** | `vcu_states.png` | the VCU decides. BRK/Drv leave `Invalid` only on a pedal press — not reproducible from CAN, so unattended start-up is blocked |
+| 11 | Data collection | `vehicle_csie_init.jpg` | 3 NTU runs, two hosts, merged; replay in one command |
+| 12 | **NDT: attempted, and it breaks** | `ndt_slide_chart.png` | one page. Tuned it, converges parked, degrades once moving. Root cause is the recording — fragmented scans, stale by 376 ms, no raw packets to re-decode |
 | 13 | **Status board** | table | the five steps, ready / in progress, one blocker each |
-| 14 | Next | bullets | raw packets · VLP-32C rotation config · VCU state entry with the vendor · gmslcam |
+| 14 | Next | bullets | raw packets · VCU state entry with the vendor · gmslcam |
+
+**Slides 5 → 6 → 8 are one argument, in order:** a per-camera CPU colour
+conversion is part of why the box runs hot, which is part of why there are two
+machines, and 144 processes starting at once on a box already at its limit is
+what the governor exists for. Do not let them drift apart in the file.
 
 ## What the LSV room takes away
 
@@ -41,8 +46,9 @@ Three things, and the deck should not dilute them:
    nothing, and everyone deploying more than one box hits it.
 2. **The startup governor is a negative result** (7) — implemented, measured,
    rejected. Worth saying out loud so nobody re-derives it.
-3. **An independent metric caught a sensor defect** (11–12) — ranking on
-   scan-to-map residual rather than NVTL is what found the fragmentation.
+3. **An independent metric caught a sensor defect** (12) — ranking on
+   scan-to-map residual rather than NVTL is what found the fragmentation. One
+   slide: we tuned it, it still breaks, and the cause is upstream of NDT.
 
 ## Cut, and where it went
 
@@ -50,9 +56,13 @@ Held in the notes for questions, not on a slide:
 
 - TSN — `tsn_setup.typ`, a separate deck. Future work.
 - oToCam mechanics — `notes-otocam.md`. Slide 4 gets one line.
+- Which GStreamer element refused UYVY — `notes-otocam.md`. Slide 5 says "no GPU
+  element found", which is the defensible claim; naming one needs a
+  `gst-inspect-1.0 nvvidconv` on the Advantech first.
 - USB port budget — `notes-usb-ports.md`. Slide 4 gets one line: *short of ports*.
 - VCU bench detail, safety rules, test suite inventory — `notes-vcu.md`.
-- NDT crop-range tuning numbers — the tuning doc. Slide 11 shows the outcome.
+- NDT crop-range tuning numbers and the NVTL-versus-residual argument — the
+  tuning doc. Slide 12 shows the outcome only.
 
 ## Statuses — CONFIRM BEFORE BUILDING
 
