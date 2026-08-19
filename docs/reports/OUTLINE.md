@@ -25,12 +25,16 @@ Slide 3 is the spine of the talk. Everything after it is a zoom-in.
 | # | Slide | Content | Asset |
 |---|---|---|---|
 | 4 | Sensor set | VLP-32C, Falcon, 3× GMSL, ZED X, u-blox, IMU — and which host each lives on | (reuse wiring, dimmed) |
-| 5 | **oToCam: the overlay costs you the USB ports** | IMX390 + MAX9296; vendor `.ko` + DT overlay; enabling the overlay kills USB. Declarative fix in `scripts/hardware/otocam/`. ABI-bound to kernel `5.15.148-tegra`; a JetPack OTA silently reverts it | — |
+| 5 | **oToCam: the overlay costs you the USB ports** | IMX390 + MAX9296; vendor `.ko` + DT overlay; enabling the overlay kills USB — **so the u-blox GNSS had to move to the Orin**. Declarative fix in `scripts/hardware/otocam/`. ABI-bound to kernel `5.15.148-tegra`; a JetPack OTA silently reverts it | — |
 | 6 | **oToCam: a conversion with no GPU element** | Cameras emit UYVY, consumers want RGB/JPEG, no GPU GStreamer element found to convert → CPU `videoconvert`, once per camera, 3 × 1920×1280 × 30 fps. `gmslcam` is the planned fix | — |
-| 7 | IMU reality | Xsens MTi on CAN is not working → the stack runs on the **ZED X built-in IMU**, which lives on the other machine and crosses the DDS link at 100 Hz | (wiring, IMU path highlighted) |
+| 7 | IMU reality | Xsens MTi on CAN is not working → the stack runs on the **ZED X built-in IMU**, which lives on the other machine and crosses the DDS link at 100 Hz. The GNSS now crosses the same link, for an unrelated reason | (wiring, IMU path highlighted) |
 
 **LSV relevance:** GMSL camera bring-up on Jetson is a shared pain. The overlay/USB
 tradeoff and the missing GPU colour-conversion path are both reusable warnings.
+
+The cascade is the memorable part and slide 5 should land it explicitly: a camera
+device-tree overlay ended up deciding **which machine the GNSS lives on**, and
+therefore that the GNSS fix crosses a wifi link. Nobody plans that; it falls out.
 
 ---
 
@@ -111,8 +115,21 @@ Inferred from the repo, not from anyone's judgement. Correct these.
 | Data collection | **done** | 3 sets recorded and replayable | data has the fragmentation and latency defects |
 | Autonomous run | **not started** | no evidence in repo | gated on the VCU blocker |
 
-Also unconfirmed: whether the Seyond Falcon is still fitted, and whether the
-u-blox is fitted (both drawn as present in the wiring diagram).
+Confirmed 2026-08-19: **Falcon working. u-blox working, but moved to the Orin**
+because the Advantech is short of USB ports — the oToCam overlay took them.
+Diagram updated.
+
+**Mismatch this exposes, and it is not cosmetic.** The software still places the
+GNSS on the master:
+
+- `golfcart.launch.yaml` host profile: `orin -> ZED camera only`, master gets
+  everything else — so on the Orin the u-blox driver is never started.
+- `config/recording/master_topics.txt` lists `/sensing/gnss/*`;
+  `orin_topics.txt` lists no GNSS at all — so the host without the device is the
+  one told to record it, against this repo's own first-hand-topics rule.
+
+Neither is a deck problem, but both are real and should be fixed before the next
+recording run, or the GNSS is silently absent from it. Say the word and I will.
 
 ## Deliberately out
 

@@ -20,6 +20,16 @@ agxorin/oto.dtbo
 ports stop working. So the platform cannot simply be configured once — the
 overlay is not free, it takes something else away.
 
+**What it took away, concretely: the GNSS.** The u-blox is the one USB sensor on
+the vehicle, and it now runs on the *Orin* rather than the Advantech, because the
+Advantech no longer has the ports to give it. That is the strongest way to state
+the cost of this overlay on a slide — not "USB stops working", which sounds
+recoverable, but "a working sensor had to move to the other machine". It also
+explains a piece of the wiring diagram that otherwise looks arbitrary: the GNSS
+sits on the machine with the camera, far from the LiDARs it is supposed to
+initialise localization for, and its fix now crosses the DDS link exactly like
+the ZED IMU does.
+
 We went through a workaround; the setup is now declarative rather than
 vendor-script driven, in `scripts/hardware/otocam/`
 ([README](https://github.com/NEWSLabNTU/2026-golf-cart/blob/3a155a66754f980b1ed43f92c8a7dd5744345df9/scripts/hardware/otocam/README.md)):

@@ -6,6 +6,10 @@
 // the authoritative record of which host publishes what. Connection types come
 // from the sensor kit configs: Velodyne and Falcon are Ethernet, the GMSL
 // cameras are MIPI capture, u-blox is USB serial, and the IMU and VCU are CAN.
+//
+// The u-blox sits on the ORIN, not the Advantech. That is a consequence, not a
+// preference: the oToCam device tree overlay costs the Advantech its USB ports,
+// so the one USB sensor moved to the machine that still has them.
 
 digraph sensors {
   rankdir=LR;
@@ -28,21 +32,19 @@ digraph sensors {
     vlp    [label="Velodyne VLP-32C\nEthernet · 192.168.7.10"];
     falcon [label="Seyond Falcon\nEthernet · UDP 8010"];
     cams   [label="3 × GMSL cameras\nleft · right · rear\nMIPI capture"];
-    gnss   [label="u-blox GNSS\nUSB serial"];
     xsens  [label="Xsens MTi IMU\nCAN · not working", color="#c06060",
             fillcolor="#fdf3f3", fontcolor="#a04040",
             style="rounded,filled,dashed"];
     vcu    [label="VCU · Turing Drive\nCAN  can0", fillcolor="#eef4ea",
             color="#7a9e6a", fontcolor="#3f6030"];
 
-    adv    [label="Autoware stack\nlidar · camera · GNSS · vehicle IF\nlocalization · planning · control",
+    adv    [label="Autoware stack\nlidar · camera · vehicle IF\nlocalization · planning · control",
             shape=box, style="filled", fillcolor="#1f5c99", fontcolor="white",
             color="#1f5c99", fontsize=11];
 
     vlp    -> adv;
     falcon -> adv;
     cams   -> adv;
-    gnss   -> adv;
     xsens  -> adv [color="#c06060", style=dashed];
     vcu    -> adv [dir=both, color="#7a9e6a", penwidth=1.4];
   }
@@ -55,19 +57,22 @@ digraph sensors {
     margin=14;
 
     zedl [label="ZEDLink capture card"];
-    orin [label="ZED driver\n/sensing/camera/zed/*",
+    gnss [label="u-blox GNSS\nUSB serial\nmoved here: oToCam overlay\ntook the Advantech USB ports",
+          color="#c08a3e", fillcolor="#fdf8f0", fontcolor="#8a5f20"];
+    orin [label="ZED driver + GNSS\n/sensing/camera/zed/*\n/sensing/gnss/*",
           shape=box, style="filled", fillcolor="#1f5c99", fontcolor="white",
           color="#1f5c99", fontsize=11];
 
     zed  [label="ZED X\nstereo + IMU\nGMSL"];
     zed  -> zedl;
     zedl -> orin [label="PCIe"];
+    gnss -> orin [color="#c08a3e"];
   }
 
   // ── the virtual link ──────────────────────────────────────────────────────
   // Not a cable: ROS 2 topics over DDS on the GolfCart wifi AP. The IMU the
   // stack actually uses crosses this link, which is why its latency matters.
-  orin -> adv [label="  DDS over GolfCart wifi\l  /sensing/camera/zed/imu/data  100 Hz\l  rgb · camera_info · health\l",
+  orin -> adv [label="  DDS over GolfCart wifi\l  /sensing/camera/zed/imu/data  100 Hz\l  rgb · camera_info · health\l  /sensing/gnss/*\l",
                style=bold, color="#1f5c99", fontcolor="#1f5c99",
                penwidth=2.0, constraint=false];
   adv  -> orin [label="  ssh: start / stop unit\l",
