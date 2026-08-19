@@ -70,6 +70,24 @@ the negative result is the interesting part — pacing spawns was implemented,
 measured, and rejected (startup 10.6 s -> 23.8 s for ~10% fewer runnable
 tasks); what ships is a 1 GiB MemAvailable floor, capped at a quarter of RAM.
 
+## Sensor wiring diagram
+
+`assets/sensor_wiring.dot` -> `sensor_wiring.png`, rendered with graphviz.
+Ownership is taken from `config/recording/{master,orin}_topics.txt`, which is
+the authoritative record of which host publishes what; connection types come
+from the sensor kit configs.
+
+Advantech AFE-R750 (master): VLP-32C and Falcon over Ethernet, three GMSL
+cameras over MIPI capture, u-blox over USB serial, Xsens IMU over CAN (not
+working), VCU over CAN can0. AGX Orin: ZED X over GMSL into the ZEDLink capture
+card, PCIe to the driver.
+
+The link between the machines is drawn as what it is — not a cable but ROS 2
+topics over DDS on the GolfCart wifi AP, plus ssh for unit start/stop. Worth
+drawing because the IMU the stack actually uses crosses that link at 100 Hz,
+which is why its latency is a localization concern rather than a networking
+detail.
+
 ## Open questions to resolve before finalising
 
 - Status of each of the five steps — the repo shows evidence for sensors,

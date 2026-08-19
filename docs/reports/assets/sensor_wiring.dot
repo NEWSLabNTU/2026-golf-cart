@@ -1,0 +1,76 @@
+// Sensor wiring across the two machines.
+//
+//   dot -Tpng -Gdpi=150 sensor_wiring.dot -o sensor_wiring.png
+//
+// Ownership is taken from config/recording/{master,orin}_topics.txt, which is
+// the authoritative record of which host publishes what. Connection types come
+// from the sensor kit configs: Velodyne and Falcon are Ethernet, the GMSL
+// cameras are MIPI capture, u-blox is USB serial, and the IMU and VCU are CAN.
+
+digraph sensors {
+  rankdir=LR;
+  bgcolor="white";
+  compound=true;
+  nodesep=0.22;
+  ranksep=0.85;
+  fontname="Helvetica";
+  node  [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=11,
+         color="#9fb6cc", fillcolor="#f4f8fb", penwidth=1.1, margin="0.12,0.07"];
+  edge  [fontname="Helvetica", fontsize=9, color="#5a5a5a", arrowsize=0.7];
+
+  // ── Advantech ─────────────────────────────────────────────────────────────
+  subgraph cluster_master {
+    label="Advantech AFE-R750  (role: master)";
+    fontsize=13; fontname="Helvetica-Bold";
+    color="#1f5c99"; penwidth=1.6; style=rounded; bgcolor="#fbfdff";
+    margin=14;
+
+    vlp    [label="Velodyne VLP-32C\nEthernet · 192.168.7.10"];
+    falcon [label="Seyond Falcon\nEthernet · UDP 8010"];
+    cams   [label="3 × GMSL cameras\nleft · right · rear\nMIPI capture"];
+    gnss   [label="u-blox GNSS\nUSB serial"];
+    xsens  [label="Xsens MTi IMU\nCAN · not working", color="#c06060",
+            fillcolor="#fdf3f3", fontcolor="#a04040",
+            style="rounded,filled,dashed"];
+    vcu    [label="VCU · Turing Drive\nCAN  can0", fillcolor="#eef4ea",
+            color="#7a9e6a", fontcolor="#3f6030"];
+
+    adv    [label="Autoware stack\nlidar · camera · GNSS · vehicle IF\nlocalization · planning · control",
+            shape=box, style="filled", fillcolor="#1f5c99", fontcolor="white",
+            color="#1f5c99", fontsize=11];
+
+    vlp    -> adv;
+    falcon -> adv;
+    cams   -> adv;
+    gnss   -> adv;
+    xsens  -> adv [color="#c06060", style=dashed];
+    vcu    -> adv [dir=both, color="#7a9e6a", penwidth=1.4];
+  }
+
+  // ── Orin ──────────────────────────────────────────────────────────────────
+  subgraph cluster_orin {
+    label="AGX Orin  (role: orin)";
+    fontsize=13; fontname="Helvetica-Bold";
+    color="#1f5c99"; penwidth=1.6; style=rounded; bgcolor="#fbfdff";
+    margin=14;
+
+    zedl [label="ZEDLink capture card"];
+    orin [label="ZED driver\n/sensing/camera/zed/*",
+          shape=box, style="filled", fillcolor="#1f5c99", fontcolor="white",
+          color="#1f5c99", fontsize=11];
+
+    zed  [label="ZED X\nstereo + IMU\nGMSL"];
+    zed  -> zedl;
+    zedl -> orin [label="PCIe"];
+  }
+
+  // ── the virtual link ──────────────────────────────────────────────────────
+  // Not a cable: ROS 2 topics over DDS on the GolfCart wifi AP. The IMU the
+  // stack actually uses crosses this link, which is why its latency matters.
+  orin -> adv [label="  DDS over GolfCart wifi\l  /sensing/camera/zed/imu/data  100 Hz\l  rgb · camera_info · health\l",
+               style=bold, color="#1f5c99", fontcolor="#1f5c99",
+               penwidth=2.0, constraint=false];
+  adv  -> orin [label="  ssh: start / stop unit\l",
+                style=dashed, color="#8a8a8a", fontcolor="#8a8a8a",
+                constraint=false];
+}

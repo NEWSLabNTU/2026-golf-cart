@@ -98,6 +98,10 @@
   ]
 ]
 
+#slide[Sensors across the two machines][
+  #align(center)[#image("assets/sensor_wiring.png", height: 9.4cm)]
+]
+
 #slide[Challenges][
   *Lack of multi-host support in ROS 2*
   #note[
@@ -154,31 +158,34 @@
 ]
 
 #slide[Startup governor: not bricking the machine][
-  Bringing up 144 processes at once can kill the host. Every spawn and
-  composable load now passes one admission governor.
+  #grid(
+    columns: (1fr, 1.1fr), gutter: 1.1em, align: top,
+    [
+      #image("assets/htop_before_governor.jpg", height: 7.4cm)
+      #v(0.35em)
+      #text(size: 13pt, fill: muted)[
+        All 12 cores at 100%, load average 128, during bring-up — before the
+        governor.
+      ]
+    ],
+    [
+      #set text(size: 15pt)
+      *Pacing the spawns was tried, measured, rejected*
+      #note[
+        Capping at 12 spawns made startup *worse* — 10.6 s → 23.8 s — for ~10%
+        fewer runnable tasks. The storm is not contention over fixed work, it
+        *is* the work. Throughput gates ship *off*.
+      ]
 
-  #v(0.45em)
-  *Pacing the spawns was tried, measured, rejected*
-  #note[
-    12-core AGX Orin: 484 runnable tasks, load1 203. Capping at 12 spawns made
-    startup *worse* — 10.6 s → 23.8 s — for ~10% fewer runnable tasks. The storm
-    is not contention over fixed work, it *is* the work. Throughput gates ship
-    *off*.
-  ]
-
-  #v(0.45em)
-  *What ships on: a memory floor*
-  #note[
-    1 GiB `MemAvailable`, capped at a quarter of RAM. Never blocks while memory
-    is plentiful; serialises only once it falls through the floor — the
-    condition that used to end in a dead desktop.
-  ]
-
-  #v(0.35em)
-  #note[
-    Sized from this stack: largest launch-owned process 274 MiB, p99 across the
-    machine 116 MiB.
-  ]
+      #v(0.4em)
+      *What ships on: a memory floor*
+      #note[
+        1 GiB `MemAvailable`, capped at a quarter of RAM. Never blocks while
+        memory is plentiful; serialises only once it falls through — the
+        condition that used to end in a dead desktop.
+      ]
+    ],
+  )
 ]
 
 // ── CAN ─────────────────────────────────────────────────────────────────────
