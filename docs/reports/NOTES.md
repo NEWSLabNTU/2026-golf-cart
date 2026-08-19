@@ -12,8 +12,10 @@ autonomous run:
 1. **Sensors** — LiDARs, cameras, IMU, GNSS
 2. **System** — multi-host bring-up, systemd orchestration
 3. **Vehicle interface** — VCU to Autoware
-4. **Full data collection run** — the run that produced the NDT data
-5. **Full autonomous run** — the goal
+4. **Map preparation** — PCD and lanelet2 from Turing Drive, downsampled for
+   runtime; see `notes-map.md`
+5. **Full data collection run** — the run that produced the NDT data
+6. **Full autonomous run** — the goal
 
 Each step carries a status: **ready** or **in progress**. The value of the deck
 is that someone can see at a glance which steps are done and where the front
@@ -31,6 +33,13 @@ Work specific to *this* vehicle, rather than anything Autoware gives for free:
 
 These are the parts that were engineered here and are worth presenting in
 detail. NDT tuning is one part of the story, not the centre of it.
+
+## Naming
+
+**華夏科大 is not mentioned in the deck.** The work is at NTU and stays there for
+now. `CLAUDE.md` and the migration roadmap still name it as the production
+target; those are project records, not slides, and are left alone — but they may
+be stale. See `notes-map.md`.
 
 ## Consequences for the current deck
 

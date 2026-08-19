@@ -2,6 +2,16 @@
 
 **30 minutes. 14 slides. ~2 minutes each.**
 
+> **Pending edits — the built deck does not have these yet.** More notes are
+> coming from the team before it is rebuilt.
+>
+> - **Add map preparation as a bring-up step.** Six steps now, not five. PCD and
+>   lanelet2 come from Turing Drive; the PCD is downsampled at runtime for NDT
+>   speed and load time. Slides 3 and 13 both enumerate the steps and both need
+>   the extra row. See `notes-map.md`, including one mechanism question to
+>   settle first.
+> - **Remove 華夏科大.** The work is at NTU. Slide 2's closing line goes.
+
 Audience: Autoware LSV meeting. They know Autoware — explain nothing about the
 architecture, the launch system or NDT. Spend the time on this vehicle.
 
