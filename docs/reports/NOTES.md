@@ -91,8 +91,8 @@ detail.
 ## Sensor integration material
 
 See `notes-otocam.md` for the oToCam GMSL cameras — the device tree overlay that
-kills the USB ports, and the UYVY encoding that neither gscam nor nvvidconv
-would take. Both belong under *Sensors*, and both feed the compute-budget story
+kills the USB ports, and the UYVY-to-RGB/JPEG conversion for which no GPU
+GStreamer element was found, forcing it onto the CPU once per camera. Both belong under *Sensors*, and both feed the compute-budget story
 that runs through the thermal photo, the htop photo and the governor.
 
 ## Open questions to resolve before finalising

@@ -36,43 +36,53 @@ vendor-script driven, in `scripts/hardware/otocam/`
 `5.15.148-tegra`, so a kernel upgrade breaks the load, and a JetPack OTA can
 reinstall the stock modules and silently undo it. `just otocam` re-applies.
 
-## 2. The camera encoding and the conversion stage
+## 2. A format conversion with no GPU element to do it
 
-The cameras output **UYVY** at 1920x1280, 30 fps — sourced, not recalled:
-`camera_{left,right,rear}.yaml` state
-`video/x-raw,format=UYVY,width=1920,height=1280,framerate=30/1`.
+The chain, stated as the problem actually is:
 
-**What the documentation actually says.** Checked because the claim was going on
-a slide, and it does not survive contact with the sources as stated:
+1. The cameras emit **UYVY** at 1920x1280, 30 fps. Sourced, not recalled:
+   `camera_{left,right,rear}.yaml` state
+   `video/x-raw,format=UYVY,width=1920,height=1280,framerate=30/1`.
+2. The consuming nodes want **RGB or JPEG**.
+3. So a conversion has to happen somewhere.
+4. gscam does that conversion through GStreamer, and **no GPU element was found
+   that takes UYVY in and gives RGB or JPEG out**.
+5. The fallback is the **CPU** `videoconvert` element — one colour conversion
+   per camera, three cameras, 1920x1280 at 30 fps.
 
-- **gscam does support UYVY.** Its ROS 2 source accepts four `image_encoding`
-  values — `rgb8`, `mono8`, `yuv422`, `jpeg` — and `yuv422` sets caps
-  `video/x-raw, format=UYVY` exactly. Anything else is a fatal
-  "Unsupported image encoding". The same strings are in the installed
-  `libgscam.so`.
+That CPU stage is the reportable cost. On a box already carrying three cameras
+and two LiDARs it is part of why the machine sits at its limit, which is the
+same limit the fan photograph, the twelve-cores-at-100% photograph, the ZED move
+to the Orin and the startup governor are all responses to.
 
-- **DeepStream `nvvideoconvert` lists UYVY on Jetson.** Its documented Jetson
-  sink-pad caps are NV12, I420, P010_10LE, BGRx, RGBA, GRAY8, RGB, BGR,
-  BGR10A2_LE, UYVP, **UYVY**, YUY2, YVYU, Y42B, I420_12LE, GRAY16_LE,
-  BGRA64_LE. (The dGPU list omits UYVY — but this is a Jetson.)
+**Workaround:** <https://github.com/newslabntu/gmslcam>, to remove that stage.
 
-**So the blocker was something more specific than "neither supports UYVY", and
-the deck should not say that.** Candidates worth one test each on the vehicle:
+### What the sources say, so the slide claims only what holds
 
-- The element in our pipeline is **`nvvidconv`** — the L4T converter — not
-  DeepStream's `nvvideoconvert`. Different plugin, different caps. This is the
-  most likely culprit and the easiest to check: `gst-inspect-1.0 nvvidconv`
-  on the Advantech.
-- gscam's `yuv422` mode publishes UYVY *unconverted*; the moment a
-  JPEG/NV12 output is wanted, a conversion element is needed regardless, and
-  that is where the CPU `videoconvert` crept in.
-- A version difference between the installed L4T/DeepStream and the documented
-  one.
+Checked because a narrower claim was heading for a slide:
 
-**What is not in doubt:** a CPU `videoconvert` stage per camera was in use, three
-cameras at 1920x1280x30 is real load, and `gmslcam` was written to remove it.
-The *cost* is the reportable fact; the exact plugin that refused the format
-needs one command to pin down.
+- **gscam is not the limitation, and the deck should not say it is.** Its ROS 2
+  source accepts `rgb8`, `mono8`, `yuv422` and `jpeg`, and `yuv422` sets caps
+  `video/x-raw, format=UYVY` exactly. It will happily *carry* UYVY — it just
+  publishes it unconverted, which is no use to a consumer wanting RGB or JPEG.
+  gscam is the thing that needs a GStreamer element to convert; it is not the
+  thing refusing the format.
+
+- **DeepStream `nvvideoconvert` documents UYVY on Jetson** (sink caps: NV12,
+  I420, P010_10LE, BGRx, RGBA, GRAY8, RGB, BGR, BGR10A2_LE, UYVP, **UYVY**,
+  YUY2, YVYU, Y42B, I420_12LE, GRAY16_LE, BGRA64_LE; the dGPU list omits it, but
+  this is a Jetson). So "DeepStream does not support UYVY" is not supportable
+  from the docs.
+
+- Our pipeline uses **`nvvidconv`**, the L4T converter, *not* `nvvideoconvert`.
+  Different plugin, different caps. If a specific element must be named as the
+  one that would not do the job, this is the candidate — and
+  `gst-inspect-1.0 nvvidconv` on the Advantech settles it in one command.
+
+**Safe wording for the slide:** "the cameras emit UYVY, the consumers want RGB or
+JPEG, and we found no GPU element to convert between them — so the conversion
+runs on CPU, once per camera." That is the true and defensible claim. Naming the
+element is optional and needs the `gst-inspect` first.
 
 ## Status in this repo
 
