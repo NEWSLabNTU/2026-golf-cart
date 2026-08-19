@@ -25,7 +25,7 @@ Rules for building it:
 | 5 | **GMSL cameras cost CPU** | bullets | cameras emit UYVY at 3 × 1920×1280 @ 30 fps, consumers want RGB/JPEG. We tried `nvvidconv`; the conversion still costs CPU per camera. `gmslcam` is the fix |
 | 6 | The machine is at its limit | `thermal_fan_cooling.jpg` | slide 5 is one reason. Hence two machines: compute, driver conflict, ZEDLink is Orin-only |
 | 7 | Launching across two hosts | `multihost_launch_diagram.png` | two problems, two answers — see below |
-| 8 | **Startup governor** | `htop_before_governor.jpg` | 144 processes can kill the host. Pacing measured and **rejected**; a 1 GiB `MemAvailable` floor ships |
+| 8 | **Startup governor** | `htop_before_governor.jpg` | same tool as slide 7. 144 processes can kill the host. Pacing measured and **rejected**; a 1 GiB `MemAvailable` floor ships |
 | 9 | Vehicle interface: how it was built | `vcu_lineage.png` | vendor script → our safety rules → drove it → interface → test suite |
 | 10 | **Engage, and the blocker** | `vcu_states.png` | the VCU decides. BRK/Drv leave `Invalid` only on a pedal press — not reproducible from CAN, so unattended start-up is blocked |
 | 11 | Data collection | `vehicle_csie_init.jpg` | 3 NTU runs, two hosts, merged; replay in one command |
@@ -40,9 +40,15 @@ into, concretely:
 
 1. **One instance, and nothing left behind.** Two hosts make both failures worse:
    a second launch racing the first, and orphaned nodes surviving a crash and
-   quietly poisoning the next run. **systemd user units** answer both —
-   singleton by construction, and `KillMode=control-group` takes the whole tree
-   down. `KillSignal=SIGINT` because play_launch ignores SIGTERM.
+   quietly poisoning the next run. Answered in two layers:
+
+   - **play_launch**, inside each host — it cleans up orphans when the launch
+     dies, and it starts the stack in **~20 s against ~60 s for `ros2 launch`**.
+     That number is worth saying: it is a 3× cut on every single iteration, on
+     hardware where you re-launch all day.
+   - **systemd user units**, around it — singleton by construction, and
+     `KillMode=control-group` to take the whole tree down. `KillSignal=SIGINT`
+     because play_launch ignores SIGTERM.
 
 2. **CycloneDDS has to be configured on both sides, and then lived with.** One
    XML profile per role in `config/cyclonedds/`, and a `config/host` marker file
