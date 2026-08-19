@@ -130,7 +130,7 @@
 // ══ what works ═══════════════════════════════════════════════════════════════
 
 // ── 2 ────────────────────────────────────────────────────────────────────────
-#slide[The vehicle][
+#slide[Vehicle platform][
   #grid(
     columns: (1.3fr, 1fr), column-gutter: 1.0em,
     image("assets/vehicle_blvd_init.jpg", height: 7.4cm),
@@ -139,7 +139,7 @@
       Autoware stack across #strong[two machines].
 
       #v(0.5em)
-      Bring-up in six steps:
+      Bring-up sequence:
 
       #v(0.3em)
       #set text(size: 13pt)
@@ -158,7 +158,7 @@
 ]
 
 // ── 3 ────────────────────────────────────────────────────────────────────────
-#slide[Where we are][
+#slide[System architecture][
   // The legend sits BESIDE the figure, not under it. The figure is about 2:1 on
   // a 2.3:1 hole, so there is spare width and no spare height; a legend under it
   // would have to come out of the figure's height, and the figure is scaled down
@@ -185,8 +185,8 @@
 ]
 
 // ── 4 ────────────────────────────────────────────────────────────────────────
-#slide[Sensors are up][
-  Every sensor on the vehicle publishes, on both machines.
+#slide[Sensor integration][
+  All sensors publish, across both hosts.
 
   #v(0.6em)
   #set text(size: 13.5pt)
@@ -206,87 +206,89 @@
 ]
 
 // ── 5 ────────────────────────────────────────────────────────────────────────
-#slide[Two machines, one stack][
-  ROS 2 dropped ROS 1's `machine` tag, so orchestration is ours. It works.
+#slide[Multi-host orchestration][
+  ROS 2 provides no equivalent of ROS 1's `machine` tag, so orchestration is
+  ours to supply. It is in place and operational.
 
   #v(0.55em)
   #grid(
     columns: (1fr, 1fr), column-gutter: 1.2em,
     [
-      *One instance, nothing left behind*
+      *Single instance, no orphaned processes*
 
       #v(0.3em)
       #set text(size: 13pt)
       #set list(spacing: 0.5em)
-      - #strong[play_launch] cleans up orphans when the launch dies, and starts
-        the stack in #strong[~20 s] against #strong[~60 s] for `ros2 launch`
+      - #strong[play_launch] reclaims orphaned processes when a launch
+        terminates, and brings the stack up in #strong[~20 s] against
+        #strong[~60 s] for `ros2 launch`
       - #strong[systemd user units] around it: singleton by construction,
         `KillMode=control-group` takes the whole tree down
     ],
     [
-      *One command, either machine*
+      *Uniform environment on either host*
 
       #v(0.3em)
       #set text(size: 13pt)
       #set list(spacing: 0.5em)
       - one CycloneDDS profile per role, plus a `config/host` marker file
       - `scripts/env.sh` reads it, and every shell and every unit sources it
-      - so a terminal on either box is correct the moment it opens. Nobody has
-        to remember which machine they are on
+      - so any shell is correctly configured on open, and no operator needs to
+        track which host they are working on
     ],
   )
 
   #v(0.6em)
-  #note[`just launch-all` brings both hosts up and returns. `just stop-all`
-  takes them down.]
+  #note[`just launch-all` starts both hosts and returns; `just stop-all` shuts
+  them down.]
 ]
 
 // ── 6 ────────────────────────────────────────────────────────────────────────
-#slide[The interface drives the cart][
+#slide[Vehicle interface][
   #grid(
     columns: (0.7fr, 1.3fr), column-gutter: 1.2em,
     align: (center, left),
     image("assets/vcu_lineage.png", height: 7.2cm),
     [
       #v(0.2em)
-      Not written from a specification. Grown from the vendor's own test code,
-      and every step exists in the repo.
+      Developed from the vendor's own test code rather than from a
+      specification. Every stage below exists in the repository.
 
       #v(0.6em)
-      The safety rules are ours:
+      The safety constraints are our addition:
 
       #v(0.25em)
       #set text(size: 13pt)
       #set list(spacing: 0.45em)
-      - target speed can never go negative, reverse is gear `R`
-      - gear `P` pins speed and angle to zero, re-applied every cycle
-      - ESTOP release is never a key the terminal cannot send
+      - target speed is clamped non-negative; reverse is gear `R`
+      - gear `P` forces speed and steering angle to zero, re-applied each cycle
+      - ESTOP release is never bound to a key the terminal cannot emit
 
       #v(0.55em)
-      #note[A test suite sits on top: keyboard control, a command service, and
-      trajectory replay.]
+      #note[A test suite sits above it: keyboard control, a command service,
+      and trajectory replay.]
     ],
   )
 ]
 
 // ── 7 ────────────────────────────────────────────────────────────────────────
-#slide[Data collection works][
+#slide[Data acquisition][
   #grid(
     columns: (1.05fr, 1fr), column-gutter: 1.0em,
-    image("assets/vehicle_csie_init.jpg", height: 7.2cm),
+    image("assets/vehicle_csie_init.jpg", height: 7.0cm),
     [
       #v(0.1em)
-      Three runs at NTU. #strong[Both hosts record separately]: each writes the
-      topics for the devices it owns, and the bags merge afterwards.
+      Three runs at NTU. #strong[Each host records independently], writing only
+      the topics for the devices it owns; the bags are merged afterwards.
 
       #v(0.55em)
-      Only #strong[first-hand driver output] is recorded. Anything a node
-      computed is left out, so replay recomputes it with today's parameters
-      rather than the ones frozen at record time.
+      Only #strong[first-hand driver output] is recorded. Derived topics are
+      excluded, so replay recomputes them under current parameters rather than
+      those fixed at record time.
 
       #v(0.55em)
-      #note[Replay is one command: `just ntu-test run`. Bag paused for
-      `/clock`, then stack, RViz, initial pose, in the only order that works.]
+      #note[Replay is a single command, `just ntu-test run`: bag paused for
+      `/clock`, then stack, RViz and initial pose, in the required order.]
     ],
   )
 ]
@@ -294,116 +296,118 @@
 // ══ what needs fixing ════════════════════════════════════════════════════════
 
 // ── 8 ────────────────────────────────────────────────────────────────────────
-#slide[What bit us][
-  Three things worth knowing before you copy this.
+#slide[Integration findings][
+  Three findings relevant to comparable deployments.
 
   #v(0.6em)
   #set list(spacing: 0.8em)
-  - *The vendor's oToCam setup gives you video and kills every USB port.*
-    We worked around it, and now have both. The `.ko` files stay ABI-bound to
-    kernel `5.15.148-tegra`, so a JetPack OTA silently undoes it again.
+  - *The vendor's default oToCam setup enables the cameras and disables every
+    USB port.* A workaround now provides both. The `.ko` files remain ABI-bound
+    to kernel `5.15.148-tegra`, so a JetPack update silently reverts it.
 
-  - *The Xsens IMU cable broke, and is being remade.* Meanwhile the stack runs
-    on the #strong[ZED X built-in IMU], which sits on the other machine and
+  - *The Xsens IMU cable has failed and is being remade.* The stack currently
+    uses the #strong[ZED X built-in IMU], which resides on the other host and
     crosses the network at 100 Hz.
 
-  - *The u-blox GNSS is on the Orin*, because the Advantech is short of USB
-    ports. So a second localization input is remote too, for an unrelated
+  - *The u-blox GNSS is hosted on the Orin*, the Advantech having no free USB
+    port. A second localization input is therefore also remote, for an unrelated
     reason.
 ]
 
 // ── 9 ────────────────────────────────────────────────────────────────────────
-#slide[The machine is at its limit][
+#slide[Compute and thermal limits][
   #grid(
     columns: (1.25fr, 1fr), column-gutter: 1.0em,
     [
       #v(0.1em)
-      The GMSL cameras emit #strong[UYVY] at 1920x1280, 30 fps, three of them.
-      The consuming nodes want #strong[RGB or JPEG], so something must convert.
-      We tried #strong[`nvvidconv`]. It still costs us CPU, per camera.
+      The three GMSL cameras emit #strong[UYVY] at 1920x1280, 30 fps, while the
+      consuming nodes require #strong[RGB or JPEG]. A conversion is therefore
+      unavoidable. #strong[`nvvidconv`] was evaluated; the conversion still
+      incurs CPU cost per camera.
 
       #v(0.55em)
-      That is one reason the box runs hot enough to need a fan held against it
-      by hand, and one reason there are #strong[two machines] at all.
+      This load contributes to the thermal saturation shown here, and is part of
+      the rationale for splitting the stack across #strong[two hosts].
 
       #v(0.55em)
-      #note[Fix in progress: #link("https://github.com/newslabntu/gmslcam")[`gmslcam`],
-      to take that stage out.]
+      #note[Mitigation in progress: #link("https://github.com/newslabntu/gmslcam")[`gmslcam`],
+      which removes that stage.]
     ],
-    image("assets/thermal_fan_cooling.jpg", height: 7.2cm),
+    image("assets/thermal_fan_cooling.jpg", height: 6.9cm),
   )
 ]
 
 // ── 10 ───────────────────────────────────────────────────────────────────────
-#slide[The bill for that speed][
+#slide[Start-up contention][
   #grid(
     columns: (1.05fr, 1fr), column-gutter: 1.0em,
-    image("assets/htop_before_governor.jpg", height: 6.2cm),
+    image("assets/htop_before_governor.jpg", height: 5.5cm),
     [
-      #set text(size: 12.5pt)
-      play_launch is fast #emph[because] it spawns as fast as it can. On a box
-      already at its limit, that is a thundering herd, and the machine locks up
-      hard enough to need a power cycle.
+      #set text(size: 12pt)
+      play_launch is fast #emph[because] it spawns without rate limiting. On a
+      host already at its limit this produces a thundering herd, and the machine
+      becomes unresponsive, requiring a power cycle.
 
       #v(0.45em)
-      *Pacing the spawns is the obvious fix. We measured it losing:* about 10%
-      fewer runnable tasks for more than double the startup time, spending the
-      exact advantage we adopted the tool for.
+      *Rate-limiting the spawns is the obvious remedy, and measurement rejects
+      it:* roughly 10% fewer runnable tasks for more than double the start-up
+      time, forfeiting the advantage the tool was adopted for.
 
       #v(0.45em)
-      What ships is a #strong[1 GiB `MemAvailable` floor]. Nothing on a healthy
-      boot; holds back only when the machine is about to die.
+      The shipped mechanism is a #strong[1 GiB `MemAvailable` floor], engaging
+      only as the host approaches exhaustion.
 
       #v(0.3em)
-      #note[Gate on the resource that runs out, not on the rate.]
+      #note[Constrain the resource that is exhausted, not the spawn rate.]
     ],
   )
 ]
 
 // ── 11 ───────────────────────────────────────────────────────────────────────
-#slide-sm[Engage is the VCU's decision, and one door we cannot open][
+#slide-sm[Autonomous engagement and VCU state entry][
   #align(center)[#image("assets/vcu_states.png", width: 72%)]
   #v(0.45em)
   #set text(size: 12.5pt)
   #grid(
     columns: (1fr, 1fr), column-gutter: 1.2em,
     [
-      There is no `vehicle_cmd_gate` external selector. The interface commands
-      nothing until all four subsystems report autonomous. #strong[No service
-      call can force it.]
+      There is no `vehicle_cmd_gate` external selector. The interface issues no
+      commands until all four subsystems report autonomous, and #strong[no
+      service call can override this].
     ],
     [
-      After a VCU restart, #strong[BRK and Drv come up `Invalid`], and only a
-      brake-pedal press was seen to clear them. Not reproducible from CAN.
+      After a VCU restart, #strong[BRK and Drv initialise as `Invalid`], and only
+      a brake-pedal press was observed to clear them. Not reproducible over CAN.
 
       #v(0.3em)
-      #text(fill: red)[*Unattended autonomous start-up is blocked.*] A vendor
-      question, not more software on our side.
+      #text(fill: red)[*Unattended autonomous start-up is therefore blocked.*]
+      This requires clarification from the vendor rather than further work on
+      our side.
     ],
   )
 ]
 
 // ── 12 ───────────────────────────────────────────────────────────────────────
-#slide[NDT still breaks][
+#slide[NDT localization][
   #grid(
     columns: (1.2fr, 1fr), column-gutter: 1.0em,
-    image("assets/ndt_slide_chart.png", height: 6.8cm),
+    image("assets/ndt_slide_chart.png", height: 6.0cm),
     [
-      #set text(size: 13pt)
-      We tuned it and measured it on #strong[scan-to-map residual], not on the
-      NVTL score. The change that helped accuracy most actually *lowered* NVTL.
+      #set text(size: 12pt)
+      Tuning was evaluated against #strong[scan-to-map residual] rather than the
+      NVTL score: the change that most improved accuracy in fact *reduced* NVTL.
 
       #v(0.45em)
-      It converges parked, to 0.14 m. It #strong[degrades a few seconds after
-      the vehicle starts moving].
+      Convergence is reliable when stationary, to 0.14 m, but
+      #strong[degrades within seconds of the vehicle moving].
 
       #v(0.45em)
-      *The cause is upstream of NDT, in the recording:* 45% of scans are
-      fragments of a revolution, and scans arrive #strong[376 ms stale].
+      *The cause lies upstream of NDT, in the recording:* 45% of scans cover
+      only part of a revolution, and scans arrive #strong[376 ms stale].
 
       #v(0.35em)
-      #note[No raw LiDAR packets were recorded, so these bags cannot be
-      re-decoded. The next run records them.]
+      #note[Raw LiDAR packets were not recorded, so these bags cannot be
+      re-decoded. The next run will capture them.]
     ],
   )
 ]
@@ -411,42 +415,42 @@
 // ══ close ════════════════════════════════════════════════════════════════════
 
 // ── 13 ───────────────────────────────────────────────────────────────────────
-#slide[Status][
+#slide[Bring-up status][
   #v(0.1em)
   #set text(size: 13.5pt)
   #table(
     columns: (auto, auto, 1fr),
     stroke: none, inset: (x: 0.45em, y: 0.48em), row-gutter: 0.05em,
     align: (left, left, left),
-    [*Step*], [*State*], [*What stands in the way*],
+    [*Step*], [*State*], [*Outstanding issue*],
     table.hline(stroke: 0.6pt + accent.lighten(50%)),
     [Sensors], [#chip("ready")],
-    [fragmented LiDAR scans; the Xsens cable is being remade],
+    [partial LiDAR scans; Xsens cable under repair],
     [Two-host system], [#chip("ready")], [none],
     [Vehicle interface], [#chip("wip")],
-    [the VCU will not enter its autonomous state from CAN alone],
+    [the VCU will not enter its autonomous state over CAN alone],
     [Map preparation], [#chip("ready")],
-    [PCD and lanelet2 from Turing Drive, downsampled at runtime],
+    [PCD and lanelet2 supplied by Turing Drive, downsampled at runtime],
     [Data collection], [#chip("flawed")],
-    [the bags carry the sensor defects above],
+    [the recordings carry the sensor defects above],
     [Autonomous run], [#chip("none")],
-    [gated on the vehicle interface blocker],
+    [dependent on the vehicle interface issue],
   )
 ]
 
 // ── 14 ───────────────────────────────────────────────────────────────────────
-#slide[Next][
+#slide[Next steps][
   #set list(spacing: 0.85em)
-  - *Ask Turing Drive what clears the `Invalid` brake state after a restart.*
-    Everything else on the autonomous run waits behind this.
+  - *Establish with Turing Drive what clears the `Invalid` brake state after a
+    restart.* All remaining work on the autonomous run depends on this.
 
-  - *Record raw LiDAR packets*, and check the VLP-32C rotation configuration
-    against the hardware. Then re-run the localization work on data that is not
-    already broken.
+  - *Record raw LiDAR packets* and verify the VLP-32C rotation configuration
+    against the hardware, then repeat the localization work on sound data.
 
-  - *Migrate the sensor kit to `gmslcam`*, and take the per-camera CPU
-    conversion out.
+  - *Migrate the sensor kit to `gmslcam`*, eliminating the per-camera CPU
+    conversion.
 
   #v(0.6em)
-  #note[TSN is a separate track, happy to cover it if there is interest.]
+  #note[TSN is a separate line of work, available for discussion if of
+  interest.]
 ]

@@ -24,21 +24,21 @@ Rules for building it:
 |---|---|---|
 | | **what works** | |
 | 1 | Title | template band, logos |
-| 2 | The vehicle, and the six steps | `vehicle_blvd_init.jpg` + status chips |
-| 3 | Where we are | `sensor_wiring.png`, full page |
-| 4 | Sensors are up | table: sensor, host, what it feeds |
-| 5 | Two machines, one stack | play_launch + systemd, DDS + host marker |
-| 6 | The interface drives the cart | `vcu_lineage.png` |
-| 7 | Data collection works | `vehicle_csie_init.jpg` |
+| 2 | Vehicle platform, and the six steps | `vehicle_blvd_init.jpg` + status chips |
+| 3 | System architecture | `sensor_wiring.png`, full page |
+| 4 | Sensor integration | table: sensor, host, what it feeds |
+| 5 | Multi-host orchestration | play_launch + systemd, DDS + host marker |
+| 6 | Vehicle interface | `vcu_lineage.png` |
+| 7 | Data acquisition | `vehicle_csie_init.jpg` |
 | | **what needs fixing** | |
-| 8 | What bit us | oToCam video-or-USB and our workaround, Xsens cable, GNSS on the Orin |
-| 9 | The machine is at its limit | `thermal_fan_cooling.jpg`, UYVY on CPU |
-| 10 | The bill for that speed | `htop_before_governor.jpg` |
-| 11 | Engage, and the door we cannot open | `vcu_states.png` |
-| 12 | NDT still breaks | `ndt_slide_chart.png` |
+| 8 | Integration findings | oToCam video-or-USB and our workaround, Xsens cable, GNSS on the Orin |
+| 9 | Compute and thermal limits | `thermal_fan_cooling.jpg`, UYVY on CPU |
+| 10 | Start-up contention | `htop_before_governor.jpg` |
+| 11 | Autonomous engagement and VCU state entry | `vcu_states.png` |
+| 12 | NDT localization | `ndt_slide_chart.png` |
 | | **close** | |
-| 13 | Status | table |
-| 14 | Next | bullets |
+| 13 | Bring-up status | table |
+| 14 | Next steps | bullets |
 
 **The order is the point.** Achievement first, caveats second. Do not move a
 problem up into slides 2 to 7 "for context": the room should hear what runs
