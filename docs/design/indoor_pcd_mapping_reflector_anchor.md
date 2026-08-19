@@ -300,7 +300,6 @@ Two details the implementation settled:
 
 ### 6.5 Post-process and tile
 
-- Convert the exported PLY to PCD, preserving intensity (§6.3).
 - Voxel downsample at 0.2 m.
 - Remove residual dynamic-object ghosts. GLIM's `map_editor` does this
   interactively — MinCut segmentation for objects, region growing for planes, a
