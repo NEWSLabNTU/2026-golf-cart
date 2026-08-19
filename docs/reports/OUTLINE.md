@@ -22,7 +22,7 @@ Rules for building it:
 | 2 | The vehicle | `vehicle_blvd_init.jpg` | what it is, where it runs |
 | 3 | **Progress overview** | `sensor_wiring.png` + status badges | **the spine** — what exists, what works |
 | 4 | Sensors: what bit us | bullets | oToCam DT overlay, ABI-bound to the kernel · Xsens dead, running on the ZED IMU · GNSS on the Orin, short of USB ports |
-| 5 | **GMSL cameras cost CPU** | bullets | cameras emit UYVY, consumers want RGB/JPEG, no GPU element found to convert → CPU `videoconvert`, once per camera, 3 × 1920×1280 @ 30 fps. `gmslcam` is the planned fix |
+| 5 | **GMSL cameras cost CPU** | bullets | cameras emit UYVY at 3 × 1920×1280 @ 30 fps, consumers want RGB/JPEG. We tried `nvvidconv`; the conversion still costs CPU per camera. `gmslcam` is the fix |
 | 6 | The machine is at its limit | `thermal_fan_cooling.jpg` | slide 5 is one reason. Hence two machines: compute, driver conflict, ZEDLink is Orin-only |
 | 7 | Launching across two hosts | `multihost_launch_diagram.png` | ROS 2 has no `machine` tag; orchestration is ours |
 | 8 | **Startup governor** | `htop_before_governor.jpg` | 144 processes can kill the host. Pacing measured and **rejected**; a 1 GiB `MemAvailable` floor ships |
@@ -56,9 +56,10 @@ Held in the notes for questions, not on a slide:
 
 - TSN — `tsn_setup.typ`, a separate deck. Future work.
 - oToCam mechanics — `notes-otocam.md`. Slide 4 gets one line.
-- Which GStreamer element refused UYVY — `notes-otocam.md`. Slide 5 says "no GPU
-  element found", which is the defensible claim; naming one needs a
-  `gst-inspect-1.0 nvvidconv` on the Advantech first.
+- Which GStreamer element refused UYVY — `notes-otocam.md`. `nvvidconv` was
+  tried and can be named. But the committed camera configs show an all-GPU
+  pipeline with no CPU `videoconvert` in it, so do not put a CPU figure or an
+  element count on the slide until that is reconciled.
 - USB port budget — `notes-usb-ports.md`. Slide 4 gets one line: *short of ports*.
 - VCU bench detail, safety rules, test suite inventory — `notes-vcu.md`.
 - NDT crop-range tuning numbers and the NVTL-versus-residual argument — the

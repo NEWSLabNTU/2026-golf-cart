@@ -81,14 +81,40 @@ Checked because a narrower claim was heading for a slide:
   from the docs.
 
 - Our pipeline uses **`nvvidconv`**, the L4T converter, *not* `nvvideoconvert`.
-  Different plugin, different caps. If a specific element must be named as the
-  one that would not do the job, this is the candidate — and
-  `gst-inspect-1.0 nvvidconv` on the Advantech settles it in one command.
+  Different plugin, different caps.
 
-**Safe wording for the slide:** "the cameras emit UYVY, the consumers want RGB or
-JPEG, and we found no GPU element to convert between them — so the conversion
-runs on CPU, once per camera." That is the true and defensible claim. Naming the
-element is optional and needs the `gst-inspect` first.
+**`nvvidconv` was tried** — confirmed by the team, 2026-08-19. So it is the
+element that can be named, rather than DeepStream's `nvvideoconvert`, which was
+never in the pipeline.
+
+### One thing that does not add up, and should be settled before the slide
+
+The committed pipeline in `camera_{left,right,rear}.yaml` is
+
+```
+v4l2src ! video/x-raw,format=UYVY,1920x1280@30 ! nvvidconv !
+video/x-raw(memory:NVMM),format=NV12 ! nvjpegenc quality=90
+```
+
+with `image_encoding: "jpeg"`. That is `nvvidconv` taking UYVY and handing NV12
+to a hardware JPEG encoder — **no CPU `videoconvert` anywhere in it**. So the
+repo does not corroborate "the conversion runs on CPU, once per camera".
+
+Both statements came from the team, so one is narrower than it reads. The likely
+resolutions, in order of plausibility:
+
+1. This pipeline is the one that was *tried* and did not work, and the CPU
+   `videoconvert` path is what actually runs — the config here would then be
+   stale.
+2. `nvvidconv` handles UYVY→NV12→JPEG, and the CPU cost is elsewhere in the
+   chain (gscam's own handling, or the RGB path a consumer needs rather than the
+   JPEG one).
+
+**Safe wording either way:** "the cameras emit UYVY, the consumers want RGB or
+JPEG, we tried `nvvidconv`, and the conversion still costs us CPU per camera —
+`gmslcam` is the fix." That holds under both resolutions. Do not put a specific
+element count or a specific CPU figure on the slide until one of them is
+confirmed.
 
 ## Status in this repo
 
