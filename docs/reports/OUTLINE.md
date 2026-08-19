@@ -2,15 +2,9 @@
 
 **30 minutes. 14 slides. ~2 minutes each.**
 
-> **Pending edits — the built deck does not have these yet.** More notes are
-> coming from the team before it is rebuilt.
->
-> - **Add map preparation as a bring-up step.** Six steps now, not five. PCD and
->   lanelet2 come from Turing Drive; the PCD is downsampled at runtime for NDT
->   speed and load time. Slides 3 and 13 both enumerate the steps and both need
->   the extra row. See `notes-map.md`, including one mechanism question to
->   settle first.
-> - **Remove 華夏科大.** The work is at NTU. Slide 2's closing line goes.
+> Both landed: map preparation is the fourth of **six** steps, and 華夏科大 is
+> not named anywhere. Slide 2 carries the six steps with a status chip each, so
+> the wiring diagram on slide 3 no longer repeats them and gets the full page.
 
 Audience: Autoware LSV meeting. They know Autoware — explain nothing about the
 architecture, the launch system or NDT. Spend the time on this vehicle.
@@ -30,14 +24,14 @@ Rules for building it:
 |---|---|---|
 | | **what works** | |
 | 1 | Title | template band, logos |
-| 2 | The vehicle | `vehicle_blvd_init.jpg` |
-| 3 | Where we are | `sensor_wiring.png` + status chips |
+| 2 | The vehicle, and the six steps | `vehicle_blvd_init.jpg` + status chips |
+| 3 | Where we are | `sensor_wiring.png`, full page |
 | 4 | Sensors are up | table: sensor, host, what it feeds |
 | 5 | Two machines, one stack | play_launch + systemd, DDS + host marker |
 | 6 | The interface drives the cart | `vcu_lineage.png` |
 | 7 | Data collection works | `vehicle_csie_init.jpg` |
 | | **what needs fixing** | |
-| 8 | What bit us | oToCam overlay, Xsens cable, GNSS on the Orin |
+| 8 | What bit us | oToCam video-or-USB and our workaround, Xsens cable, GNSS on the Orin |
 | 9 | The machine is at its limit | `thermal_fan_cooling.jpg`, UYVY on CPU |
 | 10 | The bill for that speed | `htop_before_governor.jpg` |
 | 11 | Engage, and the door we cannot open | `vcu_states.png` |
@@ -145,8 +139,9 @@ Slide 3 and slide 13 both depend on these. Inferred from the repo; correct them.
 
 | Step | Proposed | Blocker |
 |---|---|---|
-| Sensors | ready | scan fragmentation; Xsens dead |
-| System (multi-host) | ready | — |
+| Sensors | ready | scan fragmentation; Xsens cable being remade |
+| Two-host system | ready | none |
 | Vehicle interface | in progress | VCU state entry |
-| Data collection | done | data carries the sensor defects |
+| Map preparation | ready | none |
+| Data collection | done, data flawed | data carries the sensor defects |
 | Autonomous run | not started | gated on the VCU blocker |

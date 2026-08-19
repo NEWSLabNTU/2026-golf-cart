@@ -16,15 +16,23 @@ nv_imx390.ko
 agxorin/oto.dtbo
 ```
 
-**The conflict:** enabling the DT overlay makes the cameras work, and the USB
-ports stop working. So the platform cannot simply be configured once — the
-overlay is not free, it takes something else away.
+**The conflict, and how it ends.** Confirmed by the team 2026-08-19: with the
+vendor's default oToCam setup scripts the cameras work and **every USB port
+dies**. It is one or the other. We worked through a workaround and now have
+both video and USB.
+
+So this is a solved problem, not an open wound, and the slide says so. The
+residual risk is the ABI binding below, not the tradeoff itself.
 
 **Do not attach the GNSS move to this.** It is tempting and it is wrong: the
 u-blox lives on the Orin because the Advantech ran out of USB *ports*, not because
-the overlay disabled them. See `notes-usb-ports.md`. Keep the two separate on the
-slides — one is a device-tree conflict, the other is a plain port count, and
-merging them makes a claim the team has not made.
+the overlay disabled them. The overlay problem is fixed; the port count is not a
+problem anyone can fix. See `notes-usb-ports.md`, and keep the two separate on
+the slides.
+
+This also settles the tension that note recorded: the "USB stops working" claim
+was about the *default* setup, and four USB devices work today because of the
+workaround. Both statements were true, at different points in time.
 
 We went through a workaround; the setup is now declarative rather than
 vendor-script driven, in `scripts/hardware/otocam/`

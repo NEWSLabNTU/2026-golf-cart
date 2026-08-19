@@ -139,33 +139,27 @@
       Autoware stack across #strong[two machines].
 
       #v(0.5em)
-      Bring-up in five steps:
+      Bring-up in six steps:
 
-      #v(0.25em)
-      #note[
-        sensors, two-host system, vehicle interface,
-        data collection, autonomous run
-      ]
-
-      #v(0.6em)
-      Running at NTU today.
+      #v(0.3em)
+      #set text(size: 13pt)
+      #grid(
+        columns: (auto, auto), column-gutter: 0.6em, row-gutter: 0.42em,
+        align: (left, left + horizon),
+        [1. Sensors],            chip("ready"),
+        [2. Two-host system],    chip("ready"),
+        [3. Vehicle interface],  chip("wip"),
+        [4. Map preparation],    chip("ready"),
+        [5. Data collection],    chip("flawed"),
+        [6. Autonomous run],     chip("none"),
+      )
     ],
   )
 ]
 
 // ── 3 ────────────────────────────────────────────────────────────────────────
 #slide[Where we are][
-  #align(center)[#image("assets/sensor_wiring.png", height: 6.5cm)]
-  #v(0.3em)
-  #align(center)[#grid(
-    columns: (auto, auto, auto, auto, auto),
-    column-gutter: 0.7em, align: center,
-    [#text(size: 11pt)[sensors] #h(0.25em) #chip("ready")],
-    [#text(size: 11pt)[two-host] #h(0.25em) #chip("ready")],
-    [#text(size: 11pt)[vehicle interface] #h(0.25em) #chip("wip")],
-    [#text(size: 11pt)[data collection] #h(0.25em) #chip("flawed")],
-    [#text(size: 11pt)[autonomous run] #h(0.25em) #chip("none")],
-  )]
+  #align(center)[#image("assets/sensor_wiring.png", height: 8.4cm)]
 ]
 
 // ── 4 ────────────────────────────────────────────────────────────────────────
@@ -283,9 +277,9 @@
 
   #v(0.6em)
   #set list(spacing: 0.8em)
-  - *GMSL cameras need a vendor kernel module and a device tree overlay.*
-    The `.ko` files are ABI-bound to kernel `5.15.148-tegra`, so a JetPack OTA
-    reinstalls the stock modules and silently undoes it.
+  - *The vendor's oToCam setup gives you video and kills every USB port.*
+    We worked around it, and now have both. The `.ko` files stay ABI-bound to
+    kernel `5.15.148-tegra`, so a JetPack OTA silently undoes it again.
 
   - *The Xsens IMU cable broke, and is being remade.* Meanwhile the stack runs
     on the #strong[ZED X built-in IMU], which sits on the other machine and
@@ -409,6 +403,8 @@
     [Two-host system], [#chip("ready")], [none],
     [Vehicle interface], [#chip("wip")],
     [the VCU will not enter its autonomous state from CAN alone],
+    [Map preparation], [#chip("ready")],
+    [PCD and lanelet2 from Turing Drive, downsampled at runtime],
     [Data collection], [#chip("flawed")],
     [the bags carry the sensor defects above],
     [Autonomous run], [#chip("none")],
