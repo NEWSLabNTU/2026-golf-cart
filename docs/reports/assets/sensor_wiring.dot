@@ -8,8 +8,10 @@
 // cameras are MIPI capture, u-blox is USB serial, and the IMU and VCU are CAN.
 //
 // The u-blox sits on the ORIN, not the Advantech. That is a consequence, not a
-// preference: the oToCam device tree overlay costs the Advantech its USB ports,
-// so the one USB sensor moved to the machine that still has them.
+// preference: the Advantech has no USB port left. Its ports are taken by the
+// keyboard, the mouse, a phone tethering for internet, and an external disk that
+// exists because the on-board eMMC is too small. The GNSS is the fifth device
+// and there is no fifth port, so it moved to the machine that had one.
 
 digraph sensors {
   rankdir=LR;
@@ -57,7 +59,7 @@ digraph sensors {
     margin=14;
 
     zedl [label="ZEDLink capture card"];
-    gnss [label="u-blox GNSS\nUSB serial\nmoved here: oToCam overlay\ntook the Advantech USB ports",
+    gnss [label="u-blox GNSS\nUSB serial\nmoved here: no free USB port\nleft on the Advantech",
           color="#c08a3e", fillcolor="#fdf8f0", fontcolor="#8a5f20"];
     orin [label="ZED driver + GNSS\n/sensing/camera/zed/*\n/sensing/gnss/*",
           shape=box, style="filled", fillcolor="#1f5c99", fontcolor="white",

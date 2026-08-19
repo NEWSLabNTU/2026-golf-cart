@@ -25,16 +25,20 @@ Slide 3 is the spine of the talk. Everything after it is a zoom-in.
 | # | Slide | Content | Asset |
 |---|---|---|---|
 | 4 | Sensor set | VLP-32C, Falcon, 3× GMSL, ZED X, u-blox, IMU — and which host each lives on | (reuse wiring, dimmed) |
-| 5 | **oToCam: the overlay costs you the USB ports** | IMX390 + MAX9296; vendor `.ko` + DT overlay; enabling the overlay kills USB — **so the u-blox GNSS had to move to the Orin**. Declarative fix in `scripts/hardware/otocam/`. ABI-bound to kernel `5.15.148-tegra`; a JetPack OTA silently reverts it | — |
+| 5 | **oToCam: the overlay costs you the USB ports** | IMX390 + MAX9296; vendor `.ko` + DT overlay; enabling the overlay kills USB. Declarative fix in `scripts/hardware/otocam/`. ABI-bound to kernel `5.15.148-tegra`; a JetPack OTA silently reverts it | — |
 | 6 | **oToCam: a conversion with no GPU element** | Cameras emit UYVY, consumers want RGB/JPEG, no GPU GStreamer element found to convert → CPU `videoconvert`, once per camera, 3 × 1920×1280 × 30 fps. `gmslcam` is the planned fix | — |
-| 7 | IMU reality | Xsens MTi on CAN is not working → the stack runs on the **ZED X built-in IMU**, which lives on the other machine and crosses the DDS link at 100 Hz. The GNSS now crosses the same link, for an unrelated reason | (wiring, IMU path highlighted) |
+| 7 | IMU reality | Xsens MTi on CAN is not working → the stack runs on the **ZED X built-in IMU**, which lives on the other machine and crosses the DDS link at 100 Hz | (wiring, IMU path highlighted) |
+| 7b | **Why the GNSS is on the other machine** | Five USB devices, fewer ports: keyboard, mouse, phone tethering for internet, external disk (the eMMC is too small), and the u-blox. The GNSS lost. A second localization input now crosses the wifi link, and neither is remote by design | (wiring, GNSS path highlighted) |
 
 **LSV relevance:** GMSL camera bring-up on Jetson is a shared pain. The overlay/USB
 tradeoff and the missing GPU colour-conversion path are both reusable warnings.
 
-The cascade is the memorable part and slide 5 should land it explicitly: a camera
-device-tree overlay ended up deciding **which machine the GNSS lives on**, and
-therefore that the GNSS fix crosses a wifi link. Nobody plans that; it falls out.
+Slide 7b is the one nobody else will present: the compute box is also the
+development workstation, the internet gateway and the data logger, and those
+roles compete with the sensors for physical ports. That is a real constraint on a
+research vehicle and it decided a piece of the architecture. Keep it separate
+from slide 5 — the overlay's USB problem and the port shortage are two different
+things, and merging them makes a claim the team has not made.
 
 ---
 
@@ -116,8 +120,9 @@ Inferred from the repo, not from anyone's judgement. Correct these.
 | Autonomous run | **not started** | no evidence in repo | gated on the VCU blocker |
 
 Confirmed 2026-08-19: **Falcon working. u-blox working, but moved to the Orin**
-because the Advantech is short of USB ports — the oToCam overlay took them.
-Diagram updated.
+because the Advantech has no free USB port — keyboard, mouse, phone tethering,
+and an external disk (the eMMC is too small) take them all. Nothing to do with the
+oToCam overlay; see `notes-usb-ports.md`. Diagram updated.
 
 **Mismatch this exposes, and it is not cosmetic.** The software still places the
 GNSS on the master:
