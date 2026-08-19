@@ -389,25 +389,37 @@
 
 // ── 12 ───────────────────────────────────────────────────────────────────────
 #slide[NDT localization][
+  // A PDF cannot animate a GIF, so the slide carries a still frame. The 2x clip
+  // it came from (02:20 to 03:20 of the debug run, cropped to the RViz 3D view)
+  // is data/captures/ndt_run.{gif,mp4} -- kept out of the repository at 16 MB,
+  // alongside the source recording. Insert the GIF into PowerPoint, or open the
+  // deck in a browser, to show the motion.
   #grid(
-    columns: (1.2fr, 1fr), column-gutter: 1.0em,
-    image("assets/ndt_slide_chart.png", height: 6.0cm),
+    columns: (1fr, 1.15fr), column-gutter: 1.0em,
     [
-      #set text(size: 12pt)
+      #image("assets/ndt_run_still.png", height: 7.6cm)
+      #v(0.15em)
+      #text(size: 10.5pt, fill: muted)[Scan aligned to the map at 11 km/h.
+      Clip available at 2x.]
+    ],
+    [
+      #set text(size: 12.5pt)
+      *The first successful NDT initialisation and tracking run on the NTU map.*
+      Initialisation from GNSS, and convergence to 0.14 m while stationary.
+
+      #v(0.45em)
+      Tracking then #strong[degrades within seconds of the vehicle moving].
       Tuning was evaluated against #strong[scan-to-map residual] rather than the
       NVTL score: the change that most improved accuracy in fact *reduced* NVTL.
 
       #v(0.45em)
-      Convergence is reliable when stationary, to 0.14 m, but
-      #strong[degrades within seconds of the vehicle moving].
+      *The cause has been identified, and lies upstream of NDT in the recording:*
+      45% of scans cover only part of a revolution, and scans arrive
+      #strong[376 ms stale]. Neither is a localization parameter.
 
-      #v(0.45em)
-      *The cause lies upstream of NDT, in the recording:* 45% of scans cover
-      only part of a revolution, and scans arrive #strong[376 ms stale].
-
-      #v(0.35em)
-      #note[Raw LiDAR packets were not recorded, so these bags cannot be
-      re-decoded. The next run will capture them.]
+      #v(0.4em)
+      #text(size: 12pt)[Both are addressed in the next collection run, which
+      records raw LiDAR packets.]
     ],
   )
 ]

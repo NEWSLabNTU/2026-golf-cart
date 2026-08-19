@@ -35,7 +35,7 @@ Rules for building it:
 | 9 | Compute and thermal limits | `thermal_fan_cooling.jpg`, UYVY on CPU |
 | 10 | Start-up contention | `htop_before_governor.jpg` |
 | 11 | Autonomous engagement and VCU state entry | `vcu_states.png` |
-| 12 | NDT localization | `ndt_slide_chart.png` |
+| 12 | NDT localization | `ndt_run_still.png`, from the run clip |
 | | **close** | |
 | 13 | Bring-up status | table |
 | 14 | Next steps | bullets |
@@ -130,8 +130,16 @@ Held in the notes for questions, not on a slide:
   element count on the slide until that is reconciled.
 - USB port budget — `notes-usb-ports.md`. Slide 4 gets one line: *short of ports*.
 - VCU bench detail, safety rules, test suite inventory — `notes-vcu.md`.
-- NDT crop-range tuning numbers and the NVTL-versus-residual argument — the
-  tuning doc. Slide 12 shows the outcome only.
+- NDT crop-range tuning numbers, and `ndt_slide_chart.png` itself. Slide 12
+  used to carry the chart; it now carries a frame from the run, which shows the
+  scan aligned to the map and is what the room actually wants to see. The chart
+  stays in assets/ for questions.
+
+**A PDF cannot animate a GIF.** `data/captures/ndt_run.gif` and `ndt_run.mp4`
+are the 2x clip of 02:20 to 03:20, cropped to the RViz 3D view. The slide shows
+a still from it. To present the motion, insert the GIF into PowerPoint or open
+the deck in a browser; the PDF will only ever show the first frame. The clip is
+16 MB and lives with the source recording rather than in the repository.
 
 ## Statuses — CONFIRM BEFORE BUILDING
 
