@@ -42,3 +42,9 @@ config/host
 # once-only warning stamps dropped by scripts/env.sh
 .envrc.sysctl-warned
 .envrc.host-warned
+
+# Progress deck and its media live outside the project, in
+# ~/Downloads/golfcart-progress-slides. They were 25 MB of binaries that churned
+# on every edit, and none of it is part of the system.
+docs/reports/
+scripts/report/
