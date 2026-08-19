@@ -25,7 +25,7 @@ Rules for building it:
 | 5 | **GMSL cameras cost CPU** | bullets | cameras emit UYVY at 3 × 1920×1280 @ 30 fps, consumers want RGB/JPEG. We tried `nvvidconv`; the conversion still costs CPU per camera. `gmslcam` is the fix |
 | 6 | The machine is at its limit | `thermal_fan_cooling.jpg` | slide 5 is one reason. Hence two machines: compute, driver conflict, ZEDLink is Orin-only |
 | 7 | Launching across two hosts | `multihost_launch_diagram.png` | two problems, two answers — see below |
-| 8 | **Startup governor** | `htop_before_governor.jpg` | same tool as slide 7. 144 processes can kill the host. Pacing measured and **rejected**; a 1 GiB `MemAvailable` floor ships |
+| 8 | **Startup governor: the bill for slide 7** | `htop_before_governor.jpg` | the speed *is* the problem — spawning that fast bricks the machine. Pacing measured and **rejected**; a 1 GiB `MemAvailable` floor ships |
 | 9 | Vehicle interface: how it was built | `vcu_lineage.png` | vendor script → our safety rules → drove it → interface → test suite |
 | 10 | **Engage, and the blocker** | `vcu_states.png` | the VCU decides. BRK/Drv leave `Invalid` only on a pedal press — not reproducible from CAN, so unattended start-up is blocked |
 | 11 | Data collection | `vehicle_csie_init.jpg` | 3 NTU runs, two hosts, merged; replay in one command |
@@ -44,8 +44,8 @@ into, concretely:
 
    - **play_launch**, inside each host — it cleans up orphans when the launch
      dies, and it starts the stack in **~20 s against ~60 s for `ros2 launch`**.
-     That number is worth saying: it is a 3× cut on every single iteration, on
-     hardware where you re-launch all day.
+     A 3× cut on every iteration, on hardware where you re-launch all day.
+     *Set this up as a win and leave it — slide 8 is the bill for it.*
    - **systemd user units**, around it — singleton by construction, and
      `KillMode=control-group` to take the whole tree down. `KillSignal=SIGINT`
      because play_launch ignores SIGTERM.
@@ -61,6 +61,26 @@ into, concretely:
 The second one is the unglamorous half and worth a sentence out loud: most of
 the multi-host work was making the *terminal experience* not require anyone to
 remember which machine they were on.
+
+### Slides 7 → 8 — the turn
+
+Do not present the governor as an unrelated hardening job. It is the direct
+consequence of what slide 7 just sold:
+
+> play_launch is fast **because** it starts nodes as fast as it can. On a box
+> already at its limit, that is a thundering herd — every node initialising at
+> once, and the machine locks up hard enough to need a power cycle. The htop
+> photo is that moment.
+
+That makes the rejected fix interesting rather than a footnote. **Pacing the
+spawns is the obvious answer and we measured it losing:** roughly a 10% cut in
+runnable tasks for more than double the startup time — which spends the exact
+advantage that made play_launch worth adopting. What ships instead is a **1 GiB
+`MemAvailable` floor**: it does nothing at all on a healthy boot and only holds
+back when the machine is genuinely about to die.
+
+The transferable line: *the speed is the feature and the failure mode; gate on
+the resource that actually runs out, not on the rate.*
 
 **Slides 5 → 6 → 8 are one argument, in order:** a per-camera CPU colour
 conversion is part of why the box runs hot, which is part of why there are two
