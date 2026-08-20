@@ -128,8 +128,54 @@ nvv4l2camerasrc device=<by-path> !
   nvjpegenc quality=90
 ```
 
+### NVJPG is one block and three cameras contend for it
+
+Separate risk from the copy, and the one that can invalidate this plan rather
+than merely slow it. Three streams at 1920x1280 and 30 fps is 90 frames a
+second, **221 MP/s of JPEG encode on a single engine**. No authoritative encode
+throughput figure for AGX Orin was found; the nearest data point is a forum
+thread asking whether 14 ms to *decode* a 1080p JPEG is normal. If that order of
+magnitude holds for encode, three cameras is at or past the limit.
+
+The failure mode is not an error message. It is dropped frames, or a silent
+software fallback that puts the load straight back on the CPU this phase exists
+to unload.
+
+`just sim cameras-bench` measures it: one stream against three, sustained fps
+and aggregate MP/s, with an explicit SHORT verdict. **It needs no cameras** --
+the encoder does not care where the pixels came from -- so this runs on the
+Advantech today.
+
+### What can be tested without cameras, and what cannot
+
+`scripts/sim/cameras.sh` puts three v4l2loopback devices carrying UYVY at the
+real geometry in front of the ROS stack. It covers the topic plumbing, the
+format handling, the crate, the detector, bag replay and the appsink stall
+behaviour, on any host.
+
+**It cannot test the capture change above, on any machine.** v4l2loopback has no
+dmabuf support -- not a version gap, the module exposes no dmabuf parameter and
+the `.ko` contains no dmabuf code -- and `nvv4l2camerasrc` accepts only
+`V4L2_MEMORY_DMABUF` in importer role. Verified 2026-08-20.
+
+**Nor can an x86 box stand in.** `nvvidconv` and `nvv4l2camerasrc` are L4T-only
+with no x86 build. DeepStream would supply `nvvideoconvert` on a dGPU, but its
+sink caps there omit UYVY, which is our input format, and gst-plugins-bad's
+`cudaconvert` omits it too (checked: I420, NV12, P010, RGBA and friends, no
+4:2:2 at all). The memory types differ as well, `memory:CUDAMemory` against
+`memory:NVMM`. Underneath that the architectures differ in the way that matters:
+VIC and NVJPG are fixed-function blocks sharing physical memory with the CPU,
+where a dGPU crosses PCIe both ways. A green result on x86 would not transfer.
+
+So the split is: everything ROS-side anywhere, encoder caps and capacity on the
+Advantech with no cameras, and only `nvv4l2camerasrc` plus the end-to-end CPU
+delta needing real hardware.
+
 Tasks:
 
+- [ ] Run `just sim cameras-bench` on the Advantech. Answers the capacity
+      question above, needs nothing attached, and is the first thing to do
+      because a SHORT verdict changes the rest of this phase.
 - [ ] Run the probe on the Advantech. Records JetPack and DeepStream versions,
       element availability, `nvjpegenc` and `nvvidconv` caps, and benchmarks
       `v4l2src` against `nvv4l2camerasrc` on all three cameras at once.

@@ -35,6 +35,8 @@ mod vehicle 'just/vehicle.just'
 mod can 'just/can.just'
 # Development and monitoring tools
 mod tool 'just/tool.just'
+# Synthetic cameras on v4l2loopback, for working with no hardware attached
+mod sim 'just/sim.just'
 
 # Initialize and update all git submodules
 checkout:
