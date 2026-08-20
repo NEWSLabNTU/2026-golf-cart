@@ -95,7 +95,7 @@ group, and there must be a test that fails when they are swapped.
 |---|---|
 | `--attach` run against the full stack | confirms no launch-level QoS override, and that the adapi nodes are live on the Orin rather than only in a workstation probe |
 | `ros2 topic list \| grep diagnostics_agg` | closes the "never published here" finding empirically instead of by inference |
-| Decide: rosbridge or rclpy (see below) | structural, and it changes what O-C builds. Not blocked by anything now |
+| ~~Decide: rosbridge or rclpy~~ | **Done, see O-A2.** rosbridge, measured rather than argued |
 
 ### Correction to an earlier figure
 
@@ -133,18 +133,102 @@ records, so these are live. `hazard_status` has no API equivalent and stays at
 `/system/emergency/hazard_status`, as does `/system/operation_mode/availability`,
 which is the per-mode availability `OperationModeState` does not break out.
 
-**The structural decision.** `golfcart_system_monitor` today is a rclpy node
-holding subscriptions behind a hardcoded type map, with Flask serving JSON. Every
-new topic costs a subscription, a type-map entry and a serialiser, and that type
-map is why the GNSS entries were silently skipped at load for so long.
+## O-A2: the structural decision, rosbridge or rclpy
 
-`rosbridge_server` is already installed in `/opt/ros/humble`. Over it, the browser
-subscribes by topic name and the Python side contributes nothing per-type.
+**Decided 2026-08-21: rosbridge, for the graph views. Measured, not assumed.**
 
-That is a different monitor, not a bigger one. Take the decision here, before
-O-C, because taking it afterwards means building O-C twice. Either way the
-`monitor_topics.yaml` liveness table should survive: it answers "is this device
-publishing at all", which the graph does not.
+`golfcart_system_monitor` today is a rclpy node holding subscriptions behind a
+hardcoded type map, with Flask serving JSON. Every new topic costs a
+subscription, a type-map entry and a serialiser, and that type map is why the
+GNSS entries were silently skipped at load for so long. `rosbridge_server` 2.0.6
+is already installed in `/opt/ros/humble`.
+
+The measurement below was made with the aggregator, the AD API diagnostics node
+and rosbridge running locally, and a websocket client counting what arrived.
+
+### The finding that decides it: rosbridge negotiates QoS per topic
+
+O-A established that these two topics disagree on QoS, and that a subscriber
+applying one profile to both silently gets nothing on one. That is a trap a
+hand-written rclpy subscriber walks into, and it is the exact trap that already
+cost this project a working ZED camera reading as dead.
+
+rosbridge does not have the bug available. `rosbridge_library/internal/subscribers.py`
+calls `get_publishers_info_by_topic` and derives the profile from the publishers:
+default volatile plus best-effort, promote to transient-local plus reliable when
+every publisher is transient-local, demote to best-effort when any publisher is
+best-effort. It re-derives on each new client subscription.
+
+So the QoS question that would have to be got right by hand, per topic, and kept
+right through every Autoware upgrade, is answered by construction.
+
+### Measured, clean run
+
+| | struct | status |
+|---|---|---|
+| rate | once | **10.0 Hz**, matching the aggregator's `rate: 10.0` |
+| size on the wire | 8,684 B | 7,125 B |
+| bandwidth | negligible | **69.7 KiB/s** |
+
+**Total 70 KiB/s** for the whole graph feed. Trivial on localhost or LAN.
+
+Both startup orders were tested and both work:
+
+- Autoware first, then rosbridge, then the browser: struct and status both arrive.
+- Browser subscribes **5 s before Autoware starts**: struct and status both still
+  arrive. This was the case I expected to fail, because rosbridge negotiates QoS
+  at subscribe time and the publisher does not exist yet. It does not fail,
+  because volatile-against-transient-local and best-effort-against-reliable are
+  both compatible pairings, so the subscription matches when the publisher
+  appears.
+
+`subscribe` also takes `throttle_rate`, `queue_length` and `compression`, so
+server-side throttling for a UI that does not need 10 Hz is one field, not code.
+
+Reproduce with `scripts/check/rosbridge_graph_feed.sh --order`.
+
+Note the JSON cost: 7,125 B/msg on the wire for a status message describing 63
+nodes and 41 leaves is roughly four times the binary form. It does not matter at
+70 KiB/s on one link, and it would matter if this were ever fanned out to many
+clients or run across the master-to-orin link. Throttle first, reach for
+`compression` second.
+
+> Caveat on the numbers, because two separate bugs inflated them before the
+> table above was trustworthy. A first measurement read **173 Hz and 1.2 MiB/s**:
+> that was four orphaned aggregators from earlier runs publishing at once, and
+> `ros2 run` forks the node, so killing the PID it returns leaves the node alive.
+> A second read **49.7 Hz** because the teardown between the two startup-order
+> cases silently matched nothing, and the same stack ran through both (visible
+> in the results as a repeated graph `id`).
+>
+> The fix is `set -m` plus `kill -- -$!`: with job control on, each background
+> job gets its own process group whose ID equals `$!`. `setsid` is the wrong
+> tool and was the second bug, because it forks when already a group leader, so
+> the session ID is the grandchild's PID rather than `$!`.
+>
+> The script now warns when an aggregator or bridge is already running, and both
+> cases show distinct graph `id`s. Anyone repeating this: if the rate is not
+> 10 Hz, something stale is publishing.
+
+### What this does not decide
+
+**The liveness table stays rclpy.** `monitor_topics.yaml` answers "is this device
+publishing at all", which the graph does not and cannot: a sensor that never
+starts produces no diagnostic, so it has no node in the graph to be red. That
+table is also where the hardcoded type map lives, so it keeps the maintenance
+cost it always had. It is not made worse by this decision, and rewriting it is
+not part of O-C.
+
+So the monitor becomes two things sharing a page: a rosbridge-fed graph view, and
+the existing rclpy liveness view. That is more moving parts than either option
+alone, and it is still right, because the two answer different questions and the
+graph half is the one with the QoS hazard.
+
+**Deployment cost.** rosbridge is another process to launch and supervise, and it
+is one more thing that can be down when the operator needs the page. Whatever
+launches it must sit beside the monitor, and the page must say "bridge down"
+rather than "no faults" when the websocket fails. That distinction is an
+acceptance criterion for O-C, not a detail.
 
 ## O-B: play_launch, generic ROS
 
@@ -257,22 +341,31 @@ LATENT_FAULT on demand.
 ## Critical path
 
 ```
-O-A (ground truth + structural decision)
+O-A  (QoS ground truth)          DONE, struct is transient_local
+O-A2 (rosbridge or rclpy)        DONE, rosbridge for the graph views
  |
  +--> O-C (availability strip) --> O-D (failing path)
  |
  +--> O-E (MRM timeline)
 
-O-B (play_launch)  runs in parallel, no dependency
+O-B (play_launch)      runs in parallel, no dependency
 O-F (fault injection)  needed by all, buildable immediately
+
+O-C is unblocked. The only vehicle-dependent item left is confirming the QoS
+against the live stack with `diag_graph_qos.sh --attach`, which is confirmation
+rather than discovery.
 ```
 
 ## Honest caveats
 
-- **O-A is genuinely blocking.** If `struct` is `volatile`, O-C and O-D both grow
-  a restart-detection path that is not scoped in this document.
-- **The structural call is a rewrite, not an increment.** Deferring it past O-C
-  means building O-C twice.
+- ~~**O-A is genuinely blocking.**~~ Answered: `struct` is `transient_local`, so
+  no restart-detection path is needed for late join.
+- ~~**The structural call is a rewrite, not an increment.**~~ Answered in O-A2,
+  and smaller than feared: the graph views go on rosbridge, the existing rclpy
+  liveness table stays as it is. Nothing is rewritten.
+- **The monitor becomes two data paths on one page.** That is more moving parts
+  than either option alone, and rosbridge is one more process that can be down.
+  The page must distinguish "bridge down" from "no faults".
 - Every finding here was read off an x86 workstation and a recorded planning-sim
   run. The vehicle is an AGX Orin running the same stack against real sensors.
   Nothing in the chain should differ, and that is an expectation rather than a
