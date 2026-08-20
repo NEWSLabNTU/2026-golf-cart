@@ -536,6 +536,7 @@ twist_source:=gyro_odom|eagleye            # Override preset twist source
 | [docs/superpowers/specs/2026-07-27-indoor-artag-localization-design.md](docs/superpowers/specs/2026-07-27-indoor-artag-localization-design.md) | Indoor AR-tag + NDT localization design: tags replace GNSS for init, EKF correction, and NDT regularization |
 | [docs/roadmaps/3-indoor-localization.md](docs/roadmaps/3-indoor-localization.md) | Indoor localization phase master: sub-phases A (calibration) → B (mapping) → C (tag map) → D (runtime) |
 | [docs/roadmaps/2-camera-image-pipeline.md](docs/roadmaps/2-camera-image-pipeline.md) | Camera image pipeline: why JPEG, the `CompressedImage.format` contract, zero-copy capture, and the rclrs image_transport crate |
+| [docs/design/diagnostics-and-mrm-visualization.md](docs/design/diagnostics-and-mrm-visualization.md) | Diagnostics / MRM chain as it actually runs, why `/diagnostics_agg` is never published here, which ROS and Autoware viewers already exist, and the proposed views split across play_launch vs `golfcart_system_monitor` |
 
 ## Known Issues
 
