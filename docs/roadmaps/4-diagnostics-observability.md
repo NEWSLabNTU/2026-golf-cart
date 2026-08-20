@@ -315,23 +315,57 @@ someone should still look at it on the vehicle.
 
 ## O-D: the failing path, not the fault tree
 
-**Needs O-C's struct handling.**
+**Status: DONE, 2026-08-21.** `golfcart_system_monitor` `36b3f81`.
 
-When a mode goes unavailable, show the path from that mode root down to the leaf
-that caused it. Rendering all 63 nodes is a wall of green that hides the one red
-line through it, so collapse to the failing path by default and expand on demand.
+When a mode goes unavailable the strip names the **leaf** that caused it, with
+the chain of graph units behind an expander. Collapsed by default: the graph has
+63 nodes and rendering all of them is a wall of green that hides the one red line
+through it.
 
-`is_dependent` on `DiagNodeStatus` distinguishes a node that failed from one that
-merely inherited a failure, so the originating leaf is identifiable rather than
-guessed. `latch_level` records the worst level seen, so a fault that has already
-cleared is still attributable.
+### Two assumptions in this document were wrong, and probing found it
 
-Acceptance:
+**`is_dependent` is not the inherited-failure marker.** This document said to use
+it to distinguish a node that failed from one that merely inherited a failure. It
+reads **false on every node in this graph**, including nodes plainly inheriting
+their level from a child. Attribution is structural instead: walk down from the
+mode root through units that are themselves bad, and report the diag **leaves**
+that are bad. A leaf is an origin; a unit above it has only inherited. A test
+asserts that no `/autoware/...` unit path is ever reported as a cause.
 
-- with two simultaneous injected faults, both originating leaves are named
-- no inherited node is ever reported as a cause
-- a fault that clears before the operator looks is still attributable, via
-  `latch_level`
+**`latch_level` does not latch here.** `grep -rn latch` over
+`autoware_launch/config/system/diagnostics/` returns nothing, so no unit in the
+graph is configured to latch and the field stays 0 even while a node sits at
+ERROR. The acceptance criterion "a fault that clears is still attributable via
+`latch_level`" was therefore unsatisfiable as written.
+
+Retention is now client side: the page keeps the worst level seen per mode since
+load, with the causes recorded alongside it, and dims a mode that has recovered.
+That delivers what the criterion was after. O-C's latched underline is kept as
+defensive code but is currently dead against this graph, and should be left alone
+rather than "cleaned up": a future graph that does configure latching will use it.
+
+### Two more facts worth knowing before extending this
+
+- **`DiagNodeStruct` in the AD API carries only `path`.** The internal
+  `tier4_system_msgs` version also has `type` (`and`, `or`, `short-circuit-and`).
+  The API drops it, so this view cannot show why a unit failed, only which leaf
+  did. Switching to the internal topic to recover `type` would mean giving up the
+  version-committed interface, which is not worth it for a label.
+- **Anonymous inline `and`/`or` units have an empty path.** They are real nodes in
+  `struct.nodes` with `path: ""`, and are skipped in the displayed chain rather
+  than rendered as blank rows.
+
+### Acceptance, met
+
+| Criterion | Result |
+|---|---|
+| with two simultaneous faults, both originating leaves are named | asserted, faults under different subtrees |
+| no inherited node is ever reported as a cause | asserted structurally, not via `is_dependent` |
+| a fault that clears is still attributable | met by client-side retention, not `latch_level` |
+
+The render test is now 19 checks. The O-D ones fault a **named leaf** and
+propagate the level up through the fixture's real `links`, rather than setting
+mode levels directly, so the traversal itself is under test rather than assumed.
 
 ## O-E: MRM timeline
 
@@ -393,7 +427,7 @@ LATENT_FAULT on demand.
 O-A  (QoS ground truth)          DONE, struct is transient_local
 O-A2 (rosbridge or rclpy)        DONE, rosbridge for the graph views
  |
- +--> O-C (availability strip)  DONE --> O-D (failing path)  next
+ +--> O-C (availability strip)  DONE --> O-D (failing path)  DONE
  |
  +--> O-E (MRM timeline)
 
