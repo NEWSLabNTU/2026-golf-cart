@@ -17,7 +17,7 @@
 //! Publishes the corners and both candidate poses per marker, plus the `k` the
 //! corners were rectified with, so a recording replays without the camera.
 
-use anyhow::{bail, Context as _, Result};
+use anyhow::{anyhow, bail, Context as _, Result};
 use arc_swap::ArcSwap;
 use golfcart_aruco_detector::{
     dictionary::ArucoDictionary, BoardGeometry, Detector, DetectorParams, MarkerDetection,
@@ -38,7 +38,8 @@ use std::{
 
 use aruco_detection_msgs::msg::{ArucoDetection, ArucoDetectionArray};
 use geometry_msgs::msg::{Point, Pose, Quaternion};
-use sensor_msgs::msg::{CameraInfo, CompressedImage, Image};
+use rclrs_image_transport::{subscribe_image, DecodedImage, Frame, Scale, Target, Transport};
+use sensor_msgs::msg::{CameraInfo, Image};
 use std_msgs::msg::Header;
 
 const NODE_NAME: &str = "golfcart_aruco_detector";
@@ -49,7 +50,7 @@ struct Config {
     geometry: BoardGeometry,
     detector: DetectorParams,
     debug_overlay: bool,
-    compressed: bool,
+    transport: Transport,
 }
 
 impl Config {
@@ -156,23 +157,27 @@ impl Config {
             .mandatory()?
             .get();
 
+        // The transport hint, spelled the way image_transport spells it, so a
+        // node moves between raw and compressed by configuration rather than by
+        // a code change.
+        //
         // Defaults to compressed because that is what this vehicle actually
-        // publishes: the gscam pipeline is configured with
-        // `enable_pub_plugins: ["image_transport/compressed"]`, so no raw
-        // sensor_msgs/Image exists on the camera topics at all. A node
+        // publishes: the gscam pipeline runs `image_encoding: "jpeg"`, so no
+        // raw sensor_msgs/Image exists on the camera topics at all. A node
         // subscribing to the raw topic here sits silent forever and looks like
         // a detector that cannot see anything.
-        let compressed = node
-            .declare_parameter("use_compressed")
-            .default(true)
+        let hint = node
+            .declare_parameter::<Arc<str>>("image_transport")
+            .default("compressed".into())
             .mandatory()?
             .get();
+        let transport = Transport::from_hint(&hint).map_err(|error| anyhow!("{error}"))?;
 
         Ok(Self {
             geometry,
             detector,
             debug_overlay,
-            compressed,
+            transport,
         })
     }
 }
@@ -219,99 +224,49 @@ fn to_message(detection: &MarkerDetection) -> ArucoDetection {
     }
 }
 
-/// ROS `Image` to a grayscale OpenCV `Mat`.
+/// Borrow a decoded grayscale buffer as an OpenCV `Mat`.
 ///
-/// Detection only ever reads intensity, so a colour frame is converted once
-/// here rather than inside `detectMarkers` on every adaptive-threshold window.
-fn image_to_mat(msg: &Image) -> Result<Mat> {
-    use opencv::{
-        core::{CV_8UC1, CV_8UC3},
-        imgproc,
-    };
-
-    let (width, height) = (msg.width as i32, msg.height as i32);
-    let rows_fit = |channels: u32| {
-        msg.step as usize >= (msg.width * channels) as usize
-            && msg.data.len() >= msg.step as usize * msg.height as usize
-    };
-
-    // SAFETY for both branches: `Mat::new_rows_cols_with_data` borrows the
-    // message buffer without copying. The bounds check above guarantees the
-    // buffer covers `step * height`, and the Mat is cloned or converted before
-    // `msg` goes out of scope, so no Mat outlives the data it points at.
-    let mat = match msg.encoding.as_str() {
-        "mono8" => {
-            if !rows_fit(1) {
-                bail!(
-                    "mono8 image data ({} bytes, step {}) is too short for {}x{}",
-                    msg.data.len(),
-                    msg.step,
-                    msg.width,
-                    msg.height
-                );
-            }
-            unsafe {
-                Mat::new_rows_cols_with_data(
-                    height,
-                    width,
-                    CV_8UC1,
-                    msg.data.as_ptr() as *mut std::ffi::c_void,
-                    msg.step as usize,
-                )?
-                .try_clone()?
-            }
-        }
-        encoding @ ("bgr8" | "rgb8") => {
-            if !rows_fit(3) {
-                bail!(
-                    "{encoding} image data ({} bytes, step {}) is too short for {}x{}",
-                    msg.data.len(),
-                    msg.step,
-                    msg.width,
-                    msg.height
-                );
-            }
-            let colour = unsafe {
-                Mat::new_rows_cols_with_data(
-                    height,
-                    width,
-                    CV_8UC3,
-                    msg.data.as_ptr() as *mut std::ffi::c_void,
-                    msg.step as usize,
-                )?
-            };
-            let mut gray = Mat::default();
-            let code = if encoding == "bgr8" {
-                imgproc::COLOR_BGR2GRAY
-            } else {
-                imgproc::COLOR_RGB2GRAY
-            };
-            imgproc::cvt_color(&colour, &mut gray, code, 0)?;
-            gray
-        }
-        other => bail!("unsupported image encoding {other:?}; handled: mono8, bgr8, rgb8"),
-    };
-
-    Ok(mat)
-}
-
-/// Decode a JPEG/PNG frame to grayscale.
+/// Decoding happens in `rclrs_image_transport` now, on both transports: JPEG
+/// straight to one channel for the compressed topic, a luma conversion for a
+/// raw colour one. What used to be two functions here -- one calling `imdecode`
+/// and one juggling `cvt_color` per encoding -- is that crate's job, and the
+/// `CompressedImage.format` contract came with it. See
+/// docs/roadmaps/2-camera-image-pipeline.md.
 ///
-/// Decoding straight to grayscale rather than colour-then-convert: detection
-/// only reads intensity, and this skips both a colour decode and a conversion
-/// pass per frame.
-fn compressed_to_mat(msg: &CompressedImage) -> Result<Mat> {
-    use opencv::imgcodecs;
+/// No copy: the `Mat` points into the decoded buffer. The caller keeps the
+/// frame alive for as long as it uses the `Mat`, which is the same discipline
+/// the previous version needed.
+fn as_gray_mat(image: &DecodedImage) -> Result<Mat> {
+    use opencv::core::CV_8UC1;
 
-    let buffer = Mat::from_slice(&msg.data)?;
-    let mat = imgcodecs::imdecode(&buffer, imgcodecs::IMREAD_GRAYSCALE)?;
-    if mat.empty() {
+    if image.channels != 1 {
         bail!(
-            "could not decode a {} byte {:?} frame",
-            msg.data.len(),
-            msg.format
+            "expected a single-channel image, got {} channels",
+            image.channels
         );
     }
+    let want = image.step * image.height;
+    if image.data.len() < want {
+        bail!(
+            "decoded buffer is {} bytes, {want} needed for {}x{}",
+            image.data.len(),
+            image.width,
+            image.height
+        );
+    }
+
+    // SAFETY: `new_rows_cols_with_data` borrows rather than copies. The bounds
+    // check above guarantees the buffer covers `step * height`, and the Mat
+    // does not outlive `image`.
+    let mat = unsafe {
+        Mat::new_rows_cols_with_data(
+            image.height as i32,
+            image.width as i32,
+            CV_8UC1,
+            image.data.as_ptr() as *mut std::ffi::c_void,
+            image.step,
+        )?
+    };
     Ok(mat)
 }
 
@@ -456,35 +411,48 @@ fn main() -> Result<()> {
         }
     }
 
-    // Only one of these is created. Which one matters: see `use_compressed`.
-    let mut _raw_subscription = None;
-    let mut _compressed_subscription = None;
-
-    if config.compressed {
+    // One subscription, one transport, chosen by parameter. The crate owns the
+    // decode and the `CompressedImage.format` contract; this node only ever
+    // sees grayscale pixels, whichever transport they arrived on.
+    let _image_subscription = {
         let state = Arc::clone(&detector_state);
         let overlay_publisher = overlay_publisher.clone();
         let handle_frame = handle_frame.clone();
-        _compressed_subscription = Some(node.create_subscription(
-            sub_opts("~/input/image/compressed"),
-            move |msg: CompressedImage| {
+        subscribe_image(
+            &node,
+            "~/input/image",
+            config.transport,
+            sensor_qos,
+            // Detection reads intensity only. Asking for one channel means a
+            // colour JPEG never has its chroma reconstructed, rather than
+            // building three channels and throwing two away.
+            Target::Mono,
+            // Full resolution. Scaled decode is cheaper and is available, but
+            // it trades corner precision for CPU and corner precision is pose
+            // accuracy here -- see the sub-phase D acceptance criterion.
+            Scale::Full,
+            |message| log_error!(NODE_NAME, "{message}"),
+            move |frame: Frame| {
                 let loaded = state.load();
                 let Some(detector) = loaded.as_ref().as_ref() else {
                     warn_no_calibration();
                     return;
                 };
-                let mat = match compressed_to_mat(&msg) {
+                let mat = match as_gray_mat(&frame.image) {
                     Ok(mat) => mat,
                     Err(error) => {
-                        log_error!(NODE_NAME, "cannot decode image: {error:#}");
+                        log_error!(NODE_NAME, "cannot read decoded image: {error:#}");
                         return;
                     }
                 };
-                let (width, height) = (mat.cols() as u32, mat.rows() as u32);
-                handle_frame(detector, &mat, &msg.header, width, height);
+                let (width, height) = (frame.image.width as u32, frame.image.height as u32);
+                handle_frame(detector, &mat, &frame.header, width, height);
 
                 if let Some(publisher) = &overlay_publisher {
+                    // The overlay is republished under the sensor's own header;
+                    // nothing else of the original message is needed.
                     let original = Image {
-                        header: msg.header.clone(),
+                        header: frame.header.clone(),
                         ..Default::default()
                     };
                     if let Err(error) = publish_overlay(detector, &mat, &original, publisher) {
@@ -492,40 +460,14 @@ fn main() -> Result<()> {
                     }
                 }
             },
-        )?);
-    } else {
-        let state = Arc::clone(&detector_state);
-        let overlay_publisher = overlay_publisher.clone();
-        _raw_subscription = Some(node.create_subscription(
-            sub_opts("~/input/image"),
-            move |msg: Image| {
-                let loaded = state.load();
-                let Some(detector) = loaded.as_ref().as_ref() else {
-                    warn_no_calibration();
-                    return;
-                };
-                let mat = match image_to_mat(&msg) {
-                    Ok(mat) => mat,
-                    Err(error) => {
-                        log_error!(NODE_NAME, "cannot read image: {error:#}");
-                        return;
-                    }
-                };
-                handle_frame(detector, &mat, &msg.header, msg.width, msg.height);
-
-                if let Some(publisher) = &overlay_publisher {
-                    if let Err(error) = publish_overlay(detector, &mat, &msg, publisher) {
-                        log_warn!(NODE_NAME, "overlay failed: {error:#}");
-                    }
-                }
-            },
-        )?);
-    }
+        )
+        .map_err(|error| anyhow!("{error}"))?
+    };
 
     log_info!(
         NODE_NAME,
-        "subscribed to the {} image topic",
-        if config.compressed { "compressed" } else { "raw" }
+        "subscribed on the {:?} transport",
+        config.transport
     );
 
     log_info!(NODE_NAME, "detector running");

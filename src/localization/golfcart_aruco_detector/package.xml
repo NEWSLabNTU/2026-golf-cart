@@ -20,6 +20,7 @@
   <depend>sensor_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>aruco_detection_msgs</depend>
+  <depend>rclrs_image_transport</depend>
 
   <export>
     <build_type>ament_cargo</build_type>

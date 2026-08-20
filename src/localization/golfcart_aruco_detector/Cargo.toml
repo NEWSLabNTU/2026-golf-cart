@@ -25,11 +25,22 @@ sensor_msgs = "*"
 geometry_msgs = "*"
 aruco_detection_msgs = "*"
 
+# A path, not a "*" version, and the distinction is load-bearing: colcon-cargo-ros2
+# generates [patch.crates-io] entries only for *interface* packages, from their
+# generated bindings. A plain Rust library package gets no patch, so `"*"` would
+# be resolved against the real crates.io and fail on a name that does not exist
+# there. package.xml still declares the dependency, which is what orders the
+# build.
+rclrs_image_transport = { path = "../../common/rclrs_image_transport" }
+
 [dependencies.opencv]
 version = "0.88.9"
 default-features = false
 # aruco: detectMarkers and the predefined dictionaries.
 # calib3d: undistortPoints, solvePnP*, Rodrigues.
-# imgproc: colour conversion, and `remap` in the round-trip test.
-# imgcodecs: imdecode, for the compressed image path.
-features = ["aruco", "calib3d", "imgproc", "imgcodecs", "clang-runtime"]
+# imgproc: rectification, overlay drawing, and `remap` in the round-trip test.
+#
+# imgcodecs is deliberately gone: decoding moved to rclrs_image_transport,
+# which decodes JPEG through libjpeg-turbo and, unlike `imdecode`, knows what
+# CompressedImage.format means.
+features = ["aruco", "calib3d", "imgproc", "clang-runtime"]
