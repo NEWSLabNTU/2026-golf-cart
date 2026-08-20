@@ -72,17 +72,11 @@ unbounded everywhere else.
 ## 4. Map frame definition
 
 After SLAM produces a self-consistent cloud in an arbitrary frame, the cloud is
-rigidly transformed so that:
-
-- **Origin** — the point on the floor directly below the centre of the board's
-  reflective face. Floor level rather than board-centre height keeps vehicle
-  poses near z = 0, which is what the rest of the stack expects; the board centre
-  then sits at (0, 0, 1.075), which is the initializer's `board_pose_in_map`
-  default.
-- **+X** — the board's outward surface normal, pointing into the drivable space.
-- **+Z** — gravity-up, taken from the IMU's estimated gravity direction during
-  the mapping run, not from the SLAM frame's nominal Z.
-- **+Y** — completes the right-handed frame.
+rigidly transformed until the board has exactly the shared YAML
+`board_pose_in_map`: `[x, y, z, roll, pitch, yaw]`, with radians and
+`Rz(yaw) @ Ry(pitch) @ Rx(roll)`. The default preserves the original convention:
+board centre at (0, 0, 1.075), +x along its outward normal, and +z up. Sites can
+choose translation and rotation without changing runtime code.
 
 This transform is the map's definition and must be stored alongside the map, not
 merely applied and discarded. If the map is ever rebuilt from the same bag, the
@@ -318,9 +312,8 @@ four vertices in counter-clockwise order, `type=pose_marker`,
 format and vertex ordering rules are in
 [lidar_marker_localization.md](../research/lidar_marker_localization.md).
 
-Because the board is at the origin by construction, its polygon coordinates are
-known exactly rather than surveyed — a useful self-check on the anchoring step
-in §6.4.
+Because board pose and dimensions are shared YAML inputs, polygon coordinates
+are derived exactly rather than surveyed — a useful anchoring self-check.
 
 ---
 
@@ -346,9 +339,9 @@ association is trivial and there are no marker IDs to disambiguate.
 
 ### 7.2 Staging
 
-**Stage 0 — fixed user-defined pose. No new code.** With the board at the origin,
-the parking pose is a known constant, and `autoware_pose_initializer` already
-accepts one:
+**Stage 0 — fixed user-defined pose. No new code.** With the board at its
+configured map pose, the parking pose is a known constant, and
+`autoware_pose_initializer` already accepts one:
 
 ```yaml
 # src/launcher/golfcart_launch/config/localization/pose_initializer.param.yaml:3
@@ -375,8 +368,8 @@ Detect the board in the current scan, compute the vehicle pose, call
 T_map←base_link = T_map←board ∘ (T_base_link←lidar ∘ T_lidar←board)⁻¹
 ```
 
-`T_map←board` is identity by construction (§4), which is the payoff of anchoring
-the map to the board. Detection must gate on planarity, size, and height band,
+`T_map←board` is exactly shared YAML pose by construction (§4), keeping offline
+anchoring and runtime initialization aligned. Detection must gate on planarity, size, and height band,
 exactly as in §6.4 — the same false-positive population applies at runtime.
 
 This removes the "park exactly here" requirement and is the version that

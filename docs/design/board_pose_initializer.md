@@ -255,12 +255,10 @@ the test loses half its discriminating power.
 T_map←base_link = T_map←board ∘ (T_velodyne←board)⁻¹ ∘ (T_base_link←velodyne)⁻¹
 ```
 
-With the map anchored to the board per the mapping design §4, `T_map←board` is a
-pure translation of the board's mounting height: the map origin sits on the floor
-directly below the board centre, with map x along the board normal and map z up.
-Floor-level rather than board-centre origin keeps vehicle poses near z = 0, which
-is what the rest of the stack expects. It stays a parameter regardless, so an
-un-anchored map remains usable.
+With the map anchored to the board per the mapping design §4, `T_map←board` is
+shared YAML `board_pose_in_map`: `[x, y, z, roll, pitch, yaw]`, radians. Offline
+anchoring places board at this exact pose, keeping map creation and runtime
+initialization aligned.
 
 Covariance is deliberately loose, since NDT align refines the guess:
 
@@ -325,7 +323,8 @@ which a detector failure becomes a mislocalization report three weeks later.
     verticality_max_dot: 0.25
     density_tolerance: 0.5
 
-    board_pose_in_map: [0.0, 0.0, 1.075, 0.0, 0.0, 0.0, 1.0]   # identity translation-only when anchored
+    # [x, y, z, roll, pitch, yaw], radians; Rz(yaw) @ Ry(pitch) @ Rx(roll)
+    board_pose_in_map: [0.0, 0.0, 1.075, 0.0, 0.0, 0.0]
 
     max_attempts: 5
     fallback_to_user_defined_pose: false
