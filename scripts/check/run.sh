@@ -100,6 +100,100 @@ else
     lidar_ok=false
 fi
 
+# VLP32.param.yaml carries udp_only: true, which disables Nebula's HTTP client
+# and with it setup_sensor. rotation_speed and return_mode in that file are then
+# assumptions, not settings: the sensor keeps whatever its EEPROM holds and
+# nothing in the stack reports the difference. Read them back ourselves.
+vlp_cfg="$repo_dir/src/sensor_kit/golfcart_sensor_kit_launch/golfcart_sensor_kit_launch/config/VLP32.param.yaml"
+
+yaml_scalar() { awk -F': *' -v k="$2" '$0 ~ "^ *"k":" {gsub(/[[:space:]\r]/,"",$2); print $2; exit}' "$1"; }
+
+if [[ -f "$vlp_cfg" ]] && $lidar_ok; then
+    want_rpm=$(yaml_scalar "$vlp_cfg" rotation_speed)
+    want_ret=$(yaml_scalar "$vlp_cfg" return_mode)
+    udp_only=$(yaml_scalar "$vlp_cfg" udp_only)
+
+    # With udp_only the driver cannot correct a mismatch, so it is a failure.
+    # Without it, setup_sensor pushes the config at start-up and a mismatch
+    # right now is only worth a warning.
+    if [[ "$udp_only" == "true" ]]; then
+        mismatch=fail
+        why="udp_only: true, so the driver will not correct this"
+    else
+        mismatch=warn
+        why="setup_sensor should push this at start-up"
+    fi
+
+    if ! command -v curl &>/dev/null; then
+        warn "curl not installed — cannot read back LiDAR RPM/return mode (sudo apt install curl)"
+    else
+        vlp_settings=$(curl -sf -m 3 "http://${LIDAR_IP}/cgi/settings.json" 2>/dev/null)
+        vlp_status=$(curl -sf -m 3 "http://${LIDAR_IP}/cgi/status.json" 2>/dev/null)
+
+        if [[ -z "$vlp_settings" && -z "$vlp_status" ]]; then
+            warn "VLP-32C web interface at http://${LIDAR_IP} did not answer — cannot verify RPM/return mode (this is also why udp_only may have been set)"
+        else
+            # Firmware revisions disagree on types and nesting, so pull the
+            # values out by key wherever they sit rather than by fixed path.
+            read -r have_rpm have_ret < <(
+                VLP_SETTINGS="$vlp_settings" VLP_STATUS="$vlp_status" python3 - <<'PY' 2>/dev/null || echo " "
+import json, os
+
+def load(name):
+    try:
+        return json.loads(os.environ.get(name, "") or "null")
+    except ValueError:
+        return None
+
+def find(node, key):
+    if isinstance(node, dict):
+        for k, v in node.items():
+            if k == key and not isinstance(v, (dict, list)):
+                return v
+            hit = find(v, key)
+            if hit is not None:
+                return hit
+    elif isinstance(node, list):
+        for v in node:
+            hit = find(v, key)
+            if hit is not None:
+                return hit
+    return None
+
+settings, status = load("VLP_SETTINGS"), load("VLP_STATUS")
+# status.json reports the motor's measured RPM; settings.json the commanded one.
+rpm = find(status, "rpm")
+if rpm is None:
+    rpm = find(settings, "rpm")
+ret = find(settings, "returns")
+if ret is None:
+    ret = find(status, "returns")
+print(rpm if rpm is not None else "?", str(ret) if ret is not None else "?")
+PY
+            )
+
+            if [[ ! "${have_rpm:-}" =~ ^[0-9]+$ ]]; then
+                warn "VLP-32C answered but reported no usable RPM (${have_rpm:-none}) — check http://${LIDAR_IP} by hand"
+            else
+                # Measured RPM drifts a little around the commanded value.
+                if (( have_rpm > want_rpm - 30 && have_rpm < want_rpm + 30 )); then
+                    ok "VLP-32C RPM ${have_rpm} matches rotation_speed ${want_rpm} ($((want_rpm / 60)) Hz)"
+                else
+                    $mismatch "VLP-32C running at ${have_rpm} RPM but VLP32.param.yaml says ${want_rpm} — ${why}; fix at http://${LIDAR_IP}"
+                fi
+            fi
+
+            if [[ "${have_ret:-?}" == "?" || -z "${have_ret:-}" ]]; then
+                warn "VLP-32C answered but no return-mode field found — check http://${LIDAR_IP} by hand"
+            elif [[ "${have_ret,,}" == "${want_ret,,}" ]]; then
+                ok "VLP-32C return mode ${have_ret} matches return_mode ${want_ret}"
+            else
+                $mismatch "VLP-32C return mode is ${have_ret} but VLP32.param.yaml says ${want_ret} — ${why}; fix at http://${LIDAR_IP}"
+            fi
+        fi
+    fi
+fi
+
 
 # ── 1. Seyond Falcon LiDAR ───────────────────────────────────────────────
 LIDAR_IP="172.168.1.10"
