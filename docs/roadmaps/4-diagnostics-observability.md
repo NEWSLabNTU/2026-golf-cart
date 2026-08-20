@@ -16,7 +16,8 @@ The generic ROS half of the work lives in play_launch as
 ## Where the blind spot is
 
 The chain runs `/diagnostics` (69 leaves) into `aggregator_node`, which computes a
-graph of **120 units over 59 diag leaves with 7 mode roots**, and publishes it.
+graph of **63 nodes over 41 diag leaves with 7 mode roots**, and publishes it
+(measured live, see O-A).
 Three consumers read it: the availability converter, the hazard status converter,
 and a terminal logger that is launched with `enable_terminal_log: false` and
 therefore prints nothing.
@@ -32,31 +33,78 @@ readers are that silent terminal logger and an offline `tree` CLI. On a stock
 install, "which leaf just made autonomous mode unavailable" has no runtime
 answer.
 
-## O-A: ground truth on the vehicle
+## O-A: ground truth
 
-**Blocks O-C and O-D. One session, no code.**
+**Status: the blocking question is ANSWERED. O-C and O-D are unblocked.**
 
-Everything below was determined from an x86 workstation against the installed
-Autoware tree and a recorded run. Four things need confirming on the real
-vehicle before anything is built.
+`scripts/check/diag_graph_qos.sh` brings up the aggregator and the AD API
+diagnostics node, reports the QoS of all four topics, and proves whether a
+late-joining subscriber can read the graph.
 
-| Check | Why it blocks |
-|---|---|
-| `ros2 topic info -v /api/system/diagnostics/struct` | is it `transient_local`? |
-| `ros2 topic info -v /api/system/diagnostics/status`, plus `ros2 topic hz` on both | confirms the adapi nodes are live on the vehicle, not only in the 2026-08-18 planning-sim run |
-| `ros2 topic list \| grep diagnostics_agg` | closes the "never published here" finding empirically instead of by inference |
-| Decide: rosbridge or rclpy (see below) | structural, and it changes what O-C builds |
+It needs no vehicle, no sensors and no map. QoS is declared by the publisher's
+code, so the same binaries give the same answer anywhere. Run it with `--attach`
+against a live stack to confirm the launch does not override anything.
 
-**Why `transient_local` decides the design.** `struct` and `status` are separate
+### Result, 2026-08-21, Autoware 1.5.0
+
+| Topic | Reliability | Durability |
+|---|---|---|
+| `/diagnostics_graph/struct` | RELIABLE | **TRANSIENT_LOCAL** |
+| `/diagnostics_graph/status` | RELIABLE | VOLATILE |
+| `/api/system/diagnostics/struct` | RELIABLE | **TRANSIENT_LOCAL** |
+| `/api/system/diagnostics/status` | **BEST_EFFORT** | VOLATILE |
+
+Late join confirmed live: a subscriber created long after the graph was
+published received it, `63 nodes, 41 leaves, 80 links, 7 mode roots`.
+
+**Why this was the blocking question.** `struct` and `status` are separate
 messages joined by array index. `DiagLinkStruct` carries `parent` and `child` as
 indices into the struct's `nodes` array, and `DiagNodeStatus` has no path field
-at all. A subscriber holding only `status` has a list of levels it cannot name.
+at all, so a subscriber holding only `status` has a list of levels it cannot
+name. Had `struct` been `volatile`, a monitor starting after Autoware could
+never have interpreted anything, and O-C and O-D would each have needed a
+restart-detection path built on the graph `id`.
 
-If `struct` is `volatile`, a monitor that starts after the aggregator receives
-status forever and can never interpret it, and O-C and O-D both need a
-restart-detection path built on the `id` field, which changes when the graph is
-rebuilt. **That work is not scoped here**, because whether it is needed is
-exactly what this check answers.
+It is `transient_local`, so **no such path is needed for late join**. The `id`
+still matters for one narrower case: the aggregator restarting mid-session
+rebuilds the graph and changes `id`, and a monitor holding the old struct would
+index into a stale array. Compare `id` on every status and re-fetch when it
+changes. That is a handful of lines, not a sub-phase.
+
+### The trap this exposed, which is now the bigger risk
+
+**The two API topics do not share a QoS profile.** `struct` is RELIABLE, `status`
+is BEST_EFFORT. A subscriber that applies one profile to both silently receives
+nothing on one of them: a RELIABLE subscriber cannot match a BEST_EFFORT
+publisher. Verified in the probe, which subscribes `status` RELIABLE on purpose
+and gets nothing.
+
+Worse for anyone porting code: the internal and API topics **disagree with each
+other**. `/diagnostics_graph/status` is RELIABLE, `/api/system/diagnostics/status`
+is BEST_EFFORT. Code developed against the internal topic and then repointed at
+the API goes dead with no error.
+
+This is the same failure documented in `monitor_topics.yaml` for the ZED, where
+subscribing best-effort to a reliable publisher reported a live camera as dead.
+Whatever O-C is built on must take the QoS per topic, not per subscription
+group, and there must be a test that fails when they are swapped.
+
+### Still open in O-A
+
+| Check | Why it still needs the vehicle |
+|---|---|
+| `--attach` run against the full stack | confirms no launch-level QoS override, and that the adapi nodes are live on the Orin rather than only in a workstation probe |
+| `ros2 topic list \| grep diagnostics_agg` | closes the "never published here" finding empirically instead of by inference |
+| Decide: rosbridge or rclpy (see below) | structural, and it changes what O-C builds. Not blocked by anything now |
+
+### Correction to an earlier figure
+
+This document and the design doc both said "120 units, 59 leaves", counted by
+grepping `- path:` out of the graph YAML files. The **live** graph is 63 nodes,
+41 leaves and 80 links. The static count double-counted: the YAML files define
+units across several files that the aggregator resolves and dedupes, and `path:`
+also appears on leaf entries. Use the live numbers. They come from the struct
+message itself, which is what a UI will actually render.
 
 **Subscribe the AD API, not the internal topics.**
 
@@ -137,7 +185,7 @@ Acceptance:
 **Needs O-C's struct handling.**
 
 When a mode goes unavailable, show the path from that mode root down to the leaf
-that caused it. Rendering all 120 units is a wall of green that hides the one red
+that caused it. Rendering all 63 nodes is a wall of green that hides the one red
 line through it, so collapse to the failing path by default and expand on demand.
 
 `is_dependent` on `DiagNodeStatus` distinguishes a node that failed from one that

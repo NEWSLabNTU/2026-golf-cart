@@ -14,7 +14,7 @@ Node names below are the ones that appeared in the 2026-08-18 run, so this is
 what the golf cart launches, not what upstream documents.
 
 ```
- 59 diag leaves                    graph: 120 units, 7 mode roots
+ 41 diag leaves                    graph: 63 nodes, 80 links, 7 mode roots
       |                                        |
       v                                        v
 /diagnostics  ------------->  aggregator_node  ------>  /diagnostics_graph/struct   (structure, once)
@@ -46,9 +46,15 @@ what the golf cart launches, not what upstream documents.
                                           control command
 ```
 
-Sizes, counted from `autoware_launch/config/system/diagnostics/`: **120 units,
-59 `type: diag` leaves, 7 mode roots** (`stop`, `autonomous`, `local`, `remote`,
-`emergency_stop`, `comfortable_stop`, `pull_over`). Small enough to draw whole.
+Sizes, read off the live `struct` message on 2026-08-21 via
+`scripts/check/diag_graph_qos.sh`: **63 nodes, 41 diag leaves, 80 links, 7 mode
+roots** (`stop`, `autonomous`, `local`, `remote`, `emergency_stop`,
+`comfortable_stop`, `pull_over`). Small enough to draw whole.
+
+An earlier revision said "120 units, 59 leaves", counted by grepping `- path:`
+out of the graph YAML. That over-counted: the YAML defines units across several
+files which the aggregator resolves and dedupes, and `path:` appears on leaf
+entries too. The live numbers are what a UI renders.
 
 The graph is a DAG of AND/OR units over the leaves. A leaf going ERROR
 propagates up and knocks out whichever *modes* depend on it. That propagation is
@@ -345,7 +351,7 @@ unavailable immediately, without reading 59 rows. Build this first; if only one
 thing gets built, this is it.
 
 **A2. Fault path, not fault tree.** When a mode goes unavailable, show the path
-from that mode root down to the leaf that caused it. Rendering all 120 units is a
+from that mode root down to the leaf that caused it. Rendering all 63 nodes is a
 wall of green that hides the one red line through it, so collapse to the failing
 path by default and expand on demand. `is_dependent` on `DiagNodeStatus`
 distinguishes a node that failed from one that merely inherited a failure, so the
