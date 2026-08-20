@@ -160,15 +160,25 @@ if [[ ${#purge_list[@]} -gt 0 ]]; then
     sudo dpkg --purge "${purge_list[@]}"
 fi
 
-printf "${YELLOW}→${NC} Installing Ubuntu's OpenCV 4.5.4 development packages...\n"
 sudo apt-get update -qq
-# libopencv-dev is replaced in place here, so the ros-humble-* and autoware-*
-# packages that depend on it are never left unsatisfied.
-sudo apt-get install -y libopencv-dev libopencv-contrib-dev
 
-# Finishes anything a previous interrupted run left half-unpacked (dpkg status
-# iU). A no-op on a healthy system.
+# --fix-broken FIRST, and this ordering is the second thing that caught this
+# script out. While any package is half-unpacked, apt refuses every ordinary
+# install with "You might want to run 'apt --fix-broken install'" and a wall of
+# unmet dependencies: it will not install the very packages that would satisfy
+# them. So repair, then install.
+#
+# With the NVIDIA packages already removed above, the repair is usually also
+# what completes the job -- apt pulls in libopencv-dev 4.5.4 and the split -dev
+# packages the half-unpacked ones were waiting for. A no-op on a healthy system.
+printf "${YELLOW}→${NC} Repairing any interrupted transaction...\n"
 sudo apt-get -f install -y
+
+printf "${YELLOW}→${NC} Installing Ubuntu's OpenCV 4.5.4 development packages...\n"
+# libopencv-dev is replaced in place here, so the ros-humble-* and autoware-*
+# packages that depend on it are never left unsatisfied. Usually a no-op after
+# the repair above; it is here so that a first, clean run installs them at all.
+sudo apt-get install -y libopencv-dev libopencv-contrib-dev
 
 sudo ldconfig
 
