@@ -290,19 +290,19 @@ no raw publisher to disable, so the plugin allowlist is inert here — and the k
 as written (`image_raw.enable_pub_plugins`) is not the one gscam reads anyway.
 The conclusion held; the reason did not.
 
-**Forward pointer.** [Phase 4](4-camera-image-pipeline.md) makes JPEG the
-project-wide decision rather than this node's local one, and builds the rclrs
-`image_transport` equivalent whose absence this section describes. Two things
-here become its problem:
+**Forward pointer.** The [camera image pipeline](2-camera-image-pipeline.md)
+document makes JPEG the project-wide decision rather than this node's local one,
+and builds the rclrs `image_transport` equivalent whose absence this section
+describes. Two things here become its problem:
 
-- The hand-rolled image and `CameraInfo` pairing is what phase 4C2 replaces with
-  a `CameraSubscriber` equivalent.
+- The hand-rolled image and `CameraInfo` pairing is what its sub-phase C2
+  replaces with a `CameraSubscriber` equivalent.
 - `imdecode(IMREAD_GRAYSCALE)` pays a full colour decode and discards the
-  chroma. Phase 4C1 takes a grayscale decode path instead, and exposes
+  chroma. Its sub-phase C1 takes a grayscale decode path instead, and exposes
   DCT-scaled decode, which is worth measuring here: it trades corner precision
   for CPU, and corner precision is pose accuracy in this node.
 
-Phase 4 also carries a blocker that lands squarely on this doc: it is not
+It also carries a blocker that lands squarely on this doc: it is not
 established that `CameraInfo` reaches this detector at all. See blocker 1 there.
 
 ### Wired into the launch

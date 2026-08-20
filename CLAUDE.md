@@ -535,7 +535,7 @@ twist_source:=gyro_odom|eagleye            # Override preset twist source
 | [docs/design/lm_driving_tuning_workflow.md](docs/design/lm_driving_tuning_workflow.md) | LM driving integration: BEV-token input, zone-mask output, verifier-gated tuning workflow |
 | [docs/superpowers/specs/2026-07-27-indoor-artag-localization-design.md](docs/superpowers/specs/2026-07-27-indoor-artag-localization-design.md) | Indoor AR-tag + NDT localization design: tags replace GNSS for init, EKF correction, and NDT regularization |
 | [docs/roadmaps/3-indoor-localization.md](docs/roadmaps/3-indoor-localization.md) | Indoor localization phase master: sub-phases A (calibration) → B (mapping) → C (tag map) → D (runtime) |
-| [docs/roadmaps/4-camera-image-pipeline.md](docs/roadmaps/4-camera-image-pipeline.md) | Camera image pipeline phase: why JPEG, the `CompressedImage.format` contract, zero-copy capture, and the rclrs image_transport crate |
+| [docs/roadmaps/2-camera-image-pipeline.md](docs/roadmaps/2-camera-image-pipeline.md) | Camera image pipeline: why JPEG, the `CompressedImage.format` contract, zero-copy capture, and the rclrs image_transport crate |
 
 ## Known Issues
 

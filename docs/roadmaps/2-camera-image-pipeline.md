@@ -1,10 +1,24 @@
-# Phase 4 - Camera image pipeline (master)
+# Phase 2 - Camera image pipeline
 
 Get the three GMSL cameras onto a wire format that is hardware-encoded at the
 source, decodable by every consumer, and described by a contract that a Rust
 node and a C++ node read the same way.
 
+Extends [Phase 2 Track A](2-track-a.md), whose exit criterion in
+[ROADMAP.md](../../ROADMAP.md#track-a--tier-iv-camera-setup) is "three cameras
+stream images". They do. What is unfinished is the contract that says what the
+bytes on those topics mean, which is what everything downstream has to agree on.
+
+Feeds Phase 3 Track C: sub-phase D below migrates the ArUco detector, and
+[3-indoor-d5](3-indoor-d5-detector.md) is where its current hand-rolled
+transport lives.
+
 Last updated: 2026-08-20 (decision made, nothing implemented)
+
+> Numbered Phase 4 when first written, which collided with ROADMAP.md's
+> Phase 4 (Planning, Control & Safety). Renumbered 2026-08-20. Phase numbering
+> follows ROADMAP.md, not the order documents were added; `0-migration.md`'s
+> own `Phase #1`..`#11` scheme is deprecated and unrelated.
 
 ---
 

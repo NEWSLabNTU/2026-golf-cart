@@ -69,17 +69,34 @@ Last updated: 2026-04-29
 
 ## 4. Verify image streaming
 
-**Status: Not started — requires hardware**
+**Status: Streaming. The hardware premise below is obsolete — updated 2026-08-20.**
+
+Three oToBrite GMSL cameras are mounted and connected, not through the USB
+conversion kit but natively via `tegra-capture-vi`, and the three
+`image_raw/compressed` topics are in `config/recording/master_topics.txt`. What
+this task actually needs now is verification, not hardware.
+
+**The expected topic names below are wrong.** There is no raw topic. With
+`image_encoding: "jpeg"` gscam publishes `CompressedImage` and nothing else, so
+a consumer subscribed to `image_raw` waits forever and presents as a camera that
+sees nothing. Corrected list:
+
+- `/sensing/camera/left/image_raw/compressed`
+- `/sensing/camera/right/image_raw/compressed`
+- `/sensing/camera/rear/image_raw/compressed`
+
+That is a decision, not an accident, and it now has its own document:
+[2-camera-image-pipeline.md](2-camera-image-pipeline.md) covers why JPEG, the
+`CompressedImage.format` contract every consumer has to agree on, and the
+capture path.
 
 ### Not done
-- [ ] Confirm all three cameras publish to expected topics:
-  - `/sensing/camera/left/image_raw`
-  - `/sensing/camera/right/image_raw`
-  - `/sensing/camera/rear/image_raw`
-- [ ] Verify image quality and frame rate in RViz
-- [ ] Test with perception pipeline (if camera-lidar fusion preset is enabled)
-
-> **Cannot be done before real machine** — requires cameras physically connected.
+- [ ] Confirm all three publish, at rate, with `ros2 topic hz`.
+- [ ] Verify image quality and frame rate in RViz.
+- [ ] **Confirm `camera_info` is published.** `config/recording/master_topics.txt`
+      claims gscam publishes none for these cameras. If that is right, the ArUco
+      detector has never had intrinsics. See blocker 1 in the image pipeline doc.
+- [ ] Test with perception pipeline (if camera-lidar fusion preset is enabled).
 
 ---
 
@@ -90,11 +107,17 @@ Last updated: 2026-04-29
 | 1. Mount cameras | Blocked | No — physical mounting |
 | 2. Sensor kit description | Substantially done — placeholders in place, awaiting real measurements | **Yes** (done) |
 | 3. Camera launch file | Substantially done (`usb`) | **Yes** — `tier4` option, rear node enable, recipe/package.xml cleanup |
-| 4. Verify streaming | Not started | No — requires hardware |
+| 4. Verify streaming | Streaming; verification outstanding | Hardware is present — see task 4 |
 
 ### Blockers
-- **TIER IV C1 camera hardware** not yet available
-- ~~TIER IV camera ROS 2 driver package~~ — resolved: `gscam` via GMSL2-USB kit (Jetson `nvvidconv` pipeline; `usb_cam` and `v4l2_camera` were earlier candidates)
+- ~~**TIER IV C1 camera hardware** not yet available~~ — resolved: three oToBrite
+  GMSL cameras mounted, driven natively through `tegra-capture-vi` rather than
+  the USB conversion kit this document was written around.
+- ~~TIER IV camera ROS 2 driver package~~ — resolved: `gscam`. Note the pipeline
+  recorded above (`v4l2src ! UYVY ! nvvidconv ! RGBA ! videoconvert ! RGB`) is
+  **not** what ships: the YAMLs carry `nvvidconv ! NV12(NVMM) ! nvjpegenc` with
+  `image_encoding: "jpeg"`, with no CPU `videoconvert` in it. See
+  [2-camera-image-pipeline.md](2-camera-image-pipeline.md).
 - Mount positions cannot be measured until cameras are on the golf cart
 
 ### Pre-move preparation checklist
