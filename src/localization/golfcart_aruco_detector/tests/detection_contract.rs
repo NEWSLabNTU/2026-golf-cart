@@ -483,3 +483,77 @@ fn corners_are_reported_clockwise_from_top_left() -> Result<()> {
     }
     Ok(())
 }
+
+/// The two-stage path finds the same corners as the one-stage path.
+///
+/// `detection_downscale` runs candidate detection on a reduced image and then
+/// refines the corners against the full-resolution one. The claim that makes it
+/// safe is that the refinement recovers the precision the reduction gave up, so
+/// only the *finding* of small markers is traded, never the accuracy of the
+/// ones found. That claim is worth a test rather than a benchmark note: it is
+/// the whole reason the option is allowed to exist.
+///
+/// A sub-pixel tolerance, deliberately. Corner error is the direct input noise
+/// of the pose solve, and if the reduced pass were leaking into the result at
+/// all this would show it long before anything downstream did.
+#[test]
+fn downscaled_detection_refines_back_to_full_resolution_corners() -> Result<()> {
+    let image = marker_off_axis(220)?;
+    let reference = corners_of(&detector(&image, &[0.0; 5], params(CornerRefinement::Subpix))?, &image)?;
+
+    for factor in [2, 3, 4] {
+        let mut staged = params(CornerRefinement::Subpix);
+        staged.detection_downscale = factor;
+        let staged_corners = corners_of(&detector(&image, &[0.0; 5], staged)?, &image)?;
+
+        let error = rmse(&reference, &staged_corners);
+        assert!(
+            error < 0.05,
+            "detection_downscale {factor} moved the corners by {error:.4} px RMSE; \
+             the full-resolution refinement is not recovering them"
+        );
+    }
+    Ok(())
+}
+
+/// Reducing the image and narrowing the threshold sweep are not independent.
+///
+/// Both look like "make detection cheaper", and together they lose markers
+/// neither loses alone: the sweep's window sizes are in pixels of the image
+/// being searched, so reducing the image shrinks every marker while the windows
+/// stay put.
+///
+/// Stated as "there is a marker size where the reduced image alone still finds
+/// it and the combination does not", and found by sweeping rather than
+/// asserted at one hand-picked size. An earlier version of this test fixed the
+/// size at 90 px and passed for the wrong reason -- the combination still found
+/// it there. The property is real; the size at which it bites is not a constant
+/// worth hard-coding.
+#[test]
+fn a_narrowed_sweep_and_a_reduced_image_lose_markers_neither_loses_alone() -> Result<()> {
+    let mut reduced = params(CornerRefinement::Subpix);
+    reduced.detection_downscale = 3;
+
+    let mut both = reduced;
+    both.adaptive_thresh.win_size_max = both.adaptive_thresh.win_size_min;
+
+    let mut witness = None;
+    for size in (40..=240).step_by(10) {
+        let image = marker_off_axis(size)?;
+        let found_reduced = detector(&image, &[0.0; 5], reduced)?.detect(&image)?.len();
+        let found_both = detector(&image, &[0.0; 5], both)?.detect(&image)?.len();
+        if found_reduced == 1 && found_both == 0 {
+            witness = Some(size);
+            break;
+        }
+    }
+
+    assert!(
+        witness.is_some(),
+        "no marker size between 40 and 240 px was found by a reduced image alone \
+         but lost when the threshold sweep was also narrowed. The interaction \
+         warned about in aruco_detector.param.yaml may no longer hold, and that \
+         warning should be revisited rather than left standing on nothing."
+    );
+    Ok(())
+}

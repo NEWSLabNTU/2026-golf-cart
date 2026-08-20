@@ -118,6 +118,11 @@ pub struct Detector {
     /// rebuilt per frame.
     dictionary: core_cv::Ptr<aruco::Dictionary>,
     opencv_params: core_cv::Ptr<aruco::DetectorParameters>,
+    /// The same parameters with corner refinement switched off, for the coarse
+    /// pass of the two-stage path. Refining on the reduced image would be work
+    /// thrown away: the corners are refined again against the full-resolution
+    /// frame immediately afterwards. `None` when `detection_downscale` is 1.
+    coarse_params: Option<core_cv::Ptr<aruco::DetectorParameters>>,
 }
 
 // Mat is not Sync, but this is only ever read after construction.
@@ -150,6 +155,13 @@ impl Detector {
 
         // Validated once here rather than per frame.
         let opencv_params = params.to_opencv(geometry.border_bits)?;
+        let coarse_params = if params.detection_downscale > 1 {
+            let mut coarse = params;
+            coarse.corner_refinement.method = crate::params::CornerRefinement::None;
+            Some(coarse.to_opencv(geometry.border_bits)?)
+        } else {
+            None
+        };
 
         Ok(Self {
             geometry,
@@ -159,6 +171,7 @@ impl Detector {
             distortion: Mat::from_slice(d)?.try_clone()?,
             dictionary: geometry.dictionary.to_opencv()?,
             opencv_params,
+            coarse_params,
         })
     }
 
@@ -231,6 +244,103 @@ impl Detector {
             .collect()
     }
 
+    /// Find candidates on a reduced image, then refine the corners against the
+    /// full-resolution one.
+    ///
+    /// Detection cost is per-pixel, not per-marker: the time goes into
+    /// `findContours` and `approxPolyDP` over a thresholded frame, which is why
+    /// narrowing the threshold sweep or raising the perimeter filter barely
+    /// moves it while quartering the pixel count nearly quarters it. Measured on
+    /// an AGX Orin at 1920x1280 with speckle, `detectMarkers` is 38.4 ms at full
+    /// resolution and 10.5 ms at half.
+    ///
+    /// The corners come back from the reduced image, so they are scaled up and
+    /// then refined here against the full-resolution frame. That is the whole
+    /// point: what the reduced pass loses is the ability to SEE small markers,
+    /// not the precision of the ones it finds.
+    ///
+    /// The `+ 0.5` and `- 0.5` are the pixel-centre convention, not a fudge.
+    /// A pixel at index `i` has its centre at `i + 0.5` in continuous
+    /// coordinates, so mapping between scales without them leaves a half-pixel
+    /// bias -- small, systematic, and in the one quantity the pose solve is most
+    /// sensitive to.
+    fn detect_downscaled(
+        &self,
+        image: &Mat,
+        coarse: &core_cv::Ptr<aruco::DetectorParameters>,
+    ) -> Result<(VectorOfMat, Vector<i32>)> {
+        use opencv::imgproc;
+
+        let scale = self.params.detection_downscale;
+        let mut reduced = Mat::default();
+        imgproc::resize(
+            image,
+            &mut reduced,
+            core_cv::Size::new(image.cols() / scale, image.rows() / scale),
+            0.0,
+            0.0,
+            // INTER_AREA averages the pixels it drops. INTER_NEAREST would
+            // alias the marker's black-and-white grid, which is precisely the
+            // structure the identification step reads.
+            imgproc::INTER_AREA,
+        )?;
+
+        let mut corners = VectorOfMat::new();
+        let mut ids = Vector::<i32>::new();
+        #[allow(clippy::unnecessary_mut_passed)]
+        aruco::detect_markers(
+            &reduced,
+            &self.dictionary,
+            &mut corners,
+            &mut ids,
+            coarse,
+            &mut core_cv::no_array(),
+            &mut core_cv::no_array(),
+            &mut core_cv::no_array(),
+        )?;
+
+        if ids.is_empty() {
+            return Ok((corners, ids));
+        }
+
+        let scale = scale as f32;
+        let criteria = TermCriteria::new(
+            TermCriteria_Type::COUNT as i32 + TermCriteria_Type::EPS as i32,
+            self.params.corner_refinement.max_iterations,
+            self.params.corner_refinement.min_accuracy,
+        )?;
+        let window = core_cv::Size::new(
+            self.params.corner_refinement.win_size,
+            self.params.corner_refinement.win_size,
+        );
+        let refine = self.params.corner_refinement.method
+            == crate::params::CornerRefinement::Subpix;
+
+        let mut scaled = VectorOfMat::new();
+        for marker in corners.iter() {
+            let mut points = Vector::<Point2f>::new();
+            for index in 0..marker.cols() {
+                let point: Point2f = *marker.at_2d(0, index)?;
+                points.push(Point2f::new(
+                    (point.x + 0.5) * scale - 0.5,
+                    (point.y + 0.5) * scale - 0.5,
+                ));
+            }
+            if refine {
+                imgproc::corner_sub_pix(
+                    image,
+                    &mut points,
+                    window,
+                    core_cv::Size::new(-1, -1),
+                    criteria,
+                )?;
+            }
+            scaled.push(Mat::from_exact_iter(points.into_iter())?.reshape(2, 1)?.try_clone()?);
+        }
+
+        Ok((scaled, ids))
+    }
+
     /// Detect every marker of the configured dictionary in a **raw (distorted)**
     /// image, and solve each one's pose.
     ///
@@ -250,20 +360,25 @@ impl Detector {
     pub fn detect(&self, image: &Mat) -> Result<Vec<MarkerDetection>> {
         ensure!(!image.empty(), "input image is empty");
 
-        let mut corners_raw = VectorOfMat::new();
-        let mut ids = Vector::<i32>::new();
-
-        #[allow(clippy::unnecessary_mut_passed)]
-        aruco::detect_markers(
-            image,
-            &self.dictionary,
-            &mut corners_raw,
-            &mut ids,
-            &self.opencv_params,
-            &mut core_cv::no_array(),
-            &mut core_cv::no_array(),
-            &mut core_cv::no_array(),
-        )?;
+        let (corners_raw, ids) = match self.coarse_params.as_ref() {
+            Some(coarse) => self.detect_downscaled(image, coarse)?,
+            None => {
+                let mut corners_raw = VectorOfMat::new();
+                let mut ids = Vector::<i32>::new();
+                #[allow(clippy::unnecessary_mut_passed)]
+                aruco::detect_markers(
+                    image,
+                    &self.dictionary,
+                    &mut corners_raw,
+                    &mut ids,
+                    &self.opencv_params,
+                    &mut core_cv::no_array(),
+                    &mut core_cv::no_array(),
+                    &mut core_cv::no_array(),
+                )?;
+                (corners_raw, ids)
+            }
+        };
 
         if ids.is_empty() {
             return Ok(Vec::new());

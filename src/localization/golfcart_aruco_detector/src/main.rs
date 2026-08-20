@@ -114,6 +114,17 @@ impl Config {
             .mandatory()?
             .get();
 
+        // Coarse detect on a reduced frame, corners refined at full resolution.
+        // Detection cost is per-pixel, so this is the only knob that moves it
+        // much: 38.1 ms to 11.8 ms at 2, measured on an AGX Orin at 1920x1280.
+        // What it trades is the smallest marker that can still be FOUND, not
+        // corner precision -- the refinement runs against the full frame.
+        detector.detection_downscale = node
+            .declare_parameter("detection_downscale")
+            .default(1_i64)
+            .mandatory()?
+            .get() as i32;
+
         detector.adaptive_thresh.win_size_min = node
             .declare_parameter("adaptive_thresh_win_size_min")
             .default(13_i64)

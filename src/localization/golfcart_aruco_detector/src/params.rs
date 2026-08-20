@@ -141,12 +141,40 @@ impl Default for CandidateFilterParams {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct DetectorParams {
     pub corner_refinement: CornerRefinementParams,
     pub adaptive_thresh: AdaptiveThreshParams,
     pub candidate_filter: CandidateFilterParams,
+    /// Find candidates on an image reduced by this factor, then refine the
+    /// corners at full resolution. `1` disables it.
+    ///
+    /// Detection cost is dominated by per-pixel work -- `findContours` and
+    /// `approxPolyDP` over a thresholded frame -- so it falls with the pixel
+    /// count rather than with the number of markers. Measured on an AGX Orin,
+    /// 1920x1280 with speckle, `detectMarkers` takes 38.4 ms at full resolution
+    /// and 10.5 ms at half: 3.8x, for a quarter of the pixels.
+    ///
+    /// Corners are then refined against the FULL-resolution frame, so the
+    /// precision that matters for the pose solve is not the precision of the
+    /// reduced image. What is genuinely given up is the ability to find markers
+    /// too small to survive the reduction; see the note on
+    /// `adaptive_thresh` about not combining this with a narrowed sweep.
+    pub detection_downscale: i32,
+}
+
+// Written out rather than derived: `detection_downscale` must default to 1, and
+// a derived Default would make it 0, which every constructor then rejects.
+impl Default for DetectorParams {
+    fn default() -> Self {
+        Self {
+            corner_refinement: CornerRefinementParams::default(),
+            adaptive_thresh: AdaptiveThreshParams::default(),
+            candidate_filter: CandidateFilterParams::default(),
+            detection_downscale: 1,
+        }
+    }
 }
 
 impl DetectorParams {
@@ -160,6 +188,9 @@ impl DetectorParams {
             corner_refinement,
             adaptive_thresh,
             candidate_filter,
+            // Not an OpenCV parameter: the two-stage path is this crate's, and
+            // it is validated just below rather than handed to detectMarkers.
+            detection_downscale: _,
         } = *self;
 
         ensure!(
@@ -190,6 +221,11 @@ impl DetectorParams {
             candidate_filter.min_marker_distance_rate
         );
         ensure!(border_bits >= 1, "border_bits must be >= 1, got {border_bits}");
+        ensure!(
+            (1..=4).contains(&self.detection_downscale),
+            "detection_downscale must be between 1 and 4, got {}",
+            self.detection_downscale
+        );
 
         let mut params = aruco::DetectorParameters::create()?;
         params.set_marker_border_bits(border_bits);

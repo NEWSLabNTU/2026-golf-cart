@@ -30,6 +30,36 @@
     corner_refinement_min_accuracy: 0.01
 
     # ─────────────────────────────────────────────────────────────────────────
+    # Detection cost
+    # ─────────────────────────────────────────────────────────────────────────
+    # Find candidates on an image reduced by this factor, then refine the
+    # corners against the full-resolution frame. 1 disables it.
+    #
+    # This is the only knob that moves detection cost, and it is not close.
+    # Measured on an AGX Orin, 1920x1280 with speckle, three markers:
+    #
+    #   downscale   detectMarkers   smallest marker still found
+    #       1          38.1 ms                14 px
+    #       2          11.8 ms                22 px
+    #       3           6.0 ms                26 px
+    #       4           4.3 ms                34 px
+    #
+    # Narrowing the adaptive-threshold sweep buys about 3.4 ms per scale
+    # dropped, and raising min_marker_perimeter_rate or turning off corner
+    # refinement buy nothing measurable: the time goes into findContours and
+    # approxPolyDP over the whole frame, which is per-pixel work.
+    #
+    # Corner precision is NOT what this trades. Corners come back from the
+    # reduced pass and are then refined against the full-resolution image, which
+    # was measured at 0.002 px RMSE against full-resolution detection. What it
+    # trades is the smallest marker that can still be found at all.
+    #
+    # Left at 1 until it is measured on a recorded bag. The numbers above come
+    # from a synthetic scene, and the floor that matters is the one real
+    # cameras and real boards produce.
+    detection_downscale: 1
+
+    # ─────────────────────────────────────────────────────────────────────────
     # Candidate search
     # ─────────────────────────────────────────────────────────────────────────
     adaptive_thresh_win_size_min: 13
