@@ -245,24 +245,73 @@ anything proposed on that end.
 
 ## O-C: mode availability strip
 
-**Needs O-A. Build this first of the three vehicle views. If only one thing gets
-built, this is it.**
+**Status: DONE, 2026-08-21.** `golfcart_system_monitor` `acfeaa7`.
 
-Seven chips, one per mode root (`stop`, `autonomous`, `local`, `remote`,
-`emergency_stop`, `comfortable_stop`, `pull_over`), each available or not.
+Seven chips, one per mode root, above the existing liveness cards. The page
+reads the graph from rosbridge directly; the monitor node gains no subscription
+and does not proxy it, for the QoS reason in O-A2.
 
-This is the one-glance answer and the cheapest of the three: the aggregator
-already computes it and already publishes it. An operator needs to know
-autonomous became unavailable immediately, without reading 59 rows to work it
-out.
+### What it does
 
-Acceptance:
+The chip set is read from `struct`, never a hardcoded seven, so a graph that
+gains or loses a mode is followed rather than silently misreported.
 
-- a leaf forced to ERROR turns the right chip red within one second
-- the chip set is read from `struct`, not hardcoded, so a graph change does not
-  silently drop a mode from the display
-- the display distinguishes "mode unavailable" from "no data yet", which are
-  different and must not both render as red
+Three states that are easy to collapse into one, and must not be:
+
+| State | Renders as | Why it is distinct |
+|---|---|---|
+| unknown | outlined chip, "awaiting status" | struct known, nothing has reported yet. A monitor started before Autoware must not show red |
+| bridge down | chips blanked, note in words | a page that cannot reach the bridge must never look like a page reporting no faults |
+| stalled | "no status for Ns" | bridge up, aggregator dead. The chips would otherwise sit there looking healthy |
+
+`latch_level` is surfaced as an underline, so a mode that faulted earlier is
+still attributable after it clears.
+
+An aggregator restart rebuilds the graph with a new `id`. The strip compares the
+`id` on every status and re-subscribes to `struct` when it changes, which is what
+makes rosbridge re-deliver the latched message. This is the narrow case O-A left
+open, and it is a few lines as predicted.
+
+### Acceptance, met
+
+| Criterion | Result |
+|---|---|
+| a leaf forced to ERROR turns the right chip red within 1 s | **0.70 s** measured |
+| the chip set is read from `struct`, not hardcoded | asserted in the render test |
+| unavailable is distinguished from no-data-yet | asserted |
+| bridge down is distinguished from no faults | asserted |
+
+Two tests, neither needing a vehicle:
+
+- `golfcart_system_monitor/test/mode_strip_render_test.js` drives the **shipped**
+  page JavaScript against a graph fixture captured from a live aggregator, with a
+  stub DOM and WebSocket. 11 checks. `node test/mode_strip_render_test.js`.
+- `scripts/check/mode_strip_test.sh` runs it live: publishes all 41 leaves
+  healthy, forces `autonomous_emergency_braking: aeb_emergency_stop` to ERROR,
+  and confirms `autonomous`, `pull_over` and `comfortable_stop` go red while
+  `local`, `remote`, `stop` and `emergency_stop` stay green. Selectivity is the
+  point: a strip that reddens everything proves nothing.
+
+### Traps recorded while building it
+
+The fixture keeps the real node ordering deliberately. `struct` and `status` join
+by array index and `DiagNodeStatus` has no path field, so an off-by-one mislabels
+every chip and still looks plausible. Renumbering the fixture retires the only
+test that can catch it.
+
+The live test initially reported an all-ERROR baseline. That was the test's own
+fault, not the system's: it interleaved `rclpy.spin_once` with the websocket
+drain on one thread, so `/diagnostics` stopped while sampling and the aggregator
+aged every leaf out. It was measuring its own starvation. rclpy now spins on its
+own thread, and the test fails loudly if the baseline is not healthy rather than
+reporting a false pass.
+
+### Not done here
+
+No browser screenshot: the Chrome extension is not connected in this
+environment. Layout and colour contrast are unverified by eye. The render test
+covers structure and class names, which is what regressions actually break, but
+someone should still look at it on the vehicle.
 
 ## O-D: the failing path, not the fault tree
 
@@ -344,7 +393,7 @@ LATENT_FAULT on demand.
 O-A  (QoS ground truth)          DONE, struct is transient_local
 O-A2 (rosbridge or rclpy)        DONE, rosbridge for the graph views
  |
- +--> O-C (availability strip) --> O-D (failing path)
+ +--> O-C (availability strip)  DONE --> O-D (failing path)  next
  |
  +--> O-E (MRM timeline)
 
