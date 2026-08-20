@@ -384,22 +384,62 @@ Acceptance:
   operator, outcome, in order and with timestamps
 - behaviours are labelled from `ListMrmDescription`, never from a hardcoded enum
 
-## O-F: fault injection and acceptance
+## O-F: fault injection
 
-**`autoware_dummy_diag_publisher` already runs in every launch** and can force any
-leaf to a chosen level. It is configured from
-`config/system/diagnostics/dummy_diag_publisher.param.yaml`.
+**Status: DONE, 2026-08-21.** `scripts/check/diag_inject.py`, wrapped as
+`just diag`.
 
-This means every view above is testable on a parked vehicle, or on a bench with
-no vehicle at all, without waiting for a real fault.
+Forces any diagnostic leaf to any level, so the whole fault path can be
+exercised on a bench. This is what ROADMAP Phase 4 Track A item 3 needs whether
+or not any view gets built: unplugging a sensor is slower, less repeatable, and
+cannot produce a WARN-then-ERROR sequence or a timed recovery on demand.
 
-Acceptance for the phase as a whole: one forced leaf, and O-C, O-D, O-E and
-RViz's `AutowareStatePanel` all agree on what happened.
+```
+just diag list                                   # leaf names, from the RUNNING graph
+just diag inject 'aeb_emergency_stop=ERROR'      # hold it faulted until Ctrl-C
+just diag inject-cycle 'ndt_scan_matcher=ERROR'  # fault at 5 s, recover at 20 s
+just diag qos                                    # the O-A checks
+just diag strip-test                             # the O-C acceptance test
+```
 
-This harness is worth building **even if none of O-C through O-E is built**,
-because Phase 4 Track A item 3 needs it regardless. Testing sensor-dropout
-behaviour by unplugging sensors is slower, less repeatable, and cannot produce a
-LATENT_FAULT on demand.
+### Why not `autoware_dummy_diag_publisher`
+
+Autoware ships one and it is the right tool when the names are known ahead of
+time. It reads a `required_diags` list **at startup**, so a leaf that is not in
+that config cannot be faulted at runtime. Its config here was one of the 145
+files deleted in the A1 sweep, and `launch_dummy_diag_publisher` defaults to
+false in `golfcart_autoware.launch.xml` anyway.
+
+`diag_inject.py` reads the leaf names out of the **live graph** instead, so it
+always matches whatever the aggregator actually loaded, including the ArUco
+variant, and it needs no config to maintain.
+
+### Conflicts are refused, not warned about
+
+The injector publishes `/diagnostics` under the real leaves' names. With a real
+publisher also running, both write the same name and the aggregator takes
+whichever arrived last, so the levels flap and the result means nothing. The
+tool counts other publishers and **exits** rather than producing a quietly
+meaningless run. `--allow-conflict` overrides it, with a warning.
+
+That guard needed two attempts. The first counted publishers after creating its
+own and filtered by node name, and since two copies of the tool are both called
+`diag_inject`, each filtered the other out as itself and the guard never fired.
+It now counts before publishing, so anything found is genuinely someone else.
+
+### Verified
+
+Injecting `aeb_emergency_stop=ERROR` with a timed clear drove the real graph
+through the full cycle, read back off the mode roots:
+
+| | autonomous | pull_over | comfortable_stop | others |
+|---|---|---|---|---|
+| while faulted | ERROR | ERROR | ERROR | OK |
+| after clear | OK | OK | OK | OK |
+
+Substring matching resolves `aeb_emergency_stop` to
+`autonomous_emergency_braking: aeb_emergency_stop`, and an unmatched pattern is
+an error naming `--list` rather than a silent no-op.
 
 ## Cleanups, unblocked, any time
 
@@ -432,7 +472,7 @@ O-A2 (rosbridge or rclpy)        DONE, rosbridge for the graph views
  +--> O-E (MRM timeline)
 
 O-B (play_launch)      runs in parallel, no dependency
-O-F (fault injection)  needed by all, buildable immediately
+O-F (fault injection)  DONE, and O-E can now be driven from it offline
 
 O-C is unblocked. The only vehicle-dependent item left is confirming the QoS
 against the live stack with `diag_graph_qos.sh --attach`, which is confirmation

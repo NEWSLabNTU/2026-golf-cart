@@ -37,6 +37,8 @@ mod can 'just/can.just'
 mod tool 'just/tool.just'
 # Synthetic cameras on v4l2loopback, for working with no hardware attached
 mod sim 'just/sim.just'
+# Diagnostic graph: inspect it, and inject faults into it
+mod diag 'just/diag.just'
 
 # Initialize and update all git submodules
 checkout:

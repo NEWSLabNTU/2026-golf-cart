@@ -47,6 +47,7 @@ Grouped families live in `just/*.just` and are reached as `just <module> <recipe
 | `vehicle` | vehicle interface bring-up, manual control, control tests |
 | `can` | CAN record, replay, decode |
 | `tool` | RViz, PlotJuggler, TUI, keyboard controller |
+| `diag` | diagnostic graph: QoS checks, leaf listing, fault injection |
 
 `build`, `test`, `clean`, `launch*`, `stop-all` and `logs` stay at the root —
 they are the daily verbs, and a module may not share a name with a recipe
