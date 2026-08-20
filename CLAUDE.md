@@ -537,6 +537,7 @@ twist_source:=gyro_odom|eagleye            # Override preset twist source
 | [docs/roadmaps/3-indoor-localization.md](docs/roadmaps/3-indoor-localization.md) | Indoor localization phase master: sub-phases A (calibration) → B (mapping) → C (tag map) → D (runtime) |
 | [docs/roadmaps/2-camera-image-pipeline.md](docs/roadmaps/2-camera-image-pipeline.md) | Camera image pipeline: why JPEG, the `CompressedImage.format` contract, zero-copy capture, and the rclrs image_transport crate |
 | [docs/design/diagnostics-and-mrm-visualization.md](docs/design/diagnostics-and-mrm-visualization.md) | Diagnostics / MRM chain as it actually runs, why `/diagnostics_agg` is never published here, which ROS and Autoware viewers already exist, and the proposed views split across play_launch vs `golfcart_system_monitor` |
+| [docs/roadmaps/4-diagnostics-observability.md](docs/roadmaps/4-diagnostics-observability.md) | Phase 4-O: why the AD API is the subscription surface, why `transient_local` on the struct topic blocks the design, and the O-A..O-F work items |
 
 ## Known Issues
 

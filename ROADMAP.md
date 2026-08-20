@@ -89,6 +89,7 @@ Replaces GNSS with camera-detected AR tags for GNSS-denied indoor operation, kee
 1. **Review AutoSDV planning/MRM patches** — The AutoSDV project carried patches on planning and MRM modules. Audit which patches were applied in this fork (check `src/launcher/golfcart_launch/config/control/` and planning configs). Determine which are still relevant for the golf cart and which should be reverted or adapted.
 2. **Configure MRM** — Tune emergency stop parameters, collision detector thresholds, and AEB settings for golf cart dynamics (slower, heavier than AutoSDV small vehicle).
 3. **Sensor failure handling** — Test system behavior when individual sensors drop out. Ensure MRM activates correctly.
+4. **Abnormality observability (new)**: prerequisite for item 3. Today the diagnostic graph that decides mode availability has no runtime view, so "MRM activated correctly" and "MRM activated for the wrong reason" look identical from outside. Sub-phases O-A (ground truth on the vehicle) through O-F (fault injection). See [docs/roadmaps/4-diagnostics-observability.md](docs/roadmaps/4-diagnostics-observability.md); background and evidence in [docs/design/diagnostics-and-mrm-visualization.md](docs/design/diagnostics-and-mrm-visualization.md).
 
 ### Track B — Planning Module Configuration
 1. **Review AutoSDV planning patches** — Cross-check with Group X. Identify planning behavior changes from AutoSDV (e.g., speed limits, obstacle margins, intersection handling) and adapt for campus golf cart operation.
