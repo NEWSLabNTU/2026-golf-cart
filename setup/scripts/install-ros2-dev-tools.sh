@@ -41,9 +41,17 @@ if python3 -c 'import colcon_cargo_ros2' >/dev/null 2>&1; then
     echo "colcon-cargo-ros2 already installed."
 else
     echo "Installing colcon-cargo-ros2..."
-    # Note: this pins setuptools below 80, so it may downgrade an existing
-    # newer setuptools in the user environment.
-    python3 -m pip install --user colcon-cargo-ros2
+    # --no-deps is not an optimisation. The extension depends on colcon-core,
+    # which depends on empy; without this pip installs its own copies into
+    # ~/.local, shadowing the apt python3-colcon-* and python3-empy that ROS
+    # Humble pins. It picks empy 4.x, and rosidl_adapter needs 3.x:
+    #
+    #   AttributeError: module 'em' has no attribute 'BUFFERED_OPT'
+    #
+    # which surfaces as a message-generation failure in whichever package
+    # generates interfaces first, naming neither pip nor empy. Those
+    # dependencies are already installed from apt on any ROS machine.
+    python3 -m pip install --user --no-deps colcon-cargo-ros2
 fi
 
 if ! command -v cargo >/dev/null 2>&1; then
