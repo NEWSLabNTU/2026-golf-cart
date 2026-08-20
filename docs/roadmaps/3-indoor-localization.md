@@ -62,8 +62,13 @@ Hard blockers it must clear:
 
 - **No `*_optical_link` frames exist in the URDF.** PnP returns optical-convention
   poses; composing through the body-frame links rotates every observation ~90°.
-- **All three camera calibration files are one file copied three times**, declaring
-  `rational_polynomial` and internally inconsistent with the 1920×1280 stream.
+- **All three camera calibration files are one file copied three times.** Checked
+  2026-08-21: the principal point is 248 px off centre for the declared width,
+  which is what a 1440-wide calibration looks like written into a 1920-wide file.
+  That is a systematic ~14° bearing bias on every observation, in the same
+  direction every time, which no residual check downstream can see. The declared
+  `rational_polynomial` model also has all four rational coefficients set to
+  zero. Details in the sub-phase A doc.
 
 ### Board production and mounting
 

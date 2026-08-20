@@ -3,10 +3,12 @@
 Prerequisite for [Phase 3 indoor localization](3-indoor-localization.md).
 Design spec: [§2 A](../superpowers/specs/2026-07-27-indoor-artag-localization-design.md#a--camera-calibration-contract-for-d)
 
-**Status: Intrinsics partly done, and in a more dangerous state than not done.
-Extrinsics not started. Still blocks sub-phases C and D.**
+**Status: Intrinsics present but unusable — one calibration cloned across three
+cameras, at a resolution that does not match the declared one, with a distortion
+model that contradicts its own coefficients. Extrinsics not started. Still
+blocks sub-phase D.**
 
-Last updated: 2026-08-20
+Last updated: 2026-08-21
 
 ---
 
@@ -33,11 +35,86 @@ calibration. A plausible, real-looking matrix on the wrong camera produces
 plausible, real-looking poses that are wrong by an amount nobody will think to
 question.
 
-One number to check while redoing this: **`cx` is 712 on a 1920-wide image**,
-about 248 px left of centre. That is a large principal-point offset. It is
-possible on a real lens, and it is also what you would see if the calibration
-was run at a different capture size than the one declared. Worth confirming
-rather than inheriting.
+### The declared resolution does not match the numbers, 2026-08-21
+
+An earlier revision of this section flagged `cx` as worth confirming. It has now
+been checked, and it does not survive the check.
+
+```yaml
+image_width: 1920
+image_height: 1280
+camera_matrix:
+  data: [986.059, 0.0, 712.072,  0.0, 1007.400, 632.611,  0.0, 0.0, 1.0]
+```
+
+`cy` sits at 632.6, which is 1280/2 within a few pixels — correct. `cx` sits at
+712.1, where a 1920-wide image wants roughly 960. That is 248 px, 13% of the
+frame width, and a lens decentred that far would look obviously wrong through
+the viewfinder.
+
+Scaling the value to the declared width resolves it exactly:
+
+    712.07 × (1920 / 1440) = 949.4 ≈ 960
+
+These intrinsics were computed on **1440-wide** images and written into a file
+that declares 1920. The placeholder they replaced had `cx: 960, cy: 640`, so the
+real resolution was known before the calibration and lost during it.
+
+For sub-phase D this is the single most damaging number in the file. PnP turns
+pixels into bearings through `cx`, so an offset of 248 px at `fx ≈ 986` is a
+systematic bearing bias of
+
+    atan(248 / 986) ≈ 14°
+
+applied to every observation, in the same direction every time. Nothing
+downstream can detect that: the residuals stay small because every board is
+wrong in the same way.
+
+**Do not scale these numbers to 1920 and call it fixed.** The capture size is a
+hypothesis that fits the arithmetic; it is not a record of what was done. The
+original capture resolution has to be recovered, or the calibration redone.
+
+### The distortion model contradicts its own coefficients, 2026-08-21
+
+```yaml
+distortion_model: rational_polynomial
+distortion_coefficients:
+  cols: 12
+  data: [-0.3515, 0.1078, -0.00233, -0.0150,  0.0, 0.0, 0.0, 0.0,
+          0.1041, -0.0243, 0.00143, 0.00105]
+```
+
+OpenCV's twelve-slot order is `k1 k2 p1 p2 k3 k4 k5 k6 s1 s2 s3 s4`. Read that
+way, the file declares every rational coefficient — `k3` through `k6` — to be
+zero, while the four thin-prism terms `s1` through `s4` carry real values. A
+rational fit whose rational terms all vanish is degenerate; it is not a rational
+calibration at all.
+
+The likely explanation is that eight coefficients were padded to twelve with the
+zeros inserted in the middle rather than appended, which would mean the trailing
+four are `k3`..`k6` and every consumer is currently applying them as thin-prism
+terms. That cannot be confirmed from the file alone — it needs the original
+calibration output. Either way the label and the data disagree, and one of them
+is wrong.
+
+This qualifies the task note below: the detector supporting `rational_polynomial`
+end to end (phase 3D-5) says nothing about whether these particular coefficients
+are a rational fit.
+
+### Provenance
+
+`ea2e054` "feat: add intrinsic matrices" (Typas Liao, 2026-06-04) wrote the same
+calibration into all three files in one commit, replacing the identity
+placeholders. So this is one genuine calibration session, propagated — not three
+sessions that happened to coincide.
+
+### One thing that hides the resolution mismatch
+
+`camera_left.yaml` and its siblings set `camera_info_rescale: true`. gscam will
+silently rescale `camera_info` to the streamed resolution rather than reject a
+mismatch, so a wrong `image_width` produces plausible output instead of an
+error — and rescales from the wrong starting size. Turning this off during
+calibration verification would make the mismatch loud.
 
 The previous text of this section, retained because it describes what the files
 held before:
@@ -91,11 +168,21 @@ this sub-phase.
 ### Not done
 
 - [ ] **Intrinsic calibration, per camera, three times.** One calibration exists
-      and is currently installed as all three. Redo it per lens, and confirm the
-      `cx` offset noted above rather than copying it forward. The declared model
-      is `rational_polynomial` with 12 coefficients, which the detector now
-      supports end to end (phase 3D-5), so there is no reason to drop back to
-      `plumb_bob`.
+      and is currently installed as all three. Redo it per lens at the streamed
+      1920×1280; do not rescale the existing numbers, for the reason given
+      above. The detector supports `rational_polynomial` end to end (phase
+      3D-5), so there is no reason to drop back to `plumb_bob` — but write the
+      coefficients in OpenCV's documented order and check that the rational
+      terms are actually non-zero.
+- [ ] **Recover the original capture resolution** of the 2026-06-04 calibration,
+      or confirm it is unrecoverable and discard the numbers entirely. Ask
+      Typas Liao before assuming.
+- [ ] **Confirm the three cameras are the same lens.** The cloned intrinsics are
+      wrong for at least two of them regardless, but if the rear unit has a
+      different field of view, they are wrong by more than a recalibration of
+      the other two would reveal.
+- [ ] **Set `camera_info_rescale: false`** while verifying, so a resolution
+      mismatch fails loudly instead of being silently absorbed.
 - [ ] **Make the three files impossible to confuse again.** Byte-identical
       calibrations that differ only in `camera_name` are what got us here. A
       check that fails when two cameras share intrinsics costs a few lines and
