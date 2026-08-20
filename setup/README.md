@@ -70,11 +70,45 @@ The setup runs these steps in order:
 9. **python-deps** - Install Golf Cart Python dependencies
 10. **ublox-udev** - Install u-blox GPS udev rules
 
+> The numbered list above is out of date: it still names `blickfeld` and omits
+> `isaac-ros`, `otocam`, `opencv`, `linuxptp` and the network configuration.
+> `./setup.sh status` and `cd setup && just --list` are authoritative; this list
+> is not.
+
 ### Optional Steps
 
 | Command | Description |
 |---------|-------------|
 | `./setup.sh download-artifacts` | Download ML model artifacts (~2GB) |
+| `./setup.sh opencv` | Put OpenCV on one version: Ubuntu 4.5.4, with contrib |
+| `./setup.sh opencv-check` | Report the OpenCV state, change nothing |
+
+#### opencv
+
+JetPack 6.2 leaves two OpenCVs installed. NVIDIA's repo ships
+`libopencv`/`libopencv-dev` at 4.8.0 with apt priority 600; Ubuntu ships the
+`libopencv-*4.5d` runtime at 4.5.4. Nothing on the system links 4.8.0 -- not
+`cv_bridge`, not Autoware, not Isaac, not `python3-opencv` -- but
+`libopencv-dev` owns `/usr/include/opencv4` and the `/usr/lib/libopencv_*.so`
+symlinks, so every local build compiles against 4.8.0 headers and links a 4.5.4
+runtime. Silent ABI mismatch.
+
+It also costs the contrib modules: NVIDIA's build has no `aruco`, so
+`find_package(OpenCV REQUIRED COMPONENTS aruco)` fails and
+`golfcart_aruco_detector` and `golfcart_aruco_localizer` cannot be built at all
+on a stock box.
+
+The step installs `files/99-opencv-ubuntu.pref` (priority 1001, which is what
+permits the downgrade and holds it against the next `apt upgrade`), installs
+Ubuntu's `libopencv-dev` and `libopencv-contrib-dev`, purges the NVIDIA-only
+packages, and runs `ldconfig`.
+
+It is safe to re-run, and it **refuses** to run if anything on the system is
+actually linked against 4.8.0 rather than purging a library out from under it.
+Run `opencv-check` first to see what it would do.
+
+After it runs, anything already compiled against the 4.8.0 headers must be
+rebuilt: `just clean && just build` from the repository root.
 
 ## How Resume Works
 

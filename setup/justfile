@@ -33,7 +33,7 @@ default:
     @just --list
 
 # Full setup (runs all steps in order)
-setup: _init ros2 ros2-dev-tools gdown geographiclib pacmod dev-tools _setup-autoware-debian _setup-autoware-data _setup-tensorrt-engines _setup-isaac-ros python-deps nebula-driver ublox-driver ublox-udev tier4-camera gscam _setup-cyclonedds-sysctl _setup-multicast-lo _setup-turbovnc-virtualgl _setup-hardware-config _setup-otocam _setup-linuxptp ros-deps
+setup: _init ros2 ros2-dev-tools gdown geographiclib pacmod dev-tools _setup-autoware-debian _setup-autoware-data _setup-tensorrt-engines _setup-isaac-ros _setup-opencv python-deps nebula-driver ublox-driver ublox-udev tier4-camera gscam _setup-cyclonedds-sysctl _setup-multicast-lo _setup-turbovnc-virtualgl _setup-hardware-config _setup-otocam _setup-linuxptp ros-deps
     @printf "{{green}}✓ Setup complete!{{nc}}\n"
 
 # Conditional Autoware Debian install (based on SKIP_AUTOWARE_DEBIAN env var)
@@ -139,6 +139,36 @@ hardware-config: _init
     printf "{{green}}✓{{nc}} hardware-config done\n"
 
 # Conditional OTOCAM kmod install (based on INSTALL_OTOCAM env var)
+# Conditional OpenCV consistency fix (based on INSTALL_OPENCV env var)
+#
+# Runs AFTER autoware-debian and isaac-ros on purpose: both pull packages that
+# depend on libopencv-dev, so letting apt settle first means this has one state
+# to correct rather than racing it.
+_setup-opencv:
+    #!/usr/bin/env bash
+    if [[ "${INSTALL_OPENCV:-y}" == "y" ]]; then
+        just opencv
+    else
+        printf "{{yellow}}⊘{{nc}} opencv skipped (user choice)\n"
+        printf "{{yellow}}Note:{{nc}} Run 'just opencv' to fix later, or 'just opencv-check' to see the state\n"
+    fi
+
+# JetPack ships NVIDIA's OpenCV 4.8.0 as libopencv-dev, which owns
+# /usr/include/opencv4, while every runtime library and every ROS deb on the
+# system is Ubuntu's 4.5.4. Local builds then compile against one and link the
+# other. It also costs the contrib modules, which is why aruco is missing.
+#
+# just takes only the LAST contiguous comment block as the description, so the
+# blank line above is what keeps `just --list` readable.
+
+# Put OpenCV on one version: Ubuntu 4.5.4, headers and runtime together
+opencv: _init
+    @just _run opencv "{{scripts_dir}}/install-opencv.sh"
+
+# Report the OpenCV state without changing anything
+opencv-check:
+    @{{scripts_dir}}/install-opencv.sh --check
+
 _setup-otocam:
     #!/usr/bin/env bash
     if [[ "${INSTALL_OTOCAM}" == "y" ]]; then
@@ -419,6 +449,18 @@ status:
         printf "  {{green}}✓{{nc}} cyclonedds-sysctl\n"
     else
         printf "  {{red}}○{{nc}} cyclonedds-sysctl\n"
+    fi
+    # Read the version rather than a marker. A marker says this ran once; a
+    # JetPack OTA can put 4.8.0 back afterwards, and then the marker is a lie.
+    opencv_dev=$(dpkg-query -W -f='${Version}' libopencv-dev 2>/dev/null || true)
+    if [[ "$opencv_dev" == 4.5.4* && -f /usr/include/opencv4/opencv2/aruco.hpp ]]; then
+        printf "  {{green}}✓{{nc}} opencv %s, headers and runtime agree, contrib present\n" "$opencv_dev"
+    elif [[ "$opencv_dev" == 4.8.0* ]]; then
+        printf "  {{red}}○{{nc}} opencv %s headers over a 4.5.4 runtime (run: just opencv)\n" "$opencv_dev"
+    elif [[ -n "$opencv_dev" ]]; then
+        printf "  {{yellow}}○{{nc}} opencv %s, no contrib headers (run: just opencv-check)\n" "$opencv_dev"
+    else
+        printf "  {{yellow}}○{{nc}} opencv not installed\n"
     fi
     if [[ -f "{{marker_dir}}/hardware-config" ]]; then
         printf "  {{green}}✓{{nc}} hardware-config (CAN + LiDAR network)\n"

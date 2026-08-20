@@ -151,6 +151,7 @@ MENU_ITEMS=(
   "AUTOWARE_DATA|y|0|Writable Autoware data dir|Seconds. Without it TensorRT cannot cache engines and perception fails."
   "TENSORRT_ENGINES|n|1|└ compile TensorRT engines now|~11 min on an Orin. Otherwise the first launch pays it, with perception down."
   "ISAAC_ROS|y|0|Isaac ROS Visual Localization|cuVSLAM + cuVGL. Camera-only localization without LiDAR/GNSS. Jetson only."
+  "OPENCV|y|0|OpenCV consistency (4.5.4)|JetPack leaves 4.8.0 headers over a 4.5.4 runtime. Also what makes aruco/contrib available."
   "NETWORK_DDS|y|0|Network configuration (DDS)|REQUIRED to run ROS here. Both sub-steps below; scripts/env.sh refuses to load without them."
   "CYCLONEDDS_SYSCTL|y|1|└ kernel socket buffers|net.core.rmem_max=2GB + ipfrag. Writes /etc/sysctl.d/99-cyclonedds-max.conf. Below 10MB no ros2 node can start."
   "MULTICAST_LO|y|1|└ multicast on lo (persistent)|Installs multicast-lo.service. Without it lo loses MULTICAST on reboot and the loopback profile dies."
@@ -340,6 +341,7 @@ interactive_setup() {
     export INSTALL_TURBOVNC_VIRTUALGL="${MENU_STATE[TURBOVNC_VIRTUALGL]}"
     export INSTALL_HARDWARE_CONFIG="${MENU_STATE[HARDWARE_CONFIG]}"
     export INSTALL_OTOCAM="${MENU_STATE[OTOCAM]}"
+    export INSTALL_OPENCV="${MENU_STATE[OPENCV]}"
     export INSTALL_LINUXPTP="${MENU_STATE[LINUXPTP]}"
 
     printf "\nInstalling: Core"
@@ -379,6 +381,7 @@ main() {
         local k
         for k in SKIP_AUTOWARE_DEBIAN AUTOWARE_PREREQ_ROS AUTOWARE_PREREQ_SPCONV \
                  SETUP_AUTOWARE_DATA BUILD_TENSORRT_ENGINES INSTALL_ISAAC_ROS \
+                 INSTALL_OPENCV \
                  CONFIGURE_CYCLONEDDS_SYSCTL CONFIGURE_MULTICAST_LO \
                  INSTALL_TURBOVNC_VIRTUALGL \
                  INSTALL_HARDWARE_CONFIG INSTALL_OTOCAM INSTALL_LINUXPTP; do
