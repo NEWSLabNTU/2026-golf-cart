@@ -58,11 +58,27 @@
 # rather than the ones frozen at record time, which is the point.
 #/sensing/imu/imu_data
 
-# ── USB cameras — compressed only, the raw streams are far too large ────────
-# No camera_info: gscam publishes none for these, so those entries were dead.
+# ── GMSL cameras — compressed only, the raw streams are far too large ───────
+#
+# camera_info IS published, and the note that used to sit here saying gscam
+# publishes none was wrong. Checked 2026-08-20 by running gscam with these
+# YAMLs and these remaps against synthetic devices: it loads the calibration
+# from camera_info_url and publishes camera_info at the frame rate, 30 Hz.
+#
+# It has to be recorded. Without intrinsics a bag cannot be replayed through
+# anything that computes a pose from an image — the ArUco detector blocks
+# waiting for a CameraInfo that never arrives — and it costs about 1 kB a
+# message against 300 kB of JPEG.
+#
+# What is on those topics is a separate problem: all three calibration files
+# are one calibration copied three times. See blocker 2 in
+# docs/roadmaps/2-camera-image-pipeline.md.
 /sensing/camera/left/image_raw/compressed
+/sensing/camera/left/camera_info
 /sensing/camera/right/image_raw/compressed
+/sensing/camera/right/camera_info
 /sensing/camera/rear/image_raw/compressed
+/sensing/camera/rear/camera_info
 
 # ── Vehicle interface commands ───────────────────────────────────────────────
 /control/command/control_cmd
