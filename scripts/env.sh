@@ -304,7 +304,7 @@ fi
 if [ -f "${GOLFCART_REPO_ROOT}/config/sensors.conf" ]; then
     # shellcheck source=/dev/null
     . "${GOLFCART_REPO_ROOT}/config/sensors.conf"
-    export IMU_SOURCE CAMERA_MODEL
+    export IMU_SOURCE CAMERA_MODEL CAMERA_CAPTURE_PROFILE
 fi
 
 # ── Vehicle interface ────────────────────────────────────────────────────────
