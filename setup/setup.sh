@@ -180,13 +180,104 @@ menu_parent_on() {
 # Rendering is cursor-driven: the block is drawn once, then redrawn in place
 # by moving the cursor back up over it. Clearing the whole screen instead would
 # throw away whatever the user was looking at before running setup.
+#
+# That trick only works while the block fits on screen. Draw more lines than the
+# terminal has and it scrolls, the cursor-up rewind lands in the wrong place, and
+# every redraw smears a fresh copy down the terminal. So the item list is drawn
+# through a viewport: MENU_TOP is the first item shown, the window is sized from
+# the real terminal height on every render, and the block never scrolls.
 MENU_LINES=0
+MENU_TOP=0
+
+# Rows one item occupies: its own line, plus its note line if it has one.
+menu_item_height() {
+    local note
+    note=$(menu_field "${MENU_ITEMS[$1]}" 5)
+    [[ -n "$note" ]] && printf 2 || printf 1
+}
+
+# Rows available for items, after the header, the footer and the two indicator
+# slots. Read on every render so a resize is picked up without a redraw loop.
+menu_body_budget() {
+    local term_lines budget
+    term_lines=$(tput lines 2>/dev/null) || term_lines="${LINES:-24}"
+    [[ "$term_lines" =~ ^[0-9]+$ ]] || term_lines=24
+    # 3 header + 2 footer + 2 indicator slots, and one spare line so the shell
+    # prompt that follows does not push the block up by itself.
+    budget=$(( term_lines - 8 ))
+    # Below this there is no useful viewport left; show one item and let the
+    # terminal be too small rather than dividing by nothing.
+    (( budget < 2 )) && budget=2
+    printf '%s' "$budget"
+}
+
+# Terminal width, for the truncation below.
+menu_cols() {
+    local cols
+    cols=$(tput cols 2>/dev/null) || cols="${COLUMNS:-80}"
+    [[ "$cols" =~ ^[0-9]+$ ]] || cols=80
+    printf '%s' "$cols"
+}
+
+# Cut a label or note to the width it is drawn in.
+#
+# Not cosmetic. A line longer than the terminal wraps, and a wrapped line takes
+# two physical rows while this code counts it as one. MENU_LINES then
+# understates the block, the rewind lands inside it instead of above it, and
+# every redraw leaves a copy of the tail behind. Several of these notes are over
+# a hundred characters, so an 80-column terminal hits it immediately.
+menu_fit() {
+    local text="$1" width="$2"
+    (( width < 10 )) && width=10
+    if (( ${#text} > width )); then
+        printf '%s…' "${text:0:width-1}"
+    else
+        printf '%s' "$text"
+    fi
+}
+
+# Slide the viewport just far enough that the cursor's item is fully visible,
+# note included. Only ever moves by whole items, so a note never appears
+# orphaned from the label it belongs to.
+menu_scroll_into_view() {
+    local budget="$1" used i
+    (( MENU_CURSOR < MENU_TOP )) && MENU_TOP=$MENU_CURSOR
+    while (( MENU_TOP < MENU_CURSOR )); do
+        used=0
+        for (( i = MENU_TOP; i <= MENU_CURSOR; i++ )); do
+            used=$(( used + $(menu_item_height "$i") ))
+        done
+        (( used <= budget )) && break
+        MENU_TOP=$(( MENU_TOP + 1 ))
+    done
+}
 
 menu_render() {
     local i key label note indent mark dim pointer lines=0
-    printf "\n${BLUE}Golf Cart Setup${NC}  —  core (ROS 2, dev tools, GeographicLib, Python deps) is always installed\n\n"
+    local budget used=0 last_shown cols
+    cols=$(menu_cols)
+    budget=$(menu_body_budget)
+    menu_scroll_into_view "$budget"
+
+    printf "\n${BLUE}Golf Cart Setup${NC}  —  %s\n\n" \
+        "$(menu_fit "core (ROS 2, dev tools, GeographicLib, Python deps) is always installed" $(( cols - 21 )))"
     lines=$(( lines + 3 ))
-    for i in "${!MENU_ITEMS[@]}"; do
+
+    # The indicator slots are always drawn, blank when there is nothing beyond
+    # the edge. A slot that appears and disappears would change the block height
+    # between renders, and the rewind is computed from that height.
+    if (( MENU_TOP > 0 )); then
+        printf "      ${BLUE}↑ %d more above${NC}\n" "$MENU_TOP"
+    else
+        printf "\n"
+    fi
+    lines=$(( lines + 1 ))
+
+    last_shown=$(( MENU_TOP - 1 ))
+    for (( i = MENU_TOP; i < ${#MENU_ITEMS[@]}; i++ )); do
+        (( used + $(menu_item_height "$i") > budget )) && break
+        used=$(( used + $(menu_item_height "$i") ))
+        last_shown=$i
         key=$(menu_field "${MENU_ITEMS[$i]}" 1)
         indent=$(menu_field "${MENU_ITEMS[$i]}" 3)
         label=$(menu_field "${MENU_ITEMS[$i]}" 4)
@@ -210,18 +301,37 @@ menu_render() {
             pointer=" "
         fi
 
+        # Widths are the printed prefix: " x [x] " is 7 columns, an indented
+        # label adds 4, and a note is indented by 8.
         if [[ "$indent" == "1" ]]; then
-            printf " %b [%b] %b    %s${NC}\n" "$pointer" "$mark" "$dim" "$label"
+            printf " %b [%b] %b    %s${NC}\n" "$pointer" "$mark" "$dim" \
+                "$(menu_fit "$label" $(( cols - 12 )))"
         else
-            printf " %b [%b] %b%s${NC}\n" "$pointer" "$mark" "$dim" "$label"
+            printf " %b [%b] %b%s${NC}\n" "$pointer" "$mark" "$dim" \
+                "$(menu_fit "$label" $(( cols - 8 )))"
         fi
         lines=$(( lines + 1 ))
         if [[ -n "$note" ]]; then
-            printf "        %b%s${NC}\n" "${dim:-$YELLOW}" "$note"
+            printf "        %b%s${NC}\n" "${dim:-$YELLOW}" \
+                "$(menu_fit "$note" $(( cols - 9 )))"
             lines=$(( lines + 1 ))
         fi
     done
-    printf "\n  ${BLUE}↑↓${NC} move   ${BLUE}SPACE${NC} toggle   ${BLUE}a${NC} all   ${BLUE}n${NC} none   ${BLUE}ENTER${NC} continue   ${BLUE}q${NC} quit\n"
+
+    local remaining=$(( ${#MENU_ITEMS[@]} - last_shown - 1 ))
+    if (( remaining > 0 )); then
+        printf "      ${BLUE}↓ %d more below${NC}\n" "$remaining"
+    else
+        printf "\n"
+    fi
+    lines=$(( lines + 1 ))
+
+    # Two hint sets, because the full one is 96 columns and would wrap.
+    if (( cols >= 100 )); then
+        printf "\n  ${BLUE}↑↓${NC} move   ${BLUE}PgUp/PgDn${NC} page   ${BLUE}Home/End${NC} ends   ${BLUE}SPACE${NC} toggle   ${BLUE}a${NC}/${BLUE}n${NC} all/none   ${BLUE}ENTER${NC} go   ${BLUE}q${NC} quit\n"
+    else
+        printf "\n  ${BLUE}↑↓${NC} move  ${BLUE}SPACE${NC} toggle  ${BLUE}a${NC}/${BLUE}n${NC} all/none  ${BLUE}ENTER${NC} go  ${BLUE}q${NC} quit\n"
+    fi
     lines=$(( lines + 2 ))
     MENU_LINES=$lines
 }
@@ -239,11 +349,29 @@ menu_read_key() {
     IFS= read -rsn1 key || return 1
     if [[ "$key" == $'\033' ]]; then
         read -rsn2 -t 0.05 rest || rest=""
+        # PgUp/PgDn/Home/End arrive as ESC [ <digit> ~, one byte longer than the
+        # arrows. Without swallowing that trailing ~ it is read as the next
+        # keystroke, and the menu reacts to a key nobody pressed.
+        if [[ "$rest" =~ ^\[[0-9]$ ]]; then
+            local tail
+            read -rsn1 -t 0.05 tail || tail=""
+            case "${rest}${tail}" in
+                '[5~') printf 'pgup'  ; return 0 ;;
+                '[6~') printf 'pgdn'  ; return 0 ;;
+                '[1~'|'[7~') printf 'home' ; return 0 ;;
+                '[4~'|'[8~') printf 'end'  ; return 0 ;;
+                *)     printf 'esc'   ; return 0 ;;
+            esac
+        fi
         case "$rest" in
             '[A') printf 'up' ;;
             '[B') printf 'down' ;;
             '[C') printf 'right' ;;
             '[D') printf 'left' ;;
+            '[H') printf 'home' ;;
+            '[F') printf 'end' ;;
+            'OH') printf 'home' ;;
+            'OF') printf 'end' ;;
             *)    printf 'esc' ;;
         esac
         return 0
@@ -300,6 +428,11 @@ interactive_setup() {
             case "$action" in
                 up)    (( MENU_CURSOR > 0 )) && MENU_CURSOR=$(( MENU_CURSOR - 1 )) ;;
                 down)  (( MENU_CURSOR < ${#MENU_ITEMS[@]} - 1 )) && MENU_CURSOR=$(( MENU_CURSOR + 1 )) ;;
+                pgup)  MENU_CURSOR=$(( MENU_CURSOR - 5 )); (( MENU_CURSOR < 0 )) && MENU_CURSOR=0 ;;
+                pgdn)  MENU_CURSOR=$(( MENU_CURSOR + 5 ))
+                       (( MENU_CURSOR > ${#MENU_ITEMS[@]} - 1 )) && MENU_CURSOR=$(( ${#MENU_ITEMS[@]} - 1 )) ;;
+                home)  MENU_CURSOR=0 ;;
+                end)   MENU_CURSOR=$(( ${#MENU_ITEMS[@]} - 1 )) ;;
                 space) menu_toggle_current ;;
                 a|A)   for key in "${!MENU_STATE[@]}"; do MENU_STATE[$key]="y"; done ;;
                 n|N)   for key in "${!MENU_STATE[@]}"; do MENU_STATE[$key]="n"; done ;;
