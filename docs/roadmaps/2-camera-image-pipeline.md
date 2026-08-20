@@ -87,8 +87,36 @@ compressed.format += targetFormat;            // "bgr8" color, "mono8" mono
 any subscriber, byte-identical to what a C++ `compressed` publisher produces from
 a `bgr8` raw image, so Rust and C++ consumers cannot diverge.
 
-Verified 2026-08-20 by running the C++ plugin and recording what it wrote, not
-by reading it: `scripts/make_fixtures.py` in the crate publishes a known image
+Checked twice over, and the two checks found different things.
+
+**Read out of the upstream sources** (`ros-perception/image_common` and
+`ros-perception/image_transport_plugins`, both `humble`), which is where the
+rules below come from:
+
+| fact | source |
+|---|---|
+| publisher writes `encoding` + `"; jpeg compressed "` + `bgr8`/`mono8` | `compressed_publisher.cpp` |
+| the target is `bgr8` when `enc::isColor(encoding)`, else `mono8` | same |
+| `isColor` is exactly `{rgb8, bgr8, rgba8, bgra8, rgb16, bgr16, rgba16, bgra16}` | `sensor_msgs/image_encodings.hpp` |
+| subscriber splits on the first `;`, copies field one into `Image.encoding` verbatim | `compressed_subscriber.cpp` |
+| it reverts the colour order only for `isColor` encodings, keyed on the substring `compressed bgr` | same |
+| **it decodes `IMREAD_UNCHANGED` by default** (`kDefaultMode = "unchanged"`), so the channel count comes from the payload and the target field never sizes the output | same |
+| no `;` at all: guess by channel count, 1 to `mono8`, 3 to `bgr8` | same |
+| `raw` subscribes to the base topic; every other transport to `base + "/" + name` | `raw_subscriber.hpp`, `simple_subscriber_plugin.hpp` |
+| `camera_info` is the sibling of the base topic: drop the last element, append `camera_info` | `camera_common.cpp` |
+| `CameraSubscriber` pairs them with an **exact-time** `TimeSynchronizer` | `camera_subscriber.cpp` |
+
+The `IMREAD_UNCHANGED` row is the one worth stopping on, because the crate had
+it wrong. The third field of the format string does not decide how many channels
+you get -- the JPEG does. The field exists so the *revert* knows what the
+publisher did. A format string that disagrees with its own payload,
+`"mono8; jpeg compressed mono8"` carrying three channels, yields three channels
+labelled `mono8` in C++, and now here too. Copying a publisher's bug is the
+point: a Rust consumer that quietly disagreed with the C++ one about the same
+bytes is exactly the failure this crate exists to prevent.
+
+**And verified by running the plugin** and recording what it wrote, which is how
+the strings below were obtained rather than recalled: `scripts/make_fixtures.py` in the crate publishes a known image
 through `image_transport republish raw compressed` and commits the result. The
 three strings it produced:
 

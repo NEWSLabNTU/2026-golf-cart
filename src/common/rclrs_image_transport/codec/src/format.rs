@@ -287,8 +287,9 @@ impl CompressedFormat {
 
     /// Decide what to decode to, given what the payload turns out to contain.
     ///
-    /// `payload_channels` is read from the JPEG header, not guessed, and is
-    /// only consulted for the bare form -- exactly the C++ fallback: 1 channel
+    /// `payload_channels` is read from the JPEG header, not guessed, and it is
+    /// what decides the channel count -- see the comment on the match below.
+    /// The bare form additionally takes its `Image.encoding` from it: 1 channel
     /// is `mono8`, 3 is `bgr8`, anything else is an error.
     ///
     /// The channel-order half of this is the part that is easy to get wrong.
@@ -309,13 +310,25 @@ impl CompressedFormat {
     pub fn resolve(&self, payload_channels: usize) -> Result<Resolved, FormatError> {
         self.validate_codec()?;
 
-        let target = match self.target {
-            Some(target) => target,
-            None => match payload_channels {
-                1 => Target::Mono,
-                3 => Target::Colour,
-                other => return Err(FormatError::UndecidableChannelCount(other)),
-            },
+        // Payload-driven, always. `self.target` -- the third field of the
+        // format string -- is deliberately NOT consulted here, and that is a
+        // correction made after reading compressed_subscriber.cpp rather than
+        // reasoning about it: the plugin's `mode` parameter defaults to
+        // `unchanged` (kDefaultMode), so it calls
+        // `cv::imdecode(..., IMREAD_UNCHANGED)` and takes however many channels
+        // the JPEG actually holds. The third field never sizes the output. It
+        // exists so the colour revert below knows what the publisher did.
+        //
+        // Where this shows is a format string that disagrees with its own
+        // payload -- "mono8; jpeg compressed mono8" carrying three channels.
+        // C++ yields three channels labelled mono8; so does this now. Copying
+        // a publisher's bug is the point: a Rust consumer that quietly
+        // disagreed with the C++ one about the same bytes is the failure this
+        // crate exists to prevent.
+        let target = match payload_channels {
+            1 => Target::Mono,
+            3 => Target::Colour,
+            other => return Err(FormatError::UndecidableChannelCount(other)),
         };
 
         // The first field is copied verbatim by the C++ subscriber, whatever it
@@ -469,12 +482,19 @@ mod tests {
     }
 
     #[test]
-    fn the_compound_form_wins_over_the_channel_count() {
-        // A mono8 target on a 3-channel payload is a publisher bug, but the
-        // C++ subscriber trusts the string, so we do too. Silent disagreement
-        // between the two implementations is the thing being prevented.
+    fn the_payload_wins_over_the_compound_form() {
+        // A mono8 target on a 3-channel payload is a publisher bug. The C++
+        // subscriber decodes IMREAD_UNCHANGED, so it yields three channels and
+        // labels them mono8; this must do the same. Silent disagreement between
+        // the two implementations about the same bytes is the thing being
+        // prevented, and that includes agreeing about malformed input.
         let parsed = CompressedFormat::parse("mono8; jpeg compressed mono8");
-        assert_eq!(parsed.resolve(3).unwrap().target, Target::Mono);
+        let resolved = parsed.resolve(3).unwrap();
+        assert_eq!(resolved.target, Target::Colour);
+        assert_eq!(resolved.encoding, "mono8");
+
+        // And the honest case still works.
+        assert_eq!(parsed.resolve(1).unwrap().target, Target::Mono);
     }
 
     #[test]
