@@ -99,9 +99,13 @@ It also costs the contrib modules: NVIDIA's build has no `aruco`, so
 on a stock box.
 
 The step installs `files/99-opencv-ubuntu.pref` (priority 1001, which is what
-permits the downgrade and holds it against the next `apt upgrade`), installs
-Ubuntu's `libopencv-dev` and `libopencv-contrib-dev`, purges the NVIDIA-only
-packages, and runs `ldconfig`.
+lets the resolver pick the older version at all, and holds it against the next
+`apt upgrade`), removes the NVIDIA-only packages, repairs any interrupted
+transaction, installs Ubuntu's `libopencv-dev` and `libopencv-contrib-dev` with
+`--allow-downgrades`, and runs `ldconfig`.
+
+That order is the whole script, and each step of it is there because leaving it
+out fails in a way that names something else.
 
 The NVIDIA-only packages come off **before** the install, and that order is the
 whole trick. `opencv-licenses` owns `/usr/share/licenses/opencv4/*`, Ubuntu's

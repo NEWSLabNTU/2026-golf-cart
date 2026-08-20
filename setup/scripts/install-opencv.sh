@@ -178,7 +178,19 @@ printf "${YELLOW}→${NC} Installing Ubuntu's OpenCV 4.5.4 development packages.
 # libopencv-dev is replaced in place here, so the ros-humble-* and autoware-*
 # packages that depend on it are never left unsatisfied. Usually a no-op after
 # the repair above; it is here so that a first, clean run installs them at all.
-sudo apt-get install -y libopencv-dev libopencv-contrib-dev
+#
+# --allow-downgrades is required and the pin does NOT make it unnecessary. The
+# two act at different stages: Pin-Priority above 1000 is what lets the resolver
+# CHOOSE an older version as the candidate at all, and then apt-get applies a
+# separate safety check that refuses to carry out a downgrade under -y unless
+# this flag is given as well. Without it the run dies at the last step with
+#
+#   E: Packages were downgraded and -y was used without --allow-downgrades.
+#
+# after the NVIDIA packages have already been removed. Interactively there is no
+# error, just a prompt, which is why a hand-run install gets further than this
+# script did.
+sudo apt-get install -y --allow-downgrades libopencv-dev libopencv-contrib-dev
 
 sudo ldconfig
 
