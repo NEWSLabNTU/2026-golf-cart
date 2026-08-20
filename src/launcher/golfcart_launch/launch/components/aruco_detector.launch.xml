@@ -17,12 +17,23 @@
   <arg name="param_file"
        default="$(find-pkg-share golfcart_launch)/config/localization/aruco_detector.param.yaml"/>
   <arg name="debug_overlay" default="false"/>
+  <arg name="image_transport" default="compressed"
+       description="raw or compressed, spelled as image_transport spells it"/>
 
   <node pkg="golfcart_aruco_detector" exec="golfcart_aruco_detector"
         name="aruco_detector_$(var camera_name)" output="screen">
     <param from="$(var param_file)"/>
     <param name="debug_overlay" value="$(var debug_overlay)"/>
+    <param name="image_transport" value="$(var image_transport)"/>
+    <!-- BOTH remaps, and that is not belt and braces. ROS 2 remapping matches
+         a whole topic name, so `~/input/image` does not carry
+         `~/input/image/compressed` with it: with only the first line here, a
+         detector on the compressed transport subscribed to its own private
+         `<node>/input/image/compressed` and sat silent forever, looking like a
+         camera that sees nothing. Whichever transport is selected, one of these
+         two lines is the one that matters. -->
     <remap from="~/input/image" to="$(var image_topic)"/>
+    <remap from="~/input/image/compressed" to="$(var image_topic)/compressed"/>
     <remap from="~/input/camera_info" to="$(var camera_info_topic)"/>
   </node>
 </launch>
