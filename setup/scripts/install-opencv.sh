@@ -40,6 +40,20 @@ PREF_DST=/etc/apt/preferences.d/99-opencv-ubuntu
 # The NVIDIA-only packages. libopencv-dev is NOT here: it is replaced in place
 # by Ubuntu's, because ~40 ros-humble-* and autoware-* packages declare
 # `Depends: libopencv-dev` and purging it would take them with it.
+#
+# These come off BEFORE the install, not after, and the reason is opencv-licenses.
+# It owns /usr/share/licenses/opencv4/*, Ubuntu's libopencv-dev ships the same
+# paths, and NVIDIA's libopencv-dev does not declare Replaces for it. dpkg then
+# refuses to overwrite:
+#
+#   trying to overwrite '/usr/share/licenses/opencv4/SoftFloat-COPYING.txt',
+#   which is also in package opencv-licenses
+#
+# The unpack of libopencv-dev fails, so NVIDIA's 4.8.0 stays installed, and its
+# `Conflicts: libopencv-core-dev, libopencv-dnn-dev, ...` -- it is a monolithic
+# dev package that conflicts with every one of Ubuntu's split ones -- then
+# rejects the other fifteen packages in the same run. One file conflict, fifteen
+# failures, and an apt that will not do anything else until it is repaired.
 NVIDIA_PKGS=(libopencv libopencv-python libopencv-samples opencv-licenses opencv-samples-data)
 
 installed_version() {  # installed_version <pkg>
@@ -59,6 +73,15 @@ printf "    libopencv-dev          %s\n" "${dev_version:-(not installed)}"
 printf "    libopencv-contrib-dev  %s\n" "${contrib_version:-(not installed)}"
 runtime=$(ls /usr/lib/aarch64-linux-gnu/libopencv_core.so.* 2>/dev/null | head -1)
 printf "    runtime                %s\n" "${runtime:-(none found)}"
+
+# A previous run that hit the file conflict leaves packages unpacked but not
+# configured. Say so, because every apt command then fails with an error that
+# names dependencies rather than the cause.
+broken=$(dpkg -l 2>/dev/null | grep -c '^iU.*opencv' || true)
+if [[ ${broken:-0} -gt 0 ]]; then
+    printf "${YELLOW}!${NC} %s opencv package(s) are unpacked but not configured;\n" "$broken"
+    printf "    an earlier attempt was interrupted. This run repairs that.\n"
+fi
 
 nvidia_present=0
 for pkg in libopencv-dev "${NVIDIA_PKGS[@]}"; do
@@ -123,20 +146,29 @@ fi
 printf "${YELLOW}→${NC} Installing apt pin at %s\n" "$PREF_DST"
 sudo install -m 644 "$PREF_SRC" "$PREF_DST"
 
+# Take the NVIDIA-only packages off FIRST, for the file-conflict reason above.
+# dpkg rather than apt, and deliberately: if a previous attempt already broke
+# the transaction, apt refuses to do anything except --fix-broken, while dpkg
+# still operates per package. Nothing on the system depends on any of these --
+# checked with apt-cache rdepends --installed, all five come back empty.
+purge_list=()
+for pkg in "${NVIDIA_PKGS[@]}"; do
+    is_installed "$pkg" && purge_list+=("$pkg")
+done
+if [[ ${#purge_list[@]} -gt 0 ]]; then
+    printf "${YELLOW}→${NC} Removing the NVIDIA-only 4.8.0 packages first: %s\n" "${purge_list[*]}"
+    sudo dpkg --purge "${purge_list[@]}"
+fi
+
 printf "${YELLOW}→${NC} Installing Ubuntu's OpenCV 4.5.4 development packages...\n"
 sudo apt-get update -qq
 # libopencv-dev is replaced in place here, so the ros-humble-* and autoware-*
 # packages that depend on it are never left unsatisfied.
 sudo apt-get install -y libopencv-dev libopencv-contrib-dev
 
-purge_list=()
-for pkg in "${NVIDIA_PKGS[@]}"; do
-    is_installed "$pkg" && purge_list+=("$pkg")
-done
-if [[ ${#purge_list[@]} -gt 0 ]]; then
-    printf "${YELLOW}→${NC} Purging the leftover 4.8.0 packages: %s\n" "${purge_list[*]}"
-    sudo apt-get purge -y "${purge_list[@]}"
-fi
+# Finishes anything a previous interrupted run left half-unpacked (dpkg status
+# iU). A no-op on a healthy system.
+sudo apt-get -f install -y
 
 sudo ldconfig
 

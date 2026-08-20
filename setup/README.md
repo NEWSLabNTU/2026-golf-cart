@@ -103,7 +103,18 @@ permits the downgrade and holds it against the next `apt upgrade`), installs
 Ubuntu's `libopencv-dev` and `libopencv-contrib-dev`, purges the NVIDIA-only
 packages, and runs `ldconfig`.
 
-It is safe to re-run, and it **refuses** to run if anything on the system is
+The NVIDIA-only packages come off **before** the install, and that order is the
+whole trick. `opencv-licenses` owns `/usr/share/licenses/opencv4/*`, Ubuntu's
+`libopencv-dev` ships the same paths, and NVIDIA's `libopencv-dev` declares no
+`Replaces` for it. Install first and dpkg refuses to overwrite the file, the
+`libopencv-dev` unpack fails, NVIDIA's 4.8.0 stays installed, and its
+`Conflicts: libopencv-core-dev, libopencv-dnn-dev, …` — it is a monolithic dev
+package that conflicts with every one of Ubuntu's split ones — then rejects the
+other fifteen packages in the same run. One file conflict, fifteen failures, and
+an apt that will not do anything else until it is repaired.
+
+It is safe to re-run, it detects and repairs a system left half-unpacked by an
+interrupted attempt, and it **refuses** to run if anything on the system is
 actually linked against 4.8.0 rather than purging a library out from under it.
 Run `opencv-check` first to see what it would do.
 
