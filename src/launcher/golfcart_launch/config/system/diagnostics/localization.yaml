@@ -1,3 +1,21 @@
+# NOT LOADED BY ANYTHING. Kept because the edit below is real work.
+#
+# The aggregator's graph path is `autoware-main.yaml` from autoware_launch on
+# every path except `pose_source:=aruco`, which loads `autoware-main-aruco.yaml`
+# from this directory. That file pulls its localization subtree from
+# `localization-aruco.yaml`, its sibling, and every other subtree from
+# autoware_launch. Nothing reaches this file.
+#
+# It survived the 2026-08-21 sweep that removed 145 config files inherited
+# verbatim from the 2025-12-28 bulk copy of autoware_launch/config and never
+# touched since. This one WAS touched: the accuracy-check link below was
+# deliberately removed. Deleting it would have discarded that decision, so it
+# stays until someone confirms the same change is or is not wanted in
+# `localization-aruco.yaml`, which is the file that actually runs.
+#
+# Do not wire this in without re-reading it against upstream first. It is a
+# December snapshot, and upstream's localization.yaml has moved since.
+
 units:
   - path: /autoware/localization
     type: short-circuit-and
