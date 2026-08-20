@@ -3,9 +3,10 @@
 Prerequisite for [Phase 3 indoor localization](3-indoor-localization.md).
 Design spec: [§2 A](../superpowers/specs/2026-07-27-indoor-artag-localization-design.md#a--camera-calibration-contract-for-d)
 
-**Status: Not started — blocks sub-phases C and D**
+**Status: Intrinsics partly done, and in a more dangerous state than not done.
+Extrinsics not started. Still blocks sub-phases C and D.**
 
-Last updated: 2026-07-27
+Last updated: 2026-08-20
 
 ---
 
@@ -14,10 +15,32 @@ Last updated: 2026-07-27
 AR-tag pose error scales directly with intrinsic and extrinsic error. With the
 current values, tag-derived poses are not degraded — they are meaningless.
 
-### Current state
+### Current state, corrected 2026-08-20
 
-`golfcart_sensor_kit_launch/config/camera_left_calibration.yaml` (and the
-`camera_right`, `camera_rear` siblings) contain placeholders, not calibration:
+The intrinsics are **no longer placeholders**. `camera_left_calibration.yaml`
+now carries a real calibration: `fx 986.06, fy 1007.40, cx 712.07, cy 632.61`,
+a `rational_polynomial` model with 12 coefficients, and a projection matrix.
+Somebody calibrated a camera since this document was written.
+
+**But it is one calibration used for all three cameras.** Verified by diff:
+`camera_left_calibration.yaml`, `camera_right_calibration.yaml` and
+`camera_rear_calibration.yaml` are byte-identical apart from the `camera_name`
+field. Three physically different lenses share one intrinsic set.
+
+That is worse than the placeholder state it replaced, not better. Placeholders
+announce themselves — a focal length of 1 pixel cannot be mistaken for
+calibration. A plausible, real-looking matrix on the wrong camera produces
+plausible, real-looking poses that are wrong by an amount nobody will think to
+question.
+
+One number to check while redoing this: **`cx` is 712 on a 1920-wide image**,
+about 248 px left of centre. That is a large principal-point offset. It is
+possible on a real lens, and it is also what you would see if the calibration
+was run at a different capture size than the one declared. Worth confirming
+rather than inheriting.
+
+The previous text of this section, retained because it describes what the files
+held before:
 
 ```yaml
 camera_matrix:
@@ -67,8 +90,16 @@ this sub-phase.
 
 ### Not done
 
-- [ ] **Intrinsic calibration, per camera** — checkerboard, `plumb_bob` model.
-      Write real values into `camera_{left,right,rear}_calibration.yaml`.
+- [ ] **Intrinsic calibration, per camera, three times.** One calibration exists
+      and is currently installed as all three. Redo it per lens, and confirm the
+      `cx` offset noted above rather than copying it forward. The declared model
+      is `rational_polynomial` with 12 coefficients, which the detector now
+      supports end to end (phase 3D-5), so there is no reason to drop back to
+      `plumb_bob`.
+- [ ] **Make the three files impossible to confuse again.** Byte-identical
+      calibrations that differ only in `camera_name` are what got us here. A
+      check that fails when two cameras share intrinsics costs a few lines and
+      would have caught this.
 - [ ] **Extrinsic calibration, camera→base_link, per camera** — including the
       body→optical frame convention, stated explicitly rather than folded into
       a yaw value.

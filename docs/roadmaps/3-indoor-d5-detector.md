@@ -271,8 +271,7 @@ fifteen-line conversion is written out.
 
 ### Compressed transport, which turned out to be load-bearing
 
-The gscam config sets `enable_pub_plugins: ["image_transport/compressed"]`, so
-**no raw `sensor_msgs/Image` is published on these topics at all**. A detector
+**No raw `sensor_msgs/Image` is published on these topics at all.** A detector
 subscribed to the raw topic waits forever and presents as a camera that sees
 nothing. The node therefore defaults to `use_compressed: true` and decodes
 straight to grayscale with `imdecode`.
@@ -281,6 +280,30 @@ straight to grayscale with `imdecode`.
 `CompressedImage` subscription rather than a transport plugin. That is a
 simplification, not a workaround: it also avoids a decompressor node and a topic
 round trip.
+
+**Mechanism corrected 2026-08-20.** This section previously credited the
+`enable_pub_plugins` setting in the gscam config. That is not why. With
+`image_encoding: "jpeg"` gscam does not go through `image_transport` at all:
+it holds a plain `Publisher<CompressedImage>`, sets appsink caps to
+`image/jpeg`, and publishes straight to `camera/image_raw/compressed`. There is
+no raw publisher to disable, so the plugin allowlist is inert here — and the key
+as written (`image_raw.enable_pub_plugins`) is not the one gscam reads anyway.
+The conclusion held; the reason did not.
+
+**Forward pointer.** [Phase 4](4-camera-image-pipeline.md) makes JPEG the
+project-wide decision rather than this node's local one, and builds the rclrs
+`image_transport` equivalent whose absence this section describes. Two things
+here become its problem:
+
+- The hand-rolled image and `CameraInfo` pairing is what phase 4C2 replaces with
+  a `CameraSubscriber` equivalent.
+- `imdecode(IMREAD_GRAYSCALE)` pays a full colour decode and discards the
+  chroma. Phase 4C1 takes a grayscale decode path instead, and exposes
+  DCT-scaled decode, which is worth measuring here: it trades corner precision
+  for CPU, and corner precision is pose accuracy in this node.
+
+Phase 4 also carries a blocker that lands squarely on this doc: it is not
+established that `CameraInfo` reaches this detector at all. See blocker 1 there.
 
 ### Wired into the launch
 
