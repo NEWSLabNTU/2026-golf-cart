@@ -311,9 +311,37 @@ launch:
 # play_launch's shutdown cannot reach the recorder at all. Do not re-add a
 # recorder here.
 
-# System Monitor
-# - include:
-#     file: "$(find-pkg-share golfcart_system_monitor)/launch/golfcart_system_monitor.launch.yaml"
+# System Monitor, on http://localhost:8080/
+#
+# `just launch` puts play_launch's own web UI on 8081 (justfile), which only
+# makes sense as a reservation of 8080 for this. It was commented out on
+# 2026-04-24 by 286fac6, whose entire message is "disable system monitor
+# temporary" and which records no reason. Four months and a package rename
+# later, the mode availability strip and failing-path view live here and are
+# unreachable from `just launch` while this stays off, so it is back on.
+#
+# It brings up rosbridge on 9090 with it, because the strip reads Autoware's
+# diagnostic graph straight from the browser. Turn both off together with
+# launch_web_monitor:=false.
+#
+# NOT `launch_system_monitor`: that name is already taken, by Autoware's
+# system_monitor (cpu, gpu, hdd, mem, net, ntp) in
+# golfcart_autoware.launch.xml. Those monitors are diagnostic PUBLISHERS that
+# feed the graph this page displays, so overloading the name would let someone
+# trying to hide a web page silently switch off the hardware monitoring behind
+# it.
+- arg:
+    name: launch_web_monitor
+    default: "true"
+- group:
+    if: $(var launch_web_monitor)
+    children:
+    - include:
+        file: "$(find-pkg-share golfcart_system_monitor)/launch/golfcart_system_monitor.launch.yaml"
+        arg:
+        -
+          name: use_gnss
+          value: $(var use_gnss)
 
 # # RQT Runtime Monitor
 # - node:
