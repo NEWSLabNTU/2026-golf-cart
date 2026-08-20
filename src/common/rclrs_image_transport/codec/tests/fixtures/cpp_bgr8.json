@@ -1,0 +1,9 @@
+{
+  "name": "cpp_bgr8",
+  "format": "bgr8; jpeg compressed bgr8",
+  "source_encoding": "bgr8",
+  "width": 64,
+  "height": 48,
+  "channels": 3,
+  "payload_bytes": 1194
+}

@@ -1,0 +1,9 @@
+{
+  "name": "cpp_mono8",
+  "format": "mono8; jpeg compressed mono8",
+  "source_encoding": "mono8",
+  "width": 64,
+  "height": 48,
+  "channels": 1,
+  "payload_bytes": 777
+}

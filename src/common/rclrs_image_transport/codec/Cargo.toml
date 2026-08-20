@@ -1,0 +1,16 @@
+[package]
+name = "image_transport_codec"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "CompressedImage.format contract and JPEG codec, with no ROS dependency"
+
+[dependencies]
+thiserror = "1"
+
+# libjpeg-turbo. turbojpeg-sys builds it from source and links it statically
+# when no system turbojpeg.pc is found, which is the case on JetPack 6.2:
+# Ubuntu ships libturbojpeg.so.0 with no -dev package. Vendoring is the point,
+# not a fallback -- it makes the build identical on every host instead of
+# depending on which apt packages happen to be installed.
+turbojpeg = "1.5"
