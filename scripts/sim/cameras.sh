@@ -125,12 +125,22 @@ cmd_feed() {
         if [[ ! -e $d ]]; then err "$d missing, run 'up' first"; return 1; fi
         # leaky queue for the same reason the real pipeline needs one: a slow
         # sink must cost a frame, not wedge the source.
-        gst-launch-1.0 -q -e \
+        #
+        # v4l2sink is left on its DEFAULT io-mode. `io-mode=rw` looks harmless
+        # and is not: the loopback node then never flips from OUTPUT to CAPTURE
+        # and never advertises its format, so `v4l2-ctl --list-formats` comes
+        # back empty and every consumer dies with either "Device '/dev/videoN'
+        # is not a capture device" or "not-negotiated". Through gscam that
+        # surfaces as "Failed to PAUSE stream, check your gstreamer
+        # configuration", which sends you to look at the wrong file.
+        # nohup: these are meant to outlive the script that starts them, and
+        # `down` is what stops them.
+        nohup gst-launch-1.0 -q -e \
             videotestsrc is-live=true pattern="${PATTERNS[$i]}" \
             ! "video/x-raw,format=UYVY,width=${WIDTH},height=${HEIGHT},framerate=${FPS}/1" \
             ! queue leaky=downstream max-size-buffers=2 \
             ! identity drop-allocation=true \
-            ! v4l2sink device="$d" io-mode=rw sync=false async=false \
+            ! v4l2sink device="$d" sync=false async=false \
             >"${RUNDIR}/${CAMS[$i]}.log" 2>&1 &
         echo $! >> "$PIDFILE"
         ok "${CAMS[$i]} feeding $d  ${WIDTH}x${HEIGHT}@${FPS} UYVY  pattern=${PATTERNS[$i]}"
@@ -200,6 +210,20 @@ EOF
 # fallback that puts the load back on the CPU this whole exercise exists to
 # unload. This measures it, and it does not need cameras -- the encoder does not
 # care where the pixels came from, only how many arrive.
+#
+# TWO measurements, because one answers a question the other cannot:
+#
+#   sustain   the real question. Live 30 fps sources, one stream then three:
+#             does the encoder keep up with the cameras? A live source cannot
+#             exceed 30 fps, so this can only ever say "met" or "short".
+#   ceiling   how much headroom there is. Free-running sources, so the encoder
+#             is the only limit. Needed because "met" with 5% to spare and "met"
+#             with 4x to spare are different plans for the same phase.
+#
+# Both warm up first and discard it. NVJPG's first frames in a process include
+# engine init, and a cold 10-second run reports a number that says more about
+# startup than about throughput -- the earlier version of this recipe reported
+# one stream as SHORT and three as met, which is not a thing an encoder can do.
 cmd_bench() {
     require gst-launch-1.0 || return 1
     local spec enc tier secs=${SECS:-10}
@@ -212,54 +236,103 @@ cmd_bench() {
         warn "jpegenc and answer nothing about NVJPG. Run this on the Advantech."
     fi
 
-    local frames=$((FPS * secs))
+    mkdir -p "$RUNDIR"
     local mp; mp=$(awk -v w="$WIDTH" -v h="$HEIGHT" 'BEGIN{printf "%.2f", w*h/1000000}')
-    echo "  ${WIDTH}x${HEIGHT} = ${mp} MP per frame, ${FPS} fps, ${secs}s per run"
+    echo "  ${WIDTH}x${HEIGHT} = ${mp} MP per frame, ${FPS} fps target"
 
-    # fpsdisplaysink reports what the encoder actually sustained. Sourcing from
-    # videotestsrc rather than a device keeps this independent of `up`/`feed`,
-    # so it runs on a bare Jetson with nothing attached.
-    run_streams() {
-        local n=$1 pids=() i
+    local caps="video/x-raw,format=UYVY,width=${WIDTH},height=${HEIGHT}"
+
+    # A live source, rate-limited to FPS, exactly like a camera.
+    run_live() {
+        local n=$1 frames=$((FPS * secs)) pids=() i
         for ((i = 0; i < n; i++)); do
-            gst-launch-1.0 -q \
+            # -v, not -q: fpsdisplaysink reports through the `last-message`
+            # property, and gst-launch only prints property changes when it is
+            # verbose. With -q the log is empty and every rate reads as zero.
+            gst-launch-1.0 -v \
                 videotestsrc is-live=true num-buffers="$frames" \
-                ! "video/x-raw,format=UYVY,width=${WIDTH},height=${HEIGHT},framerate=${FPS}/1" \
+                ! "${caps},framerate=${FPS}/1" \
                 ! ${enc} \
                 ! fpsdisplaysink video-sink=fakesink text-overlay=false sync=false \
-                >"${RUNDIR}/bench_${n}_${i}.log" 2>&1 &
+                >"${RUNDIR}/bench_live_${n}_${i}.log" 2>&1 &
             pids+=("$!")
         done
         wait "${pids[@]}" 2>/dev/null
     }
 
-    mkdir -p "$RUNDIR"
-    for n in 1 3; do
-        hdr "${n} stream(s)"
-        local t0 t1
-        t0=$(date +%s.%N); run_streams "$n"; t1=$(date +%s.%N)
-        # average-rate is the sustained figure; last-message drop-rate exposes
-        # frames the sink never received.
-        local total=0 i
+    # One generated buffer, repeated as fast as the pipeline will take it.
+    # `imagefreeze` costs nothing per frame, so the encoder is the only limit --
+    # `videotestsrc` drawing a pattern 900 times is not.
+    run_free() {
+        local n=$1 frames=$2 pids=() i
         for ((i = 0; i < n; i++)); do
-            local r
-            r=$(grep -o 'average-rate: *[0-9.]*' "${RUNDIR}/bench_${n}_${i}.log" 2>/dev/null | tail -1 | grep -o '[0-9.]*$')
-            [[ -z $r ]] && r=$(awk -v f="$frames" -v a="$t0" -v b="$t1" 'BEGIN{printf "%.2f", f/(b-a)}')
-            total=$(awk -v t="$total" -v r="$r" 'BEGIN{print t+r}')
-            printf '    stream %d: %s fps\n' "$i" "$r"
+            gst-launch-1.0 -q \
+                videotestsrc num-buffers=1 pattern=solid-color \
+                ! "${caps},framerate=0/1" \
+                ! imagefreeze num-buffers="$frames" \
+                ! ${enc} \
+                ! fakesink sync=false \
+                >"${RUNDIR}/bench_free_${n}_${i}.log" 2>&1 &
+            pids+=("$!")
         done
-        awk -v t="$total" -v m="$mp" -v n="$n" -v f="$FPS" 'BEGIN{
-            printf "    aggregate: %.1f fps, %.0f MP/s", t, t*m
+        wait "${pids[@]}" 2>/dev/null
+    }
+
+    echo "  warming up (discarded)"
+    run_free 1 120 >/dev/null 2>&1
+
+    hdr "Sustain: can it keep up with the cameras?"
+    local n
+    for n in 1 3; do
+        run_live "$n"
+        local total=0 dropped=0 i r d
+        for ((i = 0; i < n; i++)); do
+            # Mean of the instantaneous rates, with the first four reports
+            # dropped: at the default half-second reporting interval those cover
+            # the first two seconds, which are pipeline startup rather than
+            # throughput. The cumulative `average:` field cannot be trimmed that
+            # way, which is why it is not the one used.
+            r=$(grep -o 'current: *[0-9.]*' "${RUNDIR}/bench_live_${n}_${i}.log" 2>/dev/null \
+                | grep -o '[0-9.]*$' \
+                | awk 'NR>4 { sum += $1; count++ } END { if (count) printf "%.2f", sum/count }')
+            [[ -z $r ]] && r=0
+            total=$(awk -v t="$total" -v r="$r" 'BEGIN{print t+r}')
+            d=$(grep -o 'dropped: *[0-9]*' "${RUNDIR}/bench_live_${n}_${i}.log" 2>/dev/null \
+                | grep -o '[0-9]*$' | tail -1)
+            dropped=$((dropped + ${d:-0}))
+        done
+        awk -v t="$total" -v m="$mp" -v n="$n" -v f="$FPS" -v dr="$dropped" 'BEGIN{
+            printf "    %d stream(s): %.1f fps, %.0f MP/s, %d dropped", n, t, t*m, dr
             want = n*f
-            if (t < want*0.95) printf "   <-- SHORT of %d fps, encoder is the limit\n", want
+            # Dropped frames first: that is the encoder failing to keep up, and
+            # it is unambiguous. The rate is a mean of half-second samples and
+            # carries a couple of fps of jitter on a source that is capped at
+            # the target anyway, so it only decides the verdict when it misses
+            # by a margin no jitter explains.
+            if (dr > 0) printf "   <-- SHORT: dropped frames at %d fps\n", want
+            else if (t < want*0.90) printf "   <-- SHORT of %d fps\n", want
             else printf "   (target %d fps, met)\n", want
         }'
     done
 
+    hdr "Ceiling: how much headroom is there?"
+    local frames=$((FPS * secs * 3))
+    for n in 1 3; do
+        local t0 t1
+        t0=$(date +%s.%N); run_free "$n" "$frames"; t1=$(date +%s.%N)
+        awk -v n="$n" -v f="$frames" -v a="$t0" -v b="$t1" -v m="$mp" -v fps="$FPS" 'BEGIN{
+            d = b - a; total = n*f/d
+            printf "    %d process(es): %.1f fps, %.0f MP/s  (%.1fx the %d fps this camera set needs)\n",
+                   n, total, total*m, total/(3*fps), 3*fps
+        }'
+    done
+
     echo
-    echo "  If three streams fall short while one is fine, NVJPG is saturated."
-    echo "  The plan then changes: lower quality, lower resolution, or fewer"
-    echo "  cameras on the hardware path. Record the numbers either way."
+    echo "  Read the two together. SHORT in the first block with headroom in"
+    echo "  the second means the bottleneck is upstream of the encoder, not the"
+    echo "  encoder. SHORT in both means NVJPG is saturated, and the plan"
+    echo "  changes: lower quality, lower resolution, or fewer cameras on the"
+    echo "  hardware path. Record the numbers either way."
 }
 
 cmd_status() {
