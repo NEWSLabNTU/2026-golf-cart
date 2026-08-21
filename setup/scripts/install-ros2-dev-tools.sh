@@ -29,37 +29,8 @@ if [[ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]]; then
     sudo rosdep init
 fi
 
-# Rust support for colcon.
-#
-# Two packages build with ament_cargo — golfcart_vehicle_interface and
-# cuda_ndt_matcher — and `just build` passes --cargo-args accordingly. Without
-# this extension colcon does not process them at all: it reports them as "not
-# processed", every dependent fails looking for their package.sh, and the rest
-# of the workspace aborts. The error names the missing package.sh rather than
-# the missing extension, so it is worth installing up front.
-if python3 -c 'import colcon_cargo_ros2' >/dev/null 2>&1; then
-    echo "colcon-cargo-ros2 already installed."
-else
-    echo "Installing colcon-cargo-ros2..."
-    # --no-deps is not an optimisation. The extension depends on colcon-core,
-    # which depends on empy; without this pip installs its own copies into
-    # ~/.local, shadowing the apt python3-colcon-* and python3-empy that ROS
-    # Humble pins. It picks empy 4.x, and rosidl_adapter needs 3.x:
-    #
-    #   AttributeError: module 'em' has no attribute 'BUFFERED_OPT'
-    #
-    # which surfaces as a message-generation failure in whichever package
-    # generates interfaces first, naming neither pip nor empy. Those
-    # dependencies are already installed from apt on any ROS machine.
-    python3 -m pip install --user --no-deps colcon-cargo-ros2
-fi
-
-if ! command -v cargo >/dev/null 2>&1; then
-    echo
-    echo "WARNING: cargo not found. The Rust packages cannot build without it."
-    echo "  Install the toolchain, then re-run the build:"
-    echo "    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
-    echo
-fi
+# Rust support for colcon (colcon-cargo-ros2) is a separate step:
+#   just colcon-cargo-ros2
+# It is part of the default `just setup` chain.
 
 echo "ROS 2 development tools installation complete."

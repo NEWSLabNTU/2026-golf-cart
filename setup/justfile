@@ -33,7 +33,7 @@ default:
     @just --list
 
 # Full setup (runs all steps in order)
-setup: _init ros2 ros2-dev-tools gdown geographiclib pacmod dev-tools _setup-autoware-debian _setup-autoware-data _setup-tensorrt-engines _setup-isaac-ros _setup-opencv python-deps nebula-driver ublox-driver ublox-udev tier4-camera gscam _setup-cyclonedds-sysctl _setup-multicast-lo _setup-turbovnc-virtualgl _setup-hardware-config _setup-otocam _setup-linuxptp ros-deps
+setup: _init ros2 ros2-dev-tools _setup-colcon-cargo-ros2 gdown geographiclib pacmod dev-tools _setup-autoware-debian _setup-autoware-data _setup-tensorrt-engines _setup-isaac-ros _setup-opencv python-deps nebula-driver ublox-driver ublox-udev tier4-camera gscam _setup-cyclonedds-sysctl _setup-multicast-lo _setup-turbovnc-virtualgl _setup-hardware-config _setup-otocam _setup-linuxptp ros-deps
     @printf "{{green}}✓ Setup complete!{{nc}}\n"
 
 # Conditional Autoware Debian install (based on SKIP_AUTOWARE_DEBIAN env var)
@@ -274,6 +274,23 @@ ros2: _init
 ros2-dev-tools: _init ros2
     @just _run ros2-dev-tools "{{scripts_dir}}/install-ros2-dev-tools.sh"
 
+# Conditional colcon-cargo-ros2 install (based on INSTALL_COLCON_CARGO_ROS2 env var)
+#
+# Defaults to ON: two workspace packages build with ament_cargo and colcon
+# silently refuses to process them without it.
+_setup-colcon-cargo-ros2:
+    #!/usr/bin/env bash
+    if [[ "${INSTALL_COLCON_CARGO_ROS2:-y}" == "y" ]]; then
+        just colcon-cargo-ros2
+    else
+        printf "{{yellow}}⊘{{nc}} colcon-cargo-ros2 skipped (user choice)\n"
+        printf "{{yellow}}Note:{{nc}} The Rust packages will not build; run 'just colcon-cargo-ros2' later\n"
+    fi
+
+# Install/upgrade colcon-cargo-ros2 (Rust support for colcon, >= 0.5.1)
+colcon-cargo-ros2: _init
+    @just _run colcon-cargo-ros2 "{{scripts_dir}}/install-colcon-cargo-ros2.sh"
+
 # Install gdown (Google Drive downloader)
 gdown: _init
     @just _run gdown "pip3 install --user gdown"
@@ -419,7 +436,7 @@ status:
     echo "============="
     echo ""
     echo "Core Components:"
-    for step in ros2 ros2-dev-tools gdown geographiclib pacmod dev-tools python-deps nebula-driver ublox-driver ublox-udev tier4-camera gscam ros-deps; do
+    for step in ros2 ros2-dev-tools colcon-cargo-ros2 gdown geographiclib pacmod dev-tools python-deps nebula-driver ublox-driver ublox-udev tier4-camera gscam ros-deps; do
         if [[ -f "{{marker_dir}}/$step" ]]; then
             printf "  {{green}}✓{{nc}} %s\n" "$step"
         else

@@ -61,6 +61,7 @@ The setup runs these steps in order:
 
 1. **ros2** - Install ROS 2 Humble
 2. **ros2-dev-tools** - Install colcon, rosdep, pytest, flake8
+2b. **colcon-cargo-ros2** - Install/upgrade the Rust colcon extension (>= 0.5.1)
 3. **gdown** - Install Google Drive downloader
 4. **geographiclib** - Install GeographicLib tools and geoid data
 5. **pacmod** - Add AutonomouStuff apt repository
@@ -82,6 +83,25 @@ The setup runs these steps in order:
 | `./setup.sh download-artifacts` | Download ML model artifacts (~2GB) |
 | `./setup.sh opencv` | Put OpenCV on one version: Ubuntu 4.5.4, with contrib |
 | `./setup.sh opencv-check` | Report the OpenCV state, change nothing |
+| `./setup.sh colcon-cargo-ros2` | Install/upgrade colcon-cargo-ros2 (>= 0.5.1) |
+
+#### colcon-cargo-ros2
+
+On by default in the interactive menu, because `golfcart_vehicle_interface` and
+`cuda_ndt_matcher` build with `ament_cargo`. Without the extension colcon does
+not process them at all -- it reports them as "not processed", and every
+dependent then fails looking for a `package.sh` that was never generated.
+
+The floor is **0.5.1**: earlier releases do not emit the `[patch.crates-io]`
+entries those packages rely on, and a stale install still imports cleanly, so an
+import check would never catch it. The step compares the installed version and
+runs `pip3 install --user -U --no-deps 'colcon-cargo-ros2>=0.5.1'` when it is
+missing or too old.
+
+`--no-deps` is deliberate: the extension depends on `colcon-core` -> `empy`, and
+letting pip resolve that installs empy 4.x into `~/.local`, shadowing the apt
+`python3-empy` 3.x that `rosidl_adapter` needs
+(`AttributeError: module 'em' has no attribute 'BUFFERED_OPT'`).
 
 #### opencv
 
