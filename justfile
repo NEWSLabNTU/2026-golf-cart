@@ -56,7 +56,6 @@ build *FLAGS="":
     if [[ "{{FLAGS}}" == *"--clean"* ]]; then
         just clean --yes
     fi
-    just build_seyond
     # Packages a given host cannot build get skipped rather than failing the
     # whole build. One list, not one per reason: colcon's --packages-ignore
     # takes the LAST occurrence and discards earlier ones, so passing the flag
@@ -171,9 +170,6 @@ build-engines:
     echo "=== engines in ${DATA}"
     find "${DATA}" -name '*.engine' -type f -printf '  %P  %s bytes\n' | sort
 
-build_seyond:
-    cd src/sensor_component/external/seyond_ros_driver && ./build.bash
-
 # Run tests for packages in src/ directory
 test:
     #!/usr/bin/env bash
@@ -191,12 +187,7 @@ clean *FLAGS="":
     #!/usr/bin/env bash
     do_clean() {
         rm -rf build install log
-        while IFS= read -r -d '' pkg; do
-            [[ -f "$pkg/Cargo.toml" ]] && (cd "$pkg" && cargo clean)
-        done < <(find src -name package.xml -printf '%h\0')
-        SEYOND_DIR=src/sensor_component/external/seyond_ros_driver
-        rm -rf "$SEYOND_DIR"/build "$SEYOND_DIR"/install "$SEYOND_DIR"/devel "$SEYOND_DIR"/log "$SEYOND_DIR"/src/CMakeLists.txt
-        echo "Cleaned build artifacts (cargo target/, seyond build dirs included)."
+        echo "Cleaned build artifacts."
     }
     if [[ "{{FLAGS}}" == *"--yes"* ]] || [[ "{{FLAGS}}" == *"--no-confirm"* ]]; then
         do_clean
@@ -236,6 +227,34 @@ launch ARGS="":
     if [ "${GOLFCART_TX_SET}" = 1 ]; then
         export GOLFCART_TX_ENABLED
     fi
+    # host:= comes from the config/host marker, not from the "all" default.
+    #
+    # `host:=all` puts the is_orin group in scope, and that group includes
+    # camera.launch.xml with camera_model:=zedx unconditionally — so a plain
+    # `just launch` on the Advantech started the ZED driver for a camera that is
+    # not attached, against zed_wrapper, which `just build` skips on any host
+    # without the ZED SDK. `$(find-pkg-share zed_wrapper)` then aborts the whole
+    # launch, and the message names a package nobody asked for.
+    #
+    # The marker already states which machine this is and config/ is the single
+    # source of truth for that, so read it here rather than making every operator
+    # remember host:=master. Only master and orin narrow the profile; loopback (or
+    # no marker) keeps the historical single-machine `all`, and an explicit
+    # host:= in ARGS still wins; see the case below.
+    GOLFCART_HOST_ROLE=$(
+        GOLFCART_ENV_RESOLVE_ONLY=1 GOLFCART_ENV_QUIET=1 \
+        bash -c 'source "{{justfile_directory()}}/scripts/env.sh"; printf "%s" "${GOLFCART_HOST}"'
+    ) || GOLFCART_HOST_ROLE=""
+    case "${GOLFCART_HOST_ROLE}" in
+        master | orin) HOST_ARG="host:=${GOLFCART_HOST_ROLE}" ;;
+        *)             HOST_ARG="host:=all" ;;
+    esac
+    # An explicit host:= in ARGS wins outright. Dropping ours rather than
+    # appending theirs: play_launch's precedence for a repeated argument is not
+    # something to bet the ZED guard on.
+    case " ${GOLFCART_LAUNCH_ARGS} " in
+        *" host:="*) HOST_ARG="" ;;
+    esac
     if [ "${GOLFCART_TX_ENABLED:-false}" = true ]; then
         printf '\033[1;31mCAN TX ENABLED — the cart can move. Ctrl-C to abort.\033[0m\n'
         for i in 3 2 1; do printf '  starting in %d...\r' "$i"; sleep 1; done
@@ -244,11 +263,13 @@ launch ARGS="":
     if [ -n "${DISPLAY:-}" ]; then
         play_launch launch \
             --web-addr 0.0.0.0:8081 \
-            golfcart_launch golfcart.launch.yaml ${GOLFCART_LAUNCH_ARGS}
+            golfcart_launch golfcart.launch.yaml \
+            ${HOST_ARG} ${GOLFCART_LAUNCH_ARGS}
     else
         play_launch launch \
             --web-addr 0.0.0.0:8081 \
             golfcart_launch golfcart.launch.yaml \
+            ${HOST_ARG} \
             rviz:=false ${GOLFCART_LAUNCH_ARGS}
     fi
 

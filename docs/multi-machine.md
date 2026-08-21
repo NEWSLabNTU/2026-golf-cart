@@ -57,9 +57,18 @@ pulls the token out and the environment carries it the rest of the way.
 Single-machine operation is untouched:
 
 ```bash
-just launch                         # host:=all, loopback DDS, nothing remote
+just launch                         # host:= from config/host, nothing remote
 GOLFCART_USE_ORIN=0 just launch-all   # master alone, without touching the orin
 ```
+
+`just launch` derives `host:=` from the `config/host` marker — `master` and
+`orin` narrow the profile, no marker (loopback) keeps `host:=all`. It used to
+pass nothing and take the `all` default, which put the `is_orin` group in scope
+on the Advantech: that group includes `camera.launch.xml` with
+`camera_model:=zedx` unconditionally, so a machine with no ZED and no ZED SDK
+(`just build` skips the ZED packages without one) died before any node started
+with `Package 'zed_wrapper' not found`. An explicit `host:=` in the arguments
+still wins.
 
 ## Recording
 
