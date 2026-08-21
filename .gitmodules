@@ -37,6 +37,3 @@
 [submodule "src/sensor_component/external/zed-ros2-wrapper"]
 	path = src/sensor_component/external/zed-ros2-wrapper
 	url = https://github.com/stereolabs/zed-ros2-wrapper.git
-[submodule "src/common/rclrs_image_transport"]
-	path = src/common/rclrs_image_transport
-	url = https://github.com/jerry73204/rclrs_image_transport.git
