@@ -20,7 +20,12 @@
   <depend>sensor_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>aruco_detection_msgs</depend>
-  <depend>rclrs_image_transport</depend>
+  <!--
+    rclrs_image_transport is deliberately absent. It is not a package in this
+    workspace any more: it lives at github.com/jerry73204/rclrs_image_transport
+    and Cargo.toml pins it to a commit. Declaring it here would ask colcon and
+    rosdep to find a package that is not there.
+  -->
 
   <export>
     <build_type>ament_cargo</build_type>

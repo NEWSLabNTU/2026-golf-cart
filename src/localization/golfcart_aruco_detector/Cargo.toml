@@ -25,13 +25,25 @@ sensor_msgs = "*"
 geometry_msgs = "*"
 aruco_detection_msgs = "*"
 
-# A path, not a "*" version, and the distinction is load-bearing: colcon-cargo-ros2
-# generates [patch.crates-io] entries only for *interface* packages, from their
-# generated bindings. A plain Rust library package gets no patch, so `"*"` would
-# be resolved against the real crates.io and fail on a name that does not exist
-# there. package.xml still declares the dependency, which is what orders the
-# build.
-rclrs_image_transport = { path = "../../common/rclrs_image_transport" }
+# Pinned to a commit, not a branch and not a path.
+#
+# Not a version: colcon-cargo-ros2 generates [patch.crates-io] entries only for
+# *interface* packages, from their generated bindings, so a plain Rust library
+# gets no patch and `"*"` would resolve against the real crates.io and fail on a
+# name that is not there.
+#
+# Not a branch either. `rev` is what makes a build reproducible: a branch would
+# let the crate this node links change under a `cargo update` with nothing in
+# this repository recording that it did. Bumping it is an edit here, which is
+# the point.
+#
+# The transitive rclrs and sensor_msgs requirements inside that crate are still
+# redirected by the generated [patch.crates-io], because patches apply to the
+# whole dependency graph rather than only to direct dependencies.
+#
+# Needs network on the first build of a given rev; cargo caches it under
+# ~/.cargo/git afterwards.
+rclrs_image_transport = { git = "https://github.com/jerry73204/rclrs_image_transport.git", rev = "52983a71b2b80904e1cad52c0ab459c7949b6156" }
 
 [dependencies.opencv]
 version = "0.88.9"
