@@ -52,6 +52,7 @@ struct Config {
     debug_overlay: bool,
     transport: Transport,
     decode_scale: Scale,
+    allow_camera_info_rescale: bool,
 }
 
 impl Config {
@@ -203,6 +204,15 @@ impl Config {
                 )
             })?;
 
+        // Off by default, and that is the safe direction: a frame size that
+        // disagrees with the calibration is far more often a forgotten
+        // recalibration than a deliberate scaling.
+        let allow_camera_info_rescale = node
+            .declare_parameter("allow_camera_info_rescale")
+            .default(false)
+            .mandatory()?
+            .get();
+
         let hint = node
             .declare_parameter::<Arc<str>>("image_transport")
             .default("compressed".into())
@@ -231,8 +241,28 @@ impl Config {
             debug_overlay,
             transport,
             decode_scale,
+            allow_camera_info_rescale,
         })
     }
+}
+
+/// A detector plus the frame size its intrinsics are valid for.
+///
+/// The two travel together because they are only meaningful together. `k` is in
+/// pixels of a particular image size, and `CameraInfo` states that size in its
+/// own `width` and `height`. Keeping the pair lets the image callback check
+/// what it is handed against what the calibration was made for, which is the
+/// difference between a wrong pose and a refusal.
+struct Calibration {
+    detector: Arc<Detector>,
+    /// What an incoming frame must measure, after `image_decode_scale`.
+    expected_width: u32,
+    expected_height: u32,
+    /// Kept so the intrinsics can be rebuilt for a different frame size when
+    /// `allow_camera_info_rescale` is on.
+    k: [f64; 9],
+    d: Vec<f64>,
+    distortion_model: String,
 }
 
 // ── message construction ────────────────────────────────────────────────────
@@ -367,7 +397,8 @@ fn main() -> Result<()> {
     // The detector cannot be built until CameraInfo arrives, and is rebuilt if
     // the calibration changes. ArcSwap so the image callback reads it without
     // taking a lock on every frame.
-    let detector_state: Arc<ArcSwap<Option<Arc<Detector>>>> = Arc::new(ArcSwap::from_pointee(None));
+    let detector_state: Arc<ArcSwap<Option<Arc<Calibration>>>> =
+        Arc::new(ArcSwap::from_pointee(None));
 
     let detections_publisher = node.create_publisher::<ArucoDetectionArray>("~/output/detections")?;
     let overlay_publisher = config
@@ -398,7 +429,17 @@ fn main() -> Result<()> {
             match Detector::new(geometry, params, &k, &msg.d, &msg.distortion_model) {
                 Ok(detector) => {
                     let first = state.load().is_none();
-                    state.store(Arc::new(Some(Arc::new(detector))));
+                    state.store(Arc::new(Some(Arc::new(Calibration {
+                        detector: Arc::new(detector),
+                        // CameraInfo states the size its intrinsics were made
+                        // for. Divided by the decode factor because that is the
+                        // size this node will actually receive.
+                        expected_width: msg.width / decode_factor as u32,
+                        expected_height: msg.height / decode_factor as u32,
+                        k: msg.k,
+                        d: msg.d.clone(),
+                        distortion_model: msg.distortion_model.clone(),
+                    }))));
                     if first {
                         log_info!(
                             NODE_NAME,
@@ -457,6 +498,111 @@ fn main() -> Result<()> {
         }
     };
 
+    /// Reconcile the frame size against the size the calibration was made for.
+    ///
+    /// Returns the detector to use, or `None` to drop the frame. Dropping is
+    /// the safe answer: the localizer sees a coverage gap, which is a state it
+    /// already handles, rather than poses that are wrong by a constant factor
+    /// and indistinguishable from good ones.
+    ///
+    /// With `allow_camera_info_rescale` the intrinsics are scaled to the frame
+    /// instead, and the detector rebuilt. That is only valid when the sensor
+    /// SCALED -- if it cropped, the focal length did not change and rescaling
+    /// makes things worse -- so the aspect ratio is checked first and a
+    /// mismatch is refused however the flag is set.
+    fn resolve_calibration(
+        calibration: &Arc<Calibration>,
+        frame_width: u32,
+        frame_height: u32,
+        allow_rescale: bool,
+        state: &Arc<ArcSwap<Option<Arc<Calibration>>>>,
+    ) -> Option<Arc<Detector>> {
+        if frame_width == calibration.expected_width
+            && frame_height == calibration.expected_height
+        {
+            return Some(Arc::clone(&calibration.detector));
+        }
+
+        static COUNT: AtomicU32 = AtomicU32::new(0);
+        let complain = COUNT.fetch_add(1, Ordering::Relaxed) % 60 == 0;
+
+        let expected_ratio =
+            calibration.expected_width as f64 / calibration.expected_height as f64;
+        let frame_ratio = frame_width as f64 / frame_height as f64;
+        // A percent of slack, which covers rounding on odd dimensions and
+        // nothing else.
+        let same_shape = (expected_ratio - frame_ratio).abs() / expected_ratio < 0.01;
+
+        if !same_shape {
+            if complain {
+                log_error!(
+                    NODE_NAME,
+                    "frames are {frame_width}x{frame_height} but the calibration is for \
+                     {}x{}, and the aspect ratios differ. That is not a resolution \
+                     change -- it is a different sensor mode or the wrong calibration \
+                     file. Detections are suppressed; fix camera_info_url.",
+                    calibration.expected_width,
+                    calibration.expected_height
+                );
+            }
+            return None;
+        }
+
+        if !allow_rescale {
+            if complain {
+                log_error!(
+                    NODE_NAME,
+                    "frames are {frame_width}x{frame_height} but the calibration is for \
+                     {}x{}. Every pose would be wrong by that ratio, so detections are \
+                     suppressed. Recalibrate at the new resolution, or set \
+                     allow_camera_info_rescale:=true if the sensor scales rather than \
+                     crops and the old calibration is still geometrically valid.",
+                    calibration.expected_width,
+                    calibration.expected_height
+                );
+            }
+            return None;
+        }
+
+        // Same shape, and the operator has said scaling is legitimate.
+        let factor = calibration.expected_width as f64 / frame_width as f64;
+        let scaled = golfcart_aruco_detector::scale_intrinsics(&calibration.k, factor);
+        let detector = Detector::new(
+            calibration.detector.geometry(),
+            calibration.detector.params(),
+            &scaled,
+            &calibration.d,
+            &calibration.distortion_model,
+        )
+        .ok()?;
+        let detector = Arc::new(detector);
+
+        if complain {
+            log_warn!(
+                NODE_NAME,
+                "frames are {frame_width}x{frame_height}, calibration is for {}x{}; \
+                 rescaling the intrinsics by {factor:.4} because \
+                 allow_camera_info_rescale is set. This is a stopgap: the distortion \
+                 model is NOT rescaled, and it only holds if the sensor scales rather \
+                 than crops. Recalibrate.",
+                calibration.expected_width,
+                calibration.expected_height
+            );
+        }
+
+        // Cache it, so the rebuild is once per calibration rather than per frame.
+        state.store(Arc::new(Some(Arc::new(Calibration {
+            detector: Arc::clone(&detector),
+            expected_width: frame_width,
+            expected_height: frame_height,
+            k: scaled,
+            d: calibration.d.clone(),
+            distortion_model: calibration.distortion_model.clone(),
+        }))));
+
+        Some(detector)
+    }
+
     /// Shared "waiting for calibration" complaint, throttled: without it this
     /// prints once per frame for as long as the camera stays uncalibrated.
     fn warn_no_calibration() {
@@ -475,6 +621,8 @@ fn main() -> Result<()> {
     // sees grayscale pixels, whichever transport they arrived on.
     let _image_subscription = {
         let state = Arc::clone(&detector_state);
+        let rescale_state = Arc::clone(&detector_state);
+        let allow_rescale = config.allow_camera_info_rescale;
         let overlay_publisher = overlay_publisher.clone();
         let handle_frame = handle_frame.clone();
         subscribe_image(
@@ -496,10 +644,36 @@ fn main() -> Result<()> {
             |message| log_error!(NODE_NAME, "{message}"),
             move |frame: Frame| {
                 let loaded = state.load();
-                let Some(detector) = loaded.as_ref().as_ref() else {
+                let Some(calibration) = loaded.as_ref().as_ref() else {
                     warn_no_calibration();
                     return;
                 };
+
+                // The check this whole struct exists for. `k` is in pixels of
+                // the size CameraInfo declares; if the frame is a different
+                // size, the intrinsics describe a different camera than the one
+                // that took this picture, and every pose comes out scaled by
+                // the ratio with nothing downstream able to tell.
+                //
+                // The way this happens in practice is not exotic: someone
+                // changes the capture resolution in camera_capture/<profile>.yaml
+                // and does not recalibrate. gscam publishes the calibration file
+                // verbatim -- it touches only the header -- so the stale width
+                // and height come through with the stale k, and they are the
+                // evidence.
+                let frame_width = frame.image.width as u32;
+                let frame_height = frame.image.height as u32;
+                let detector = match resolve_calibration(
+                    calibration,
+                    frame_width,
+                    frame_height,
+                    allow_rescale,
+                    &rescale_state,
+                ) {
+                    Some(detector) => detector,
+                    None => return,
+                };
+                let detector = detector.as_ref();
                 let mat = match as_gray_mat(&frame.image) {
                     Ok(mat) => mat,
                     Err(error) => {

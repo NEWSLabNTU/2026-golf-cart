@@ -91,6 +91,30 @@
     # never happened.
     image_decode_scale: 1
 
+    # Accept a frame whose size disagrees with CameraInfo, by rescaling the
+    # intrinsics to it.
+    #
+    # OFF, and the default is the point. `k` is in pixels of the size CameraInfo
+    # declares. Change the capture resolution in camera_capture/<profile>.yaml
+    # and forget to recalibrate, and gscam keeps publishing the old calibration
+    # verbatim -- it touches only the header -- so the images get bigger while
+    # `k` does not, and every pose comes out wrong by that ratio. Nothing
+    # downstream can tell: the poses are self-consistent, they are just not
+    # where the vehicle is.
+    #
+    # The detector compares the two on every frame. Mismatched, it suppresses
+    # detections and says so, which the localizer already handles as a coverage
+    # gap. An aspect-ratio mismatch is refused however this is set: that is not
+    # a resolution change but a different sensor mode or the wrong file, and
+    # rescaling would make it worse.
+    #
+    # Turn this on only when the sensor genuinely SCALES rather than crops, and
+    # treat it as a stopgap until a recalibration: the distortion coefficients
+    # are not rescaled with it. They are in normalized coordinates so they
+    # survive a pure scaling, but a sensor that changes mode usually changes
+    # more than scale.
+    allow_camera_info_rescale: false
+
     # ─────────────────────────────────────────────────────────────────────────
     # Candidate search
     # ─────────────────────────────────────────────────────────────────────────
