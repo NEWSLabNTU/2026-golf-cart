@@ -500,10 +500,11 @@ an error naming `--list` rather than a silent no-op.
   comment needs the submodule pointer ceremony.
 - `logging_diag_graph` runs in every launch with `enable_terminal_log: false`. A
   node doing nothing. Enable it or drop it.
-- `golfcart_system_monitor` is commented out of `golfcart.launch.yaml:316`. Only
-  `sensor_only.launch.yaml` and `logging_simulation.launch.yaml` launch it, so
-  nothing built here is reachable from the normal launch until that is settled.
-  Decide before O-C, not after.
+- ~~`golfcart_system_monitor` is commented out of `golfcart.launch.yaml`.~~
+  **Done 2026-08-21**, `6448564`. Behind `launch_web_monitor`, deliberately not
+  `launch_system_monitor`, which already names Autoware's cpu/gpu/hdd monitors
+  and would let someone hiding a page switch off the hardware monitoring behind
+  it.
 
 ## Critical path
 
