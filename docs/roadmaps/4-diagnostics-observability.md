@@ -369,20 +369,64 @@ mode levels directly, so the traversal itself is under test rather than assumed.
 
 ## O-E: MRM timeline
 
-**Needs O-A only, not O-C.**
+**Status: DONE, 2026-08-21.** `golfcart_system_monitor` `4651fa7`.
 
-`MrmState` is a state machine, and what matters after an incident is the
-sequence: when availability dropped, when `mrm_handler` reacted, which operator
-ran, whether it reached `MRM_SUCCEEDED`. A strip chart of `mrm_state` beside
-`hazard_status.level` answers post-run questions that no instantaneous view can,
-including the ones RViz's `AutowareStatePanel` cannot, since it shows only the
-present value.
+Every change to MRM state, hazard status and per-mode availability, newest
+first, with wall-clock timestamps. Changes only, not messages: these topics
+republish at rate and a timeline that logs every message is a log.
 
-Acceptance:
+### The description API is empty on this deployment
 
-- replaying an injected fault shows availability drop, handler reaction,
-  operator, outcome, in order and with timestamps
-- behaviours are labelled from `ListMrmDescription`, never from a hardcoded enum
+`MrmState.behavior` is marked deprecated in the message file in favour of
+`ListMrmDescription`, and this document said to label from that service.
+**Called against a live stack it returns `descriptions=[]`.** `FailSafeNode`
+takes an `mrm_descriptions` parameter that nothing here sets, and the running
+node declares no such parameter at all.
+
+So the deprecated enum is what we have. The labels carry a comment to revisit
+them on upgrade. That is the **third** field this phase planned on and found
+inert, after `is_dependent` and `latch_level`. The pattern is worth naming: the
+message definitions describe what Autoware's diagnostic stack *can* express,
+not what this deployment's configuration actually populates. Check any new field
+against a live graph before designing on it.
+
+### Verified, and what is not
+
+Verified against a live MRM chain assembled on the bench: aggregator,
+availability converter, both MRM operators, `mrm_handler`, the hazard converter,
+three adapi nodes, and synthetic odometry, control mode and gear
+(`scripts/check/_mrm_fake_inputs.py`). Injecting one AEB leaf produced, in
+order:
+
+```
+  hazard      SINGLE_POINT_FAULT emergency
+  available   stop local remote emergency_stop      (autonomous, pull_over,
+                                                     comfortable_stop dropped)
+  ...on clear:
+  hazard      NO_FAULT
+  available   stop autonomous local remote emergency_stop comfortable_stop pull_over
+```
+
+The ordering is real information the timeline surfaces: **hazard_status changed
+roughly 80 ms before availability did.**
+
+> **Not verified: `mrm_state` transitions.** `mrm_handler` sits in
+> `no mrm operation available: operate emergency_stop` on this bench, because
+> the operation-mode plumbing it expects (`operation_mode_transition_manager`,
+> the control gate) is not there. It publishes once at startup and never moves.
+> The timeline renders it correctly against synthetic messages, but the live
+> transition sequence needs the full stack or the vehicle. Forcing it on the
+> bench would have tested the fixture rather than the system.
+
+### A dropped bridge does not clear the timeline
+
+It is the record of what happened, and a drop is when that record matters most,
+so the disconnection is appended as an event instead. Asserted in the test.
+
+That test also caught a real scoping bug: `note()` and `renderTimeline()` were
+defined inside `connect()`, so `bridgeLost()` at IIFE scope could not reach
+them. It fires only on a bridge drop, which is exactly why the live run passed
+while the unit test did not.
 
 ## O-F: fault injection
 
@@ -469,7 +513,7 @@ O-A2 (rosbridge or rclpy)        DONE, rosbridge for the graph views
  |
  +--> O-C (availability strip)  DONE --> O-D (failing path)  DONE
  |
- +--> O-E (MRM timeline)
+ +--> O-E (MRM timeline)  DONE
 
 O-B (play_launch)      runs in parallel, no dependency
 O-F (fault injection)  DONE, and O-E can now be driven from it offline
