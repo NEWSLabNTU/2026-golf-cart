@@ -20,7 +20,8 @@
 use anyhow::{anyhow, bail, Context as _, Result};
 use arc_swap::ArcSwap;
 use golfcart_aruco_detector::{
-    dictionary::ArucoDictionary, BoardGeometry, Detector, DetectorParams, MarkerDetection,
+    dictionary::ArucoDictionary, reconcile_frame_size, BoardGeometry, Detector, DetectorParams,
+    FrameSize, MarkerDetection,
 };
 use nalgebra::Isometry3;
 use opencv::{core::Mat, prelude::*};
@@ -498,18 +499,17 @@ fn main() -> Result<()> {
         }
     };
 
-    /// Reconcile the frame size against the size the calibration was made for.
+    /// Apply [`reconcile_frame_size`]'s verdict.
+    ///
+    /// The decision itself is in `calibration.rs`, with unit tests: it is
+    /// arithmetic about sizes and belongs somewhere it can be exercised without
+    /// a camera. What is left here is what the node does about it -- logging,
+    /// rebuilding, caching -- which needs a running graph to mean anything.
     ///
     /// Returns the detector to use, or `None` to drop the frame. Dropping is
-    /// the safe answer: the localizer sees a coverage gap, which is a state it
-    /// already handles, rather than poses that are wrong by a constant factor
-    /// and indistinguishable from good ones.
-    ///
-    /// With `allow_camera_info_rescale` the intrinsics are scaled to the frame
-    /// instead, and the detector rebuilt. That is only valid when the sensor
-    /// SCALED -- if it cropped, the focal length did not change and rescaling
-    /// makes things worse -- so the aspect ratio is checked first and a
-    /// mismatch is refused however the flag is set.
+    /// the safe answer: the localizer already handles a detector that reports
+    /// nothing, as a coverage gap, and has no way to handle poses that are
+    /// quietly scaled.
     fn resolve_calibration(
         calibration: &Arc<Calibration>,
         frame_width: u32,
@@ -517,55 +517,66 @@ fn main() -> Result<()> {
         allow_rescale: bool,
         state: &Arc<ArcSwap<Option<Arc<Calibration>>>>,
     ) -> Option<Arc<Detector>> {
-        if frame_width == calibration.expected_width
-            && frame_height == calibration.expected_height
-        {
+        let expected = (calibration.expected_width, calibration.expected_height);
+        let actual = (frame_width, frame_height);
+        let verdict = reconcile_frame_size(expected, actual, allow_rescale);
+
+        if verdict == FrameSize::Matches {
             return Some(Arc::clone(&calibration.detector));
         }
 
+        // Throttled: every one of these repeats at the frame rate for as long
+        // as the mismatch lasts, which is until someone recalibrates.
         static COUNT: AtomicU32 = AtomicU32::new(0);
         let complain = COUNT.fetch_add(1, Ordering::Relaxed) % 60 == 0;
 
-        let expected_ratio =
-            calibration.expected_width as f64 / calibration.expected_height as f64;
-        let frame_ratio = frame_width as f64 / frame_height as f64;
-        // A percent of slack, which covers rounding on odd dimensions and
-        // nothing else.
-        let same_shape = (expected_ratio - frame_ratio).abs() / expected_ratio < 0.01;
-
-        if !same_shape {
-            if complain {
-                log_error!(
-                    NODE_NAME,
-                    "frames are {frame_width}x{frame_height} but the calibration is for \
-                     {}x{}, and the aspect ratios differ. That is not a resolution \
-                     change -- it is a different sensor mode or the wrong calibration \
-                     file. Detections are suppressed; fix camera_info_url.",
-                    calibration.expected_width,
-                    calibration.expected_height
-                );
+        let factor = match verdict {
+            FrameSize::Matches => unreachable!("handled above"),
+            FrameSize::Unusable => {
+                if complain {
+                    log_error!(
+                        NODE_NAME,
+                        "CameraInfo declares {}x{} and the frame is {frame_width}x{frame_height}; \
+                         a zero dimension means the calibration was never populated. Detections \
+                         are suppressed. Check camera_info_url.",
+                        expected.0,
+                        expected.1
+                    );
+                }
+                return None;
             }
-            return None;
-        }
-
-        if !allow_rescale {
-            if complain {
-                log_error!(
-                    NODE_NAME,
-                    "frames are {frame_width}x{frame_height} but the calibration is for \
-                     {}x{}. Every pose would be wrong by that ratio, so detections are \
-                     suppressed. Recalibrate at the new resolution, or set \
-                     allow_camera_info_rescale:=true if the sensor scales rather than \
-                     crops and the old calibration is still geometrically valid.",
-                    calibration.expected_width,
-                    calibration.expected_height
-                );
+            FrameSize::AspectMismatch => {
+                if complain {
+                    log_error!(
+                        NODE_NAME,
+                        "frames are {frame_width}x{frame_height} but the calibration is for \
+                         {}x{}, and the aspect ratios differ. That is not a resolution change -- \
+                         it is a different sensor mode or the wrong calibration file. Detections \
+                         are suppressed; fix camera_info_url.",
+                        expected.0,
+                        expected.1
+                    );
+                }
+                return None;
             }
-            return None;
-        }
+            FrameSize::SizeMismatch => {
+                if complain {
+                    log_error!(
+                        NODE_NAME,
+                        "frames are {frame_width}x{frame_height} but the calibration is for \
+                         {}x{}. Every pose would be wrong by that ratio, so detections are \
+                         suppressed. Recalibrate at the new resolution, or set \
+                         allow_camera_info_rescale:=true if the sensor scales rather than crops \
+                         and the old calibration is still geometrically valid.",
+                        expected.0,
+                        expected.1
+                    );
+                }
+                return None;
+            }
+            FrameSize::Rescale { factor } => factor,
+        };
 
-        // Same shape, and the operator has said scaling is legitimate.
-        let factor = calibration.expected_width as f64 / frame_width as f64;
         let scaled = golfcart_aruco_detector::scale_intrinsics(&calibration.k, factor);
         let detector = Detector::new(
             calibration.detector.geometry(),
@@ -580,17 +591,16 @@ fn main() -> Result<()> {
         if complain {
             log_warn!(
                 NODE_NAME,
-                "frames are {frame_width}x{frame_height}, calibration is for {}x{}; \
-                 rescaling the intrinsics by {factor:.4} because \
-                 allow_camera_info_rescale is set. This is a stopgap: the distortion \
-                 model is NOT rescaled, and it only holds if the sensor scales rather \
-                 than crops. Recalibrate.",
-                calibration.expected_width,
-                calibration.expected_height
+                "frames are {frame_width}x{frame_height}, calibration is for {}x{}; rescaling \
+                 the intrinsics by {factor:.4} because allow_camera_info_rescale is set. This \
+                 is a stopgap: the distortion model is NOT rescaled, and it only holds if the \
+                 sensor scales rather than crops. Recalibrate.",
+                expected.0,
+                expected.1
             );
         }
 
-        // Cache it, so the rebuild is once per calibration rather than per frame.
+        // Cached, so the rebuild is once per calibration rather than per frame.
         state.store(Arc::new(Some(Arc::new(Calibration {
             detector: Arc::clone(&detector),
             expected_width: frame_width,

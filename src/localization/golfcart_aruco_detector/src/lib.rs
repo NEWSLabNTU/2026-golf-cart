@@ -22,12 +22,14 @@
 //! Vendored from LCTK and merged into one package. What was dropped, and why,
 //! is in `docs/roadmaps/3-indoor-d5-detector.md`.
 
+pub mod calibration;
 pub mod detector;
 pub mod dictionary;
 pub mod marker_pnp;
 pub mod params;
 pub mod render;
 
+pub use calibration::{reconcile_frame_size, FrameSize};
 pub use detector::{scale_intrinsics, BoardGeometry, Detector, MarkerDetection, NUM_CORNERS};
 pub use dictionary::ArucoDictionary;
 pub use marker_pnp::{marker_local_corners, solve_marker_pose, MarkerPose};
