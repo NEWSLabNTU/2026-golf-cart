@@ -155,8 +155,23 @@ if [[ -z $profile_dir ]]; then
     exit 0
 fi
 
-active=${CAMERA_CAPTURE_PROFILE:-v4l2-dmabuf}
-ok "active profile: ${active}  (CAMERA_CAPTURE_PROFILE, default v4l2-dmabuf)"
+# The profile is camera.launch.xml's `capture_profile` argument and nothing else
+# — the CAMERA_CAPTURE_PROFILE environment variable it used to also read is gone.
+# Read the default out of the launch file rather than repeating it here, so this
+# report cannot claim a profile the launch would not run.
+launch_xml=""
+for candidate in \
+    "${repo_dir}/install/golfcart_sensor_kit_launch/share/golfcart_sensor_kit_launch/launch/camera.launch.xml" \
+    "${repo_dir}/src/sensor_kit/golfcart_sensor_kit_launch/golfcart_sensor_kit_launch/launch/camera.launch.xml"; do
+    [[ -f $candidate ]] && { launch_xml=$candidate; break; }
+done
+active=$(sed -n 's/.*name="capture_profile"[^>]*default="\([^"]*\)".*/\1/p' "${launch_xml}" 2>/dev/null | head -1)
+if [[ -z $active ]]; then
+    warn "could not read capture_profile's default out of camera.launch.xml"
+    active=nvv4l2camerasrc
+else
+    ok "active profile: ${active}  (capture_profile default in camera.launch.xml)"
+fi
 echo "  from ${profile_dir#"${repo_dir}/"}"
 
 # The pipeline for one camera, out of one profile. Reading the YAML rather than
@@ -235,8 +250,11 @@ else
         done
     done
     ok "cleared against a real device: ${cleared[*]}"
-    echo "  Take the first one that works on the ladder and set it:"
-    echo "      CAMERA_CAPTURE_PROFILE=${best}    # in config/sensors.conf"
+    echo "  Take the first one that works on the ladder. For one run:"
+    echo "      ros2 launch golfcart_sensor_kit_launch camera.launch.xml \\"
+    echo "          camera_model:=gscam capture_profile:=${best}"
+    echo "  To make it what the vehicle runs, change capture_profile's default"
+    echo "  in camera.launch.xml: \`just launch\` cannot pass the argument through."
 fi
 
 hdr "Devices"
@@ -244,7 +262,7 @@ shopt -s nullglob
 devices=(/dev/video*)
 if [[ ${#devices[@]} -eq 0 ]]; then
     warn "no /dev/video* at all. For a box with no cameras: \`just sim cameras\`,
-         then CAMERA_CAPTURE_PROFILE=sim."
+         then launch camera.launch.xml with capture_profile:=sim."
 else
     ok "${devices[*]}"
     [[ -d /dev/v4l/by-path ]] && echo "  by-path: $(ls /dev/v4l/by-path 2>/dev/null | tr '\n' ' ')"

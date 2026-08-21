@@ -267,13 +267,16 @@ Tasks:
       runs `v4l2src` and `nvv4l2camerasrc` against it and says which cleared.
 - [ ] Run the probe on the Advantech **with the cameras attached**. That is the
       one remaining unknown: everything else in this sub-phase is now measured.
-- [x] Make the capture path switchable without editing a tracked file:
-      `camera_capture/<profile>.yaml`, selected by `CAMERA_CAPTURE_PROFILE`.
-      Four profiles, one variable, and nothing downstream of the source element
-      changes between them. See sub-phase B.
-- [ ] On the vehicle, walk the ladder and set the winner:
-      `CAMERA_CAPTURE_PROFILE=nvv4l2camerasrc`, falling back to `v4l2-dmabuf`
-      then `v4l2-mmap`. `scripts/check/camera_pipeline.sh` does the walking.
+- [x] Make the capture path switchable: `camera_capture/<profile>.yaml`, selected
+      by `camera.launch.xml`'s `capture_profile` argument. Four profiles, and
+      nothing downstream of the source element changes between them. See
+      sub-phase B. (Originally an environment variable, `CAMERA_CAPTURE_PROFILE`;
+      that was removed in favour of the argument and its default.)
+- [ ] On the vehicle, walk the ladder and set the winner: `nvv4l2camerasrc`,
+      falling back to `v4l2-dmabuf` then `v4l2-mmap`. Setting it means changing
+      `capture_profile`'s default in `camera.launch.xml` — `just launch` cannot
+      pass the argument through. `scripts/check/camera_pipeline.sh` does the
+      walking.
 - [x] Rewrite `config/gscam.md` against what the YAMLs actually carry. Done, and
       it corrected two things it had asserted: `camera_info_rescale` is not a
       gscam parameter at all -- the name does not occur in the `ros2` branch --
@@ -345,19 +348,27 @@ worth doing for its own sake.
 ### Capture profiles
 
 The capture path is the one part of this pipeline that cannot be settled without
-the vehicle, so it is now a **profile**, switched by environment variable at
-deploy time with no edit to a tracked file:
+the vehicle, so it is now a **profile**, named by `camera.launch.xml`'s
+`capture_profile` argument:
 
 ```bash
-CAMERA_CAPTURE_PROFILE=nvv4l2camerasrc just launch
+ros2 launch golfcart_sensor_kit_launch camera.launch.xml \
+    camera_model:=gscam capture_profile:=v4l2-mmap
 ```
+
+That argument is the whole selection mechanism. It was also read from
+`CAMERA_CAPTURE_PROFILE` at first, so a profile could be chosen per run of
+`just launch`; the variable is gone, and `just launch` reaches this file through
+two installed Autoware sensing files that forward a fixed set of arguments and
+not this one. Through `just launch`, the default below is what runs, and changing
+what the vehicle runs is an edit to that default.
 
 `golfcart_sensor_kit_launch/config/camera_capture/`:
 
 | profile | source | status |
 |---|---|---|
-| `v4l2-dmabuf` | `v4l2src io-mode=4` | **default**, what shipped before profiles |
-| `nvv4l2camerasrc` | `nvv4l2camerasrc` | the zero-copy target, unverified against oToCam |
+| `nvv4l2camerasrc` | `nvv4l2camerasrc` | **default**, the zero-copy target, unverified against oToCam |
+| `v4l2-dmabuf` | `v4l2src io-mode=4` | what shipped before profiles |
 | `v4l2-mmap` | `v4l2src io-mode=2` | copies on purpose, to keep "camera dead" and "dmabuf dead" separable |
 | `sim` | `v4l2src` on v4l2loopback | no hardware; pairs with `just sim cameras` |
 
@@ -372,7 +383,7 @@ Exercised end to end on an AGX Orin with no cameras attached, through the real
 launch file:
 
 ```console
-$ CAMERA_CAPTURE_PROFILE=sim ros2 launch golfcart_sensor_kit_launch camera.launch.xml camera_model:=gscam
+$ ros2 launch golfcart_sensor_kit_launch camera.launch.xml camera_model:=gscam capture_profile:=sim
 left  30.008 Hz    right 30.019 Hz    rear  30.031 Hz
 camera_info 29.978 Hz    format "jpeg"
 ```
