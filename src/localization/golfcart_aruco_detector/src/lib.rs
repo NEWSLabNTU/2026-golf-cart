@@ -28,7 +28,7 @@ pub mod marker_pnp;
 pub mod params;
 pub mod render;
 
-pub use detector::{BoardGeometry, Detector, MarkerDetection, NUM_CORNERS};
+pub use detector::{scale_intrinsics, BoardGeometry, Detector, MarkerDetection, NUM_CORNERS};
 pub use dictionary::ArucoDictionary;
 pub use marker_pnp::{marker_local_corners, solve_marker_pose, MarkerPose};
 pub use params::{

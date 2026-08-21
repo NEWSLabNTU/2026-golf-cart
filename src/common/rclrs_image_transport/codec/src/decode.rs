@@ -78,6 +78,31 @@ pub enum Scale {
 }
 
 impl Scale {
+    /// What the image is divided by: 1, 2, 4 or 8.
+    ///
+    /// A consumer needs this, not just the enum. Anything holding camera
+    /// intrinsics has to bring them down by the same factor when the frame
+    /// shrinks, or every distance it computes is scaled by it.
+    pub fn divisor(self) -> u32 {
+        match self {
+            Scale::Full => 1,
+            Scale::Half => 2,
+            Scale::Quarter => 4,
+            Scale::Eighth => 8,
+        }
+    }
+
+    /// Parse the divisor as a parameter would carry it.
+    pub fn from_divisor(divisor: u32) -> Option<Self> {
+        match divisor {
+            1 => Some(Scale::Full),
+            2 => Some(Scale::Half),
+            4 => Some(Scale::Quarter),
+            8 => Some(Scale::Eighth),
+            _ => None,
+        }
+    }
+
     fn factor(self) -> turbojpeg::ScalingFactor {
         match self {
             Scale::Full => turbojpeg::ScalingFactor::ONE,

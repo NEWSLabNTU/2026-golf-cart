@@ -59,6 +59,38 @@
     # cameras and real boards produce.
     detection_downscale: 1
 
+    # Decode the JPEG at a fraction of its stored size, 1 | 2 | 4 | 8. libjpeg
+    # does this inside the IDCT, so it is cheaper than decoding and resizing.
+    #
+    # A DIFFERENT trade from detection_downscale, and worth keeping straight.
+    # This one throws pixels away before anything sees them, so corner precision
+    # really is reduced. detection_downscale keeps the full frame for the
+    # refinement and only searches a reduced one, which is why it measures at
+    # 0.002 px. Reach for detection_downscale first.
+    #
+    # Measured live on an AGX Orin: one 1920x1280 camera at 30 fps, gscam with
+    # hardware NVJPG, whole-node CPU:
+    #
+    #   decode  downscale     rate      CPU
+    #     1         1        30.0 Hz    187%
+    #     1         2        29.7 Hz     76%
+    #     2         1        29.9 Hz     57%
+    #     2         2        30.1 Hz     53%
+    #
+    # Note the last two rows: once the frame is 960x640 the detection is already
+    # cheap, so downscaling on top of it adds little.
+    #
+    # The intrinsics are scaled to match, in the node, on every CameraInfo. They
+    # have to be: `k` says how a metre at a distance maps to pixels, and halving
+    # the pixels while leaving fx alone reports every pose at half its true
+    # distance, confidently. The detections message carries the scaled `k` and
+    # the reduced width and height, so the localizer stays consistent with it.
+    #
+    # Only applies to the compressed transport. With image_transport:=raw the
+    # node refuses to start rather than scale intrinsics for a reduction that
+    # never happened.
+    image_decode_scale: 1
+
     # ─────────────────────────────────────────────────────────────────────────
     # Candidate search
     # ─────────────────────────────────────────────────────────────────────────

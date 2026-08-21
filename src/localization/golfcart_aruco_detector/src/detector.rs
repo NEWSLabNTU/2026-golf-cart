@@ -104,6 +104,36 @@ pub fn validate_distortion(model: &str, count: usize) -> Result<()> {
     Ok(())
 }
 
+/// Rewrite intrinsics for an image that has been reduced by `factor`.
+///
+/// Required, not optional, whenever the frame handed to the detector is smaller
+/// than the one `CameraInfo` describes. `k` says how a metre at a distance maps
+/// to pixels; halve the pixels and leave `fx` alone and every pose comes out at
+/// half the true distance, confidently and with no error anywhere. It is the
+/// kind of wrong that reads as a calibration problem.
+///
+/// The principal point moves by the pixel-centre convention, not by plain
+/// division: a pixel at index `i` has its centre at `i + 0.5`, so
+/// `cx' = (cx + 0.5) / factor - 0.5`. Plain division leaves a half-pixel offset
+/// that grows with the factor.
+///
+/// Distortion coefficients are **not** touched: they act in normalized image
+/// coordinates, which are by definition independent of resolution.
+pub fn scale_intrinsics(k: &[f64; 9], factor: f64) -> [f64; 9] {
+    let s = 1.0 / factor;
+    [
+        k[0] * s,
+        k[1] * s,
+        (k[2] + 0.5) * s - 0.5,
+        k[3] * s,
+        k[4] * s,
+        (k[5] + 0.5) * s - 0.5,
+        k[6],
+        k[7],
+        k[8],
+    ]
+}
+
 pub struct Detector {
     geometry: BoardGeometry,
     params: DetectorParams,
@@ -472,5 +502,47 @@ mod tests {
             "plumb_bob",
         );
         assert!(result.is_err(), "an all-zero camera matrix was accepted");
+    }
+}
+
+#[cfg(test)]
+mod intrinsics_tests {
+    use super::*;
+
+    #[test]
+    fn scaling_intrinsics_by_one_changes_nothing() {
+        let k = [900.0, 0.0, 960.5, 0.0, 900.0, 640.5, 0.0, 0.0, 1.0];
+        assert_eq!(scale_intrinsics(&k, 1.0), k);
+    }
+
+    #[test]
+    fn halving_the_image_halves_the_focal_length() {
+        let k = [900.0, 0.0, 959.5, 0.0, 900.0, 639.5, 0.0, 0.0, 1.0];
+        let half = scale_intrinsics(&k, 2.0);
+        assert_eq!(half[0], 450.0);
+        assert_eq!(half[4], 450.0);
+        // (959.5 + 0.5) / 2 - 0.5 = 479.5, which is the centre of a 960-wide
+        // image, as 959.5 is the centre of a 1920-wide one.
+        assert_eq!(half[2], 479.5);
+        assert_eq!(half[5], 319.5);
+        assert_eq!(half[8], 1.0);
+    }
+
+    #[test]
+    fn a_point_projects_to_the_same_place_in_both_scales() {
+        // The property that matters: reducing the image and reducing the
+        // intrinsics together must leave the projected point where it was,
+        // under the same pixel-centre mapping the detector uses for corners.
+        let k = [900.0, 0.0, 959.5, 0.0, 900.0, 639.5, 0.0, 0.0, 1.0];
+        let half = scale_intrinsics(&k, 2.0);
+        for (x, y, z) in [(0.3f64, -0.2f64, 4.0f64), (-1.1, 0.7, 2.5), (0.0, 0.0, 10.0)] {
+            let u = k[0] * x / z + k[2];
+            let v = k[4] * y / z + k[5];
+            let u_half = half[0] * x / z + half[2];
+            let v_half = half[4] * y / z + half[5];
+            // The same mapping applied to corners in detect_downscaled.
+            assert!(((u + 0.5) / 2.0 - 0.5 - u_half).abs() < 1e-9, "u {u} vs {u_half}");
+            assert!(((v + 0.5) / 2.0 - 0.5 - v_half).abs() < 1e-9, "v {v} vs {v_half}");
+        }
     }
 }

@@ -51,6 +51,7 @@ struct Config {
     detector: DetectorParams,
     debug_overlay: bool,
     transport: Transport,
+    decode_scale: Scale,
 }
 
 impl Config {
@@ -177,6 +178,31 @@ impl Config {
         // raw sensor_msgs/Image exists on the camera topics at all. A node
         // subscribing to the raw topic here sits silent forever and looks like
         // a detector that cannot see anything.
+        // Decode the JPEG at a fraction of its stored size. libjpeg does this
+        // inside the IDCT, so it is cheaper than decoding and resizing, and it
+        // is a DIFFERENT knob from detection_downscale: this one throws pixels
+        // away before anything sees them, so corner precision really is
+        // reduced. detection_downscale keeps the full frame for the refinement
+        // and only searches a reduced one.
+        //
+        // Reach for detection_downscale first. This is here for the case where
+        // the decode itself is the cost, or where the wire format is larger
+        // than the detector needs.
+        let decode_scale = node
+            .declare_parameter("image_decode_scale")
+            .default(1_i64)
+            .mandatory()?
+            .get();
+        let decode_scale = u32::try_from(decode_scale)
+            .ok()
+            .and_then(Scale::from_divisor)
+            .ok_or_else(|| {
+                anyhow!(
+                    "image_decode_scale must be 1, 2, 4 or 8 (the fractions libjpeg \
+                     can produce during the IDCT), got {decode_scale}"
+                )
+            })?;
+
         let hint = node
             .declare_parameter::<Arc<str>>("image_transport")
             .default("compressed".into())
@@ -184,11 +210,27 @@ impl Config {
             .get();
         let transport = Transport::from_hint(&hint).map_err(|error| anyhow!("{error}"))?;
 
+        // The scaled decode happens inside libjpeg, so it exists only on the
+        // compressed transport; the raw path hands the image over untouched.
+        // Accepting the combination would scale the intrinsics for a reduction
+        // that never happened, and every pose would come out wrong by the
+        // factor with nothing to indicate it. Refused rather than ignored: a
+        // parameter silently doing nothing is how the wrong one gets left set.
+        if transport == Transport::Raw && decode_scale != Scale::Full {
+            bail!(
+                "image_decode_scale is {:?}, but it only applies to the compressed \
+                 transport -- the raw transport delivers whatever the publisher sent. \
+                 Set image_transport to \"compressed\", or image_decode_scale to 1",
+                decode_scale
+            );
+        }
+
         Ok(Self {
             geometry,
             detector,
             debug_overlay,
             transport,
+            decode_scale,
         })
     }
 }
@@ -346,8 +388,14 @@ fn main() -> Result<()> {
         let state = Arc::clone(&detector_state);
         let geometry = config.geometry;
         let params = config.detector;
+        // CameraInfo describes the camera, not the frame this node is about to
+        // receive. If the JPEG is decoded at a fraction of its stored size, `k`
+        // has to come down with it or every pose is scaled by the same factor
+        // -- confidently, with nothing in the graph reporting an error.
+        let decode_factor = config.decode_scale.divisor() as f64;
         node.create_subscription(sub_opts("~/input/camera_info"), move |msg: CameraInfo| {
-            match Detector::new(geometry, params, &msg.k, &msg.d, &msg.distortion_model) {
+            let k = golfcart_aruco_detector::scale_intrinsics(&msg.k, decode_factor);
+            match Detector::new(geometry, params, &k, &msg.d, &msg.distortion_model) {
                 Ok(detector) => {
                     let first = state.load().is_none();
                     state.store(Arc::new(Some(Arc::new(detector))));
@@ -355,8 +403,8 @@ fn main() -> Result<()> {
                         log_info!(
                             NODE_NAME,
                             "calibration received: {}x{}, {} distortion coefficients ({})",
-                            msg.width,
-                            msg.height,
+                            msg.width / decode_factor as u32,
+                            msg.height / decode_factor as u32,
                             msg.d.len(),
                             msg.distortion_model
                         );
@@ -438,10 +486,13 @@ fn main() -> Result<()> {
             // colour JPEG never has its chroma reconstructed, rather than
             // building three channels and throwing two away.
             Target::Mono,
-            // Full resolution. Scaled decode is cheaper and is available, but
-            // it trades corner precision for CPU and corner precision is pose
-            // accuracy here -- see the sub-phase D acceptance criterion.
-            Scale::Full,
+            // How much of the JPEG to decode. Distinct from detection_downscale
+            // in what it costs: this throws pixels away before anything sees
+            // them, so corner precision really does drop, where
+            // detection_downscale keeps the full frame for the refinement.
+            // Intrinsics are brought down by the same factor where CameraInfo
+            // arrives, or every pose would be scaled by it.
+            config.decode_scale,
             |message| log_error!(NODE_NAME, "{message}"),
             move |frame: Frame| {
                 let loaded = state.load();
@@ -477,8 +528,10 @@ fn main() -> Result<()> {
 
     log_info!(
         NODE_NAME,
-        "subscribed on the {:?} transport",
-        config.transport
+        "subscribed on the {:?} transport, decoding at {:?}, detection downscale {}",
+        config.transport,
+        config.decode_scale,
+        config.detector.detection_downscale
     );
 
     log_info!(NODE_NAME, "detector running");
