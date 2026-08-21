@@ -1,9 +1,0 @@
-{
-  "name": "cpp_rgb8",
-  "format": "rgb8; jpeg compressed bgr8",
-  "source_encoding": "rgb8",
-  "width": 64,
-  "height": 48,
-  "channels": 3,
-  "payload_bytes": 1194
-}
