@@ -274,7 +274,11 @@ Tasks:
 - [ ] On the vehicle, walk the ladder and set the winner:
       `CAMERA_CAPTURE_PROFILE=nvv4l2camerasrc`, falling back to `v4l2-dmabuf`
       then `v4l2-mmap`. `scripts/check/camera_pipeline.sh` does the walking.
-- [ ] Rewrite `config/gscam.md` against what the YAMLs actually carry.
+- [x] Rewrite `config/gscam.md` against what the YAMLs actually carry. Done, and
+      it corrected two things it had asserted: `camera_info_rescale` is not a
+      gscam parameter at all -- the name does not occur in the `ros2` branch --
+      and neither are `video_device`, `brightness` and friends, which are
+      `usb_cam` leftovers gscam never reads.
 
 CPU, for the before number the acceptance criterion asks for. Three streams of
 `videotestsrc ! nvvidconv ! NV12(NVMM) ! nvjpegenc` at 30 fps measured ~180% of
@@ -538,10 +542,31 @@ code change.
 - [x] `use_compressed: bool` became `image_transport: "raw"|"compressed"`, the
       spelling `image_transport` uses. Default unchanged in behaviour.
 - [x] Dropped the `opencv` `imgcodecs` feature.
-- [ ] Evaluate scaled decode for detection with full-res corner refinement.
-      Available (`Scale::Half` and friends) and deliberately not switched on:
-      it trades corner precision for CPU, corner precision is pose accuracy, and
-      that is a measurement, not a default.
+- [x] Evaluate scaled decode for detection with full-res corner refinement.
+      Measured, and the shape of the answer was not the expected one. Detection
+      cost is per-pixel -- `findContours` and `approxPolyDP` over the thresholded
+      frame -- so narrowing the threshold sweep buys ~3.4 ms per scale dropped
+      and raising the perimeter filter or disabling corner refinement buy
+      nothing measurable. Resolution is the only real lever.
+
+      `detection_downscale` therefore detects on a reduced frame and refines the
+      corners against the full one, which costs **0.002 px RMSE** against
+      full-resolution detection: precision is not what it trades, the smallest
+      findable marker is (14 px at 1, 22 at 2, 26 at 3, 34 at 4).
+      `image_decode_scale` exposes the crate's scaled decode separately, with
+      the intrinsics scaled to match. Live, one camera at 30 fps:
+
+      | decode | downscale | CPU |
+      |---|---|---|
+      | 1 | 1 | 187% |
+      | 1 | 2 | 76% |
+      | 2 | 1 | 57% |
+      | 2 | 2 | 53% |
+
+- [ ] **Choose the defaults from a recorded bag.** Both knobs ship at 1, so none
+      of the above is switched on. The numbers come from a synthetic scene, and
+      what decides them is the smallest marker the real boards present at the
+      real working distance.
 
 **A bug found on the way, fixed here.** `aruco_detector.launch.xml` remapped
 `~/input/image` only. ROS 2 remapping matches a whole topic name, so it does not
