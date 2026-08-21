@@ -13,15 +13,30 @@ Feeds Phase 3 Track C: sub-phase D below migrates the ArUco detector, and
 [3-indoor-d5](3-indoor-d5-detector.md) is where its current hand-rolled
 transport lives.
 
-Last updated: 2026-08-21. Blockers 1, 3 and 4 and the NVJPG capacity question
-are answered, measured on an AGX Orin (JetPack 6.2, L4T R36.4.4, DeepStream 7.1)
-with no cameras attached. Sub-phase B is decided: **gscam stays, gmslcam is
-dropped**, and the capture path is a switchable profile. Sub-phase C is
-implemented and tested against the C++ plugin's own bytes. Sub-phase D is
-written but not compiled; see the note there.
+Last updated: 2026-08-22. **Sub-phase A is done, on the vehicle.**
+`nvv4l2camerasrc` binds to the oToCam driver, and it is now the default profile.
+Blockers 1, 3 and 4 and the NVJPG capacity question are all answered. Sub-phase
+B is decided: **gscam stays, gmslcam is dropped**, and the capture path is a
+switchable profile. Sub-phase C is implemented and tested against the C++
+plugin's own bytes. Sub-phase D is written but not compiled; see the note there.
 
-What is left needs the vehicle: whether `nvv4l2camerasrc` binds to the oToCam
-driver, and the end-to-end CPU delta. Both are one command on the box.
+Measured with three cameras running on the vehicle:
+
+| profile | gscam CPU, per camera | rate, three cameras |
+|---|---|---|
+| `nvv4l2camerasrc` | **~8% of a core** | up to ~40 fps |
+| `v4l2-dmabuf` | ~40% of a core | drops to 29-30 Hz |
+
+A factor of five, and it settles a question this document had been careful to
+leave open. `v4l2src io-mode=4` asks the driver to export dmabuf, and the note
+below said the 147 MB/s import copy was therefore an upper bound on what
+`nvv4l2camerasrc` could save rather than a measured cost. It was not an upper
+bound: the copy was really there, the request was not being honoured, and
+removing it is worth 32 points of a core per camera. NVJPG is confirmed active
+in `jtop` on the new path.
+
+What is left needs a recorded bag: the detector's acceptance, and the defaults
+for `detection_downscale` and `image_decode_scale`, which both still ship at 1.
 
 > Numbered Phase 4 when first written, which collided with ROADMAP.md's
 > Phase 4 (Planning, Control & Safety). Renumbered 2026-08-20. Phase numbering
@@ -153,7 +168,7 @@ Three traps this encodes, all of which the crate must enforce:
 |---|---|---|---|
 | 1 | **`camera_info` may never reach the detector.** `config/recording/master_topics.txt` stated "gscam publishes none for these". But gscam holds a `CameraInfo` publisher on `camera/camera_info`, uses `camera_info_manager`, `camera_info_url` is set in all three YAMLs, `camera_left_calibration.yaml` is a real calibration, and `camera.launch.xml` remaps it. Those could not all be true. | D, and every indoor run | **Answered 2026-08-20: gscam publishes it.** Run against three v4l2loopback devices with the same YAML shape and the same two remaps `camera.launch.xml` uses, gscam loaded the calibration from `camera_info_url` and published `camera_info` at 30 Hz alongside the image. The recording comment was wrong, and the three topics are now recorded. One `ros2 topic list` on the master is still worth doing, but the detector's intrinsics problem is blocker 2, not this. |
 | 2 | **All three calibration files are one calibration copied three times.** Verified by diff on 2026-08-20: byte-identical apart from `camera_name`. The intrinsics are real, not placeholders, which makes this worse rather than better -- a plausible matrix on the wrong lens yields plausible poses that are wrong. Also `cx` is 712 on a 1920-wide image, about 248 px off centre. See [3-indoor-a](3-indoor-a-camera-calibration.md). | D | Confirmed, unfixed |
-| 3 | **`nvv4l2camerasrc` binding to the oToCam driver is unverified.** It is verified by NVIDIA against their own V4L2 driver; oToCam is a vendor `nv_imx390.ko` behind a MAX9296. | A | **Half answered 2026-08-20.** The element is present and emits `UYVY` in `memory:NVMM`, which is what `nvvidconv` wants. Whether it binds to `nv_imx390` still needs a camera: it accepts only `V4L2_MEMORY_DMABUF` in importer role, and no loopback device can stand in. `scripts/check/camera_pipeline.sh` runs the test automatically when a `/dev/video*` exists. |
+| 3 | **`nvv4l2camerasrc` binding to the oToCam driver is unverified.** It is verified by NVIDIA against their own V4L2 driver; oToCam is a vendor `nv_imx390.ko` behind a MAX9296. | A | **CLEARED on the vehicle, 2026-08-22.** It binds. Three cameras run on it, gscam costs ~8% of a core each against ~40% on `v4l2-dmabuf`, and `jtop` shows NVJPG active. It is now `capture_profile`'s default. |
 | 4 | **`nvjpegenc` NVMM sink caps unverified on this install.** Decides whether today's pipeline is hardware or a silent software fallback: the hardware JPEG encoder needs a dmabuf fd. | A | **Cleared 2026-08-20.** `nvjpegenc` lists `video/x-raw(memory:NVMM), format={I420, NV12}`, and the committed `nvvidconv ! NV12(NVMM) ! nvjpegenc` chain negotiates and runs. No silent software fallback. One thing the caps do say: `GRAY8` is accepted in **system memory only**, so encoding mono at the source -- the open question below -- would leave NVMM and hand the import copy back. |
 | 5 | **`config/gscam.md` is stale on two counts.** It documents an `RGBA -> videoconvert -> RGB` pipeline with `image_encoding: rgb8` that is not what the YAMLs carry, and a `platform-3610000.usb-...` USB adapter rig that has been replaced by `platform-tegra-capture-vi-...`. It is the source of the "CPU conversion per camera" claim. | reading anything | Confirmed stale |
 
@@ -265,30 +280,40 @@ Tasks:
       element availability, `nvjpegenc`/`nvvidconv`/`nvv4l2camerasrc` caps, runs
       the negotiation with `videotestsrc`, and -- when a `/dev/video*` exists --
       runs `v4l2src` and `nvv4l2camerasrc` against it and says which cleared.
-- [ ] Run the probe on the Advantech **with the cameras attached**. That is the
-      one remaining unknown: everything else in this sub-phase is now measured.
+- [x] Run the probe on the Advantech **with the cameras attached**. Done, and
+      `nvv4l2camerasrc` cleared: it binds to `nv_imx390`, which no loopback
+      device could have told us.
 - [x] Make the capture path switchable: `camera_capture/<profile>.yaml`, selected
       by `camera.launch.xml`'s `capture_profile` argument. Four profiles, and
       nothing downstream of the source element changes between them. See
       sub-phase B. (Originally an environment variable, `CAMERA_CAPTURE_PROFILE`;
       that was removed in favour of the argument and its default.)
-- [ ] On the vehicle, walk the ladder and set the winner: `nvv4l2camerasrc`,
-      falling back to `v4l2-dmabuf` then `v4l2-mmap`. Setting it means changing
-      `capture_profile`'s default in `camera.launch.xml` — `just launch` cannot
-      pass the argument through. `scripts/check/camera_pipeline.sh` does the
-      walking.
+- [x] On the vehicle, walk the ladder and set the winner. `nvv4l2camerasrc` won
+      on the first rung and is `capture_profile`'s default in
+      `camera.launch.xml`. The ladder below it was not needed.
 - [x] Rewrite `config/gscam.md` against what the YAMLs actually carry. Done, and
       it corrected two things it had asserted: `camera_info_rescale` is not a
       gscam parameter at all -- the name does not occur in the `ros2` branch --
       and neither are `video_device`, `brightness` and friends, which are
       `usb_cam` leftovers gscam never reads.
 
-CPU, for the before number the acceptance criterion asks for. Three streams of
-`videotestsrc ! nvvidconv ! NV12(NVMM) ! nvjpegenc` at 30 fps measured ~180% of
-one core total, of which ~96% is `videotestsrc` itself generating UYVY. So the
-encode-and-convert stage is roughly **0.85 of a core for three cameras** with a
-system-memory source. That is the number `nvv4l2camerasrc` has to beat, and the
-`v4l2src` import copy it removes is 147 MB/s per camera.
+**Acceptance: met.** "Three cameras streaming, aggregate CPU for the
+capture-and-encode stage measured before and after, both numbers written down."
+
+    before, v4l2-dmabuf      ~40% of a core per camera, ~120% for three
+    after,  nvv4l2camerasrc   ~8% of a core per camera,  ~24% for three
+
+Both on the vehicle, with the real sensors. The bench figure this section used
+to carry -- ~0.85 of a core for three synthetic streams -- was measured with
+`videotestsrc` standing in for a camera and is superseded by the two rows above;
+it is worth knowing only as the reason the after number was expected to be small
+rather than as a prediction of it.
+
+Note what the before number says about `io-mode=4`. It asks the driver for
+dmabuf; getting 40% of a core per camera anyway means the request was not
+honoured and the 4.92 MB frame really was being copied. The caution in this
+document that the copy might already have been avoided was the right caution and
+the wrong guess.
 
 **DeepStream is deliberately not in this plan.** DeepStream 7.1 is installed
 (`/opt/nvidia/deepstream/deepstream-7.1`, package `deepstream-7.1 7.1.0-1`) and
@@ -367,7 +392,7 @@ what the vehicle runs is an edit to that default.
 
 | profile | source | status |
 |---|---|---|
-| `nvv4l2camerasrc` | `nvv4l2camerasrc` | **default**, the zero-copy target, unverified against oToCam |
+| `nvv4l2camerasrc` | `nvv4l2camerasrc` | **default**, and verified on the vehicle: ~8% of a core per camera against ~40% on `v4l2-dmabuf` |
 | `v4l2-dmabuf` | `v4l2src io-mode=4` | what shipped before profiles |
 | `v4l2-mmap` | `v4l2src io-mode=2` | copies on purpose, to keep "camera dead" and "dmabuf dead" separable |
 | `sim` | `v4l2src` on v4l2loopback | no hardware; pairs with `just sim cameras` |
@@ -639,6 +664,21 @@ CPU down. Unchanged is the bar; this is a refactor, not a tuning opportunity.
   smaller than the original estimate too: 5.3 ms grayscale against 9.1 ms
   colour, and the detector already decodes grayscale from a colour JPEG. This
   looks like a trade that no longer pays.
+- **The cameras are running at ~40 fps, not the 30 the caps ask for.** Every
+  profile's caps string says `framerate=30/1`, and on `nvv4l2camerasrc` the
+  topics come out at up to ~40. That element does not rate-limit: it delivers
+  what the sensor mode produces, and the framerate field in the caps does not
+  constrain it the way it constrains `v4l2src`. So 30 was never being enforced
+  on this path, and the 29-30 Hz seen on `v4l2-dmabuf` was the CPU-bound rate
+  rather than the requested one.
+
+  Nothing breaks. NVJPG at 3x40 fps is 295 MP/s against the 899 MP/s measured
+  ceiling. But three things assume 30 and are now wrong by a third: bag sizes,
+  any rate check written against 30 Hz, and the per-frame cost of every consumer
+  -- the ArUco detector included, which is the one that cannot afford it. Worth
+  deciding deliberately whether 40 is wanted, rather than inheriting it: the
+  sensor mode is the place to set it, not the caps.
+
 - **UYVY is 4:2:2 and NV12 is 4:2:0.** Half the vertical chroma is discarded
   before JPEG sees it, unavoidably, on the NVJPG path. Irrelevant to grayscale
   consumers. Worth knowing before anyone builds a colour-critical feature on
