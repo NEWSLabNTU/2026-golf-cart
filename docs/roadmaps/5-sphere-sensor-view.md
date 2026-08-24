@@ -13,8 +13,8 @@ also adjusts parameters is a different program, and the value of this one comes
 from being downstream — it shows the calibration the system is *running*, not
 the file that is supposed to describe it.
 
-Last updated: 2026-08-25. **S1 is done**, verified against a synthetic camera on a
-workstation. S2 is next.
+Last updated: 2026-08-25. **S1 and S2 are done**, verified against synthetic
+cameras on a workstation. S3 is next.
 
 ---
 
@@ -106,19 +106,47 @@ What S1 settled beyond the checklist:
 
 ## S2 — many cameras
 
-- [ ] Camera list as a display property, each entry an image topic plus its
-      `camera_info` topic. Nothing hardcoded; the same display serves the three
-      GMSL cameras on the Advantech and the ZED on the orin.
-- [ ] Per-camera decode worker. The cameras publish `image_raw/compressed`
-      only, so every frame needs a JPEG decode, and doing it on the render
-      thread stalls RViz. Newest frame wins, older frames drop — this is a
-      monitor, dropping is correct.
-- [ ] Sphere radius as a live property, adjustable while watching.
-- [ ] Per-camera alpha, and enable/disable per layer.
-- [ ] Rebuild patch geometry when `CameraInfo` or TF changes, and only then.
+- [x] Camera list as display properties. Each camera is a `CameraLayer`, a
+      child `BoolProperty` carrying its own image topic, `camera_info` topic and
+      alpha. The three GMSL cameras are defaults, not hardcoding: every topic is
+      editable and layers can be added or removed at runtime, so the same
+      display serves the ZED on the orin or a bag with other names.
+- [x] Per-camera decode worker, one thread each, waiting on a condition
+      variable. Newest frame wins and the rest are dropped — this is a monitor,
+      so a growing queue would be the wrong answer.
+- [x] Sphere radius as a live property.
+- [x] Per-camera alpha, and enable/disable per layer.
+- [x] Rebuild patch geometry when `CameraInfo` or TF changes, and only then. A
+      layer whose `CameraInfo` arrives late marks itself dirty and is picked up
+      without rebuilding the layers that are already correct.
 
-**Acceptance:** all three GMSL cameras on the sphere at once, seams visible
-between them, radius adjustable without a restart, RViz frame rate unchanged.
+**Acceptance: met.** Three cameras render at once at 31 fps against the 30 fps
+cap, each visibly its own patch, with the seams between them where the geometry
+says they should be.
+
+Radius was exercised by comparing 10 m against 3 m: at 10 m the three patches
+nearly meet, at 3 m they separate into three islands with gaps between. That is
+the parallax the design warns about, made visible — each camera sits about a
+metre off the sphere centre, so the solid angle it covers shrinks as the sphere
+closes in. The property is wired through the same dirty-flag path as everything
+else; it was verified by relaunching rather than by dragging the slider, because
+this workstation has no GUI automation and RViz properties are not reachable
+from outside the process.
+
+Per-camera status is reported in the Displays panel, one line per layer:
+triangle count when it is drawing, the missing transform when it is not, and a
+count of undecodable frames if any arrived.
+
+What S2 settled beyond the checklist:
+
+- **Decoding moved off the executor thread as well.** S1 decoded in the
+  subscription callback, which was fine for one camera. Three would have
+  serialised behind each other on the executor, so each layer now owns a thread
+  and the callback does nothing but hand over bytes.
+- **Format conversion happens on the worker**, not in the upload. The render
+  thread's share of a frame is now the blit alone.
+- **Layers are Qt properties, so deleting one takes its Ogre objects with it**
+  through the destructor. No separate teardown path to get wrong.
 
 ---
 

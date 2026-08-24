@@ -21,6 +21,7 @@ find_package(Qt5 COMPONENTS Widgets REQUIRED)
 set(CMAKE_AUTOMOC ON)
 
 add_library(${PROJECT_NAME} SHARED
+  src/camera_layer.cpp
   src/sphere_mesh.cpp
   src/sphere_view_display.cpp
   src/textured_patch.cpp

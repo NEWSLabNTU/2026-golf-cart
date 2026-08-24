@@ -18,24 +18,20 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rviz_common/display.hpp>
 
-#include <sensor_msgs/msg/camera_info.hpp>
-#include <sensor_msgs/msg/compressed_image.hpp>
-
-#include <QImage>
+#include <QList>
 #include <memory>
-#include <mutex>
 #include <string>
 
+#include "camera_layer.hpp"
 #include "sphere_mesh.hpp"
-#include "textured_patch.hpp"
 
 namespace rviz_common
 {
 namespace properties
 {
+class BoolProperty;
 class FloatProperty;
-class RosTopicProperty;
-class StringProperty;
+class IntProperty;
 class TfFrameProperty;
 }  // namespace properties
 }  // namespace rviz_common
@@ -43,11 +39,12 @@ class TfFrameProperty;
 namespace golfcart_sphere_view
 {
 
-/// Paints one camera onto a sphere centred on the vehicle.
+/// Paints several cameras onto one sphere centred on the vehicle.
 ///
-/// S1 of the phase, so one camera and no point clouds. The split that matters
-/// is already in place: patch geometry is rebuilt only when the CameraInfo or
-/// the transform changes, and each frame does nothing but upload a texture.
+/// Each camera is a child property with its own topics, alpha and enable, so a
+/// seam can be attributed by switching one side off. Patch geometry is rebuilt
+/// only when the calibration, the transform or a sphere property changes; a
+/// frame costs one texture upload per camera.
 class SphereViewDisplay : public rviz_common::Display
 {
   Q_OBJECT
@@ -65,35 +62,25 @@ protected:
   void onDisable() override;
 
 private Q_SLOTS:
-  void updateTopics();
   void updateGeometryProperties();
-  void updateAlpha();
+  void addCamera();
+  void removeLastCamera();
 
 private:
-  void subscribe();
-  void unsubscribe();
-  void rebuildGeometry();
-  bool lookUpCameraPose(CameraPose & pose);
+  CameraLayer * appendCamera(
+    const QString & name, const QString & image_topic, const QString & camera_info_topic);
+  void refreshStatus();
+  bool updateCentreTransform();
 
-  std::unique_ptr<TexturedPatch> patch_;
+  QList<CameraLayer *> cameras_;
+  bool geometry_dirty_{true};
+  int unnamed_camera_count_{0};
 
-  rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr image_subscription_;
-  rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr camera_info_subscription_;
-
-  std::mutex frame_mutex_;
-  QImage pending_frame_;
-  bool has_pending_frame_{false};
-
-  sensor_msgs::msg::CameraInfo camera_info_;
-  bool has_camera_info_{false};
-  bool geometry_dirty_{false};
-
-  rviz_common::properties::RosTopicProperty * image_topic_property_;
-  rviz_common::properties::RosTopicProperty * camera_info_topic_property_;
   rviz_common::properties::TfFrameProperty * centre_frame_property_;
   rviz_common::properties::FloatProperty * radius_property_;
-  rviz_common::properties::FloatProperty * alpha_property_;
   rviz_common::properties::FloatProperty * resolution_property_;
+  rviz_common::properties::BoolProperty * add_camera_property_;
+  rviz_common::properties::BoolProperty * remove_camera_property_;
 };
 
 }  // namespace golfcart_sphere_view

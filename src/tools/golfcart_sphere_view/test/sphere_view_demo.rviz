@@ -15,12 +15,9 @@ Visualization Manager:
     - Class: golfcart_sphere_view/SphereView
       Enabled: true
       Name: SphereView
-      Image Topic: /sensing/camera/left/image_raw/compressed
-      Camera Info Topic: /sensing/camera/left/camera_info
       Centre Frame: base_link
       Radius: 10
       Grid Step: 1
-      Alpha: 1
   Global Options:
     Fixed Frame: base_link
     Frame Rate: 30
@@ -29,7 +26,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 25
+      Distance: 32
       Focal Point: {X: 0, Y: 0, Z: 0}
       Pitch: 0.3
       Yaw: 3.0
