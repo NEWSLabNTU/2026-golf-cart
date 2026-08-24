@@ -1,0 +1,36 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Enabled: true
+      Name: Grid
+      Cell Size: 1
+      Plane Cell Count: 20
+    - Class: rviz_default_plugins/TF
+      Enabled: true
+      Name: TF
+    - Class: golfcart_sphere_view/SphereView
+      Enabled: true
+      Name: SphereView
+      Image Topic: /sensing/camera/left/image_raw/compressed
+      Camera Info Topic: /sensing/camera/left/camera_info
+      Centre Frame: base_link
+      Radius: 10
+      Grid Step: 1
+      Alpha: 1
+  Global Options:
+    Fixed Frame: base_link
+    Frame Rate: 30
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 25
+      Focal Point: {X: 0, Y: 0, Z: 0}
+      Pitch: 0.3
+      Yaw: 3.0
+      Name: Current View

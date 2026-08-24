@@ -1,0 +1,10 @@
+<library path="golfcart_sphere_view">
+  <class name="golfcart_sphere_view/SphereView"
+         type="golfcart_sphere_view::SphereViewDisplay"
+         base_class_type="rviz_common::Display">
+    <description>
+      Paints a camera image onto a sphere centred on the vehicle, for checking
+      sensor transforms.
+    </description>
+  </class>
+</library>

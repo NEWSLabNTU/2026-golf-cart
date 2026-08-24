@@ -13,7 +13,8 @@ also adjusts parameters is a different program, and the value of this one comes
 from being downstream — it shows the calibration the system is *running*, not
 the file that is supposed to describe it.
 
-Last updated: 2026-08-24. Nothing implemented.
+Last updated: 2026-08-25. **S1 is done**, verified against a synthetic camera on a
+workstation. S2 is next.
 
 ---
 
@@ -58,20 +59,48 @@ The risk phase. If dynamic textures on `ManualObject` geometry misbehave inside
 RViz2's render loop, that is worth finding in a day rather than after the
 projection maths is written.
 
-- [ ] Package `golfcart_sphere_view`, `rviz_common::Display` subclass,
-      `plugin_description.xml`, loads in RViz2 and shows in the Displays panel.
-- [ ] Vendor `tile_object.{hpp,cpp}` from `nobleo/rviz_satellite` as
+- [x] Package `golfcart_sphere_view` at `src/tools/`, `rviz_common::Display`
+      subclass, `plugin_description.xml`, loads in RViz2 and shows in the
+      Displays panel.
+- [x] Vendor `tile_object.{hpp,cpp}` from `nobleo/rviz_satellite` as
       `textured_patch`, Apache-2.0 header and attribution intact.
-- [ ] Replace its quad builder with a sphere-patch builder.
-- [ ] Replace per-update texture reallocation with `createManual` plus a blit
+- [x] Replace its quad builder with a sphere-patch builder.
+- [x] Replace per-update texture reallocation with `createManual` plus a blit
       into the `HardwarePixelBuffer`. The original suits map tiles that change
       when the vehicle drives a block; three cameras at 30 Hz would be ninety
       allocations a second.
-- [ ] One hardcoded camera, one hardcoded sphere radius, texture updating live.
+- [x] One camera, live radius, texture updating live.
+- [x] Nine unit tests over the projection and the patch builder, which need no
+      GPU and no ROS graph.
 
-**Acceptance:** a curved patch of `/sensing/camera/left/image_raw/compressed`
-visible in RViz2, updating at camera rate, with RViz's own frame rate unchanged
-from a session without the display.
+**Acceptance: met.** A curved patch of a 30 Hz JPEG camera renders in RViz2 at
+31 fps against the 30 fps cap, image features visibly bending with the sphere,
+and a frame-to-frame diff confined to the part of the test pattern that moves —
+so the texture is live rather than one frozen upload.
+
+Verified on a workstation against a synthetic camera rather than the vehicle,
+since the point of S1 is the rendering path. The publisher is
+`test/fake_camera.py`: a grid, a circle, a moving dot and a corner marker, with
+a static `base_link -> camera_left_optical` transform in the REP-103 optical
+convention.
+
+What S1 settled beyond the checklist:
+
+- **Geometry and texture are already decoupled.** `setGeometry` runs when the
+  `CameraInfo` or the transform changes; `update()` does nothing per frame but
+  upload. The structure S2 and S3 need is in place rather than promised.
+- **`K`, not `P`.** The topic this display draws is the distorted image straight
+  off the camera, so the projection pairs the distortion model with the
+  unrectified intrinsics. Using `P` would silently undistort twice.
+- **Sensor QoS on both subscriptions.** A reliable subscription matches nothing
+  against a best-effort sensor stream, and does so silently.
+- **Transforms are looked up at time zero**, not at the image stamp. These are
+  static mounts, and asking at the stamp fails during the window before
+  `tf_static` arrives.
+- One test asserts that `k4` in slot 5 pulls a point *inward* while `k1` pushes
+  it out. That is the coefficient ordering the vehicle's camera files disagree
+  with, per [3A](3-indoor-a-camera-calibration.md), so the check is worth
+  keeping even though nothing here reads those files yet.
 
 ---
 
