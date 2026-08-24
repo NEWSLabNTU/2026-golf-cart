@@ -5,9 +5,24 @@ one sphere centred on `base_link`, so that a wrong extrinsic becomes something
 you can see rather than something you compute.
 
 Status: proposed, 2026-08-24. Nothing implemented.
+Phase doc: [5-sphere-sensor-view.md](../roadmaps/5-sphere-sensor-view.md).
+
+## Scope
+
+**This package renders. It does not calibrate.**
+
+[LCTK](https://github.com/NEWSLabNTU/LCTK) computes the extrinsics. This is an
+Autoware-side package that subscribes to live topics, applies the transforms
+that are already published on `/tf_static`, and draws the result. It has no
+optimiser, no target detection, no parameter output, and no file it writes.
+
+The boundary is worth stating because a viewer that also nudges parameters is a
+different and much larger program, and because the value here comes precisely
+from being downstream: it consumes the calibration the running system is
+actually using, not a file that is meant to describe it.
 
 Related: [Phase 3A camera calibration](../roadmaps/3-indoor-a-camera-calibration.md),
-which this tool is meant to verify.
+whose output this tool checks.
 
 ---
 
@@ -211,9 +226,11 @@ flowchart TD
     J --> A
 ```
 
-The tool is **read-only**. It does not estimate or write extrinsics; LCTK does
-that. What this adds is the step before and after: seeing that a calibration is
-wrong, and confirming that a new one is right.
+The tool is **read-only**, by design and not by omission. LCTK estimates; this
+renders what the running system believes. What it adds is the step on either
+side of that: seeing that a calibration is wrong, and confirming that a new one
+is right, against live sensors rather than against the calibration dataset that
+produced it.
 
 A concrete first session, once phase 3A's calibration lands:
 
