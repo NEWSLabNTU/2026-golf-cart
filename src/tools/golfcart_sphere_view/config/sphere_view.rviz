@@ -1,0 +1,83 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /SphereView1
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Enabled: true
+      Name: Grid
+      Cell Size: 1
+      Plane Cell Count: 40
+      Alpha: 0.3
+    - Class: rviz_default_plugins/TF
+      Enabled: false
+      Name: TF
+      Show Names: true
+    - Class: golfcart_sphere_view/SphereView
+      Enabled: true
+      Name: SphereView
+      Centre Frame: base_link
+      # Roughly the distance of the structure the cart is usually parked near.
+      # Sweep it: features align when it matches their true depth.
+      Radius: 10
+      Grid Step: 1
+      camera_left:
+        Value: true
+        Image Topic: /sensing/camera/left/image_raw/compressed
+        Camera Info Topic: /sensing/camera/left/camera_info
+        Alpha: 1
+      camera_right:
+        Value: true
+        Image Topic: /sensing/camera/right/image_raw/compressed
+        Camera Info Topic: /sensing/camera/right/camera_info
+        Alpha: 1
+      camera_rear:
+        Value: true
+        Image Topic: /sensing/camera/rear/image_raw/compressed
+        Camera Info Topic: /sensing/camera/rear/camera_info
+        Alpha: 1
+      vlp32c:
+        Value: true
+        Topic: /sensing/lidar/vlp32/velodyne_points
+        Placement: Angular
+        Colour By: Intensity
+        Intensity Max: 255
+        Point Size: 0.05
+        Decimation: 2
+        Alpha: 1
+      falcon:
+        Value: false
+        Topic: /sensing/lidar/falcon/iv_points
+        Placement: Angular
+        Colour By: Flat
+        Point Size: 0.05
+        Decimation: 2
+        Alpha: 1
+  Global Options:
+    Fixed Frame: base_link
+    Frame Rate: 30
+    Background Color: 48; 48; 48
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/FocusCamera
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      # Inside the sphere looking out is the view this display is for; start
+      # just outside it so the shape is legible, then dolly in.
+      Distance: 18
+      Focal Point: {X: 0, Y: 0, Z: 1}
+      Pitch: 0.2
+      Yaw: 3.1
+      Name: Orbit
+Window Geometry:
+  Height: 900
+  Width: 1400
+  Displays:
+    collapsed: false

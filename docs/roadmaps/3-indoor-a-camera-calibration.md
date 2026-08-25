@@ -197,7 +197,11 @@ this sub-phase.
       Needs tuning under the actual indoor lighting, trading shutter speed
       against gain noise.
 - [ ] **Verify with projection overlay** — project the VLP-32C point cloud onto
-      each camera image in RViz and confirm alignment.
+      each camera image in RViz and confirm alignment. `just tool sphere` does
+      this for all three cameras at once; see
+      [the guide](../guides/sphere_sensor_view.md). Stock RViz2's `Camera`
+      display does one camera at a time and needs no plugin, which is the
+      quicker first look.
 
 ### Can do before the indoor site is chosen
 
@@ -217,7 +221,11 @@ These are the numbers sub-phase D depends on:
 - Intrinsics: reprojection RMS ≤ 0.5 px per camera.
 - Extrinsics: ≤ 2 cm position, ≤ 0.5° orientation, camera→base_link.
 - Optical frame convention correct and explicit.
-- Point cloud projection overlay visually aligned in RViz for all three cameras.
+- Point cloud projection overlay visually aligned in RViz for all three cameras,
+  and the seams between them continuous in the spherical view. Note the limit of
+  that check: judging a seam by eye is worth perhaps a degree, so it catches a
+  swapped camera or a missing optical-frame rotation but does not certify the
+  0.5° above.
 
 Extrinsic error propagates directly into every tag observation, and its runtime
 signature is a **range-correlated offset** between tag-derived and NDT poses —

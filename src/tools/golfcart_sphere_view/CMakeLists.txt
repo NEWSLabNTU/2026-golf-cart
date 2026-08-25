@@ -69,7 +69,8 @@ install(TARGETS ${PROJECT_NAME} EXPORT ${PROJECT_NAME}
 # The synthetic camera and its RViz config, so the display can be exercised
 # without the vehicle.
 install(PROGRAMS test/fake_camera.py test/fake_lidar.py DESTINATION lib/${PROJECT_NAME})
-install(FILES test/sphere_view_demo.rviz DESTINATION share/${PROJECT_NAME}/rviz)
+install(FILES config/sphere_view.rviz test/sphere_view_demo.rviz
+  DESTINATION share/${PROJECT_NAME}/rviz)
 
 pluginlib_export_plugin_description_file(rviz_common plugin_description.xml)
 ament_package()

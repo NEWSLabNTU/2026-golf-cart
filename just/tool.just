@@ -17,6 +17,30 @@ default:
 rviz:
     rviz2 -d ./src/launcher/golfcart_launch/rviz/golfcart.rviz
 
+# Check sensor transforms: cameras and LiDARs on one sphere at base_link
+sphere:
+    # Read-only. LCTK computes the extrinsics; this shows what the running
+    # system believes them to be, so a wrong one is visible rather than
+    # computed. docs/guides/sphere_sensor_view.md says how to read it.
+    rviz2 -d ./src/tools/golfcart_sphere_view/config/sphere_view.rviz
+
+# The sphere view against synthetic sensors, with no vehicle attached
+sphere-demo:
+    #!/usr/bin/env bash
+    # Three cameras and a wall with a doorway in it. For working on the display
+    # itself: it proves nothing about any real calibration, because the
+    # synthetic sensors agree with each other by construction.
+    set -euo pipefail
+    PACKAGE=./src/tools/golfcart_sphere_view
+    python3 "$PACKAGE/test/fake_camera.py" &
+    CAMERAS=$!
+    python3 "$PACKAGE/test/fake_lidar.py" &
+    LIDAR=$!
+    # Kill the publishers however RViz exits, including a Ctrl-C that lands on
+    # the whole process group.
+    trap 'kill $CAMERAS $LIDAR 2>/dev/null || true' EXIT
+    rviz2 -d "$PACKAGE/test/sphere_view_demo.rviz"
+
 # Launch PlotJuggler for data visualization
 plotjuggler:
     ros2 run plotjuggler plotjuggler

@@ -13,9 +13,9 @@ also adjusts parameters is a different program, and the value of this one comes
 from being downstream — it shows the calibration the system is *running*, not
 the file that is supposed to describe it.
 
-Last updated: 2026-08-25. **S1, S2 and S3 are done**, verified against synthetic
-sensors on a workstation. S4 is next, and the vehicle is what remains to prove
-any of it.
+Last updated: 2026-08-25. **All four sub-phases are done.** Everything has been
+verified against synthetic sensors on a workstation; **none of it has met a real
+sensor**, which is the whole of what remains.
 
 ---
 
@@ -186,15 +186,27 @@ needs the vehicle, and it is the first thing to do with it.
 
 ## S4 — make it usable by someone else
 
-- [ ] `just tool sphere` recipe.
-- [ ] Saved RViz config with the display configured for this vehicle's topics.
-- [ ] A page in the book: what each mode shows, how to read a seam, and what
-      the radius property does and does not prove.
-- [ ] Note in [3A](3-indoor-a-camera-calibration.md) pointing at this as the
-      verification step for its projection-overlay acceptance criterion.
+- [x] `just tool sphere` recipe, plus `just tool sphere-demo` which brings up
+      the synthetic sensors and the display together and cleans them up on exit.
+- [x] Saved RViz config at `config/sphere_view.rviz`, wired to this vehicle's
+      three cameras and both LiDARs, with the Falcon off by default so the first
+      view is not two clouds at once.
+- [x] [Guide](../guides/sphere_sensor_view.md): what each mode shows, how to
+      read a seam, what sweeping the radius proves, what the tool cannot tell
+      you, and a symptom table for when nothing appears.
+- [x] Note in [3A](3-indoor-a-camera-calibration.md) pointing its
+      projection-overlay criterion at this tool — and qualifying that criterion,
+      since judging a seam by eye is worth about a degree and 3A asks for 0.5°.
 
-**Acceptance:** somebody who did not write it can bring up the vehicle, run one
-command, and say whether the extrinsics look right.
+The guide went to `docs/guides/` rather than the book. `CLAUDE.md` describes a
+`book/` directory with mkdocs; there is no such directory in this repository, so
+this follows the guides that actually exist.
+
+**Acceptance: not yet met, and it cannot be met here.** It asks that somebody
+who did not write the tool can bring up the vehicle and say whether the
+extrinsics look right. Everything above has been exercised against synthetic
+sensors, which agree with each other by construction. The first person to run
+`just tool sphere` on the cart is the test.
 
 ---
 

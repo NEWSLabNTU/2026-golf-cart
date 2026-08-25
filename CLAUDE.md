@@ -62,6 +62,8 @@ just tool rviz          # Launch RViz
 just tool plotjuggler   # PlotJuggler visualization
 just tool controller    # Keyboard manual control
 just tool tui           # Drive monitor TUI (pose, speed, states)
+just tool sphere        # Sensor transforms: cameras and LiDARs on one sphere
+just tool sphere-demo   # Same display, synthetic sensors, no vehicle
 ```
 
 ### Vehicle Interface (standalone, no Autoware)
@@ -540,6 +542,7 @@ twist_source:=gyro_odom|eagleye            # Override preset twist source
 | [docs/design/diagnostics-and-mrm-visualization.md](docs/design/diagnostics-and-mrm-visualization.md) | Diagnostics / MRM chain as it actually runs, why `/diagnostics_agg` is never published here, which ROS and Autoware viewers already exist, and the proposed views split across play_launch vs `golfcart_system_monitor` |
 | [docs/roadmaps/4-diagnostics-observability.md](docs/roadmaps/4-diagnostics-observability.md) | Phase 4-O: why the AD API is the subscription surface, why `transient_local` on the struct topic blocks the design, and the O-A..O-F work items |
 | [docs/roadmaps/5-sphere-sensor-view.md](docs/roadmaps/5-sphere-sensor-view.md) | Phase 5: RViz2 spherical sensor view — rendering-only extrinsic check, S1..S4, and why the sphere radius bounds what it can prove |
+| [docs/guides/sphere_sensor_view.md](docs/guides/sphere_sensor_view.md) | Spherical sensor view: how to read a seam, what sweeping the radius proves, and what the tool cannot tell you |
 | [docs/design/sphere_sensor_view.md](docs/design/sphere_sensor_view.md) | Spherical sensor view design: the display plugin, what is vendored from rviz_satellite, the two cloud modes |
 
 ## Known Issues
