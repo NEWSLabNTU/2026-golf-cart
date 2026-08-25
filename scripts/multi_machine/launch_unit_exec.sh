@@ -60,6 +60,7 @@ fi
 # unit has no display to draw on.
 # shellcheck disable=SC2086
 exec play_launch launch \
+    --container-mode "${GOLFCART_CONTAINER_MODE:-observable}" \
     --web-addr 0.0.0.0:8081 \
     golfcart_launch golfcart.launch.yaml \
     "host:=${HOST}" \

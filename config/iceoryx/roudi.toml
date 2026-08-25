@@ -1,0 +1,48 @@
+# RouDi mempool configuration for the golf cart stack.
+#
+# RouDi hands publishers fixed-size chunks out of these pools. A publisher that
+# needs a chunk larger than the biggest pool fails at RUNTIME, not at startup,
+# so the top of this list is the real ceiling on any loaned message.
+#
+# The pools are deliberately modest. Cyclone's zero-copy path only accepts
+# FIXED-SIZE types, and any message carrying a std_msgs/Header is disqualified
+# because frame_id is a string. Measured with a can_loan_messages() probe on
+# this machine:
+#
+#     sensor_msgs/PointCloud2  no      geometry_msgs/Twist  YES
+#     sensor_msgs/Image        no      std_msgs/UInt64      YES
+#     sensor_msgs/Imu          no
+#
+# So the traffic eligible for these pools is small headerless command messages,
+# not point clouds or images. Sizing the pools for a 4 MB cloud would reserve
+# memory that nothing in this stack can ever claim. Grow them when a measured
+# publisher actually needs it, not in anticipation.
+#
+# The whole segment is reserved up front in /dev/shm, so sum(size x count) is
+# real resident memory. This config is about 58 MB plus RouDi's own management
+# segment.
+
+[general]
+version = 1
+
+[[segment]]
+
+[[segment.mempool]]
+size = 128
+count = 4096
+
+[[segment.mempool]]
+size = 1024
+count = 2048
+
+[[segment.mempool]]
+size = 16384
+count = 512
+
+[[segment.mempool]]
+size = 131072
+count = 128
+
+[[segment.mempool]]
+size = 1048576
+count = 32

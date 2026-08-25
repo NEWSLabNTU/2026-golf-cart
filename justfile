@@ -40,6 +40,9 @@ mod sim 'just/sim.just'
 # Diagnostic graph: inspect it, and inject faults into it
 mod diag 'just/diag.just'
 
+# CPU / kernel profiling of the running stack
+mod profile 'just/profile.just'
+
 # Initialize and update all git submodules
 checkout:
     git submodule update --init --recursive --checkout
@@ -216,6 +219,10 @@ clean *FLAGS="":
 launch ARGS="":
     #!/usr/bin/env bash
     set -euo pipefail
+    # No-op unless the resolved DDS profile enables <SharedMemory>, which it
+    # does not today. When it does, a missing iox-roudi makes every node hang at
+    # participant creation with nothing printed; this turns that into an error.
+    {{justfile_directory()}}/scripts/iceoryx/ensure_roudi.sh || exit 2
     # tx= is not a launch argument and cannot be: the installed
     # tier4_vehicle_launch/vehicle.launch.xml forwards a fixed set of arguments
     # and drops the rest, so vehicle_interface.launch.xml reads the environment
@@ -262,11 +269,13 @@ launch ARGS="":
     fi
     if [ -n "${DISPLAY:-}" ]; then
         play_launch launch \
+            --container-mode "${GOLFCART_CONTAINER_MODE:-observable}" \
             --web-addr 0.0.0.0:8081 \
             golfcart_launch golfcart.launch.yaml \
             ${HOST_ARG} ${GOLFCART_LAUNCH_ARGS}
     else
         play_launch launch \
+            --container-mode "${GOLFCART_CONTAINER_MODE:-observable}" \
             --web-addr 0.0.0.0:8081 \
             golfcart_launch golfcart.launch.yaml \
             ${HOST_ARG} \
@@ -281,6 +290,10 @@ launch ARGS="":
 launch-up ARGS="":
     #!/usr/bin/env bash
     set -uo pipefail
+    # No-op unless the resolved DDS profile enables <SharedMemory>, which it
+    # does not today. When it does, a missing iox-roudi makes every node hang at
+    # participant creation with nothing printed; this turns that into an error.
+    {{justfile_directory()}}/scripts/iceoryx/ensure_roudi.sh || exit 2
     # tx= is pulled out first: it is not a launch argument (the installed
     # tier4_vehicle_launch/vehicle.launch.xml drops unknown ones) but an
     # environment variable the unit reads. See config/vehicle.conf.
@@ -329,6 +342,10 @@ launch-down:
 launch-all ARGS="":
     #!/usr/bin/env bash
     set -uo pipefail
+    # No-op unless the resolved DDS profile enables <SharedMemory>, which it
+    # does not today. When it does, a missing iox-roudi makes every node hang at
+    # participant creation with nothing printed; this turns that into an error.
+    {{justfile_directory()}}/scripts/iceoryx/ensure_roudi.sh || exit 2
     # NOTE: ARGS is positional. `just launch-all ARGS="..."` does NOT work:
     # just has no NAME=value syntax for recipe parameters.
     #
@@ -375,6 +392,7 @@ logs:
 # Launch Autoware planning simulator with Golf Cart vehicle
 launch-sim-planning:
     play_launch launch \
+        --container-mode "${GOLFCART_CONTAINER_MODE:-observable}" \
         --web-addr 0.0.0.0:8081 \
         autoware_launch planning_simulator.launch.xml \
         map_path:={{justfile_directory()}}/data/ntu-campus-planning/r01 \
@@ -386,10 +404,12 @@ launch-sim-logging ARGS="":
     #!/usr/bin/env bash
     if [ -n "$DISPLAY" ]; then \
         play_launch launch \
+            --container-mode "${GOLFCART_CONTAINER_MODE:-observable}" \
             --web-addr 0.0.0.0:8081 \
             golfcart_launch logging_simulation.launch.yaml {{ARGS}}; \
     else \
         play_launch launch \
+            --container-mode "${GOLFCART_CONTAINER_MODE:-observable}" \
             --web-addr 0.0.0.0:8081 \
             golfcart_launch logging_simulation.launch.yaml \
             rviz:=false {{ARGS}}; \

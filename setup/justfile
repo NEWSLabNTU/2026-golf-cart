@@ -33,7 +33,7 @@ default:
     @just --list
 
 # Full setup (runs all steps in order)
-setup: _init ros2 ros2-dev-tools _setup-colcon-cargo-ros2 gdown geographiclib pacmod dev-tools _setup-autoware-debian _setup-autoware-data _setup-tensorrt-engines _setup-isaac-ros _setup-opencv python-deps nebula-driver ublox-driver ublox-udev tier4-camera gscam _setup-cyclonedds-sysctl _setup-multicast-lo _setup-turbovnc-virtualgl _setup-hardware-config _setup-otocam _setup-linuxptp ros-deps
+setup: _init ros2 ros2-dev-tools _setup-colcon-cargo-ros2 gdown geographiclib pacmod dev-tools _setup-autoware-debian _setup-autoware-data _setup-tensorrt-engines _setup-isaac-ros _setup-opencv python-deps nebula-driver ublox-driver ublox-udev tier4-camera gscam _setup-cyclonedds-sysctl _setup-iceoryx _setup-multicast-lo _setup-turbovnc-virtualgl _setup-hardware-config _setup-otocam _setup-linuxptp ros-deps
     @printf "{{green}}✓ Setup complete!{{nc}}\n"
 
 # Conditional Autoware Debian install (based on SKIP_AUTOWARE_DEBIAN env var)
@@ -78,6 +78,13 @@ _setup-tensorrt-engines:
     fi
 
 # Conditional CycloneDDS sysctl configuration (based on CONFIGURE_CYCLONEDDS_SYSCTL env var)
+_setup-iceoryx:
+    #!/usr/bin/env bash
+    # No question gate: config/cyclonedds/*.xml enables <SharedMemory>, and a
+    # host without iox-roudi does not degrade gracefully - every ROS process
+    # hangs at participant creation. Treat it as required, like the RMW itself.
+    just iceoryx
+
 _setup-cyclonedds-sysctl:
     #!/usr/bin/env bash
     if [[ "${CONFIGURE_CYCLONEDDS_SYSCTL:-n}" == "y" ]]; then
@@ -377,11 +384,15 @@ ublox-udev: _init
 # cannot create a DDS domain, so the umbrella recipe is what the menu and the
 # error message in scripts/env.sh both point at.
 # Configure the host network for CycloneDDS (kernel buffers + lo multicast)
-network-dds: cyclonedds-sysctl multicast-lo
+network-dds: cyclonedds-sysctl multicast-lo iceoryx
 
 # Configure CycloneDDS kernel buffers (system-wide, persistent)
 cyclonedds-sysctl: _init
     @just _run cyclonedds-sysctl "{{scripts_dir}}/configure-cyclonedds-sysctl.sh"
+
+# Install the Iceoryx runtime (iox-roudi) for CycloneDDS shared memory
+iceoryx: _init
+    @just _run iceoryx "{{scripts_dir}}/install-iceoryx.sh"
 
 # Enable multicast on lo, persistently (systemd unit)
 multicast-lo: _init
@@ -466,6 +477,11 @@ status:
         printf "  {{green}}✓{{nc}} cyclonedds-sysctl\n"
     else
         printf "  {{red}}○{{nc}} cyclonedds-sysctl\n"
+    fi
+    if command -v iox-roudi >/dev/null 2>&1; then
+        printf "  {{green}}✓{{nc}} iceoryx (iox-roudi)\n"
+    else
+        printf "  {{red}}○{{nc}} iceoryx (iox-roudi)\n"
     fi
     # Read the version rather than a marker. A marker says this ran once; a
     # JetPack OTA can put 4.8.0 back afterwards, and then the marker is a lie.

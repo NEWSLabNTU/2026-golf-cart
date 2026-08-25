@@ -7,6 +7,15 @@ Description=Golf Cart launch stack (play_launch)
 # files only ever differed in those two strings.
 After=network-online.target
 Wants=network-online.target
+# Ordering only, deliberately Wants= and not Requires=. Shared memory is
+# currently DISABLED in the CycloneDDS profiles (iceoryx runs out of publisher
+# ports on a stack this size - see config/cyclonedds/master.xml), so RouDi is
+# not on the critical path and a RouDi failure must not take the stack with it.
+# If <SharedMemory> is ever re-enabled after rebuilding iceoryx with a raised
+# IOX_MAX_PUBLISHERS, change this to Requires=: with SHM on and RouDi absent,
+# participant creation hangs forever with no message rather than failing.
+Wants=iox-roudi.service
+After=iox-roudi.service
 
 [Service]
 Type=simple

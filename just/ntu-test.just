@@ -46,6 +46,7 @@ bag SET="CSIE-1" ARGS="":
 # 2. Bring up the logging simulation (sensor drivers off, no RViz).
 up ARGS="":
     play_launch launch --parser python --web-addr 0.0.0.0:8081 \
+        --container-mode "${GOLFCART_CONTAINER_MODE:-observable}" \
         golfcart_launch ntu_logging_sim.launch.xml rviz:=false {{ARGS}}
 
 # 3. RViz with the point cloud map rendered visibly, on bag time.

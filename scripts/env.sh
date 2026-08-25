@@ -216,6 +216,8 @@ fi
 rmem_max=$(sysctl -n net.core.rmem_max 2>/dev/null || echo "0")
 ipfrag_time=$(sysctl -n net.ipv4.ipfrag_time 2>/dev/null || echo "999")
 ipfrag_thresh=$(sysctl -n net.ipv4.ipfrag_high_thresh 2>/dev/null || echo "0")
+wmem_max=$(sysctl -n net.core.wmem_max 2>/dev/null || echo "0")
+netdev_backlog=$(sysctl -n net.core.netdev_max_backlog 2>/dev/null || echo "0")
 
 # Kept as a function so the two audiences get different treatment. Sourcing
 # env.sh only WARNS -- `just build`, `just test` and an ordinary shell have no
@@ -224,10 +226,24 @@ ipfrag_thresh=$(sysctl -n net.ipv4.ipfrag_high_thresh 2>/dev/null || echo "0")
 golfcart_dds_problems() {
     local problems="" rmem
     rmem=$(sysctl -n net.core.rmem_max 2>/dev/null || echo 0)
-    if [ "${rmem}" -lt 10485760 ]; then
+    if [ "${rmem}" -lt 16777216 ]; then
         problems="${problems}
-  - net.core.rmem_max is ${rmem}; the DDS profile requires at least 10485760"
+  - net.core.rmem_max is ${rmem}; the DDS profile requires at least 16777216"
     fi
+    # Only when the resolved profile actually enables shared memory. With SHM
+    # on and RouDi absent, participant creation HANGS rather than failing, so
+    # nothing downstream ever prints an error - but SHM is off by default here
+    # (iceoryx runs out of publisher ports on a stack this size), and demanding
+    # RouDi regardless would block every launch for an unused transport.
+    _gc_profile="${CYCLONEDDS_URI#file://}"
+    if [ -n "${_gc_profile}" ] && [ -f "${_gc_profile}" ] \
+       && grep -q '<Enable>true</Enable>' "${_gc_profile}" 2>/dev/null \
+       && ! { [ -S /tmp/roudi ] && pgrep -x iox-roudi >/dev/null 2>&1; }; then
+        problems="${problems}
+  - iox-roudi is not running, and the DDS profiles enable <SharedMemory>.
+    Start it with:  systemctl --user start iox-roudi.service"
+    fi
+    unset _gc_profile
     if [ "${CYCLONEDDS_URI:-}" != "${CYCLONEDDS_URI#*loopback.xml}" ] \
        && ! ip link show lo 2>/dev/null | grep -q MULTICAST; then
         problems="${problems}
@@ -286,7 +302,9 @@ fi
 # Suboptimal-but-usable: still only worth saying once.
 if [ "$rmem_max" -lt 2147483647 ] || \
    [ "$ipfrag_time" -gt 3 ] || \
-   [ "$ipfrag_thresh" -lt 134217728 ]; then
+   [ "$ipfrag_thresh" -lt 134217728 ] || \
+   [ "$wmem_max" -lt 16777216 ] || \
+   [ "$netdev_backlog" -lt 8192 ]; then
     if [ ! -f "${GOLFCART_REPO_ROOT}/.envrc.sysctl-warned" ]; then
         echo "┌────────────────────────────────────────────────────────────┐"
         echo "│ NOTE: CycloneDDS kernel buffers are not fully tuned        │"
@@ -305,6 +323,17 @@ if [ -f "${GOLFCART_REPO_ROOT}/config/sensors.conf" ]; then
     # shellcheck source=/dev/null
     . "${GOLFCART_REPO_ROOT}/config/sensors.conf"
     export IMU_SOURCE CAMERA_MODEL
+fi
+
+# ── play_launch runtime ──────────────────────────────────────────────────────
+# GOLFCART_CONTAINER_MODE picks how composable nodes are run. It is resolved
+# here rather than baked into each caller so that `just launch`, the systemd
+# units and the replay scripts cannot disagree about it. See config/runtime.conf
+# for what each mode costs.
+if [ -f "${GOLFCART_REPO_ROOT}/config/runtime.conf" ]; then
+    # shellcheck source=/dev/null
+    . "${GOLFCART_REPO_ROOT}/config/runtime.conf"
+    export GOLFCART_CONTAINER_MODE
 fi
 
 # ── Vehicle interface ────────────────────────────────────────────────────────

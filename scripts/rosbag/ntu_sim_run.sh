@@ -126,6 +126,7 @@ wait_for 60 "/clock" has_topic /clock \
 say "2/5  bringing up the logging simulation (sensor drivers off)"
 # shellcheck disable=SC2086
 ( cd "${REPO_ROOT}" && play_launch launch --parser python --web-addr 0.0.0.0:8081 \
+      --container-mode "${GOLFCART_CONTAINER_MODE:-observable}" \
       golfcart_launch ntu_logging_sim.launch.xml rviz:=false ${LAUNCH_ARGS} ) > "${STACK_LOG}" 2>&1 &
 # The initialize service is the real readiness signal: it appears only once
 # pose_initializer is up, which is the thing step 5 talks to.
