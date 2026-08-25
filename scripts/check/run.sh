@@ -100,10 +100,11 @@ else
     lidar_ok=false
 fi
 
-# VLP32.param.yaml carries udp_only: true, which disables Nebula's HTTP client
-# and with it setup_sensor. rotation_speed and return_mode in that file are then
-# assumptions, not settings: the sensor keeps whatever its EEPROM holds and
-# nothing in the stack reports the difference. Read them back ourselves.
+# VLP32.param.yaml carries udp_only: false, so Nebula's HTTP client is live and
+# setup_sensor pushes rotation_speed and return_mode at start-up. Read them back
+# to confirm the push landed. If udp_only is ever flipped to true the HTTP client
+# is disabled and those two become assumptions about the EEPROM instead, which
+# nothing in the stack would report — hence the harsher verdict below.
 vlp_cfg="$repo_dir/src/sensor_kit/golfcart_sensor_kit_launch/golfcart_sensor_kit_launch/config/VLP32.param.yaml"
 
 yaml_scalar() { awk -F': *' -v k="$2" '$0 ~ "^ *"k":" {gsub(/[[:space:]\r]/,"",$2); print $2; exit}' "$1"; }
@@ -183,9 +184,21 @@ PY
                 fi
             fi
 
+            # Nebula and the Velodyne web UI name the return modes differently:
+            # return_mode must be spelled SingleStrongest/SingleLast/SingleFirst/Dual
+            # (nebula_common.hpp's generic parser; anything else aborts the node),
+            # while settings.json answers Strongest/Last/Dual. Compare in the
+            # sensor's vocabulary.
+            case "${want_ret,,}" in
+                singlestrongest) want_ret_sensor=strongest ;;
+                singlelast)      want_ret_sensor=last ;;
+                singlefirst)     want_ret_sensor=first ;;
+                *)               want_ret_sensor="${want_ret,,}" ;;
+            esac
+
             if [[ "${have_ret:-?}" == "?" || -z "${have_ret:-}" ]]; then
                 warn "VLP-32C answered but no return-mode field found — check http://${LIDAR_IP} by hand"
-            elif [[ "${have_ret,,}" == "${want_ret,,}" ]]; then
+            elif [[ "${have_ret,,}" == "$want_ret_sensor" ]]; then
                 ok "VLP-32C return mode ${have_ret} matches return_mode ${want_ret}"
             else
                 $mismatch "VLP-32C return mode is ${have_ret} but VLP32.param.yaml says ${want_ret} — ${why}; fix at http://${LIDAR_IP}"
