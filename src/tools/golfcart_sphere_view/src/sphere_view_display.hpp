@@ -23,6 +23,7 @@
 #include <string>
 
 #include "camera_layer.hpp"
+#include "cloud_layer.hpp"
 #include "sphere_mesh.hpp"
 
 namespace rviz_common
@@ -65,22 +66,29 @@ private Q_SLOTS:
   void updateGeometryProperties();
   void addCamera();
   void removeLastCamera();
+  void addCloud();
+  void removeLastCloud();
 
 private:
   CameraLayer * appendCamera(
     const QString & name, const QString & image_topic, const QString & camera_info_topic);
+  CloudLayer * appendCloud(const QString & name, const QString & topic, const QColor & colour);
   void refreshStatus();
   bool updateCentreTransform();
 
   QList<CameraLayer *> cameras_;
+  QList<CloudLayer *> clouds_;
   bool geometry_dirty_{true};
   int unnamed_camera_count_{0};
+  int unnamed_cloud_count_{0};
 
   rviz_common::properties::TfFrameProperty * centre_frame_property_;
   rviz_common::properties::FloatProperty * radius_property_;
   rviz_common::properties::FloatProperty * resolution_property_;
   rviz_common::properties::BoolProperty * add_camera_property_;
   rviz_common::properties::BoolProperty * remove_camera_property_;
+  rviz_common::properties::BoolProperty * add_cloud_property_;
+  rviz_common::properties::BoolProperty * remove_cloud_property_;
 };
 
 }  // namespace golfcart_sphere_view

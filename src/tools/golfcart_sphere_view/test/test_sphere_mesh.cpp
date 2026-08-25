@@ -16,15 +16,19 @@
 
 #include <OgreMatrix3.h>
 
+#include "cloud_projection.hpp"
 #include "sphere_mesh.hpp"
 
 namespace
 {
 
 using golfcart_sphere_view::CameraPose;
+using golfcart_sphere_view::CloudPlacement;
 using golfcart_sphere_view::SphereResolution;
 using golfcart_sphere_view::buildCameraPatch;
+using golfcart_sphere_view::placePoint;
 using golfcart_sphere_view::projectToPixel;
+using golfcart_sphere_view::rainbow;
 
 /// A pinhole camera with no distortion: 640x480, 90 degrees across.
 sensor_msgs::msg::CameraInfo pinhole()
@@ -172,6 +176,51 @@ TEST(BuildCameraPatch, OffsetCameraShiftsWhichDirectionsAreCovered)
   a_mean_y /= static_cast<float>(a.size());
   b_mean_y /= static_cast<float>(b.size());
   EXPECT_GT(b_mean_y, a_mean_y);
+}
+
+TEST(PlacePoint, AngularKeepsDirectionAndDiscardsRange)
+{
+  const Ogre::Vector3 far_away(30.0f, 40.0f, 0.0f);  // 50 m out
+  const auto placed = placePoint(far_away, 10.0, CloudPlacement::Angular);
+
+  EXPECT_NEAR(placed.length(), 10.0f, 1e-4f);
+  // Same bearing, which is the whole point: what survives is what a camera can
+  // be compared against.
+  EXPECT_NEAR(
+    placed.normalisedCopy().dotProduct(far_away.normalisedCopy()), 1.0f, 1e-5f);
+}
+
+TEST(PlacePoint, MetricLeavesThePointAlone)
+{
+  const Ogre::Vector3 measured(3.0f, -4.0f, 12.0f);
+  const auto placed = placePoint(measured, 10.0, CloudPlacement::Metric);
+  EXPECT_EQ(placed, measured);
+}
+
+TEST(PlacePoint, ReturnAtTheOriginIsNotNormalised)
+{
+  // A degenerate return has no direction to preserve. Landing at the centre is
+  // visibly wrong, which beats a NaN that quietly poisons the buffer.
+  const auto placed = placePoint(Ogre::Vector3::ZERO, 10.0, CloudPlacement::Angular);
+  EXPECT_TRUE(std::isfinite(placed.x));
+  EXPECT_TRUE(std::isfinite(placed.y));
+  EXPECT_TRUE(std::isfinite(placed.z));
+  EXPECT_EQ(placed, Ogre::Vector3::ZERO);
+}
+
+TEST(Rainbow, RunsBlueToRedAndClampsOutside)
+{
+  const auto low = rainbow(0.0);
+  const auto high = rainbow(1.0);
+  EXPECT_GT(low.b, 0.9f);
+  EXPECT_LT(low.r, 0.1f);
+  EXPECT_GT(high.r, 0.9f);
+  EXPECT_LT(high.b, 0.1f);
+
+  // Clamped, not wrapped: a saturated return should read as the top of the
+  // scale rather than looping back to the bottom of it.
+  EXPECT_EQ(rainbow(-5.0), low);
+  EXPECT_EQ(rainbow(5.0), high);
 }
 
 }  // namespace

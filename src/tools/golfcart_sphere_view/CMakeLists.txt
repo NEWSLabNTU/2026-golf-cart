@@ -22,6 +22,8 @@ set(CMAKE_AUTOMOC ON)
 
 add_library(${PROJECT_NAME} SHARED
   src/camera_layer.cpp
+  src/cloud_layer.cpp
+  src/cloud_projection.cpp
   src/sphere_mesh.cpp
   src/sphere_view_display.cpp
   src/textured_patch.cpp
@@ -44,7 +46,8 @@ target_compile_definitions(${PROJECT_NAME} PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNC
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
-  ament_add_gtest(test_sphere_mesh test/test_sphere_mesh.cpp src/sphere_mesh.cpp)
+  ament_add_gtest(test_sphere_mesh test/test_sphere_mesh.cpp src/sphere_mesh.cpp
+    src/cloud_projection.cpp)
   target_include_directories(test_sphere_mesh PRIVATE src)
   target_link_libraries(test_sphere_mesh
     rviz_rendering::rviz_rendering
@@ -65,7 +68,7 @@ install(TARGETS ${PROJECT_NAME} EXPORT ${PROJECT_NAME}
 
 # The synthetic camera and its RViz config, so the display can be exercised
 # without the vehicle.
-install(PROGRAMS test/fake_camera.py DESTINATION lib/${PROJECT_NAME})
+install(PROGRAMS test/fake_camera.py test/fake_lidar.py DESTINATION lib/${PROJECT_NAME})
 install(FILES test/sphere_view_demo.rviz DESTINATION share/${PROJECT_NAME}/rviz)
 
 pluginlib_export_plugin_description_file(rviz_common plugin_description.xml)

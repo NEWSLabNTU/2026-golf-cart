@@ -57,6 +57,11 @@ SphereViewDisplay::SphereViewDisplay()
   remove_camera_property_ = new rviz_common::properties::BoolProperty(
     "Remove Last Camera", false, "Tick to drop the last camera layer.", this,
     SLOT(removeLastCamera()));
+  add_cloud_property_ = new rviz_common::properties::BoolProperty(
+    "Add LiDAR", false, "Tick to append another point cloud layer.", this, SLOT(addCloud()));
+  remove_cloud_property_ = new rviz_common::properties::BoolProperty(
+    "Remove Last LiDAR", false, "Tick to drop the last point cloud layer.", this,
+    SLOT(removeLastCloud()));
 }
 
 SphereViewDisplay::~SphereViewDisplay() = default;
@@ -78,6 +83,44 @@ void SphereViewDisplay::onInitialize()
   appendCamera(
     "camera_rear", "/sensing/camera/rear/image_raw/compressed",
     "/sensing/camera/rear/camera_info");
+
+  // The vehicle's two LiDARs, with distinct flat colours so their overlap is
+  // legible when Colour By is set to Flat.
+  appendCloud("vlp32c", "/sensing/lidar/vlp32/velodyne_points", QColor(255, 255, 255));
+  appendCloud("falcon", "/sensing/lidar/falcon/iv_points", QColor(255, 160, 60));
+}
+
+CloudLayer * SphereViewDisplay::appendCloud(
+  const QString & name, const QString & topic, const QColor & colour)
+{
+  auto * layer = new CloudLayer(name, topic, colour, this);
+  layer->initialize(context_, scene_node_);
+  clouds_.append(layer);
+  if (isEnabled()) {
+    layer->subscribe();
+  }
+  return layer;
+}
+
+void SphereViewDisplay::addCloud()
+{
+  if (!add_cloud_property_->getBool()) {
+    return;
+  }
+  add_cloud_property_->setBool(false);
+  appendCloud(QString("lidar_%1").arg(++unnamed_cloud_count_), "", QColor(200, 200, 200));
+}
+
+void SphereViewDisplay::removeLastCloud()
+{
+  if (!remove_cloud_property_->getBool()) {
+    return;
+  }
+  remove_cloud_property_->setBool(false);
+  if (clouds_.isEmpty()) {
+    return;
+  }
+  delete clouds_.takeLast();
 }
 
 CameraLayer * SphereViewDisplay::appendCamera(
@@ -124,6 +167,9 @@ void SphereViewDisplay::onEnable()
   for (auto * camera : cameras_) {
     camera->subscribe();
   }
+  for (auto * cloud : clouds_) {
+    cloud->subscribe();
+  }
   geometry_dirty_ = true;
 }
 
@@ -131,6 +177,9 @@ void SphereViewDisplay::onDisable()
 {
   for (auto * camera : cameras_) {
     camera->unsubscribe();
+  }
+  for (auto * cloud : clouds_) {
+    cloud->unsubscribe();
   }
   scene_node_->setVisible(false);
 }
@@ -142,6 +191,12 @@ void SphereViewDisplay::reset()
     camera->unsubscribe();
     if (isEnabled()) {
       camera->subscribe();
+    }
+  }
+  for (auto * cloud : clouds_) {
+    cloud->unsubscribe();
+    if (isEnabled()) {
+      cloud->subscribe();
     }
   }
   geometry_dirty_ = true;
@@ -172,10 +227,10 @@ bool SphereViewDisplay::updateCentreTransform()
 
 void SphereViewDisplay::refreshStatus()
 {
-  QStringList lines;
+  QStringList camera_lines;
   int rendering = 0;
   for (auto * camera : cameras_) {
-    lines << camera->statusSummary();
+    camera_lines << camera->statusSummary();
     if (camera->isRendering()) {
       ++rendering;
     }
@@ -183,7 +238,16 @@ void SphereViewDisplay::refreshStatus()
   setStatus(
     rendering > 0 ? rviz_common::properties::StatusProperty::Ok
     : rviz_common::properties::StatusProperty::Warn,
-    "Cameras", lines.join("; "));
+    "Cameras", camera_lines.join("; "));
+
+  QStringList cloud_lines;
+  for (auto * cloud : clouds_) {
+    cloud_lines << cloud->statusSummary();
+  }
+  if (!cloud_lines.isEmpty()) {
+    setStatus(
+      rviz_common::properties::StatusProperty::Ok, "LiDARs", cloud_lines.join("; "));
+  }
 }
 
 void SphereViewDisplay::update(float /*wall_dt*/, float /*ros_dt*/)
@@ -216,6 +280,16 @@ void SphereViewDisplay::update(float /*wall_dt*/, float /*ros_dt*/)
 
   for (auto * camera : cameras_) {
     camera->updateTexture();
+  }
+
+  // Clouds are re-placed when a new one arrives, and also when the sphere
+  // itself changed -- in Angular mode the radius is where the points go.
+  const std::string centre_frame = centre_frame_property_->getFrameStd();
+  for (auto * cloud : clouds_) {
+    cloud->update(centre_frame, radius_property_->getFloat(), rebuild);
+  }
+  if (rebuild) {
+    refreshStatus();
   }
 }
 

@@ -16,7 +16,7 @@ Visualization Manager:
       Enabled: true
       Name: SphereView
       Centre Frame: base_link
-      Radius: 10
+      Radius: 8
       Grid Step: 1
   Global Options:
     Fixed Frame: base_link

@@ -13,8 +13,9 @@ also adjusts parameters is a different program, and the value of this one comes
 from being downstream — it shows the calibration the system is *running*, not
 the file that is supposed to describe it.
 
-Last updated: 2026-08-25. **S1 and S2 are done**, verified against synthetic
-cameras on a workstation. S3 is next.
+Last updated: 2026-08-25. **S1, S2 and S3 are done**, verified against synthetic
+sensors on a workstation. S4 is next, and the vehicle is what remains to prove
+any of it.
 
 ---
 
@@ -152,20 +153,34 @@ What S2 settled beyond the checklist:
 
 ## S3 — the LiDARs, and the actual check
 
-- [ ] Cloud layers, configurable topic list, transformed into `base_link`.
-- [ ] `angular` mode: points snapped to the sphere radius. Removes parallax, so
-      what remains is a pure rotation comparison. This is the default.
-- [ ] `metric` mode: true range kept. Exposes translation error, at the cost of
-      the sphere no longer being a sphere.
-- [ ] Colour by intensity, by range, and by source sensor. Source colouring is
-      what makes VLP-32C against Falcon legible.
-- [ ] Point size and decimation properties, so a 32-plane cloud at 10 Hz does
-      not bury the image underneath it.
+- [x] Cloud layers, one `CloudLayer` per sensor, each with its own topic and
+      style, transformed into the centre frame.
+- [x] `Angular` placement: returns snapped to the sphere radius. Removes
+      parallax, leaving the direction, which is the only thing a camera can be
+      compared against. This is the default.
+- [x] `Metric` placement: true range kept, so a translation error shows as depth
+      disagreement rather than being projected away.
+- [x] Colour by intensity, by range, and flat per sensor. Flat is what makes
+      VLP-32C against Falcon legible in an overlap.
+- [x] Point size, alpha and decimation, so a 32-plane cloud does not bury the
+      image it is meant to be checked against.
 
-**Acceptance:** with the vehicle parked facing structure that has both depth
-discontinuities and visual texture — a doorway, a building edge, parked cars —
-the cloud's depth discontinuity sits on the image's visual edge for each camera
-in turn.
+**Acceptance: partly met, and honestly so.** Both modes render correctly against
+a synthetic wall with a doorway cut out of it, at 31 fps against the 30 fps cap,
+with 33.7k returns at 10 Hz alongside three cameras.
+
+In `Angular`, the returns form a band on the sphere and the doorway is legible
+as an intensity change -- the opening dark, its retroreflective frame bright,
+which is what a VLP-32C reports above 100. In `Metric` with colour by range, the
+wall stands at its true distance and the returns that went through the doorway
+sit visibly behind it. That is the distinction the two modes exist for, shown
+rather than asserted.
+
+**What is not met** is the acceptance as written: it asks for the cloud's depth
+discontinuity to sit on a *camera's* visual edge, and a synthetic wall and a
+synthetic camera agree with each other by construction. Nothing here proves the
+tool detects a real miscalibration, because nothing here is miscalibrated. That
+needs the vehicle, and it is the first thing to do with it.
 
 ---
 
