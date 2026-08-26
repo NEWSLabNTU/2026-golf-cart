@@ -17,6 +17,7 @@
 #include <OgreSceneManager.h>
 #include <OgreSceneNode.h>
 
+#include <rviz_common/config.hpp>
 #include <rviz_common/display_context.hpp>
 #include <rviz_common/frame_manager_iface.hpp>
 #include <rviz_common/properties/bool_property.hpp>
@@ -70,6 +71,20 @@ void SphereViewDisplay::onInitialize()
 {
   Display::onInitialize();
   centre_frame_property_->setFrameManager(context_->getFrameManager());
+  context_ready_ = true;
+
+  // load() runs before this, so a saved config has already created its layers
+  // and they are waiting for a scene node. Give them one, and only fall back to
+  // the vehicle's own sensors when nothing was loaded.
+  for (auto * camera : cameras_) {
+    camera->initialize(context_, scene_node_);
+  }
+  for (auto * cloud : clouds_) {
+    cloud->initialize(context_, scene_node_);
+  }
+  if (!cameras_.isEmpty() || !clouds_.isEmpty()) {
+    return;
+  }
 
   // The vehicle's three GMSL cameras. Defaults rather than hardcoding: every
   // topic is editable, and layers can be added or removed, so the same display
@@ -94,7 +109,9 @@ CloudLayer * SphereViewDisplay::appendCloud(
   const QString & name, const QString & topic, const QColor & colour)
 {
   auto * layer = new CloudLayer(name, topic, colour, this);
-  layer->initialize(context_, scene_node_);
+  if (context_ready_) {
+    layer->initialize(context_, scene_node_);
+  }
   clouds_.append(layer);
   if (isEnabled()) {
     layer->subscribe();
@@ -127,7 +144,9 @@ CameraLayer * SphereViewDisplay::appendCamera(
   const QString & name, const QString & image_topic, const QString & camera_info_topic)
 {
   auto * layer = new CameraLayer(name, image_topic, camera_info_topic, this);
-  layer->initialize(context_, scene_node_);
+  if (context_ready_) {
+    layer->initialize(context_, scene_node_);
+  }
   cameras_.append(layer);
   if (isEnabled()) {
     layer->subscribe();
@@ -159,6 +178,45 @@ void SphereViewDisplay::removeLastCamera()
   // Deleting the property detaches it from the tree and takes its Ogre objects
   // with it through the destructor.
   delete layer;
+}
+
+void SphereViewDisplay::load(const rviz_common::Config & config)
+{
+  // A camera entry carries an image topic; a LiDAR entry carries a placement.
+  // Matching on the fields rather than on a saved type string keeps
+  // hand-written configs working, which is how these are actually produced.
+  for (auto iter = config.mapIterator(); iter.isValid(); iter.advance()) {
+    const QString name = iter.currentKey();
+    const rviz_common::Config child = config.mapGetChild(name);
+    if (!child.isValid() || child.getType() != rviz_common::Config::Map) {
+      continue;
+    }
+
+    const bool is_camera = child.mapGetChild("Image Topic").isValid();
+    const bool is_cloud = child.mapGetChild("Placement").isValid();
+    if (!is_camera && !is_cloud) {
+      continue;
+    }
+
+    bool exists = false;
+    for (int i = 0; i < numChildren(); ++i) {
+      if (childAt(i)->getName() == name) {
+        exists = true;
+        break;
+      }
+    }
+    if (exists) {
+      continue;
+    }
+
+    if (is_camera) {
+      appendCamera(name, "", "");
+    } else {
+      appendCloud(name, "", QColor(200, 200, 200));
+    }
+  }
+
+  Display::load(config);
 }
 
 void SphereViewDisplay::onEnable()

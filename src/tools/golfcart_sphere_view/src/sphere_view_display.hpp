@@ -58,6 +58,14 @@ public:
   void reset() override;
   void update(float wall_dt, float ros_dt) override;
 
+  /// Create the layers a saved config names before letting RViz fill them in.
+  ///
+  /// RViz assigns saved child entries to existing properties by name and drops
+  /// the rest without a word, so a config naming layers this display did not
+  /// happen to create by default would load as silence. Since the layer set is
+  /// the whole point of the display being configurable, the config decides it.
+  void load(const rviz_common::Config & config) override;
+
 protected:
   void onEnable() override;
   void onDisable() override;
@@ -79,6 +87,9 @@ private:
   QList<CameraLayer *> cameras_;
   QList<CloudLayer *> clouds_;
   bool geometry_dirty_{true};
+  // load() runs before onInitialize(), so layers it creates have no scene node
+  // to attach to yet. Ogre objects wait until there is one.
+  bool context_ready_{false};
   int unnamed_camera_count_{0};
   int unnamed_cloud_count_{0};
 

@@ -41,6 +41,7 @@ namespace properties
 class EnumProperty;
 class FloatProperty;
 class RosTopicProperty;
+class TfFrameProperty;
 }  // namespace properties
 }  // namespace rviz_common
 
@@ -65,6 +66,9 @@ public:
   /// Ogre objects cannot be built in the constructor: the display owns the
   /// scene node and only has it after onInitialize().
   void initialize(rviz_common::DisplayContext * context, Ogre::SceneNode * parent_scene_node);
+
+  /// Frame the projection is done in: the override if set, else CameraInfo's.
+  std::string opticalFrame(const sensor_msgs::msg::CameraInfo & camera_info) const;
 
   void subscribe();
   void unsubscribe();
@@ -99,6 +103,7 @@ private:
   rviz_common::properties::RosTopicProperty * image_topic_property_;
   rviz_common::properties::EnumProperty * image_type_property_;
   rviz_common::properties::RosTopicProperty * camera_info_topic_property_;
+  rviz_common::properties::TfFrameProperty * optical_frame_property_;
   rviz_common::properties::FloatProperty * alpha_property_;
 
   rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr compressed_subscription_;

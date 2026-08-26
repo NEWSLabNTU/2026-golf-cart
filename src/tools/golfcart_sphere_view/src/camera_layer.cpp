@@ -23,6 +23,7 @@
 #include <rviz_common/properties/enum_property.hpp>
 #include <rviz_common/properties/float_property.hpp>
 #include <rviz_common/properties/ros_topic_property.hpp>
+#include <rviz_common/properties/tf_frame_property.hpp>
 #include <rviz_common/ros_integration/ros_node_abstraction_iface.hpp>
 
 #include <string>
@@ -59,6 +60,19 @@ CameraLayer::CameraLayer(
     "Intrinsics for the same camera. Without it there is no patch to draw on.", this,
     SLOT(onTopicsChanged()));
 
+  // REP-103 says CameraInfo names the optical frame, and plenty of real
+  // publishers name the body frame instead -- Autoware's own Leo Drive bags
+  // among them, where camera_info carries camera_left/camera_link while the
+  // projection belongs in camera_left/camera_optical_link. Taking CameraInfo at
+  // its word there rotates every observation by ninety degrees, which looks
+  // like a catastrophic calibration error rather than a naming convention.
+  // Blank means trust CameraInfo.
+  optical_frame_property_ = new rviz_common::properties::TfFrameProperty(
+    "Optical Frame Override", "",
+    "Frame to project in when CameraInfo names the body frame rather than the optical "
+    "one. Leave blank to use whatever CameraInfo says.",
+    this, nullptr, true, SLOT(onTopicsChanged()));
+
   alpha_property_ = new rviz_common::properties::FloatProperty(
     "Alpha", 1.0f, "Transparency for this camera alone, for looking through an overlap.",
     this, SLOT(onAlphaChanged()));
@@ -73,10 +87,22 @@ CameraLayer::~CameraLayer()
   patch_.reset();
 }
 
+std::string CameraLayer::opticalFrame(const sensor_msgs::msg::CameraInfo & camera_info) const
+{
+  const std::string override_frame = optical_frame_property_->getFrameStd();
+  if (!override_frame.empty() && override_frame != rviz_common::properties::TfFrameProperty::
+    FIXED_FRAME_STRING.toStdString())
+  {
+    return override_frame;
+  }
+  return camera_info.header.frame_id;
+}
+
 void CameraLayer::initialize(
   rviz_common::DisplayContext * context, Ogre::SceneNode * parent_scene_node)
 {
   context_ = context;
+  optical_frame_property_->setFrameManager(context_->getFrameManager());
   patch_ = std::make_unique<TexturedPatch>(
     context_->getSceneManager(), parent_scene_node, getName().toStdString());
   patch_->setAlpha(alpha_property_->getFloat());
@@ -160,13 +186,24 @@ void CameraLayer::subscribe()
     return;
   }
   auto raw_node = node->get_raw_node();
+
+  // An empty topic is not a mistake, it is a layer nobody has pointed anywhere
+  // yet -- which is exactly the state a layer is in while a saved config is
+  // still being applied to it. Subscribing anyway throws "topic name must not
+  // be empty string" out of rclcpp, and RViz abandons the whole config load.
+  const std::string image_topic = image_topic_property_->getTopicStd();
+  const std::string camera_info_topic = camera_info_topic_property_->getTopicStd();
+  if (image_topic.empty() || camera_info_topic.empty()) {
+    return;
+  }
+
   startWorker();
 
   // Sensor QoS on all of them: a reliable subscription matches nothing against
   // a best-effort sensor stream, and says nothing about it while it does so.
   if (image_type_property_->getOptionInt() == 0) {
     compressed_subscription_ = raw_node->create_subscription<sensor_msgs::msg::CompressedImage>(
-      image_topic_property_->getTopicStd(), rclcpp::SensorDataQoS(),
+      image_topic, rclcpp::SensorDataQoS(),
       [this](sensor_msgs::msg::CompressedImage::ConstSharedPtr message) {
         {
           std::lock_guard<std::mutex> lock(encoded_mutex_);
@@ -178,7 +215,7 @@ void CameraLayer::subscribe()
       });
   } else {
     raw_subscription_ = raw_node->create_subscription<sensor_msgs::msg::Image>(
-      image_topic_property_->getTopicStd(), rclcpp::SensorDataQoS(),
+      image_topic, rclcpp::SensorDataQoS(),
       [this](sensor_msgs::msg::Image::ConstSharedPtr message) {
         {
           std::lock_guard<std::mutex> lock(encoded_mutex_);
@@ -195,7 +232,7 @@ void CameraLayer::subscribe()
   }
 
   camera_info_subscription_ = raw_node->create_subscription<sensor_msgs::msg::CameraInfo>(
-    camera_info_topic_property_->getTopicStd(), rclcpp::SensorDataQoS(),
+    camera_info_topic, rclcpp::SensorDataQoS(),
     [this](sensor_msgs::msg::CameraInfo::ConstSharedPtr message) {
       std::lock_guard<std::mutex> lock(camera_info_mutex_);
       const bool changed = !has_camera_info_ || camera_info_.k != message->k ||
@@ -279,7 +316,7 @@ void CameraLayer::updateGeometry(
     camera_info = camera_info_;
   }
 
-  const std::string & camera_frame = camera_info.header.frame_id;
+  const std::string camera_frame = opticalFrame(camera_info);
   if (camera_frame.empty()) {
     transform_error_ = "CameraInfo carries no frame_id";
     return;

@@ -123,8 +123,14 @@ void CloudLayer::subscribe()
   if (!node) {
     return;
   }
+  // Same reason as the camera layer: a blank topic is an unconfigured layer,
+  // and subscribing to it throws out of rclcpp mid config load.
+  const std::string topic = topic_property_->getTopicStd();
+  if (topic.empty()) {
+    return;
+  }
   subscription_ = node->get_raw_node()->create_subscription<sensor_msgs::msg::PointCloud2>(
-    topic_property_->getTopicStd(), rclcpp::SensorDataQoS(),
+    topic, rclcpp::SensorDataQoS(),
     [this](sensor_msgs::msg::PointCloud2::ConstSharedPtr message) {
       // Keep the message and do the work on the render thread. Transforming
       // here would need FrameManager from a subscription thread, and the cost
