@@ -1,0 +1,86 @@
+# Sphere view against Autoware's Leo Drive ISUZU bags (Bus-ODD dataset).
+#
+#   aws s3 sync s3://autoware-files/recordings/bags/2022-08-22_leo_drive_isuzu_bags/ \
+#       ./leo_bags --no-sign-request
+#   ros2 bag play leo_bags/all-sensors-bag1_compressed --clock
+#
+# Three Lucid Vision cameras and a concatenated cloud from three Velodynes, with
+# camera_info and tf_static in the bag. The cameras publish sensor_msgs/Image,
+# not CompressedImage, which is why every layer here sets Image Type to Raw.
+#
+# Playback needs applanix_msgs built, or the GNSS topics fail to deserialise and
+# take the player down with them.
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /SphereView1
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Enabled: true
+      Name: Grid
+      Cell Size: 1
+      Plane Cell Count: 40
+      Alpha: 0.3
+    - Class: rviz_default_plugins/TF
+      Enabled: false
+      Name: TF
+      Show Names: true
+    - Class: golfcart_sphere_view/SphereView
+      Enabled: true
+      Name: SphereView
+      Centre Frame: base_link
+      Radius: 12
+      Grid Step: 1
+      camera_left:
+        Value: true
+        Image Topic: /lucid_vision/camera_1/raw_image
+        Image Type: Raw
+        Camera Info Topic: /lucid_vision/camera_1/camera_info
+        Alpha: 1
+      camera_right:
+        Value: true
+        Image Topic: /lucid_vision/camera_2/raw_image
+        Image Type: Raw
+        Camera Info Topic: /lucid_vision/camera_2/camera_info
+        Alpha: 1
+      camera_rear:
+        Value: true
+        Image Topic: /lucid_vision/camera_0/raw_image
+        Image Type: Raw
+        Camera Info Topic: /lucid_vision/camera_0/camera_info
+        Alpha: 1
+      vlp32c:
+        Value: true
+        Topic: /sensing/lidar/concatenated/pointcloud
+        Placement: Angular
+        Colour By: Intensity
+        Intensity Max: 255
+        Point Size: 0.06
+        Decimation: 2
+        Alpha: 1
+      falcon:
+        Value: false
+        Topic: ""
+  Global Options:
+    Fixed Frame: base_link
+    Frame Rate: 30
+    Background Color: 48; 48; 48
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 22
+      Focal Point: {X: 0, Y: 0, Z: 1}
+      Pitch: 0.2
+      Yaw: 3.1
+      Name: Orbit
+Window Geometry:
+  Height: 900
+  Width: 1400
+  Displays:
+    collapsed: false
