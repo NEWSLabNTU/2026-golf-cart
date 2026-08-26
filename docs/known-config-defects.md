@@ -15,29 +15,13 @@ were ERROR or STALE. Most of that is this list. Phase 4-O is building a mode
 strip and an MRM timeline on top of the diagnostic graph, and a graph that is
 permanently a third red trains everyone to ignore it.
 
----
-
-## 1. The vehicle checkout is not in git
-
-The run loaded `/mnt/external/2026-golf-cart/install/...`, and that checkout's
-`VLP32.param.yaml` differs from every commit on `origin/2026-golf`:
-
-| | in git (`6a3f9b1`) | running on the vehicle |
-|---|---|---|
-| `udp_only` | `true` | `false` |
-| `return_mode` | `Dual` | `SingleStrongest` |
-| comments | no `return_mode` spelling section | has one, about `return_mode_from_string()` vs `return_mode_from_string_velodyne()` |
-
-The vehicle's version is the better one. It is also the one nobody else has, and
-it is the file that decides the LiDAR's frame rate and point count. Commit it.
-
-This makes every other item here provisional: what is in the repository is not
-necessarily what produced these logs. Check the vehicle before concluding that
-any config below is untouched.
+**Read a config out of git, not out of a submodule working tree.** One entry
+here was wrong for that reason and has moved to *Not defects* below. The
+one-line guard is `git submodule status --recursive | grep '^+'`.
 
 ---
 
-## 2. RViz asks for an MRM overlay plugin that does not exist
+## 1. RViz asks for an MRM overlay plugin that does not exist
 
 ```
 [ERROR] [rviz2]: PluginlibFactory: The plugin for class
@@ -63,7 +47,7 @@ install does ship `autoware_overlay_rviz_plugin/SignalDisplay` and
 
 ---
 
-## 3. `topic_state_monitor_initialpose3d` has all-zero thresholds
+## 2. `topic_state_monitor_initialpose3d` has all-zero thresholds
 
 Its published parameters:
 
@@ -86,7 +70,7 @@ play_launch issue #0023), so it has never worked in either sense.
 
 ---
 
-## 4. Two nodes claim `/sensing/gnss/ublox`
+## 3. Two nodes claim `/sensing/gnss/ublox`
 
 ```
 [ERROR] duplicated_node_checker: Error: Duplicated nodes detected[/sensing/gnss/ublox]
@@ -111,7 +95,7 @@ name collision would be a real hazard if both hosts ever did have a receiver.
 
 ---
 
-## 5. Autoware's `system_monitor` runs on stock x86 defaults
+## 4. Autoware's `system_monitor` runs on stock x86 defaults
 
 The repository ships no override for
 `/opt/autoware/1.5.0/share/autoware_launch/config/system/system_monitor/*`, so
@@ -135,7 +119,7 @@ was telling the truth.
 
 ---
 
-## 6. `collision_detector` reports ERROR with no message
+## 5. `collision_detector` reports ERROR with no message
 
 3,184 reports, all `[ERROR] No message was set`. The node is publishing a
 diagnostic status it never filled in. Either it is misconfigured or it is
@@ -143,7 +127,7 @@ running without an input it requires. Not investigated.
 
 ---
 
-## 7. `/adapi/node/vehicle_door` reports a door status forever
+## 6. `/adapi/node/vehicle_door` reports a door status forever
 
 `The door status is unknown.`, ERROR on 99.8% of reports. The golf cart has no
 doors. The AD API door interface should not be in the graph.
@@ -154,7 +138,7 @@ strings `1` and `0`.
 
 ---
 
-## 8. The web monitor still lists `/diagnostics_agg`
+## 7. The web monitor still lists `/diagnostics_agg`
 
 `src/system/golfcart_system_monitor/config/monitor_topics.yaml:57`
 
@@ -170,7 +154,7 @@ dead entry in the monitor's own table.
 
 ---
 
-## 9. The sensor kit's analyzer config carries a comment that is wrong
+## 8. The sensor kit's analyzer config carries a comment that is wrong
 
 `src/sensor_kit/golfcart_sensor_kit_launch/golfcart_sensor_kit_launch/config/diagnostic_aggregator/sensor_kit.param.yaml:3`
 
@@ -198,18 +182,38 @@ Recorded so nobody re-investigates them:
   above, not its own fault.
 - **`net_monitor: Network Traffic`**, "No data monitored: greengrass". Stock
   `monitor_program: "greengrass"`, already documented as ignorable in CLAUDE.md.
+- **`VLP32.param.yaml` differing between the vehicle and this repository.** An
+  earlier revision of this file listed that as defect #1, on the strength of the
+  vehicle running `udp_only: false` / `return_mode: SingleStrongest` where the
+  repository appeared to hold `udp_only: true` / `return_mode: Dual`. It was
+  wrong. The vehicle's version is committed, as `e41e16f fix(lidar): spell
+  return_mode the way Nebula parses it`, and the parent has pinned it since
+  `a7baa23`. What had gone stale was a **submodule working tree**: this checkout
+  of `golfcart_sensor_kit_launch` sat at `76527d1`, one commit behind the pin,
+  because `git submodule update` had not been run after a pull, and the file
+  read out of it was the old one.
+
+  Worth keeping because the failure mode is not obvious: `git status` in the
+  parent says nothing when a submodule is checked out *behind* its pin at a
+  commit that is still an ancestor, so the stale file looks authoritative. The
+  check is
+
+  ```bash
+  git submodule status --recursive | grep '^+'
+  ```
+
+  which lists exactly the submodules whose checkout is not the pinned commit.
+  Run it before concluding that a config file on a machine differs from git.
 
 ---
 
 ## Suggested order
 
-1. **Commit the vehicle's checkout** (#1). Everything else is unverifiable until
-   the file on the machine and the file in git are the same file.
-2. **The five `system_monitor` parameters** (#5) and the `/diagnostics_agg` row
-   (#8). Cheapest, and together they remove most of the permanent red.
-3. **The RViz MRM plugin** (#2), because phase 4-O has been reasoning about MRM
+1. **The five `system_monitor` parameters** (#4) and the `/diagnostics_agg` row
+   (#7). Cheapest, and together they remove most of the permanent red.
+2. **The RViz MRM plugin** (#1), because phase 4-O has been reasoning about MRM
    visualization on the assumption that it works.
-4. **The u-blox split** (#4), which is a launch-config change on both hosts.
-5. `topic_state_monitor_initialpose3d` (#3), `collision_detector` (#6) and the
-   AD API door (#7) need someone to decide what they should say, not just what
+3. **The u-blox split** (#3), which is a launch-config change on both hosts.
+4. `topic_state_monitor_initialpose3d` (#2), `collision_detector` (#5) and the
+   AD API door (#6) need someone to decide what they should say, not just what
    number to put in them.

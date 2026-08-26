@@ -68,11 +68,17 @@ Two things can still produce the warning, and they need different fixes:
    broken and the GUI says nothing. Fix per display, in the Topic > Reliability
    Policy dropdown.
 2. **The vehicle running a different config from the one in git.** The run
-   loaded `/mnt/external/2026-golf-cart/install/.../golfcart.rviz`. That
-   checkout is known to differ from the repository elsewhere: its
-   `VLP32.param.yaml` has `udp_only: false` and a `return_mode` comment block
-   that exist in no commit on `origin/2026-golf`. See
-   [known-config-defects.md](../../known-config-defects.md).
+   loaded `/mnt/external/2026-golf-cart/install/.../golfcart.rviz`, and nothing
+   in the bundle pins that checkout to a commit. Confirm it before trusting the
+   file above, with `git -C /mnt/external/2026-golf-cart status` on the machine.
+
+   An earlier revision of this document offered `VLP32.param.yaml` as evidence
+   that the vehicle's checkout diverges from git. That was wrong, and it is not
+   evidence of anything: the vehicle's version of that file is committed as
+   `e41e16f` and pinned since `a7baa23`. The divergence was in a **local
+   submodule working tree** sitting one commit behind the pin, not on the
+   vehicle. See the note in
+   [known-config-defects.md](../../known-config-defects.md#not-defects).
 
 **Check first, it costs nothing:**
 
