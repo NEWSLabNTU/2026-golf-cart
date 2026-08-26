@@ -14,10 +14,13 @@
 
 #include "camera_layer.hpp"
 
+#include "raw_image.hpp"
+
 #include <OgreSceneNode.h>
 
 #include <rviz_common/display_context.hpp>
 #include <rviz_common/frame_manager_iface.hpp>
+#include <rviz_common/properties/enum_property.hpp>
 #include <rviz_common/properties/float_property.hpp>
 #include <rviz_common/properties/ros_topic_property.hpp>
 #include <rviz_common/ros_integration/ros_node_abstraction_iface.hpp>
@@ -39,6 +42,17 @@ CameraLayer::CameraLayer(
   image_topic_property_ = new rviz_common::properties::RosTopicProperty(
     "Image Topic", image_topic, "sensor_msgs/msg/CompressedImage",
     "Compressed image for this camera.", this, SLOT(onTopicsChanged()));
+
+  // Compressed by default because that is what this vehicle publishes, but
+  // public datasets frequently ship raw Image -- Autoware's own Leo Drive bags
+  // among them -- and republishing them just to look at them is a poor trade.
+  image_type_property_ = new rviz_common::properties::EnumProperty(
+    "Image Type", "Compressed",
+    "Message type on the image topic. Compressed is sensor_msgs/CompressedImage, "
+    "Raw is sensor_msgs/Image.",
+    this, SLOT(onTopicsChanged()));
+  image_type_property_->addOption("Compressed", 0);
+  image_type_property_->addOption("Raw", 1);
 
   camera_info_topic_property_ = new rviz_common::properties::RosTopicProperty(
     "Camera Info Topic", camera_info_topic, "sensor_msgs/msg/CameraInfo",
@@ -94,22 +108,35 @@ void CameraLayer::workerLoop()
   // would show up as a stalled frame loop rather than as a slow camera, so each
   // camera decodes on its own thread and hands over only the result.
   while (worker_running_) {
-    std::vector<uint8_t> encoded;
+    PendingFrame frame;
     {
       std::unique_lock<std::mutex> lock(encoded_mutex_);
       encoded_available_.wait(lock, [this] { return has_encoded_frame_ || !worker_running_; });
       if (!worker_running_) {
         return;
       }
-      encoded = std::move(encoded_frame_);
+      frame = std::move(encoded_frame_);
       has_encoded_frame_ = false;
     }
 
     QImage decoded;
-    if (!decoded.loadFromData(encoded.data(), static_cast<int>(encoded.size()))) {
-      std::lock_guard<std::mutex> lock(decoded_mutex_);
-      ++decode_failures_;
-      continue;
+    if (frame.compressed) {
+      if (!decoded.loadFromData(frame.bytes.data(), static_cast<int>(frame.bytes.size()))) {
+        std::lock_guard<std::mutex> lock(decoded_mutex_);
+        ++decode_failures_;
+        decode_error_ = "undecodable compressed frame";
+        continue;
+      }
+    } else {
+      std::string reason;
+      decoded = rawImageToQImage(
+        frame.bytes, frame.width, frame.height, frame.step, frame.encoding, reason);
+      if (decoded.isNull()) {
+        std::lock_guard<std::mutex> lock(decoded_mutex_);
+        ++decode_failures_;
+        decode_error_ = reason;
+        continue;
+      }
     }
     // Converting here rather than in the upload keeps the render thread's share
     // of each frame down to the blit itself.
@@ -135,18 +162,37 @@ void CameraLayer::subscribe()
   auto raw_node = node->get_raw_node();
   startWorker();
 
-  // Sensor QoS on both: a reliable subscription matches nothing against a
-  // best-effort sensor stream, and says nothing about it while it does so.
-  image_subscription_ = raw_node->create_subscription<sensor_msgs::msg::CompressedImage>(
-    image_topic_property_->getTopicStd(), rclcpp::SensorDataQoS(),
-    [this](sensor_msgs::msg::CompressedImage::ConstSharedPtr message) {
-      {
-        std::lock_guard<std::mutex> lock(encoded_mutex_);
-        encoded_frame_ = message->data;
-        has_encoded_frame_ = true;
-      }
-      encoded_available_.notify_one();
-    });
+  // Sensor QoS on all of them: a reliable subscription matches nothing against
+  // a best-effort sensor stream, and says nothing about it while it does so.
+  if (image_type_property_->getOptionInt() == 0) {
+    compressed_subscription_ = raw_node->create_subscription<sensor_msgs::msg::CompressedImage>(
+      image_topic_property_->getTopicStd(), rclcpp::SensorDataQoS(),
+      [this](sensor_msgs::msg::CompressedImage::ConstSharedPtr message) {
+        {
+          std::lock_guard<std::mutex> lock(encoded_mutex_);
+          encoded_frame_.bytes = message->data;
+          encoded_frame_.compressed = true;
+          has_encoded_frame_ = true;
+        }
+        encoded_available_.notify_one();
+      });
+  } else {
+    raw_subscription_ = raw_node->create_subscription<sensor_msgs::msg::Image>(
+      image_topic_property_->getTopicStd(), rclcpp::SensorDataQoS(),
+      [this](sensor_msgs::msg::Image::ConstSharedPtr message) {
+        {
+          std::lock_guard<std::mutex> lock(encoded_mutex_);
+          encoded_frame_.bytes = message->data;
+          encoded_frame_.width = message->width;
+          encoded_frame_.height = message->height;
+          encoded_frame_.step = message->step;
+          encoded_frame_.encoding = message->encoding;
+          encoded_frame_.compressed = false;
+          has_encoded_frame_ = true;
+        }
+        encoded_available_.notify_one();
+      });
+  }
 
   camera_info_subscription_ = raw_node->create_subscription<sensor_msgs::msg::CameraInfo>(
     camera_info_topic_property_->getTopicStd(), rclcpp::SensorDataQoS(),
@@ -166,7 +212,8 @@ void CameraLayer::subscribe()
 
 void CameraLayer::unsubscribe()
 {
-  image_subscription_.reset();
+  compressed_subscription_.reset();
+  raw_subscription_.reset();
   camera_info_subscription_.reset();
   stopWorker();
   {
@@ -176,7 +223,7 @@ void CameraLayer::unsubscribe()
   }
   {
     std::lock_guard<std::mutex> lock(encoded_mutex_);
-    encoded_frame_.clear();
+    encoded_frame_ = PendingFrame{};
     has_encoded_frame_ = false;
   }
 }
@@ -302,7 +349,8 @@ QString CameraLayer::statusSummary() const
   }
   QString summary = getName() + ": " + QString::number(triangle_count_) + " triangles";
   if (decode_failures_ > 0) {
-    summary += ", " + QString::number(decode_failures_) + " undecodable frames";
+    summary += ", " + QString::number(decode_failures_) + " dropped (" +
+      QString::fromStdString(decode_error_) + ")";
   }
   return summary;
 }

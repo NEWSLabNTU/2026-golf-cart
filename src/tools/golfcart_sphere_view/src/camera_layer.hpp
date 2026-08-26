@@ -20,6 +20,7 @@
 
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <sensor_msgs/msg/compressed_image.hpp>
+#include <sensor_msgs/msg/image.hpp>
 
 #include <QImage>
 #include <atomic>
@@ -37,6 +38,7 @@ namespace rviz_common
 class DisplayContext;
 namespace properties
 {
+class EnumProperty;
 class FloatProperty;
 class RosTopicProperty;
 }  // namespace properties
@@ -95,17 +97,34 @@ private:
   std::unique_ptr<TexturedPatch> patch_;
 
   rviz_common::properties::RosTopicProperty * image_topic_property_;
+  rviz_common::properties::EnumProperty * image_type_property_;
   rviz_common::properties::RosTopicProperty * camera_info_topic_property_;
   rviz_common::properties::FloatProperty * alpha_property_;
 
-  rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr image_subscription_;
+  rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr compressed_subscription_;
+  rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr raw_subscription_;
   rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr camera_info_subscription_;
 
-  // Encoded frame in, decoded frame out. One slot each: this is a monitor, so
-  // the newest frame wins and the rest are dropped rather than queued.
+  /// A frame as it arrived, before the worker turns it into a QImage.
+  ///
+  /// Compressed and raw are carried in one slot because the worker treats them
+  /// the same way afterwards: decode or wrap, convert to RGB888, hand over.
+  struct PendingFrame
+  {
+    std::vector<uint8_t> bytes;
+    // Zero for compressed frames, where the header is in the bytes themselves.
+    uint32_t width{0};
+    uint32_t height{0};
+    uint32_t step{0};
+    std::string encoding;
+    bool compressed{true};
+  };
+
+  // Frame in, decoded frame out. One slot each: this is a monitor, so the
+  // newest frame wins and the rest are dropped rather than queued.
   std::mutex encoded_mutex_;
   std::condition_variable encoded_available_;
-  std::vector<uint8_t> encoded_frame_;
+  PendingFrame encoded_frame_;
   bool has_encoded_frame_{false};
 
   std::mutex decoded_mutex_;
@@ -124,6 +143,7 @@ private:
   std::size_t triangle_count_{0};
   std::string transform_error_;
   std::size_t decode_failures_{0};
+  std::string decode_error_;
 };
 
 }  // namespace golfcart_sphere_view

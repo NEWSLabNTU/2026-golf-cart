@@ -17,6 +17,7 @@
 #include <OgreMatrix3.h>
 
 #include "cloud_projection.hpp"
+#include "raw_image.hpp"
 #include "sphere_mesh.hpp"
 
 namespace
@@ -29,6 +30,7 @@ using golfcart_sphere_view::buildCameraPatch;
 using golfcart_sphere_view::placePoint;
 using golfcart_sphere_view::projectToPixel;
 using golfcart_sphere_view::rainbow;
+using golfcart_sphere_view::rawImageToQImage;
 
 /// A pinhole camera with no distortion: 640x480, 90 degrees across.
 sensor_msgs::msg::CameraInfo pinhole()
@@ -221,6 +223,68 @@ TEST(Rainbow, RunsBlueToRedAndClampsOutside)
   // scale rather than looping back to the bottom of it.
   EXPECT_EQ(rainbow(-5.0), low);
   EXPECT_EQ(rainbow(5.0), high);
+}
+
+TEST(RawImage, ConvertsRgb8AndKeepsPixelValues)
+{
+  // Two pixels, one red one green, with no row padding.
+  const std::vector<uint8_t> bytes{255, 0, 0, 0, 255, 0};
+  std::string reason;
+  const auto image = rawImageToQImage(bytes, 2, 1, 6, "rgb8", reason);
+
+  ASSERT_FALSE(image.isNull()) << reason;
+  EXPECT_EQ(image.width(), 2);
+  EXPECT_EQ(image.height(), 1);
+  EXPECT_EQ(image.pixelColor(0, 0), QColor(255, 0, 0));
+  EXPECT_EQ(image.pixelColor(1, 0), QColor(0, 255, 0));
+}
+
+TEST(RawImage, ReadsBgr8InTheRightOrder)
+{
+  // The same two pixels with the channels swapped on the wire. Getting this
+  // backwards would paint the sphere in plausible wrong colours, which is
+  // exactly the kind of error a visual check cannot catch.
+  const std::vector<uint8_t> bytes{0, 0, 255, 0, 255, 0};
+  std::string reason;
+  const auto image = rawImageToQImage(bytes, 2, 1, 6, "bgr8", reason);
+
+  ASSERT_FALSE(image.isNull()) << reason;
+  EXPECT_EQ(image.pixelColor(0, 0), QColor(255, 0, 0));
+  EXPECT_EQ(image.pixelColor(1, 0), QColor(0, 255, 0));
+}
+
+TEST(RawImage, HonoursRowPadding)
+{
+  // step is larger than width x channels, which is normal for aligned buffers.
+  // Ignoring it shears the image by one pixel per row.
+  const std::vector<uint8_t> bytes{
+    255, 0, 0, 0, 255, 0, 9, 9,     // row 0 plus two padding bytes
+    0, 0, 255, 255, 255, 255, 9, 9  // row 1 plus two padding bytes
+  };
+  std::string reason;
+  const auto image = rawImageToQImage(bytes, 2, 2, 8, "rgb8", reason);
+
+  ASSERT_FALSE(image.isNull()) << reason;
+  EXPECT_EQ(image.pixelColor(0, 1), QColor(0, 0, 255));
+  EXPECT_EQ(image.pixelColor(1, 1), QColor(255, 255, 255));
+}
+
+TEST(RawImage, RejectsShortBuffers)
+{
+  const std::vector<uint8_t> bytes(5, 0);  // one byte short of 2x1 rgb8
+  std::string reason;
+  EXPECT_TRUE(rawImageToQImage(bytes, 2, 1, 6, "rgb8", reason).isNull());
+  EXPECT_FALSE(reason.empty());
+}
+
+TEST(RawImage, NamesTheEncodingItCannotHandle)
+{
+  const std::vector<uint8_t> bytes(64, 0);
+  std::string reason;
+  EXPECT_TRUE(rawImageToQImage(bytes, 4, 4, 4, "bayer_rggb8", reason).isNull());
+  // The message has to carry the encoding: "could not decode" sends someone
+  // hunting through a driver for a fault that is really a missing debayer.
+  EXPECT_NE(reason.find("bayer_rggb8"), std::string::npos);
 }
 
 }  // namespace

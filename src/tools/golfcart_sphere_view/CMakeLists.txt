@@ -24,6 +24,7 @@ add_library(${PROJECT_NAME} SHARED
   src/camera_layer.cpp
   src/cloud_layer.cpp
   src/cloud_projection.cpp
+  src/raw_image.cpp
   src/sphere_mesh.cpp
   src/sphere_view_display.cpp
   src/textured_patch.cpp
@@ -47,9 +48,11 @@ target_compile_definitions(${PROJECT_NAME} PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNC
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
   ament_add_gtest(test_sphere_mesh test/test_sphere_mesh.cpp src/sphere_mesh.cpp
-    src/cloud_projection.cpp)
+    src/cloud_projection.cpp
+  src/raw_image.cpp)
   target_include_directories(test_sphere_mesh PRIVATE src)
   target_link_libraries(test_sphere_mesh
+    Qt5::Widgets
     rviz_rendering::rviz_rendering
     ${sensor_msgs_TARGETS}
   )
