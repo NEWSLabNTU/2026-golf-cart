@@ -28,7 +28,8 @@ auditing the recorder's topic list and are recorded here as observations, not
 diagnoses. The cause could be unplugged hardware, an unstarted driver, or a wrong
 topic name, and nothing here distinguishes those.
 
-Two rate observations worth a look, also uninvestigated:
+Two rate observations worth a look. **Investigated 2026-08-26**, see
+[LiDAR Pipeline Starvation](research/sensing/lidar-pipeline-starvation.md):
 
 - The Velodyne measured **6.8 Hz** live and averages ~8.6 Hz across the bag,
   against a nominal 10 Hz. Some of that is `ros2 topic hz` competing with a
@@ -36,6 +37,20 @@ Two rate observations worth a look, also uninvestigated:
 - The fused cloud runs at **3.5 Hz**, well below either input. Expected behaviour
   for a synchroniser waiting on the slower source is roughly the slower input
   rate, not a third of it.
+
+The second one is the interesting half and the instinct above was right: the
+fused rate is not explained by the slower input. The concatenator's own
+`debug_mode` diagnostics show the Falcon present in **95.6%** of windows and the
+Velodyne in **47.2%**, against a `timeout_sec: 0.2` window and a measured
+**135 ms** mean arrival skew between the two sensors. A skew that size against a
+200 ms timeout is a coin flip per window, which is the number we measure. Most
+Velodyne scans are published and then discarded by the synchroniser rather than
+never produced.
+
+Separately, and not the same fault: RViz shows **no** Velodyne points at all,
+because a RELIABLE subscriber cannot match the driver's BEST_EFFORT publisher
+and receives nothing rather than less. Check with
+`ros2 topic info -v /sensing/lidar/vlp32/velodyne_points`.
 
 ### Otobrite GMSL cameras — not enumerating
 

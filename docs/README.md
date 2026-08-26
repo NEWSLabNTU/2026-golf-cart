@@ -3,6 +3,7 @@
 ## Roadblocks
 
 - [Known Roadblocks](roadblocks.md) — Open issues blocking setup, build, or test workflows
+- [Known Configuration Defects](known-config-defects.md) — wrong in a config file rather than in hardware or code, so wrong on every run; the source of most of the permanent red in the diagnostic graph
 
 ## Guides
 
@@ -14,6 +15,7 @@
 
 Background research and technology surveys (some carry historical AutoSDV-era context).
 
+- [LiDAR Pipeline Starvation](research/sensing/lidar-pipeline-starvation.md) — why NDT gets ~4 Hz of half-empty cloud and why the Velodyne is missing from RViz; two unrelated faults, a QoS mismatch and a 200 ms sync window
 - [NDT Parameter Tuning](research/localization/ndt_parameter_tuning_coss_map.md) — NDT scan matcher tuning for VLP-32C on COSS map
 - [Indoor Localization](research/indoor_localization.md) — ROS 2 indoor localization solutions survey (historical)
 - [NVIDIA Isaac ROS](research/nvidia_isaac_ros.md) — Isaac ROS Visual SLAM analysis (historical)
