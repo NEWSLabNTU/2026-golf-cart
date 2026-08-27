@@ -518,6 +518,138 @@ subtly disagreeing about what direction a sample is.
 Do it when S6 starts, not before: today there is exactly one consumer, and a
 shared abstraction with one user is a guess about the second.
 
+## Performance on the AGX Orin
+
+The display's per-frame cost is dominated by one thing: turning three JPEG
+streams into three textures. Everything else -- the patch geometry, the cloud
+placement, the sphere itself -- is either rebuilt only on calibration change or
+is a few thousand operations.
+
+### Measured: the display's own work is about 1 ms a frame
+
+With the timing instrumentation reporting live, against the Leo bags -- three
+cameras and an 82 000 point concatenated cloud:
+
+    geometry 0.00 ms, textures 0.48 ms, clouds 0.47 ms
+
+Geometry is zero because it is rebuilt only when a calibration changes, which is
+the invariant the architecture was built around and it holds. Everything the
+display does per frame is under a millisecond.
+
+That number matters because the same session showed RViz at **250% CPU**, and
+the two facts together say where the cost is not. Bisecting confirmed it:
+cameras alone cost about one core over a bare-RViz baseline, and that cost did
+not change when the decode rate was dropped from 10 Hz to 1 Hz, nor when the
+vertex buffers were made static, nor is it transport -- a bare subscriber to one
+raw image topic costs 2%.
+
+The answer was the test environment. This workstation renders RViz through
+TurboVNC on **llvmpipe**, Mesa's software rasteriser:
+
+    OpenGL renderer string: llvmpipe (LLVM 15.0.7, 256 bits)
+
+So those cores were the CPU rasterising 82 000 point billboards and three
+textured patches, which on the Orin is the GPU's job. **The CPU figures from
+this machine say almost nothing about the vehicle**, and are recorded here only
+so nobody re-derives them and draws the same wrong conclusion. What does
+transfer is the sub-millisecond update path, since that is real work on a real
+CPU either way.
+
+One thing worth carrying anyway: the cloud's cost scaled with rendered point
+count even in software, 250% down to 204% when decimation went from 2 to 10.
+Decimation is the first knob to reach for wherever the rasterising happens.
+
+### Measured, on an x86 workstation: decode
+
+A 1920x1280 frame at quality 90, which is what `nvjpegenc` produces on this
+vehicle, through the path the display uses today:
+
+| step | cost |
+|---|---|
+| `QImage::loadFromData`, full resolution | **9.79 ms** |
+| plus `convertToFormat(RGB888)` | 9.84 ms |
+| `QImageReader` scaled decode, 1/2 | 7.63 ms |
+| `QImageReader` scaled decode, 1/4 | 7.08 ms |
+
+Three cameras at 30 Hz is **88% of one core** on that machine. An A78AE core in
+an Orin is roughly two to three times slower on this kind of work, so expect
+**two to three cores** on the vehicle -- alongside Autoware. That is not
+affordable for a diagnostic, and unlike the rendering figures above this one is
+real CPU work that will not be handed to a GPU.
+
+The second measurement is the useful one: **Qt's scaled decode barely helps**,
+22 to 28% rather than the 4 to 16 times a DCT-scaled decode should give. Qt
+decodes at full size and scales afterwards. Reaching libjpeg-turbo's
+`tjDecompress2` directly is the only way to get the real saving, and the
+workspace already carries libjpeg-turbo through the ArUco detector.
+
+These numbers are a lower bound for the vehicle and were taken off-target.
+Nothing below should be built before they are taken again on the Orin.
+
+### Where the cost actually is, and the order to attack it
+
+**1. Rate limiting. Free, and the largest single win.** Nothing about this
+display needs 30 Hz. A calibration check is a thing you look at, and the eye
+cannot use more than a few updates a second. A `Max Update Rate` property
+defaulting to 10 Hz cuts decode and upload by three immediately; 5 Hz cuts it by
+six. This costs one timestamp comparison in the subscription callback, and it
+should exist before anything clever does.
+
+Note what it does *not* cost: the geometry is unaffected, the cloud is
+unaffected, and the check itself is unaffected, because a static vehicle looking
+at a static scene has nothing to lose by sampling slower.
+
+**2. Decode smaller.** A sphere patch at a 1 degree grid does not resolve
+1920x1280. Half resolution is 4 times fewer pixels to decode, convert, upload
+and store, and the picture is still far sharper than the seam judgement it
+supports. Through `tjDecompress2` with a scaling factor, not through Qt, per the
+measurement above.
+
+**3. Upload less.** 1920x1280 RGB888 is 7.4 MiB per camera per frame; three
+cameras at 30 Hz is 663 MiB/s of memory traffic on a board with unified memory,
+where that bandwidth is shared with everything else including the GPU doing the
+rendering. Items 1 and 2 together reduce this by a factor of twelve to
+twenty-four, which is likely enough that nothing further is needed.
+
+**4. Hardware decode, if the measurements still demand it.** The Orin has an
+NVJPG block, reachable through `NvJPEGDecoder` in the Jetson multimedia API,
+through `nvjpegdec` in GStreamer, or through NVIDIA's `nvjpeg` CUDA library.
+Decoding to NV12 in a DMA buffer and binding it as an `EGLImage` avoids the CPU
+entirely, which on unified memory means no copy at all rather than a cheaper
+one.
+
+Two cautions. The NVJPG block is one unit and the capture path is already using
+it to *encode* three camera streams -- the phase 2 work measured that contention
+-- so adding three decodes competes with the thing being diagnosed. And binding
+an external texture into Ogre inside RViz is genuinely intricate; it is the
+right answer only if steps 1 to 3 have been done and are still not enough.
+
+**5. The colouring in S5 is not the problem.** 33 000 returns against three
+cameras is roughly 100 000 polynomial evaluations, once per cloud at 10 Hz.
+That is milliseconds on one core, and an early rejection against each camera's
+optical axis removes most of it. No CUDA path is warranted, and proposing one
+would be optimising the cheap half.
+
+### The systems answers, which may beat all of the above
+
+**Do not decode on the vehicle at all.** RViz can run on a laptop and subscribe
+over the network. At 5 Hz and roughly 200 KiB a frame, three cameras is 3 MiB/s,
+which a wired link carries without noticing, and the Orin's cost falls to the
+publishing it was doing anyway. For a tool used while parked and looking, this
+is the obvious deployment and it needs no code.
+
+**Or publish a preview stream.** If the capture pipeline gains a downscaled
+branch -- something the phase 2 capture work is already positioned to add -- the
+display subscribes to that and the question disappears for every consumer at
+once, not just this one.
+
+### The budget to hold it to
+
+A diagnostic that costs more than **10% of one core and 100 MiB/s** on the
+vehicle is not a diagnostic worth running while diagnosing. Rate limiting and
+half-resolution decode should land inside that on their own; if a measurement on
+the Orin says otherwise, that is when the hardware path earns its complexity.
+
 ## Alternatives considered
 
 **RViz2's stock `Camera` display** renders the 3D scene composited onto a camera

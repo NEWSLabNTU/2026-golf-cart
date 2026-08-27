@@ -26,6 +26,7 @@
 #include <rviz_common/properties/tf_frame_property.hpp>
 #include <rviz_common/ros_integration/ros_node_abstraction_iface.hpp>
 
+#include <chrono>
 #include <string>
 #include <utility>
 #include <vector>
@@ -77,6 +78,20 @@ CameraLayer::CameraLayer(
     "Leave blank to use CameraInfo, which is correct far more often than not. Verify "
     "before setting this: a frame named *_optical_link is not always the optical one.",
     this, nullptr, true, SLOT(onTopicsChanged()));
+
+  // Decoding is what this display costs, and it is the one cost that scales
+  // with frame rate: a 1920x1280 JPEG takes about 10 ms on a workstation core
+  // and two to three times that on an Orin, so three cameras at 30 Hz would
+  // spend two to three cores decoding pictures nobody can read that fast. A
+  // calibration check is something you look at; ten a second is already more
+  // than the eye uses. Frames above the limit are dropped before they reach the
+  // worker, so the saving is the whole decode and not just the upload.
+  max_rate_property_ = new rviz_common::properties::FloatProperty(
+    "Max Update Rate", 10.0f,
+    "Frames per second to decode, at most. Raise it for a moving vehicle, lower it "
+    "when the Orin is busy; zero means every frame.",
+    this, SLOT(onAlphaChanged()));
+  max_rate_property_->setMin(0.0f);
 
   alpha_property_ = new rviz_common::properties::FloatProperty(
     "Alpha", 1.0f, "Transparency for this camera alone, for looking through an overlap.",
@@ -181,6 +196,22 @@ void CameraLayer::workerLoop()
   }
 }
 
+bool CameraLayer::acceptFrameNow()
+{
+  const float rate = max_rate_property_->getFloat();
+  if (rate <= 0.0f) {
+    return true;
+  }
+  const auto now = std::chrono::steady_clock::now();
+  const auto interval = std::chrono::duration<double>(1.0 / static_cast<double>(rate));
+  if (last_accepted_.time_since_epoch().count() != 0 && now - last_accepted_ < interval) {
+    ++dropped_by_rate_;
+    return false;
+  }
+  last_accepted_ = now;
+  return true;
+}
+
 void CameraLayer::subscribe()
 {
   if (!context_ || !getBool()) {
@@ -210,6 +241,9 @@ void CameraLayer::subscribe()
     compressed_subscription_ = raw_node->create_subscription<sensor_msgs::msg::CompressedImage>(
       image_topic, rclcpp::SensorDataQoS(),
       [this](sensor_msgs::msg::CompressedImage::ConstSharedPtr message) {
+        if (!acceptFrameNow()) {
+          return;
+        }
         {
           std::lock_guard<std::mutex> lock(encoded_mutex_);
           encoded_frame_.bytes = message->data;
@@ -222,6 +256,9 @@ void CameraLayer::subscribe()
     raw_subscription_ = raw_node->create_subscription<sensor_msgs::msg::Image>(
       image_topic, rclcpp::SensorDataQoS(),
       [this](sensor_msgs::msg::Image::ConstSharedPtr message) {
+        if (!acceptFrameNow()) {
+          return;
+        }
         {
           std::lock_guard<std::mutex> lock(encoded_mutex_);
           encoded_frame_.bytes = message->data;

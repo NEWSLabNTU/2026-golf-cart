@@ -24,6 +24,7 @@
 
 #include <QImage>
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
@@ -93,6 +94,9 @@ private Q_SLOTS:
   void onEnableChanged();
 
 private:
+  /// Rate gate: true when this frame is due, false when it should be dropped.
+  bool acceptFrameNow();
+
   void startWorker();
   void stopWorker();
   void workerLoop();
@@ -105,6 +109,7 @@ private:
   rviz_common::properties::RosTopicProperty * camera_info_topic_property_;
   rviz_common::properties::TfFrameProperty * optical_frame_property_;
   rviz_common::properties::FloatProperty * alpha_property_;
+  rviz_common::properties::FloatProperty * max_rate_property_;
 
   rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr compressed_subscription_;
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr raw_subscription_;
@@ -148,6 +153,8 @@ private:
   std::size_t triangle_count_{0};
   std::string transform_error_;
   std::size_t decode_failures_{0};
+  std::size_t dropped_by_rate_{0};
+  std::chrono::steady_clock::time_point last_accepted_{};
   std::string decode_error_;
 };
 

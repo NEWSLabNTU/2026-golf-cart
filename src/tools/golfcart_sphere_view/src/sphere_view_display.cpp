@@ -22,9 +22,12 @@
 #include <rviz_common/frame_manager_iface.hpp>
 #include <rviz_common/properties/bool_property.hpp>
 #include <rviz_common/properties/float_property.hpp>
+#include <rviz_common/properties/string_property.hpp>
 #include <rviz_common/properties/tf_frame_property.hpp>
 
 #include <QStringList>
+#include <cstdio>
+#include <cstdlib>
 #include <string>
 
 namespace golfcart_sphere_view
@@ -58,6 +61,15 @@ SphereViewDisplay::SphereViewDisplay()
   remove_camera_property_ = new rviz_common::properties::BoolProperty(
     "Remove Last Camera", false, "Tick to drop the last camera layer.", this,
     SLOT(removeLastCamera()));
+  // A row rather than a status child, because the question it answers is asked
+  // while watching the thing, and a status child has to be expanded first.
+  timing_property_ = new rviz_common::properties::StringProperty(
+    "Frame Cost", "measuring",
+    "Milliseconds per rendered frame in each stage, averaged. Geometry should be zero "
+    "once the calibration settles; textures and clouds are the ongoing cost.",
+    this);
+  timing_property_->setReadOnly(true);
+
   add_cloud_property_ = new rviz_common::properties::BoolProperty(
     "Add LiDAR", false, "Tick to append another point cloud layer.", this, SLOT(addCloud()));
   remove_cloud_property_ = new rviz_common::properties::BoolProperty(
@@ -329,6 +341,12 @@ void SphereViewDisplay::update(float /*wall_dt*/, float /*ros_dt*/)
     return;
   }
 
+  using Clock = std::chrono::steady_clock;
+  const auto elapsed_ms = [](Clock::time_point from) {
+      return std::chrono::duration<double, std::milli>(Clock::now() - from).count();
+    };
+
+  const auto geometry_started = Clock::now();
   const bool rebuild = geometry_dirty_;
   if (rebuild) {
     SphereResolution resolution;
@@ -352,16 +370,43 @@ void SphereViewDisplay::update(float /*wall_dt*/, float /*ros_dt*/)
     }
   }
 
+  timing_.blend(timing_.geometry_ms, elapsed_ms(geometry_started));
+
+  const auto textures_started = Clock::now();
   for (auto * camera : cameras_) {
     camera->updateTexture();
   }
+  timing_.blend(timing_.textures_ms, elapsed_ms(textures_started));
 
   // Clouds are re-placed when a new one arrives, and also when the sphere
   // itself changed -- in Angular mode the radius is where the points go.
+  const auto clouds_started = Clock::now();
   const std::string centre_frame = centre_frame_property_->getFrameStd();
   for (auto * cloud : clouds_) {
     cloud->update(centre_frame, radius_property_->getFloat(), rebuild);
   }
+  timing_.blend(timing_.clouds_ms, elapsed_ms(clouds_started));
+
+  // Compact because the property column is narrow. geom/tex/cloud, milliseconds.
+  timing_property_->setStdString(
+    (QString("%1 / %2 / %3 ms")
+    .arg(timing_.geometry_ms, 0, 'f', 2)
+    .arg(timing_.textures_ms, 0, 'f', 2)
+    .arg(timing_.clouds_ms, 0, 'f', 2)).toStdString());
+
+  // The same numbers on stderr for a headless measurement, which is how they
+  // will be taken on the vehicle: ssh in, set the variable, read the log.
+  static const bool log_timing = std::getenv("GOLFCART_SPHERE_VIEW_TIMING") != nullptr;
+  if (log_timing) {
+    const auto now = Clock::now();
+    if (now - last_timing_log_ > std::chrono::seconds(2)) {
+      last_timing_log_ = now;
+      std::fprintf(
+        stderr, "[sphere_view] geometry %.2f ms, textures %.2f ms, clouds %.2f ms\n",
+        timing_.geometry_ms, timing_.textures_ms, timing_.clouds_ms);
+    }
+  }
+
   if (rebuild) {
     refreshStatus();
   }

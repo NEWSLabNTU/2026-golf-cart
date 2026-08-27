@@ -19,6 +19,7 @@
 #include <rviz_common/display.hpp>
 
 #include <QList>
+#include <chrono>
 #include <memory>
 #include <string>
 
@@ -33,6 +34,7 @@ namespace properties
 class BoolProperty;
 class FloatProperty;
 class IntProperty;
+class StringProperty;
 class TfFrameProperty;
 }  // namespace properties
 }  // namespace rviz_common
@@ -90,6 +92,23 @@ private:
   void refreshStatus();
   bool updateCentreTransform();
 
+  /// Exponential moving average of the milliseconds each stage costs.
+  ///
+  /// Reported in the Displays panel rather than logged, because the question it
+  /// answers -- where does this display spend its time on this machine -- is
+  /// asked while looking at it, and on the vehicle the answer differs from the
+  /// answer on a workstation.
+  struct StageTiming
+  {
+    double geometry_ms{0.0};
+    double textures_ms{0.0};
+    double clouds_ms{0.0};
+
+    void blend(double & average, double sample) { average = 0.9 * average + 0.1 * sample; }
+  };
+
+  StageTiming timing_;
+  std::chrono::steady_clock::time_point last_timing_log_{};
   QList<CameraLayer *> cameras_;
   QList<CloudLayer *> clouds_;
   bool geometry_dirty_{true};
@@ -106,6 +125,7 @@ private:
   rviz_common::properties::BoolProperty * remove_camera_property_;
   rviz_common::properties::BoolProperty * add_cloud_property_;
   rviz_common::properties::BoolProperty * remove_cloud_property_;
+  rviz_common::properties::StringProperty * timing_property_;
 };
 
 }  // namespace golfcart_sphere_view

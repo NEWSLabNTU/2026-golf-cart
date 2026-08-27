@@ -41,7 +41,12 @@ TexturedPatch::TexturedPatch(
 {
   setupMaterial();
   manual_object_ = scene_manager_->createManualObject("TexturedPatch/" + unique_id_);
-  manual_object_->setDynamic(true);
+  // Static, despite being rebuilt occasionally. A dynamic ManualObject keeps its
+  // vertex buffers in a form Ogre expects to change often, and this geometry
+  // changes only when a calibration or a mount does -- perhaps once a session.
+  // setGeometry recreates the object outright, which is the honest way to say
+  // "this rarely changes" and costs nothing on the rare occasions it does.
+  manual_object_->setDynamic(false);
   scene_node_ = parent_scene_node->createChildSceneNode();
   scene_node_->attachObject(manual_object_);
 }
