@@ -420,17 +420,34 @@ sensor_suite:=vlp32c             # Velodyne VLP-32C
 lidar_model:=vlp32c
 camera_model:=gscam|zedx|none   # env ONLY - see below
 imu_source:=xsens|zed           # env ONLY - see below
+pointcloud_backend:=cpu|cuda    # env ONLY - see below
 gnss_receiver:=ublox|septentrio
 ```
 
-**`camera_model`, `imu_source` and `tx_enabled` do NOT work as launch arguments.** They reach
+```bash
+# CPU concatenator (default) vs the CUDA one, same params and topics either way
+POINTCLOUD_BACKEND=cuda just launch
+```
+
+**`camera_model`, `imu_source`, `pointcloud_backend` and `tx_enabled` do NOT work
+as launch arguments.** They reach
 `golfcart_autoware.launch.xml`, but the path onwards runs through
 `tier4_sensing_component.launch.xml` and `tier4_sensing_launch/sensing.launch.xml`
 — installed Autoware files that forward a fixed set of arguments and drop the
 rest. The sensor kit reads `$(env IMU_SOURCE xsens)` / `$(env CAMERA_MODEL gscam)`
-instead, so `just launch "imu_source:=zed"` looks like it works and does nothing.
+/ `$(env POINTCLOUD_BACKEND cpu)` instead, so `just launch "imu_source:=zed"`
+looks like it works and does nothing.
 Set them in `config/sensors.conf`, which `scripts/env.sh` sources for both shells
 and units.
+
+`POINTCLOUD_BACKEND=cpu|cuda` picks which concatenator loads into
+`pointcloud_container`: the CPU component, or
+`CudaPointCloudConcatenateDataSynchronizerComponent` from the already-installed
+`autoware_cuda_pointcloud_preprocessor`. Same parameter file, node name and
+topics either way. It defaults to `cpu` and should stay there unless a
+measurement says otherwise: concatenation costs 12.5 ms against a 510 ms pipeline
+latency, so the GPU is not where the delay is. See
+[docs/research/sensing/lidar-pipeline-starvation.md](docs/research/sensing/lidar-pipeline-starvation.md).
 
 `tx_enabled` is the same story one branch over: `tier4_vehicle_launch/vehicle.launch.xml`
 forwards only `vehicle_id`, `raw_vehicle_cmd_converter_param_path` and

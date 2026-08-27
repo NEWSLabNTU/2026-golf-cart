@@ -316,13 +316,13 @@ if [ "$rmem_max" -lt 2147483647 ] || \
 fi
 
 # ── Sensor selection ─────────────────────────────────────────────────────────
-# IMU_SOURCE / CAMERA_MODEL reach the sensor kit only as environment variables:
-# the launch-argument path is swallowed by two installed Autoware files that
-# forward a fixed set of arguments. See config/sensors.conf.
+# IMU_SOURCE / CAMERA_MODEL / POINTCLOUD_BACKEND reach the sensor kit only as
+# environment variables: the launch-argument path is swallowed by two installed
+# Autoware files that forward a fixed set of arguments. See config/sensors.conf.
 if [ -f "${GOLFCART_REPO_ROOT}/config/sensors.conf" ]; then
     # shellcheck source=/dev/null
     . "${GOLFCART_REPO_ROOT}/config/sensors.conf"
-    export IMU_SOURCE CAMERA_MODEL
+    export IMU_SOURCE CAMERA_MODEL POINTCLOUD_BACKEND
 fi
 
 # ── play_launch runtime ──────────────────────────────────────────────────────
