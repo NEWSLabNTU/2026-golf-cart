@@ -9,15 +9,20 @@ artifact of the container-mode change being tested that afternoon.
 [roadblocks.md](../../roadblocks.md#sensor-status-observed-2026-08-10), plus the
 symptom that the point cloud is partially missing in RViz.
 
-Answer up front: these are **two unrelated faults** that happen to produce the
-same complaint.
+Answer up front: these are **two symptoms of one fault**. The original version of
+this document called them unrelated; that was corrected on 2026-08-28 once the
+cause was found. The Velodyne topic is published BEST_EFFORT, which both denies
+a RELIABLE RViz display any data at all and costs the concatenator more than
+half its scans.
 
 | | Symptom | Cause | Confidence |
 |---|---|---|---|
 | **A** | RViz shows no Velodyne at all | a RELIABLE subscriber cannot match the BEST_EFFORT publisher, so it receives nothing | established |
-| **B** | NDT gets ~4 Hz of cloud, half of it Falcon-only | Velodyne scans are lost upstream of the concatenator; **not** the matching window, which was tested and ruled out | cause still open |
+| **B** | NDT gets ~4 Hz of cloud, half of it Falcon-only | the same BEST_EFFORT publisher, whose 1.38 MiB clouds fragment and are dropped without retransmission | established; a residual gap under load is still open |
 
-Fixing A does nothing for B and vice versa.
+Fixing A does nothing for B, but one change addresses both: the Velodyne
+publisher's reliability.
+
 
 ---
 
@@ -181,24 +186,77 @@ install. It reports the actual spread of what was collected, which two
 independent sensors set themselves. On a kit whose LiDARs share a clock it
 tracks the config and looks like a tolerance; here it does not.
 
-### Where the Velodyne clouds actually go
+### Where the Velodyne clouds actually go: transport, and it is the same fault as A
 
-Not into a missed match. The arithmetic rules that out: the NTU bag carries
-`/sensing/lidar/vlp32/velodyne_points` at **7.02 Hz** while the concatenator
-attempts at **3.7 Hz**, so roughly two Velodyne clouds are available per
-attempt and presence should be near 100%. It is ~50%.
+**Answered 2026-08-28.** They are dropped in transport, because the Velodyne
+topic is published **BEST_EFFORT** while the Falcon's is **RELIABLE**, and each
+Velodyne message is large enough to fragment.
 
-Clouds are therefore being lost **upstream of any timestamp comparison**. The
-same figure appears on the vehicle (47.2% on 2026-08-25) where no per-sensor
-preprocessing ran at all, so it is not the preprocessing chain either.
+The QoS recorded in the NTU bag, which is the QoS the drivers offered:
 
-That is the open question. It is a counting exercise along the chain, raw to
-cropped to deskewed to outlier-filtered to collector, and the one hard rule is
-to **not use `ros2 topic hz`**: it is a Python node and drops roughly three
-quarters of 300 KiB messages at 10 Hz. Proven by playing a bag with nothing
-else running, where the C++ recorder received 288 of 288 scans and `ros2 topic
-hz` reported 2.1 Hz for the same topic. Use `ros2 bag record` or the nodes'
-own diagnostics.
+| topic | `reliability` | |
+|---|---|---|
+| `/sensing/lidar/vlp32/velodyne_points` | `2` | **BEST_EFFORT** |
+| `/sensing/lidar/falcon/iv_points` | `1` | **RELIABLE** |
+
+Play that bag into nothing but a `ros2 bag record`, no stack at all, over 67 s:
+
+| transport | Velodyne delivered | Falcon |
+|---|---|---|
+| default FastDDS | 185 = **2.75 Hz** | 635 = 9.45 Hz |
+| this repo's CycloneDDS profile | 416 = **6.16 Hz** | 636 = 9.42 Hz |
+
+The bag carries the Velodyne at 7.02 Hz and the Falcon at 9.40 Hz. The Falcon
+arrives complete under both transports. The Velodyne does not arrive complete
+under either, and how much of it arrives depends entirely on the DDS
+configuration. That is what a fragmented BEST_EFFORT sample looks like: one lost
+fragment discards the whole cloud, and nothing retransmits.
+
+Size is why it fragments. The Velodyne cloud is `PointXYZIRCAEDT`, 30 bytes per
+point at 48342 points, so **1.38 MiB** per message, against a
+`net.core.rmem_default` of 1 MiB. Note the kernel's UDP `RcvbufErrors` counter
+does **not** move during this, so the loss is in DDS fragment reassembly rather
+than socket overflow, and looking only at `/proc/net/snmp` will say everything
+is fine.
+
+**This is the same root cause as fault A.** The header table at the top of this
+document called them unrelated. They are not. A BEST_EFFORT publisher is exactly
+why a RELIABLE RViz display receives nothing at all, and it is also why the
+concatenator receives less than half the scans. One property of one publisher,
+two symptoms.
+
+### What it does not explain, yet
+
+Correct transport does not close the gap on its own. Re-running the full stack
+with CycloneDDS rather than the default:
+
+| | attempts | Velodyne present | Falcon | all present |
+|---|---|---|---|---|
+| default FastDDS | 277 | 54.2% | 85.2% | 39.4% |
+| CycloneDDS profile | 368 | 45.4% | 88.9% | 34.2% |
+
+Concatenation attempts rise (277 to 368) but Velodyne presence does not: 45.4%,
+which is where the vehicle sat (47.2%). So a bare recorder gets 6.16 Hz while
+the running stack gets 2.23 Hz of Velodyne into windows, and per-stage counting
+shows preprocessing costs only ~12% of that (267 raw to 235 preprocessed).
+
+The remaining loss is between "one subscriber on an otherwise idle machine" and
+"this topic inside the running stack". Contention, subscriber queue depth, or
+the executor. Not yet isolated.
+
+### Methodology warning, learned the hard way
+
+Every measurement in this document before 2026-08-28 was taken with
+`RMW_IMPLEMENTATION` unset, which silently replaced the vehicle's CycloneDDS
+configuration with default FastDDS. On this topic that is a 2.2x difference in
+delivered messages. `scripts/env.sh` sets both `RMW_IMPLEMENTATION` and
+`CYCLONEDDS_URI` for exactly this reason; a test harness that unsets them is not
+testing the system.
+
+Combined with the `ros2 topic hz` trap above: **two separate instrument errors,
+both of which made the pipeline look worse than it is, and both of which were
+invisible in the output.** Check the transport and the observer before believing
+a rate.
 
 ### Still worth doing, independent of the above
 
