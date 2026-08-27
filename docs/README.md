@@ -15,6 +15,7 @@
 
 Background research and technology surveys (some carry historical AutoSDV-era context).
 
+- [Autoware CUDA Point Cloud Chain](research/sensing/autoware-cuda-pointcloud-chain.md) — the four pipeline modes, why a CPU chain cannot feed the CUDA concatenator, and the per-sensor preprocessing this repo is missing entirely
 - [LiDAR Pipeline Starvation](research/sensing/lidar-pipeline-starvation.md) — why NDT gets ~4 Hz of half-empty cloud and why the Velodyne is missing from RViz; two unrelated faults, a QoS mismatch and a 200 ms sync window
 - [NDT Parameter Tuning](research/localization/ndt_parameter_tuning_coss_map.md) — NDT scan matcher tuning for VLP-32C on COSS map
 - [Indoor Localization](research/indoor_localization.md) — ROS 2 indoor localization solutions survey (historical)
