@@ -316,13 +316,18 @@ if [ "$rmem_max" -lt 2147483647 ] || \
 fi
 
 # ── Sensor selection ─────────────────────────────────────────────────────────
-# IMU_SOURCE / CAMERA_MODEL / POINTCLOUD_BACKEND reach the sensor kit only as
-# environment variables: the launch-argument path is swallowed by two installed
-# Autoware files that forward a fixed set of arguments. See config/sensors.conf.
+# IMU_SOURCE / CAMERA_MODEL reach the sensor kit only as environment variables:
+# the launch-argument path is swallowed by two installed Autoware files that
+# forward a fixed set of arguments. See config/sensors.conf.
+#
+# POINTCLOUD_BACKEND crosses the same gap but is NOT set here. It is a per-run
+# choice rather than a per-machine one, so golfcart.launch.yaml declares it as a
+# launch argument and set_env's it just before the include. Nothing needs to
+# resolve it at shell level.
 if [ -f "${GOLFCART_REPO_ROOT}/config/sensors.conf" ]; then
     # shellcheck source=/dev/null
     . "${GOLFCART_REPO_ROOT}/config/sensors.conf"
-    export IMU_SOURCE CAMERA_MODEL POINTCLOUD_BACKEND
+    export IMU_SOURCE CAMERA_MODEL
 fi
 
 # ── play_launch runtime ──────────────────────────────────────────────────────

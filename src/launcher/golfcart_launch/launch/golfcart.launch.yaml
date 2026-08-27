@@ -154,6 +154,28 @@ launch:
       Localization preset: default, eagleye, aruco.
       aruco sets pose_source and additionally requires aruco_tag_map_path.
 
+# Which LiDAR concatenator loads into pointcloud_container.
+#
+# A real launch argument: `just launch pointcloud_backend:=cuda`. It reaches the
+# sensor kit through the set_env below rather than by being forwarded, because
+# the chain to the sensor kit runs through tier4_sensing_component.launch.xml and
+# tier4_sensing_launch/sensing.launch.xml, and the latter forwards exactly three
+# arguments (launch_driver, vehicle_mirror_param_file, pointcloud_container_name)
+# and drops everything else. Forwarding alone happens to work under play_launch,
+# whose parser does not scope includes the way ros2 launch does, and would then
+# silently stop working under stock `ros2 launch`. The environment survives both.
+#
+# Deliberately NOT in config/sensors.conf: unlike IMU_SOURCE and CAMERA_MODEL
+# this is not a per-machine deployment fact, it is a per-run experiment.
+- arg:
+    name: pointcloud_backend
+    default: "cpu"
+    description: "LiDAR concatenator: cpu | cuda"
+
+- set_env:
+    name: POINTCLOUD_BACKEND
+    value: "$(var pointcloud_backend)"
+
 # Include perception preset (defines perception_mode, use_traffic_light_recognition, etc.)
 - include:
     file: "$(find-pkg-share golfcart_launch)/config/perception/preset/$(var perception_preset)_preset.yaml"
