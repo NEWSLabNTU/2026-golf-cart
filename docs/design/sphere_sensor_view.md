@@ -285,6 +285,98 @@ than reallocate, geometry rebuilt only on `CameraInfo` or TF change.
 
 ---
 
+## What the first real dataset changed
+
+S1 to S4 were built and verified against synthetic sensors. Autoware's Leo
+Drive bags were the first data the display had not also generated, and they
+falsified four things at once. Recorded here because each was a *reasonable*
+assumption, and the pattern is worth carrying into the next phase: every one was
+a case of trusting a name or a model past where it was earned.
+
+**A frame called `*_optical_link` need not be the optical frame.** These bags
+publish both `camera_left/camera_link` and `camera_left/camera_optical_link`,
+and it is the first that satisfies the optical convention. Believing the name
+rolled every image ninety degrees. The check is three lines of arithmetic --
+transform the optical axes into the vehicle frame, confirm image-down points
+down -- and it should be run against any new rig before anything else.
+
+**A distortion polynomial lies outside its fitted range.** On these cameras it
+turns over near 60 degrees off axis, so rays at 65 degrees project back to
+plausible pixels inside the frame. The sphere took a band of texture sampled
+from somewhere the camera never looked -- and unlike a gap, that looks like
+data. The display now bounds each model at its own turnover.
+
+**Parallax at the seams is larger than intuition suggests.** These cameras are
+2.08 m apart. At radius 12 a feature at 5 m lands 13.8 degrees adrift between
+front and left; at 40 m, 6.8 degrees. The vehicle this is being built for has
+baselines of centimetres, so the seams there will be far smaller -- but the
+lesson is that the bowl model's error scales with baseline, and it is the
+binding constraint on stitching for anything longer than a car.
+
+**Zero at the radius is the self-check worth keeping.** Two cameras painting a
+feature that sits exactly on the sphere must paint it in the same place. That
+the measured disagreement is 0.00 degrees at exactly the sphere radius is what
+tells you the transform composition is right, independent of any picture.
+
+## Where this can go next
+
+Four candidates, in the order their value per unit of effort suggests. None is
+started, and S1 to S4 are enough to be useful without any of them.
+
+### A -- Colour the cloud from the cameras, instead of the sphere
+
+Project each LiDAR return into whichever cameras contain it and colour the point
+with that pixel. Every return carries its true range, so there is no bowl and no
+parallax at all: a wrong extrinsic shows as colour bleeding across depth
+discontinuities, tree colour smeared onto the road behind it.
+
+This is the classic LiDAR-camera check, it reuses `projectToPixel` and
+`CloudLayer` almost unchanged, and it answers the alignment question exactly
+where the sphere can only approximate. Its limit is the opposite of the sphere's:
+it says nothing about directions the LiDAR does not sample, and a 32-plane
+scanner samples vertically rather sparsely.
+
+The two are complements, which is the argument for having both. Small to medium
+effort, and the highest value here.
+
+### B -- Report the disagreement as a number
+
+For directions two cameras both cover, compare the colours they sample and
+report the mean difference. Sweeping the radius produces a curve whose minimum
+estimates the scene depth, and whose residual at that minimum bounds the
+extrinsic error.
+
+That turns the tool from a picture into a measurement, which is what makes it
+usable in a regression: run it over a bag in CI and fail when the residual
+grows. The confound is photometric -- exposure, vignetting and white balance
+differ between cameras -- so it needs normalising before the number means
+anything. Medium effort.
+
+### C -- An adaptive shell from LiDAR range
+
+Replace the constant radius with the measured range per direction, so the
+surface the images are painted on is the surface the LiDAR sees. This removes
+the seams properly rather than trading them off.
+
+It is also the option to be most careful about. It couples the two sensor
+families the tool exists to compare independently: once a LiDAR extrinsic error
+deforms the surface the camera images are painted on, the two failure modes mix
+and the picture stops being diagnostic. It also needs the geometry rebuilt at
+scan rate rather than at calibration rate, which is the one thing the current
+architecture deliberately avoids. Large effort, and worth it only if the seams
+turn out to obstruct real use.
+
+### D -- A coverage map
+
+Colour the sphere by how many cameras see each direction, and report the solid
+angle covered by none, one, and two or more. The geometry for this already
+exists; it is the patch set, counted rather than textured.
+
+This is not a calibration check, which is why it is not first. It is, however,
+exactly the question phase 3 asks about ArUco boards -- whether two are visible
+everywhere on the route -- and the same machinery answers it for camera
+placement. Small effort.
+
 ## Alternatives considered
 
 **RViz2's stock `Camera` display** renders the 3D scene composited onto a camera

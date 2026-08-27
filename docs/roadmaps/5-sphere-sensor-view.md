@@ -13,9 +13,10 @@ also adjusts parameters is a different program, and the value of this one comes
 from being downstream — it shows the calibration the system is *running*, not
 the file that is supposed to describe it.
 
-Last updated: 2026-08-25. **All four sub-phases are done.** Everything has been
-verified against synthetic sensors on a workstation; **none of it has met a real
-sensor**, which is the whole of what remains.
+Last updated: 2026-08-28. **All four sub-phases are done**, and the tool has now
+been run against a real dataset — Autoware's Leo Drive bags — which falsified
+four assumptions and cost four fixes. **It has still never met this vehicle**,
+which is what remains. Candidates for what comes after are at the end.
 
 ---
 
@@ -209,6 +210,77 @@ sensors, which agree with each other by construction. The first person to run
 `just tool sphere` on the cart is the test.
 
 ---
+
+## Beyond S4 — candidates, none started
+
+S1 to S4 are done and the tool is usable. What follows is optional, ordered by
+value per unit of effort, and argued in
+[the design](../design/sphere_sensor_view.md#where-this-can-go-next).
+
+Nothing here should start before the tool has been run on the cart. Four
+assumptions died on contact with the first real dataset, and the cart is a
+different rig again — its own surprises should shape this list rather than
+being planned around.
+
+### S5 — colour the cloud from the cameras
+
+- [ ] Project each return into whichever cameras contain it; colour it with that
+      pixel. `Colour By: Camera`, alongside intensity, range and flat.
+- [ ] Decide the rule when several cameras contain a return: nearest optical
+      axis is the obvious one, and blending is not, since a seam that blends is
+      a seam you cannot see.
+- [ ] Mark returns no camera sees, rather than leaving them black and
+      indistinguishable from a dark surface.
+
+**Why first.** Every return carries its true range, so there is no bowl and no
+parallax: this answers the alignment question exactly where the sphere can only
+approximate it. A wrong extrinsic shows as colour bleeding across depth
+discontinuities. It reuses `projectToPixel` and `CloudLayer` nearly unchanged.
+
+**Acceptance:** on a bag with a depth discontinuity, the colour boundary sits on
+the geometric one; introducing a deliberate one-degree error in a camera
+extrinsic visibly bleeds colour across it.
+
+### S6 — a coverage map
+
+- [ ] Colour the sphere by how many cameras see each direction.
+- [ ] Report solid angle covered by none, one, and two or more.
+
+**Why.** Not a calibration check, but the same patch geometry answers the
+question phase 3 asks about ArUco boards — whether two are visible everywhere —
+and the same numbers size camera placement.
+
+**Acceptance:** the reported fractions match a hand calculation for a synthetic
+rig of known field of view and spacing.
+
+### S7 — disagreement as a number
+
+- [ ] For directions two cameras both cover, report the mean colour difference.
+- [ ] Sweep the radius and plot it: the minimum estimates scene depth, the
+      residual at the minimum bounds extrinsic error.
+- [ ] Normalise for exposure and vignetting first, or the number measures the
+      cameras' auto-exposure rather than their alignment.
+
+**Why.** Turns the tool from a picture into a measurement, which is what allows
+a regression test over a recorded bag.
+
+**Acceptance:** on the Leo bags the swept minimum lands near the true depth of
+the structure in the overlap, and a deliberately corrupted extrinsic raises the
+residual.
+
+### S8 — an adaptive shell, only if the seams obstruct real use
+
+- [ ] Replace the constant radius with measured range per direction.
+
+**Why it is last, and may never happen.** It removes the seams properly. It also
+couples the two sensor families the tool exists to compare independently: once a
+LiDAR extrinsic error deforms the surface the images are painted on, the two
+failure modes mix and the picture stops being diagnostic. It needs geometry
+rebuilt at scan rate, which the current architecture deliberately avoids.
+
+On this vehicle the case is weak anyway — the cart's cameras are centimetres
+apart, not the 2.08 m of the Leo bus, so its seams should be small at any
+sensible radius.
 
 ## What this does not do
 
