@@ -13,10 +13,22 @@
 #   base_link -> sensor_kit_base_link -> camera_*/camera_link
 #                                     -> camera_*/camera_optical_link
 #
-# Two things follow. The cameras publish sensor_msgs/Image rather than
-# CompressedImage, hence Image Type: Raw. And camera_info names the BODY frame,
-# camera_left/camera_link, not the optical one -- so each layer overrides it,
-# or every observation comes out rotated by ninety degrees.
+# The cameras publish sensor_msgs/Image rather than CompressedImage, hence
+# Image Type: Raw.
+#
+# No optical frame override here, which was not obvious. The tf tree offers both
+# camera_*/camera_link and camera_*/camera_optical_link, and the second name
+# invites the assumption that the first is a body frame. It is not. Checking
+# where the axes actually point, for all three cameras:
+#
+#   frame                 image right   image down   view direction
+#   camera_link           +forward      down         +left      (camera_left)
+#   camera_optical_link   +up           -left        +forward
+#
+# camera_link is the optical frame: image down points down, and the view
+# direction points out of the side the camera is on. camera_optical_link is that
+# rolled ninety degrees, which renders as a tilted picture on the sphere.
+# CameraInfo names camera_link, and CameraInfo is right.
 #
 # Playback needs applanix_msgs built, or the GNSS topics fail to deserialise and
 # take the player down with them.
@@ -50,21 +62,18 @@ Visualization Manager:
         Image Topic: /lucid_vision/camera_1/raw_image
         Image Type: Raw
         Camera Info Topic: /lucid_vision/camera_1/camera_info
-        Optical Frame Override: camera_left/camera_optical_link
         Alpha: 1
       camera_right:
         Value: true
         Image Topic: /lucid_vision/camera_2/raw_image
         Image Type: Raw
         Camera Info Topic: /lucid_vision/camera_2/camera_info
-        Optical Frame Override: camera_right/camera_optical_link
         Alpha: 1
       camera_top:
         Value: true
         Image Topic: /lucid_vision/camera_0/raw_image
         Image Type: Raw
         Camera Info Topic: /lucid_vision/camera_0/camera_info
-        Optical Frame Override: camera_top/camera_optical_link
         Alpha: 1
       vlp32c:
         Value: true

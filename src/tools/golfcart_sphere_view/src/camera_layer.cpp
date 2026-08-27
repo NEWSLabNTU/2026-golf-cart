@@ -60,17 +60,22 @@ CameraLayer::CameraLayer(
     "Intrinsics for the same camera. Without it there is no patch to draw on.", this,
     SLOT(onTopicsChanged()));
 
-  // REP-103 says CameraInfo names the optical frame, and plenty of real
-  // publishers name the body frame instead -- Autoware's own Leo Drive bags
-  // among them, where camera_info carries camera_left/camera_link while the
-  // projection belongs in camera_left/camera_optical_link. Taking CameraInfo at
-  // its word there rotates every observation by ninety degrees, which looks
-  // like a catastrophic calibration error rather than a naming convention.
-  // Blank means trust CameraInfo.
+  // REP-103 says CameraInfo names the optical frame, and the default here is to
+  // believe it. The override exists for publishers that do not, but reach for it
+  // only after checking where the axes point: a frame called *_optical_link is
+  // not necessarily the optical one, and Autoware's Leo Drive bags are a case
+  // where it is not -- their camera_link is the optical frame and their
+  // camera_optical_link is that rolled ninety degrees. Guessing from the name
+  // there produces a tilted picture that looks like a calibration fault.
+  //
+  // The check is three lines of arithmetic: transform the optical axes into the
+  // vehicle frame and confirm that image-down points down and that the view
+  // direction points out of the side the camera is on.
   optical_frame_property_ = new rviz_common::properties::TfFrameProperty(
     "Optical Frame Override", "",
-    "Frame to project in when CameraInfo names the body frame rather than the optical "
-    "one. Leave blank to use whatever CameraInfo says.",
+    "Frame to project in, for publishers whose CameraInfo names the wrong frame. "
+    "Leave blank to use CameraInfo, which is correct far more often than not. Verify "
+    "before setting this: a frame named *_optical_link is not always the optical one.",
     this, nullptr, true, SLOT(onTopicsChanged()));
 
   alpha_property_ = new rviz_common::properties::FloatProperty(
