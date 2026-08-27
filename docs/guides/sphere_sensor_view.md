@@ -113,6 +113,24 @@ to one side or the other: turn one camera off and see which one moved.
 
 ---
 
+## Gaps between patches are not a fault
+
+Each camera covers only the directions its lens actually sees, so patches stop
+short of each other and bare sphere shows through. That is the honest picture.
+
+The reason it is worth stating: a distortion model is fitted over the angles a
+lens really sees and is meaningless past them, and a radial polynomial typically
+turns over somewhere outside that range and starts mapping ever-wider rays back
+towards the image centre. On the Leo Drive cameras, whose real field reaches
+about 55 degrees off axis, a ray at 65 degrees projects to a pixel comfortably
+inside the frame. Painting those directions produces a band of stretched texture
+sampled from somewhere the camera never looked -- and unlike a gap, it looks
+like data.
+
+The display finds where each model stops increasing and refuses anything beyond
+it. So a gap means "no camera sees this direction", which is a coverage answer
+worth having, and never a silent lie.
+
 ## What it cannot tell you
 
 **Which parameter is wrong.** A bad extrinsic and a bad intrinsic both bend the

@@ -15,6 +15,7 @@
 #include "sphere_mesh.hpp"
 
 #include <cmath>
+#include <limits>
 #include <vector>
 
 namespace golfcart_sphere_view
@@ -27,11 +28,46 @@ double coefficient(const std::vector<double> & d, std::size_t index)
   return index < d.size() ? d[index] : 0.0;
 }
 
+/// The radial part of the distortion model: how far out a ray at radius r lands.
+double radialMapping(const sensor_msgs::msg::CameraInfo & camera_info, double r)
+{
+  const auto & d = camera_info.d;
+  const double r2 = r * r;
+  const double r4 = r2 * r2;
+  const double r6 = r4 * r2;
+  const double numerator =
+    1.0 + coefficient(d, 0) * r2 + coefficient(d, 1) * r4 + coefficient(d, 4) * r6;
+  const double denominator =
+    1.0 + coefficient(d, 5) * r2 + coefficient(d, 6) * r4 + coefficient(d, 7) * r6;
+  if (std::abs(denominator) < 1e-12) {
+    return std::numeric_limits<double>::quiet_NaN();
+  }
+  return r * numerator / denominator;
+}
+
 }  // namespace
+
+double maxValidRadius(const sensor_msgs::msg::CameraInfo & camera_info)
+{
+  // Walk outwards until the mapping stops increasing. The step is fine enough
+  // that the answer is within a fraction of a degree, and the cap of four is
+  // already 76 degrees off axis -- past any lens this display is meant for.
+  constexpr double step = 0.01;
+  constexpr double cap = 4.0;
+  double previous = 0.0;
+  for (double r = step; r <= cap; r += step) {
+    const double mapped = radialMapping(camera_info, r);
+    if (!std::isfinite(mapped) || mapped <= previous) {
+      return r - step;
+    }
+    previous = mapped;
+  }
+  return cap;
+}
 
 bool projectToPixel(
   const sensor_msgs::msg::CameraInfo & camera_info, const Ogre::Vector3 & point,
-  double & u, double & v)
+  double & u, double & v, double max_radius)
 {
   // Optical frame convention, REP-103: z forward, x right, y down. A point at
   // or behind the image plane has no projection.
@@ -56,6 +92,9 @@ bool projectToPixel(
   const double s4 = coefficient(d, 11);
 
   const double r2 = x * x + y * y;
+  if (r2 > max_radius * max_radius) {
+    return false;
+  }
   const double r4 = r2 * r2;
   const double r6 = r4 * r2;
 
@@ -99,6 +138,7 @@ std::vector<PatchVertex> buildCameraPatch(
 
   const double width = static_cast<double>(camera_info.width);
   const double height = static_cast<double>(camera_info.height);
+  const double max_radius = maxValidRadius(camera_info);
   const auto latitude_step = resolution.latitude_step_deg * M_PI / 180.0;
   const auto longitude_step = resolution.longitude_step_deg * M_PI / 180.0;
   const int latitude_count = static_cast<int>(std::round(M_PI / latitude_step));
@@ -131,7 +171,7 @@ std::vector<PatchVertex> buildCameraPatch(
 
       double u = 0.0;
       double v = 0.0;
-      if (!projectToPixel(camera_info, in_optical_frame, u, v)) {
+      if (!projectToPixel(camera_info, in_optical_frame, u, v, max_radius)) {
         return corner;
       }
       if (u < 0.0 || v < 0.0 || u >= width || v >= height) {

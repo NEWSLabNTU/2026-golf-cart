@@ -20,6 +20,7 @@
 
 #include <sensor_msgs/msg/camera_info.hpp>
 
+#include <limits>
 #include <vector>
 
 #include "textured_patch.hpp"
@@ -41,15 +42,35 @@ struct SphereResolution
   double longitude_step_deg{1.0};
 };
 
+/// Largest normalised radius at which this distortion model still makes sense.
+///
+/// A radial polynomial is fitted over the angles a lens actually sees, and says
+/// nothing useful beyond them. Worse than nothing: the polynomial usually turns
+/// over somewhere outside the calibrated range and starts mapping ever-wider
+/// rays back towards the image centre. Measured on the Leo Drive cameras, whose
+/// true field is about 55 degrees off axis:
+///
+///     55 deg -> pixel 714   inside the 720-wide image, correctly
+///     60 deg -> pixel 729   the polynomial peaks here
+///     65 deg -> pixel 536   inside the image again, and wrong
+///
+/// Every direction past the turnover therefore projects to a plausible pixel,
+/// and the sphere gets a band of stretched texture sampled from somewhere the
+/// camera never looked. Returns the radius at which the polynomial stops
+/// increasing, or a generous cap when it never does.
+double maxValidRadius(const sensor_msgs::msg::CameraInfo & camera_info);
+
 /// Project a pixel-space point through a CameraInfo's distortion model.
 ///
-/// Returns false when the point is behind the camera or the model cannot be
-/// evaluated. The distortion coefficients are interpreted in OpenCV's order,
+/// Returns false when the point is behind the camera, when the model cannot be
+/// evaluated, or when the point lies beyond `max_radius` -- see maxValidRadius,
+/// and note that the default of infinity reproduces the folding described
+/// there. The distortion coefficients are interpreted in OpenCV's order,
 /// k1 k2 p1 p2 [k3 [k4 k5 k6 [s1 s2 s3 s4]]], which is what both plumb_bob and
 /// rational_polynomial use; anything longer than the model needs is ignored.
 bool projectToPixel(
   const sensor_msgs::msg::CameraInfo & camera_info, const Ogre::Vector3 & point_in_optical_frame,
-  double & u, double & v);
+  double & u, double & v, double max_radius = std::numeric_limits<double>::infinity());
 
 /// Build the part of the sphere this camera can see.
 ///

@@ -27,6 +27,7 @@ using golfcart_sphere_view::CameraPose;
 using golfcart_sphere_view::CloudPlacement;
 using golfcart_sphere_view::SphereResolution;
 using golfcart_sphere_view::buildCameraPatch;
+using golfcart_sphere_view::maxValidRadius;
 using golfcart_sphere_view::placePoint;
 using golfcart_sphere_view::projectToPixel;
 using golfcart_sphere_view::rainbow;
@@ -285,6 +286,85 @@ TEST(RawImage, NamesTheEncodingItCannotHandle)
   // The message has to carry the encoding: "could not decode" sends someone
   // hunting through a driver for a fault that is really a missing debayer.
   EXPECT_NE(reason.find("bayer_rggb8"), std::string::npos);
+}
+
+/// The Leo Drive cameras: 90 degrees across, strong barrel distortion, and a
+/// radial polynomial that turns over just outside the lens's real field.
+sensor_msgs::msg::CameraInfo leoDriveCamera()
+{
+  sensor_msgs::msg::CameraInfo info;
+  info.width = 720;
+  info.height = 465;
+  info.header.frame_id = "camera_optical";
+  info.k = {359.8575, 0.0, 358.37, 0.0, 359.295, 216.2425, 0.0, 0.0, 1.0};
+  info.d = {-0.2747, 0.09015, 0.000588, -7.66e-05, -0.01453};
+  return info;
+}
+
+TEST(MaxValidRadius, StopsWhereTheRealPolynomialTurnsOver)
+{
+  const double limit = maxValidRadius(leoDriveCamera());
+  // The turnover measured on these coefficients is near 60 degrees, tan 1.73.
+  EXPECT_GT(limit, std::tan(50.0 * M_PI / 180.0));
+  EXPECT_LT(limit, std::tan(65.0 * M_PI / 180.0));
+}
+
+TEST(MaxValidRadius, LeavesAnUndistortedModelAlone)
+{
+  // With no distortion the mapping is the identity and never turns over, so
+  // nothing should be rejected short of the cap.
+  EXPECT_GE(maxValidRadius(pinhole()), 3.9);
+}
+
+TEST(ProjectToPixel, RejectsRaysBeyondTheModelsRange)
+{
+  const auto info = leoDriveCamera();
+  const double limit = maxValidRadius(info);
+
+  // 65 degrees off axis is past the turnover. Unbounded, it lands at a
+  // plausible pixel well inside the image, which is what smeared a band of
+  // texture across the sphere.
+  const double r = std::tan(65.0 * M_PI / 180.0);
+  const Ogre::Vector3 beyond(static_cast<float>(r), 0.0f, 1.0f);
+
+  double u = 0.0;
+  double v = 0.0;
+  ASSERT_TRUE(projectToPixel(info, beyond, u, v));
+  EXPECT_GT(u, 0.0);
+  EXPECT_LT(u, static_cast<double>(info.width));
+
+  EXPECT_FALSE(projectToPixel(info, beyond, u, v, limit));
+}
+
+TEST(ProjectToPixel, KeepsRaysInsideTheModelsRange)
+{
+  const auto info = leoDriveCamera();
+  const double limit = maxValidRadius(info);
+  const double r = std::tan(40.0 * M_PI / 180.0);
+
+  double u = 0.0;
+  double v = 0.0;
+  ASSERT_TRUE(projectToPixel(info, Ogre::Vector3(static_cast<float>(r), 0.0f, 1.0f), u, v, limit));
+  EXPECT_GT(u, static_cast<double>(info.k[2]));
+}
+
+TEST(BuildCameraPatch, DoesNotWrapTextureOntoDirectionsTheLensCannotSee)
+{
+  CameraPose pose;
+  pose.position = Ogre::Vector3::ZERO;
+  pose.orientation = forwardFacingOptical();
+
+  const auto triangles = buildCameraPatch(leoDriveCamera(), pose, 10.0, SphereResolution{1.0, 1.0});
+  ASSERT_FALSE(triangles.empty());
+
+  // Every vertex must lie within the turnover angle of the camera's own axis,
+  // which for a forward-facing camera is +x in base_link.
+  const double limit_angle = std::atan(maxValidRadius(leoDriveCamera()));
+  for (const auto & vertex : triangles) {
+    const auto direction = vertex.position.normalisedCopy();
+    const double angle = std::acos(std::min(1.0, static_cast<double>(direction.x)));
+    EXPECT_LE(angle, limit_angle + 1e-3);
+  }
 }
 
 }  // namespace
