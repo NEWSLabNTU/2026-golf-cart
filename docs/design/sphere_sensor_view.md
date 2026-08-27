@@ -377,6 +377,147 @@ exactly the question phase 3 asks about ArUco boards -- whether two are visible
 everywhere on the route -- and the same machinery answers it for camera
 placement. Small effort.
 
+## The data pipeline the next phases need
+
+S5 to S7 all want the same thing the current code does not have: **one place that
+knows what every camera currently is**. Today each `CameraLayer` privately owns
+its image, its `CameraInfo` and its transform, and `CloudLayer` cannot see any of
+it. Colouring a return from a camera, counting how many cameras cover a
+direction, and comparing what two cameras report all need that knowledge shared.
+
+The whole of the addition is a snapshot registry, and the discipline is that it
+is a *snapshot* -- immutable, assembled once per render pass, read by anything.
+
+### What runs where now
+
+```
+  ROS executor thread          worker thread(s)         render thread (RViz)
+  -------------------          ----------------         --------------------
+  CompressedImage/Image  --->  decode to QImage   --->  blit into texture
+   30 Hz per camera            convert RGB888           (per camera)
+                                                        upload only, no work
+
+  CameraInfo             ------------------------->     rebuild patch geometry
+   on change only                                       (only when it changed)
+
+  PointCloud2            ------------------------->     transform, place, colour
+   10 Hz                                                 (only on new cloud)
+
+  tf                     ------------------------->     place the sphere node
+                                                        (every frame, cheap)
+```
+
+The invariant that makes it affordable: **geometry is a function of calibration
+and mounting, not of time.** Per-frame cost is a texture upload and one transform
+lookup. Nothing in what follows may break that.
+
+### What it becomes
+
+```
+                          ┌───────────────────────────────┐
+   CameraLayer  ─ publish ─┤  CameraRegistry               │
+   (one per camera)        │  vector<shared_ptr<const      │
+                           │         CameraSample>>        │
+                           │                               │
+                           │  CameraSample:                │
+                           │    CameraInfo  info           │
+                           │    QImage      frame          │
+                           │    Vector3     position       │  in the centre frame
+                           │    Quaternion  orientation    │
+                           │    double      max_radius     │  cached turnover
+                           └───────────────────────────────┘
+                                    │            │
+                       ┌────────────┘            └──────────────┐
+                       ▼                                        ▼
+              CloudLayer (S5)                          CoverageLayer (S6)
+              colour by camera                         count per direction
+                       │                                        │
+                       └──────────────► DisagreementReport (S7) ◄┘
+                                        compare two samples
+```
+
+Assembly happens on the render thread at the top of `SphereViewDisplay::update`,
+before any layer runs. A sample is built only when that camera has both a frame
+and a transform; a camera without either is simply absent from the registry, so
+every consumer gets "no camera covers this" rather than a special case to
+forget.
+
+No new threads and no new locks. The registry is written by one thread, read by
+the same thread, and holds shared pointers to immutable snapshots -- a consumer
+that wants to keep one across frames may, and it will be looking at a consistent
+past rather than a torn present.
+
+### The one new operation
+
+```
+  sampleColour(sample, point_in_centre_frame) -> optional<ColourValue>
+
+     1. p_cam = sample.orientation.Inverse() * (point - sample.position)
+     2. reject unless p_cam.z > 0                    behind the camera
+     3. reject unless r <= sample.max_radius         outside the model's range
+     4. projectToPixel(sample.info, p_cam, u, v)     existing function
+     5. reject unless (u, v) inside the image
+     6. return sample.frame.pixel(u, v)
+```
+
+Steps 1 to 5 are exactly what `buildCameraPatch` already does per grid vertex;
+the only new part is step 6. That is the point of the refactor: the projection
+rules -- including the turnover bound that took a real dataset to discover --
+live in one place and every consumer inherits them.
+
+### Cost
+
+A 32-plane scan is roughly 33 000 returns after decimation. Colouring them
+against three cameras is 100 000 evaluations of a polynomial and 33 000 random
+reads from an image, once per cloud rather than once per rendered frame. That is
+milliseconds at 10 Hz. An early rejection on the angle between the return and
+each camera's optical axis removes most of the projections before they start,
+since a return is usually in view of at most one camera.
+
+Coverage and disagreement are computed on the direction grid, which is thousands
+of samples rather than tens of thousands, and only when the calibration changes.
+
+### Parts
+
+Reused unchanged, and this is most of it:
+
+| part | why it already fits |
+|---|---|
+| `projectToPixel`, `maxValidRadius` | the projection rules, bound included |
+| `rawImageToQImage` | both image encodings, already tested |
+| `placePoint`, `rainbow` | placement and colour scales |
+| `TexturedPatch` | unchanged; the sphere still paints the same way |
+| the dirty-flag discipline | S5 recolours per cloud, not per frame |
+
+Extended:
+
+| part | change |
+|---|---|
+| `CameraLayer` | publish a `CameraSample`; it already computes every field |
+| `CloudLayer` | one more `Colour By` option, and a registry pointer |
+| `SphereViewDisplay` | assemble the registry each update |
+
+New, and small:
+
+| file | contents |
+|---|---|
+| `camera_sample.hpp` | the struct and the registry alias |
+| `camera_sampling.{hpp,cpp}` | `sampleColour`, testable with no ROS graph and no GPU |
+| `frame_lookup.{hpp,cpp}` | the centre-frame transform composition, currently written out three times |
+| `coverage.{hpp,cpp}` (S6) | counts per direction over the shared grid |
+| `disagreement.{hpp,cpp}` (S7) | the overlap metric |
+
+### One refactor worth doing first
+
+`buildCameraPatch` generates the latitude/longitude grid inside itself. S6 needs
+the same grid to count coverage, and S7 needs it again to compare cameras.
+Splitting out `sphereDirections(resolution)` costs nothing now and keeps three
+consumers from each growing their own grid, which is how two of them end up
+subtly disagreeing about what direction a sample is.
+
+Do it when S6 starts, not before: today there is exactly one consumer, and a
+shared abstraction with one user is a guess about the second.
+
 ## Alternatives considered
 
 **RViz2's stock `Camera` display** renders the 3D scene composited onto a camera
