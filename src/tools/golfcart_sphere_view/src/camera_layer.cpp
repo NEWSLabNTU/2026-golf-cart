@@ -14,6 +14,7 @@
 
 #include "camera_layer.hpp"
 
+#include "jpeg_decode.hpp"
 #include "raw_image.hpp"
 
 #include <OgreSceneNode.h>
@@ -22,6 +23,7 @@
 #include <rviz_common/frame_manager_iface.hpp>
 #include <rviz_common/properties/enum_property.hpp>
 #include <rviz_common/properties/float_property.hpp>
+#include <rviz_common/properties/int_property.hpp>
 #include <rviz_common/properties/ros_topic_property.hpp>
 #include <rviz_common/properties/tf_frame_property.hpp>
 #include <rviz_common/ros_integration/ros_node_abstraction_iface.hpp>
@@ -92,6 +94,17 @@ CameraLayer::CameraLayer(
     "when the Orin is busy; zero means every frame.",
     this, SLOT(onAlphaChanged()));
   max_rate_property_->setMin(0.0f);
+
+  // A sphere patch at a one degree grid does not resolve 1920 wide, and libjpeg
+  // can skip the inverse DCT work for coefficients a smaller output never uses.
+  // Half size is four times fewer pixels to decode, convert, upload and store,
+  // for a picture still far sharper than the seam judgement it supports.
+  decode_width_property_ = new rviz_common::properties::IntProperty(
+    "Decode Width Limit", 960,
+    "Decode JPEG no wider than this, using libjpeg's scaled decode. Zero decodes at "
+    "full size. Raw images are unaffected.",
+    this, SLOT(onAlphaChanged()));
+  decode_width_property_->setMin(0);
 
   alpha_property_ = new rviz_common::properties::FloatProperty(
     "Alpha", 1.0f, "Transparency for this camera alone, for looking through an overlap.",
@@ -167,10 +180,17 @@ void CameraLayer::workerLoop()
 
     QImage decoded;
     if (frame.compressed) {
-      if (!decoded.loadFromData(frame.bytes.data(), static_cast<int>(frame.bytes.size()))) {
+      // libjpeg first, for the scaled decode. Anything it will not take -- a
+      // CompressedImage may carry PNG -- falls back to Qt rather than being
+      // refused, since drawing the frame is the point.
+      std::string reason;
+      decoded = decodeJpeg(frame.bytes, frame.decode_width_limit, reason);
+      if (decoded.isNull() &&
+        !decoded.loadFromData(frame.bytes.data(), static_cast<int>(frame.bytes.size())))
+      {
         std::lock_guard<std::mutex> lock(decoded_mutex_);
         ++decode_failures_;
-        decode_error_ = "undecodable compressed frame";
+        decode_error_ = reason.empty() ? "undecodable compressed frame" : reason;
         continue;
       }
     } else {
@@ -248,6 +268,7 @@ void CameraLayer::subscribe()
           std::lock_guard<std::mutex> lock(encoded_mutex_);
           encoded_frame_.bytes = message->data;
           encoded_frame_.compressed = true;
+          encoded_frame_.decode_width_limit = decode_width_property_->getInt();
           has_encoded_frame_ = true;
         }
         encoded_available_.notify_one();

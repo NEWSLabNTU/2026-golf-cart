@@ -259,11 +259,15 @@ Measured, and the measurement corrected two guesses. Details and the trap in
       callback so a dropped frame costs nothing rather than costing a decode.
       Three cameras at 30 Hz would spend two to three Orin cores decoding
       1920x1280 JPEG faster than anyone can read it.
-- [ ] **Decode at half resolution** through libjpeg-turbo's `tjDecompress2`.
-      Four times fewer pixels to decode, convert, upload and store, and still
-      far sharper than the seam judgement it supports. Measured that Qt's
-      `setScaledSize` is *not* this: it saves 22 to 28% because Qt decodes full
-      size and scales afterwards.
+- [x] **Decode smaller, and straight to the target format.** `Decode Width
+      Limit`, 960 by default, through libjpeg's `scale_num`/`scale_denom`. A
+      photograph-like 1920x1280 frame goes from 3.72 ms on the old Qt path to
+      0.91 ms. Most of that is decoding directly to RGB888 rather than letting
+      Qt choose a format and converting; scaling halves what remains. The
+      four-times-fewer-pixels intuition does not hold, because Huffman decoding
+      is proportional to compressed size and happens either way — on a noisy
+      frame the same scaling saved 14%. Qt's `setScaledSize` is not a substitute:
+      it decodes full size and resamples.
 - [ ] **Take the numbers on the Orin.** Everything above was measured on a
       workstation whose RViz runs on llvmpipe, so its CPU totals are software
       rasterisation and say nothing about the vehicle. The instrumentation

@@ -13,6 +13,7 @@
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
+  <depend>libjpeg</depend>
   <depend>pluginlib</depend>
   <depend>rclcpp</depend>
   <depend>rviz_common</depend>

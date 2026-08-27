@@ -16,7 +16,12 @@
 
 #include <OgreMatrix3.h>
 
+#include <QBuffer>
+#include <QByteArray>
+#include <QColor>
+
 #include "cloud_projection.hpp"
+#include "jpeg_decode.hpp"
 #include "raw_image.hpp"
 #include "sphere_mesh.hpp"
 
@@ -31,6 +36,8 @@ using golfcart_sphere_view::maxValidRadius;
 using golfcart_sphere_view::placePoint;
 using golfcart_sphere_view::projectToPixel;
 using golfcart_sphere_view::rainbow;
+using golfcart_sphere_view::decodeJpeg;
+using golfcart_sphere_view::jpegScaleNumerator;
 using golfcart_sphere_view::rawImageToQImage;
 
 /// A pinhole camera with no distortion: 640x480, 90 degrees across.
@@ -365,6 +372,88 @@ TEST(BuildCameraPatch, DoesNotWrapTextureOntoDirectionsTheLensCannotSee)
     const double angle = std::acos(std::min(1.0, static_cast<double>(direction.x)));
     EXPECT_LE(angle, limit_angle + 1e-3);
   }
+}
+
+/// A JPEG of known size, built rather than checked in.
+std::vector<uint8_t> makeJpeg(int width, int height)
+{
+  QImage source(width, height, QImage::Format_RGB888);
+  for (int y = 0; y < height; ++y) {
+    for (int x = 0; x < width; ++x) {
+      source.setPixel(x, y, qRgb((x * 5) & 0xff, (y * 3) & 0xff, (x ^ y) & 0xff));
+    }
+  }
+  QByteArray encoded;
+  QBuffer buffer(&encoded);
+  buffer.open(QIODevice::WriteOnly);
+  source.save(&buffer, "JPEG", 90);
+  return std::vector<uint8_t>(encoded.begin(), encoded.end());
+}
+
+TEST(JpegScaleNumerator, PicksTheLargestReductionThatStillMeetsTheLimit)
+{
+  // 1920 wide: an eighth is 240, a quarter 480, a half 960.
+  EXPECT_EQ(jpegScaleNumerator(1920, 960), 4);   // 1920 * 4/8 = 960, exactly the limit
+  EXPECT_EQ(jpegScaleNumerator(1920, 500), 4);   // 2/8 would give 480, under the limit
+  EXPECT_EQ(jpegScaleNumerator(1920, 480), 2);   // 2/8 gives 480, which meets it
+  EXPECT_EQ(jpegScaleNumerator(1920, 100), 1);
+  // Never upscale, and never scale at all when the limit is off or already met.
+  EXPECT_EQ(jpegScaleNumerator(1920, 0), 8);
+  EXPECT_EQ(jpegScaleNumerator(640, 960), 8);
+}
+
+TEST(DecodeJpeg, FullSizeMatchesTheStoredDimensions)
+{
+  std::string reason;
+  const auto image = decodeJpeg(makeJpeg(320, 240), 0, reason);
+  ASSERT_FALSE(image.isNull()) << reason;
+  EXPECT_EQ(image.width(), 320);
+  EXPECT_EQ(image.height(), 240);
+  EXPECT_EQ(image.format(), QImage::Format_RGB888);
+}
+
+TEST(DecodeJpeg, HonoursTheWidthLimitByScalingDuringDecode)
+{
+  std::string reason;
+  const auto image = decodeJpeg(makeJpeg(640, 480), 320, reason);
+  ASSERT_FALSE(image.isNull()) << reason;
+  EXPECT_EQ(image.width(), 320);
+  EXPECT_EQ(image.height(), 240);
+}
+
+TEST(DecodeJpeg, ScaledDecodeStillLooksLikeTheOriginal)
+{
+  // A scaled decode that returned the right size but the wrong pixels would be
+  // worse than no scaling at all, and the size assertions above cannot see it.
+  const auto data = makeJpeg(640, 480);
+  std::string reason;
+  const auto full = decodeJpeg(data, 0, reason);
+  const auto half = decodeJpeg(data, 320, reason);
+  ASSERT_FALSE(full.isNull());
+  ASSERT_FALSE(half.isNull());
+
+  for (int y : {10, 120, 300}) {
+    for (int x : {10, 160, 300}) {
+      const QColor a = full.pixelColor(x * 2, y * 2);
+      const QColor b = half.pixelColor(x, y);
+      EXPECT_NEAR(a.red(), b.red(), 40);
+      EXPECT_NEAR(a.green(), b.green(), 40);
+      EXPECT_NEAR(a.blue(), b.blue(), 40);
+    }
+  }
+}
+
+TEST(DecodeJpeg, RefusesWhatIsNotAJpegInsteadOfCrashing)
+{
+  std::string reason;
+  // libjpeg's default error handler calls exit(); this must return instead, so
+  // that one malformed frame does not take RViz with it.
+  EXPECT_TRUE(decodeJpeg(std::vector<uint8_t>{0x89, 0x50, 0x4e, 0x47}, 0, reason).isNull());
+  EXPECT_FALSE(reason.empty());
+
+  auto truncated = makeJpeg(64, 64);
+  truncated.resize(truncated.size() / 3);
+  EXPECT_TRUE(decodeJpeg(truncated, 0, reason).isNull());
 }
 
 }  // namespace

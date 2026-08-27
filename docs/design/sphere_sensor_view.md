@@ -619,11 +619,30 @@ Note what it does *not* cost: the geometry is unaffected, the cloud is
 unaffected, and the check itself is unaffected, because a static vehicle looking
 at a static scene has nothing to lose by sampling slower.
 
-**2. Decode smaller.** A sphere patch at a 1 degree grid does not resolve
-1920x1280. Half resolution is 4 times fewer pixels to decode, convert, upload
-and store, and the picture is still far sharper than the seam judgement it
-supports. Through `tjDecompress2` with a scaling factor, not through Qt, per the
-measurement above.
+**2. Decode smaller, and decode straight to the format used.** Implemented, and
+the measurement corrected the reasoning behind it. A photograph-like 1920x1280
+frame, decoded on the workstation:
+
+| path | cost |
+|---|---|
+| Qt `loadFromData` then `convertToFormat` | 3.72 ms |
+| libjpeg direct to RGB888, full size | 1.66 ms |
+| libjpeg, width limit 960 | 0.91 ms |
+| libjpeg, width limit 480 | 0.73 ms |
+
+Most of the first jump is not scaling at all: it is decoding straight to the
+layout the texture wants instead of letting Qt pick a format and converting
+afterwards. Scaling then roughly halves what is left.
+
+The saving from scaling is **not** the "four times fewer pixels" that the output
+size suggests, because Huffman decoding is proportional to the compressed size
+and happens regardless. On a deliberately noisy 1224 KiB frame the same
+half-size decode saved only 14%. Content decides how much of the work is
+entropy decoding and how much is inverse DCT, and only the second scales away.
+
+Done through libjpeg's `scale_num`/`scale_denom` rather than `tjDecompress2`:
+the standard API on this platform is already libjpeg-turbo underneath, and it
+needs no dependency the workspace did not already have.
 
 **3. Upload less.** 1920x1280 RGB888 is 7.4 MiB per camera per frame; three
 cameras at 30 Hz is 663 MiB/s of memory traffic on a board with unified memory,

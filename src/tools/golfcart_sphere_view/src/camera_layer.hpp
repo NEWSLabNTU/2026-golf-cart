@@ -41,6 +41,7 @@ namespace properties
 {
 class EnumProperty;
 class FloatProperty;
+class IntProperty;
 class RosTopicProperty;
 class TfFrameProperty;
 }  // namespace properties
@@ -110,6 +111,7 @@ private:
   rviz_common::properties::TfFrameProperty * optical_frame_property_;
   rviz_common::properties::FloatProperty * alpha_property_;
   rviz_common::properties::FloatProperty * max_rate_property_;
+  rviz_common::properties::IntProperty * decode_width_property_;
 
   rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr compressed_subscription_;
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr raw_subscription_;
@@ -128,6 +130,8 @@ private:
     uint32_t step{0};
     std::string encoding;
     bool compressed{true};
+    // Read on the subscription thread so the worker needs no property access.
+    int decode_width_limit{0};
   };
 
   // Frame in, decoded frame out. One slot each: this is a monitor, so the

@@ -17,6 +17,7 @@ find_package(rviz_default_plugins REQUIRED)
 find_package(rviz_rendering REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(Qt5 COMPONENTS Widgets REQUIRED)
+find_package(JPEG REQUIRED)
 
 set(CMAKE_AUTOMOC ON)
 
@@ -24,6 +25,7 @@ add_library(${PROJECT_NAME} SHARED
   src/camera_layer.cpp
   src/cloud_layer.cpp
   src/cloud_projection.cpp
+  src/jpeg_decode.cpp
   src/raw_image.cpp
   src/sphere_mesh.cpp
   src/sphere_view_display.cpp
@@ -34,6 +36,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE src)
 target_link_libraries(${PROJECT_NAME}
   PUBLIC
   Qt5::Widgets
+  JPEG::JPEG
   pluginlib::pluginlib
   rclcpp::rclcpp
   rviz_common::rviz_common
@@ -49,10 +52,12 @@ if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
   ament_add_gtest(test_sphere_mesh test/test_sphere_mesh.cpp src/sphere_mesh.cpp
     src/cloud_projection.cpp
+  src/jpeg_decode.cpp
   src/raw_image.cpp)
   target_include_directories(test_sphere_mesh PRIVATE src)
   target_link_libraries(test_sphere_mesh
     Qt5::Widgets
+    JPEG::JPEG
     rviz_rendering::rviz_rendering
     ${sensor_msgs_TARGETS}
   )
