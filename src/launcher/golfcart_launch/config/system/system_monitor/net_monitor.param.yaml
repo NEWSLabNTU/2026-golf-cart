@@ -1,0 +1,37 @@
+# net_monitor for the golf cart.
+#
+# Differs from the Autoware default in one line: `devices` names the interfaces
+# instead of `["*"]`.
+#
+# `["*"]` monitors every interface the kernel reports, and NetMonitor reports
+# ERROR if any one of them is down. On the AGX Orin that always includes
+# `l4tbr0`, the L4T USB device-mode bridge, which is down unless the board is
+# being used as a USB device. So `net_monitor: Network Usage` was ERROR on 100%
+# of its reports in the 2026-08-25 run, permanently, for an interface nothing
+# uses.
+#
+# Listing interfaces makes this file machine-specific, which is the cost. The
+# failure mode if the list is wrong is mild and visible: an interface that is
+# not listed is simply not monitored. Compare against `ip -br link` if the
+# hardware changes.
+#
+#   lo        loopback, carries intra-host DDS
+#   enP5p3s0  100 Mbit, the link this stack saturates at ~98% tx
+#   enP5p4s0  100 Mbit, Velodyne VLP-32C (192.168.7.x)
+#   enP5p5s0  1 Gbit,   Seyond Falcon
+#   enP5p6s0  1 Gbit,   spare
+#
+# Deliberately absent: l4tbr0, usb0, usb1, usb2. The usb* devices report
+# "Not Supported" for ioctl(SIOCETHTOOL) rather than ERROR, so they are not the
+# cause, but they carry nothing either.
+/**:
+  ros__parameters:
+    devices: ["lo", "enP5p3s0", "enP5p4s0", "enP5p5s0", "enP5p6s0"]
+    monitor_program: "greengrass"
+    enable_traffic_monitor: true
+    crc_error_check_duration: 1
+    crc_error_count_threshold: 1
+    reassembles_failed_check_duration: 1
+    reassembles_failed_check_count: 1
+    udp_buf_errors_check_duration: 1
+    udp_buf_errors_check_count: 1

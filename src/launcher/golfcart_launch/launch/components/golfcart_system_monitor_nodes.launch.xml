@@ -1,0 +1,59 @@
+<launch>
+  <arg name="cpu_monitor_config_file" default="$(find-pkg-share autoware_system_monitor)/config/cpu_monitor.param.yaml"/>
+  <arg name="hdd_monitor_config_file" default="$(find-pkg-share autoware_system_monitor)/config/hdd_monitor.param.yaml"/>
+  <arg name="mem_monitor_config_file" default="$(find-pkg-share autoware_system_monitor)/config/mem_monitor.param.yaml"/>
+  <arg name="net_monitor_config_file" default="$(find-pkg-share autoware_system_monitor)/config/net_monitor.param.yaml"/>
+  <arg name="ntp_monitor_config_file" default="$(find-pkg-share autoware_system_monitor)/config/ntp_monitor.param.yaml"/>
+  <arg name="process_monitor_config_file" default="$(find-pkg-share autoware_system_monitor)/config/process_monitor.param.yaml"/>
+  <arg name="gpu_monitor_config_file" default="$(find-pkg-share autoware_system_monitor)/config/gpu_monitor.param.yaml"/>
+  <arg name="voltage_monitor_config_file" default="$(find-pkg-share autoware_system_monitor)/config/voltage_monitor.param.yaml"/>
+
+  <!--
+    Per-monitor enables. Upstream's copy of this file loads all eight
+    unconditionally, which is fine on the desktop it was written for and wrong
+    on an AGX Orin: three of them cannot succeed here and report ERROR forever.
+
+      gpu_monitor      "No message was set" x5. The Orin's iGPU is not NVML.
+      hdd_monitor      "connect error" x4. Wants an hdd_reader daemon that is
+                       not running; a parameter cannot start it.
+      voltage_monitor  "Battery Dead". cmos_battery_label is "" and the Orin
+                       has no CMOS battery to read.
+
+    Defaults stay true so this file behaves like upstream's; the golf cart turns
+    them off in tier4_system_component.launch.xml next door. A permanently red
+    leaf is worse than an absent one, because absent is visible and red is
+    background. See docs/known-config-defects.md.
+  -->
+  <arg name="launch_gpu_monitor" default="true"/>
+  <arg name="launch_hdd_monitor" default="true"/>
+  <arg name="launch_voltage_monitor" default="true"/>
+
+  <group>
+    <node_container pkg="rclcpp_components" exec="component_container_mt" name="system_monitor_container" namespace="system_monitor" output="screen">
+      <composable_node pkg="autoware_system_monitor" plugin="CPUMonitor" name="cpu_monitor">
+        <param from="$(var cpu_monitor_config_file)"/>
+      </composable_node>
+      <composable_node pkg="autoware_system_monitor" plugin="MemMonitor" name="mem_monitor">
+        <param from="$(var mem_monitor_config_file)"/>
+      </composable_node>
+      <composable_node pkg="autoware_system_monitor" plugin="NetMonitor" name="net_monitor">
+        <param from="$(var net_monitor_config_file)"/>
+      </composable_node>
+      <composable_node pkg="autoware_system_monitor" plugin="NTPMonitor" name="ntp_monitor">
+        <param from="$(var ntp_monitor_config_file)"/>
+      </composable_node>
+      <composable_node pkg="autoware_system_monitor" plugin="ProcessMonitor" name="process_monitor">
+        <param from="$(var process_monitor_config_file)"/>
+      </composable_node>
+      <composable_node pkg="autoware_system_monitor" plugin="HddMonitor" name="hdd_monitor" if="$(var launch_hdd_monitor)">
+        <param from="$(var hdd_monitor_config_file)"/>
+      </composable_node>
+      <composable_node pkg="autoware_system_monitor" plugin="GPUMonitor" name="gpu_monitor" if="$(var launch_gpu_monitor)">
+        <param from="$(var gpu_monitor_config_file)"/>
+      </composable_node>
+      <composable_node pkg="autoware_system_monitor" plugin="VoltageMonitor" name="voltage_monitor" if="$(var launch_voltage_monitor)">
+        <param from="$(var voltage_monitor_config_file)"/>
+      </composable_node>
+    </node_container>
+  </group>
+</launch>

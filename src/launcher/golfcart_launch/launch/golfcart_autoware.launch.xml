@@ -95,7 +95,10 @@
     <let name="resolved_diagnostic_graph_path"
          value="$(var diagnostic_graph_aggregator_graph_path)"
          unless="$(eval '\'$(var pose_source)\' == \'aruco\'')"/>
-    <include file="$(find-pkg-share autoware_launch)/launch/components/tier4_system_component.launch.xml">
+    <!-- Ours, not autoware_launch's: it drops the three system monitors that
+         cannot succeed on an Orin and points net_monitor at a device list
+         instead of ["*"]. See that file and docs/known-config-defects.md. -->
+    <include file="$(find-pkg-share golfcart_launch)/launch/components/tier4_system_component.launch.xml">
       <arg name="diagnostic_graph_aggregator_graph_path"
            value="$(var resolved_diagnostic_graph_path)"/>
     </include>

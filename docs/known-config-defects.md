@@ -110,7 +110,7 @@ Verified by resolving the launch: `ublox` gives 154 nodes with one
 
 ---
 
-## 4. Autoware's `system_monitor` runs on stock x86 defaults
+## 4. Autoware's `system_monitor` runs on stock x86 defaults — FIXED 2026-08-28
 
 The repository ships no override for
 `/opt/autoware/1.5.0/share/autoware_launch/config/system/system_monitor/*`, so
@@ -131,6 +131,28 @@ as is, they are five permanently-red leaves feeding whatever aggregates them.
 Note the one that is *not* on this list: `cpu_monitor: CPU Usage` was ERROR on
 26.4% of reports before the optimization and 0.4% after. That monitor works and
 was telling the truth.
+
+**Fixed** in two parts, both in `golfcart_launch`:
+
+- `net_monitor` gets `config/system/system_monitor/net_monitor.param.yaml`,
+  naming the five interfaces instead of `["*"]`. One down interface made the
+  whole check ERROR forever, and on a Jetson `l4tbr0` is always down.
+- `gpu_monitor`, `hdd_monitor` and `voltage_monitor` are not launched. A
+  parameter cannot fix any of them: the iGPU is not NVML, the `hdd_reader`
+  daemon is not running, and there is no CMOS battery.
+
+This needed two local copies, because `tier4_system_launch` hardcodes its
+include of `autoware_system_monitor`'s launch file, which loads all eight
+monitors unconditionally and takes no per-monitor argument:
+`launch/components/tier4_system_component.launch.xml` (ours now, referenced from
+`golfcart_autoware.launch.xml`) and
+`launch/components/golfcart_system_monitor_nodes.launch.xml`, which adds
+`launch_{gpu,hdd,voltage}_monitor` defaulting to true so it still behaves like
+upstream's for anyone else.
+
+Verified by resolving the full launch: five monitors instead of eight, 151 nodes
+against a 154-node baseline, and `net_monitor`'s `devices` resolving to the
+interface list. **Not yet run on the vehicle.**
 
 ---
 
@@ -227,8 +249,8 @@ Recorded so nobody re-investigates them:
 ## Suggested order
 
 **Done 2026-08-28**: #1 (RViz MRM plugin), #3 (u-blox, code landed, still needs
-`GNSS_RECEIVER=none` set on the Advantech), #7 (`/diagnostics_agg` row), #8
-(analyzer comment).
+`GNSS_RECEIVER=none` set on the Advantech), #4 (system_monitor), #7
+(`/diagnostics_agg` row), #8 (analyzer comment). Five of eight.
 
 Remaining, in order:
 
