@@ -9,19 +9,17 @@ artifact of the container-mode change being tested that afternoon.
 [roadblocks.md](../../roadblocks.md#sensor-status-observed-2026-08-10), plus the
 symptom that the point cloud is partially missing in RViz.
 
-Answer up front: these are **two symptoms of one fault**. The original version of
-this document called them unrelated; that was corrected on 2026-08-28 once the
-cause was found. The Velodyne topic is published BEST_EFFORT, which both denies
-a RELIABLE RViz display any data at all and costs the concatenator more than
-half its scans.
+Answer up front: **two faults on one topic.** A is a QoS mismatch that denies
+RViz any data. B is a TF transform failure inside the concatenator that discards
+clouds which arrived perfectly intact. An intermediate revision of this document
+briefly claimed a single shared cause; that was wrong and is corrected below.
 
 | | Symptom | Cause | Confidence |
 |---|---|---|---|
 | **A** | RViz shows no Velodyne at all | a RELIABLE subscriber cannot match the BEST_EFFORT publisher, so it receives nothing | established |
-| **B** | NDT gets ~4 Hz of cloud, half of it Falcon-only | the same BEST_EFFORT publisher, whose 1.38 MiB clouds fragment and are dropped without retransmission | established; a residual gap under load is still open |
+| **B** | NDT gets ~4 Hz of cloud, half of it Falcon-only | the concatenator cannot transform the cloud into `base_link` and discards it; everything upstream is lossless | established; the reason the lookup fails is open |
 
-Fixing A does nothing for B, but one change addresses both: the Velodyne
-publisher's reliability.
+Fixing A does nothing for B. They share a topic, not a cause.
 
 
 ---
@@ -186,77 +184,73 @@ install. It reports the actual spread of what was collected, which two
 independent sensors set themselves. On a kit whose LiDARs share a clock it
 tracks the config and looks like a tolerance; here it does not.
 
-### Where the Velodyne clouds actually go: transport, and it is the same fault as A
+### Where the Velodyne clouds actually go: the concatenator's TF transform
 
-**Answered 2026-08-28.** They are dropped in transport, because the Velodyne
-topic is published **BEST_EFFORT** while the Falcon's is **RELIABLE**, and each
-Velodyne message is large enough to fragment.
+**Answered 2026-08-28.** They arrive intact and are then discarded inside the
+concatenator, because it cannot transform them into `base_link`:
 
-The QoS recorded in the NTU bag, which is the QoS the drivers offered:
+```
+[WARN] [sensing.lidar.concatenate_data]:
+transformed_raw_points[/sensing/lidar/vlp32/pointcloud_before_sync] is nullptr,
+skipping pointcloud publish.
+```
 
-| topic | `reliability` | |
-|---|---|---|
-| `/sensing/lidar/vlp32/velodyne_points` | `2` | **BEST_EFFORT** |
-| `/sensing/lidar/falcon/iv_points` | `1` | **RELIABLE** |
+`transformed_raw_points` is the cloud after transformation into `output_frame`.
+A null pointer there means the lookup failed and the whole publish is skipped.
 
-Play that bag into nothing but a `ros2 bag record`, no stack at all, over 67 s:
+**The counts identify it.** On the 2026-08-25 vehicle run the concatenator made
+2210 attempts with the Velodyne present in 1043, so **1167 without it**, against
+**1186** nullptr warnings for that topic. Those are the same event. For the
+Falcon the same run logged only 153, a 7.8:1 asymmetry against the Velodyne.
 
-| transport | Velodyne delivered | Falcon |
-|---|---|---|
-| default FastDDS | 185 = **2.75 Hz** | 635 = 9.45 Hz |
-| this repo's CycloneDDS profile | 416 = **6.16 Hz** | 636 = 9.42 Hz |
+**Nothing upstream is losing anything.** Per-stage counting over 67.9 s of NTU
+CSIE-1 replay, on the repo's CycloneDDS profile:
 
-The bag carries the Velodyne at 7.02 Hz and the Falcon at 9.40 Hz. The Falcon
-arrives complete under both transports. The Velodyne does not arrive complete
-under either, and how much of it arrives depends entirely on the DDS
-configuration. That is what a fragmented BEST_EFFORT sample looks like: one lost
-fragment discards the whole cloud, and nothing retransmits.
+| stage | count |
+|---|---|
+| `vlp32/velodyne_points` | 419 |
+| `vlp32/self_cropped/pointcloud_ex` | 419 |
+| `vlp32/rectified/pointcloud_ex` | 419 |
+| `vlp32/pointcloud_before_sync` | 419 |
 
-Size is why it fragments. The Velodyne cloud is `PointXYZIRCAEDT`, 30 bytes per
-point at 48342 points, so **1.38 MiB** per message, against a
-`net.core.rmem_default` of 1 MiB. Note the kernel's UDP `RcvbufErrors` counter
-does **not** move during this, so the loss is in DDS fragment reassembly rather
-than socket overflow, and looking only at `/proc/net/snmp` will say everything
-is fine.
+419 over 67.9 s is 6.17 Hz, exactly the rate the bag holds in that segment
+(431 messages in its first 70 s). The driver, the crop box, the distortion
+corrector and the ring outlier filter are collectively lossless. The clouds are
+delivered and then thrown away at the last step.
 
-**This is the same root cause as fault A.** The header table at the top of this
-document called them unrelated. They are not. A BEST_EFFORT publisher is exactly
-why a RELIABLE RViz display receives nothing at all, and it is also why the
-concatenator receives less than half the scans. One property of one publisher,
-two symptoms.
+**Two earlier explanations are dead.** The matching window was tested and ruled
+out (table above). Transport was tested and ruled out: on the repo's CycloneDDS
+profile 416 of 431 arrive, 96.5%. Forcing the publisher RELIABLE via
+`ros2 bag play --qos-profile-overrides-path` changed nothing, because there was
+nothing left to recover.
 
-### What it does not explain, yet
+Transport is worth one caveat rather than a finding. Under **default FastDDS**
+the same replay delivers only 185 of 431, 43%, because the topic is BEST_EFFORT
+and a `PointXYZIRCAEDT` cloud at 48342 points is 1.38 MiB, so it fragments and
+one lost fragment discards the sample. The repo's CycloneDDS profile already
+handles this, and the vehicle uses it. It matters only if someone runs this
+stack without `scripts/env.sh`.
 
-Correct transport does not close the gap on its own. Re-running the full stack
-with CycloneDDS rather than the default:
+### Why the transform fails: still open
 
-| | attempts | Velodyne present | Falcon | all present |
-|---|---|---|---|---|
-| default FastDDS | 277 | 54.2% | 85.2% | 39.4% |
-| CycloneDDS profile | 368 | 45.4% | 88.9% | 34.2% |
+Not the frame names, which was the obvious guess and is wrong: the sensor kit
+URDF publishes links named `velodyne` and `seyond`, matching `frame_id` in
+`VLP32.param.yaml` and `seyond.param.yaml`. The calibration YAML's `vlp32c` and
+`falcon` are entry names the xacro maps onto those links, not frames.
 
-Concatenation attempts rise (277 to 368) but Velodyne presence does not: 45.4%,
-which is where the vehicle sat (47.2%). So a bare recorder gets 6.16 Hz while
-the running stack gets 2.23 Hz of Velodyne into windows, and per-stage counting
-shows preprocessing costs only ~12% of that (267 raw to 235 preprocessed).
+What to probe next, in order:
 
-The remaining loss is between "one subscriber on an otherwise idle machine" and
-"this topic inside the running stack". Contention, subscriber queue depth, or
-the executor. Not yet isolated.
-
-### Methodology warning, learned the hard way
-
-Every measurement in this document before 2026-08-28 was taken with
-`RMW_IMPLEMENTATION` unset, which silently replaced the vehicle's CycloneDDS
-configuration with default FastDDS. On this topic that is a 2.2x difference in
-delivered messages. `scripts/env.sh` sets both `RMW_IMPLEMENTATION` and
-`CYCLONEDDS_URI` for exactly this reason; a test harness that unsets them is not
-testing the system.
-
-Combined with the `ros2 topic hz` trap above: **two separate instrument errors,
-both of which made the pipeline look worse than it is, and both of which were
-invisible in the output.** Check the transport and the observer before believing
-a rate.
+1. **Whether the failure is time-bounded.** `is_motion_compensated: true` makes
+   the lookup time-dependent, so a cloud stamped outside the TF buffer's range
+   fails while a static lookup would succeed. `VLP32.param.yaml` runs with
+   `Use Sensor Time: 0`, so the Velodyne is stamped on host arrival while the
+   Seyond is not, which is a mechanism for exactly this asymmetry.
+2. **Whether `tf_static` is complete when the failures happen**, and whether
+   they cluster at startup or continue throughout.
+3. **`/tf` publishers for the same frame.** CLAUDE.md already records the Xsens
+   driver broadcasting `world -> imu_link` while the URDF publishes
+   `sensor_kit_base_link -> imu_link`; a second parent for a LiDAR frame would
+   produce intermittent lookup failures of exactly this shape.
 
 ### Still worth doing, independent of the above
 
