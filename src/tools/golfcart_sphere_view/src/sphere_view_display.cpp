@@ -219,6 +219,15 @@ void SphereViewDisplay::load(const rviz_common::Config & config)
   Display::load(config);
 }
 
+void SphereViewDisplay::fixedFrameChanged()
+{
+  // The patches themselves do not change -- they are expressed in the centre
+  // frame, and the relationship between a camera and the frame it is bolted to
+  // is not affected by which frame RViz happens to be drawing in. Only where
+  // the sphere sits changes, and update() handles that.
+  updateCentreTransform();
+}
+
 void SphereViewDisplay::onEnable()
 {
   scene_node_->setVisible(true);
@@ -310,11 +319,18 @@ void SphereViewDisplay::refreshStatus()
 
 void SphereViewDisplay::update(float /*wall_dt*/, float /*ros_dt*/)
 {
+  // Every frame, not only when something was rebuilt. The sphere is built once
+  // in the centre frame's own coordinates and then placed by this one node, so
+  // following the centre frame is entirely a matter of keeping the node's pose
+  // current: whenever the vehicle moves under a fixed frame of map or odom, and
+  // whenever the user picks a different fixed frame in Global Options. Doing it
+  // only on rebuild left the sphere behind at a stale pose.
+  if (!updateCentreTransform()) {
+    return;
+  }
+
   const bool rebuild = geometry_dirty_;
   if (rebuild) {
-    if (!updateCentreTransform()) {
-      return;
-    }
     SphereResolution resolution;
     resolution.latitude_step_deg = resolution_property_->getFloat();
     resolution.longitude_step_deg = resolution_property_->getFloat();

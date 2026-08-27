@@ -42,6 +42,11 @@ namespace golfcart_sphere_view
 
 /// Paints several cameras onto one sphere centred on the vehicle.
 ///
+/// The sphere is built once, in the coordinates of one chosen frame -- normally
+/// base_link -- and then placed in the scene by a single node. Which frame RViz
+/// draws in is therefore independent of it: change the fixed frame and the
+/// sphere is transformed into the new one, unchanged in shape.
+///
 /// Each camera is a child property with its own topics, alpha and enable, so a
 /// seam can be attributed by switching one side off. Patch geometry is rebuilt
 /// only when the calibration, the transform or a sphere property changes; a
@@ -56,6 +61,7 @@ public:
 
   void onInitialize() override;
   void reset() override;
+  void fixedFrameChanged() override;
   void update(float wall_dt, float ros_dt) override;
 
   /// Create the layers a saved config names before letting RViz fill them in.

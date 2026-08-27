@@ -30,22 +30,24 @@
 # rolled ninety degrees, which renders as a tilted picture on the sphere.
 # CameraInfo names camera_link, and CameraInfo is right.
 #
-# Centred on sensor_kit_base_link rather than base_link. This is a bus: base_link
-# is at the rear axle and the cameras are 6.2 m forward of it, so a sphere
-# centred there sits 6.6 m from the front camera and 6.2 m from the left one,
-# with the front surface much nearer the cameras than the rear surface is. The
-# sensor kit origin is 1.4 to 2.2 m from all three, which at least makes the
-# geometry symmetric.
+# Centred on base_link, which is the frame to reach for unless there is a
+# reason not to. Any frame works -- the sphere is built in the centre frame's
+# own coordinates and transformed into whatever RViz is drawing in -- and on
+# this bus sensor_kit_base_link is worth trying, because base_link is at the
+# rear axle and the cameras are 6.2 m forward of it. Centring on the sensor kit
+# puts all three within 1.4 to 2.2 m of the middle and closes the seams a
+# little: front against left at 5 m goes from 13.8 to 11.5 degrees.
 #
-# It does not fix the seams, and nothing here can. The cameras are 2.08 m apart,
-# and one sphere has one radius, so only features at that radius line up across
-# a seam. Measured for this rig, front against left at radius 12:
+# Neither choice fixes the seams and nothing here can. The cameras are 2.08 m
+# apart, one sphere has one radius, and only features at that radius line up
+# across a seam. Measured for this rig at radius 12:
 #
-#   feature at   5 m -> 11.5 deg apart      feature at 12 m -> 0.0 deg
-#   feature at  20 m ->  3.5 deg apart      feature at 40 m -> 6.1 deg
+#   feature at   5 m -> 13.8 deg apart      feature at 12 m -> 0.0 deg
+#   feature at  20 m ->  4.1 deg apart      feature at 40 m -> 6.8 deg
 #
-# The zero at 12 m is the useful part: it is what the numbers must do if the
-# transforms compose correctly, and they do.
+# The zero at 12 m is the useful part: two cameras painting a feature that sits
+# exactly on the sphere must agree, so that number is what the arithmetic has to
+# produce if the transforms compose correctly. It does.
 #
 # Playback needs applanix_msgs built, or the GNSS topics fail to deserialise and
 # take the player down with them.
@@ -71,7 +73,7 @@ Visualization Manager:
     - Class: golfcart_sphere_view/SphereView
       Enabled: true
       Name: SphereView
-      Centre Frame: sensor_kit_base_link
+      Centre Frame: base_link
       Radius: 12
       Grid Step: 1
       camera_left:

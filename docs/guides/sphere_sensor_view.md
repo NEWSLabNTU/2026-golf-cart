@@ -29,6 +29,26 @@ no ground truth, no measurement, just the observation that they should agree.
 
 ---
 
+## Which frame the sphere sits on
+
+`Centre Frame` picks the frame the sphere is built around, and `base_link` is
+the answer unless there is a reason otherwise. The sphere is built once in that
+frame's own coordinates, so the choice is about geometry and not about
+rendering: it decides where the middle of the sphere is relative to the sensors,
+which is what the radius is then measured from.
+
+RViz's own `Fixed Frame`, under Global Options, is a separate and independent
+choice. The sphere is transformed into whatever frame RViz is drawing in, so
+switching between `base_link`, `odom` and `map` changes the viewpoint and
+nothing else. With a world-fixed frame the sphere travels with the vehicle, as
+it should.
+
+Worth knowing when the sensors sit far from `base_link`: on a long vehicle,
+`base_link` may be metres behind the cameras, which makes the sphere lopsided
+around them -- much closer to the front surface than the rear. Centring on the
+sensor kit frame instead makes it symmetric. It does not close the seams, for
+the reason in step 3, but it stops the geometry being needlessly uneven.
+
 ## Before it will show anything
 
 - The stack must be running, or a bag playing. This is a passive viewer.
