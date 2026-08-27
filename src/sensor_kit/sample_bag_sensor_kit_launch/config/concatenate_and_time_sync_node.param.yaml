@@ -22,4 +22,9 @@
     matching_strategy:
       type: advanced
       lidar_timestamp_offsets: [0.0, 0.0, 0.0]
-      lidar_timestamp_noise_window: [0.01, 0.01, 0.01]
+      # Widened from 0.01 on 2026-08-27. At 0.01 the observed matching window was
+      # 20 ms, and the VLS128 top LiDAR (~191k points, the slowest to preprocess)
+      # made it into only 14% of windows on CPU and 15% on CUDA. That ceiling sat
+      # above both backends and hid what they actually cost.
+      # 0.1 matches golfcart_sensor_kit_launch.
+      lidar_timestamp_noise_window: [0.1, 0.1, 0.1]
