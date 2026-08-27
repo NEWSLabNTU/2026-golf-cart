@@ -14,9 +14,13 @@ bag. Only the sensor kit had to be written, because `sample_sensor_kit` declares
 four LiDARs and the bag carries three.
 
 Adapted from `cuda_ndt_matcher/tests/rosbag_replay/rosbag_sensor_kit_launch`,
-with two changes: it carries the `pointcloud_backend` (`cpu` | `cuda`) switch,
-and its calibration lives in this repo's existing `individual_params` rather
-than in a second package of that name.
+with its calibration moved into this repo's existing `individual_params` rather
+than a second package of that name.
+
+**CPU only.** This kit does not own its preprocessing: crop box, distortion
+correction and ring outlier filtering all come from the stock
+`common_sensor_launch` nebula container. `pointcloud_backend:=cuda` lives in
+`golfcart_sensor_kit_launch`, which does own that stage.
 
 
 Custom sensor kit for the Autoware [rosbag replay simulation tutorial](https://autowarefoundation.github.io/autoware-documentation/main/demos/rosbag-replay-simulation/).

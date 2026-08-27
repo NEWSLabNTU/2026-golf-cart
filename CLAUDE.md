@@ -447,13 +447,31 @@ play_launch, whose parser does not scope includes the way `ros2 launch` does, an
 would then silently stop working under stock `ros2 launch`; the environment
 survives both. Nothing needs `POINTCLOUD_BACKEND` set in a shell.
 
-It picks which concatenator loads into `pointcloud_container`: the CPU component,
-or `CudaPointCloudConcatenateDataSynchronizerComponent` from the
-already-installed `autoware_cuda_pointcloud_preprocessor`. Same parameter file,
-node name and topics either way. Defaults to `cpu` and should stay there unless a
-measurement says otherwise: concatenation costs 12.5 ms against a 510 ms pipeline
-latency, so the GPU is not where the delay is. See
-[docs/research/sensing/lidar-pipeline-starvation.md](docs/research/sensing/lidar-pipeline-starvation.md).
+It picks where the **whole preprocessing and concatenation stage** runs, not just
+the concatenator:
+
+| | `cpu` (default) | `cuda` |
+|---|---|---|
+| per-LiDAR | crop box, distortion corrector, ring outlier filter (3 nodes) | `CudaPointcloudPreprocessorNode` (1 node) |
+| concatenation | `PointCloudConcatenateDataSynchronizerComponent` | `CudaPointCloudConcatenateDataSynchronizerComponent` |
+
+**The drivers stay on the CPU in both modes.** Nebula has no CUDA decoder for
+Velodyne, only an unmerged Hesai-only PR, and the Seyond driver is a vendor CPU
+binary. That costs little: the host-to-device upload happens at the
+preprocessor's input, which is what Autoware's own `pipeline_mode:=cuda` does.
+
+Halves cannot be mixed, and the launch refuses to try. The CUDA concatenator
+subscribes over `cuda_blackboard` and needs the `pointcloud_before_sync/cuda`
+negotiation topic that only the CUDA preprocessor publishes.
+
+**Only the Velodyne is preprocessed.** The Seyond publishes `PointXYZIRC` with no
+per-point time field, so it cannot be deskewed by CPU or GPU; it reaches the
+concatenator raw. Fixing that means changing the driver to emit
+`PointXYZIRCAEDT`.
+
+Full reasoning and the measurements behind it:
+[docs/research/sensing/autoware-cuda-pointcloud-chain.md](docs/research/sensing/autoware-cuda-pointcloud-chain.md)
+and [docs/research/sensing/lidar-pipeline-starvation.md](docs/research/sensing/lidar-pipeline-starvation.md).
 
 `tx_enabled` is the same story one branch over: `tier4_vehicle_launch/vehicle.launch.xml`
 forwards only `vehicle_id`, `raw_vehicle_cmd_converter_param_path` and

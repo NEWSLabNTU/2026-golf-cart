@@ -5,7 +5,6 @@
   <arg name="vehicle_id" default="$(env VEHICLE_ID default)"/>
   <arg name="vehicle_mirror_param_file"/>
   <arg name="pointcloud_container_name" default="pointcloud_container"/>
-  <arg name="pointcloud_backend" default="$(env POINTCLOUD_BACKEND cpu)" description="cpu | cuda"/>
 
   <group>
     <push-ros-namespace namespace="lidar"/>
@@ -67,7 +66,6 @@
       <arg name="use_multithread" value="true"/>
       <arg name="use_concat_filter" value="$(var use_concat_filter)"/>
       <arg name="pointcloud_container_name" value="$(var pointcloud_container_name)"/>
-      <arg name="pointcloud_backend" value="$(var pointcloud_backend)"/>
     </include>
   </group>
 </launch>

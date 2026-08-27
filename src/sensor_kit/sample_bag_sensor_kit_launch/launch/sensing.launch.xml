@@ -2,7 +2,6 @@
   <arg name="launch_driver" default="true" description="do launch driver"/>
   <arg name="vehicle_mirror_param_file" description="path to the file of vehicle mirror position yaml"/>
   <arg name="pointcloud_container_name" default="pointcloud_container"/>
-  <arg name="pointcloud_backend" default="$(env POINTCLOUD_BACKEND cpu)" description="cpu | cuda"/>
   <arg name="vehicle_id" default="$(env VEHICLE_ID default)"/>
 
   <group>
@@ -11,7 +10,6 @@
       <arg name="launch_driver" value="$(var launch_driver)"/>
       <arg name="vehicle_mirror_param_file" value="$(var vehicle_mirror_param_file)"/>
       <arg name="pointcloud_container_name" value="$(var pointcloud_container_name)"/>
-      <arg name="pointcloud_backend" value="$(var pointcloud_backend)"/>
     </include>
 
     <!-- IMU Driver (from sample_sensor_kit_launch) -->

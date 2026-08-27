@@ -24,31 +24,21 @@ from launch.actions import OpaqueFunction
 from launch.actions import SetLaunchConfiguration
 from launch.conditions import IfCondition
 from launch.conditions import UnlessCondition
-from launch.substitutions import EnvironmentVariable
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import LoadComposableNodes
 from launch_ros.descriptions import ComposableNode
 from launch_ros.parameter_descriptions import ParameterFile
 
 
-# Same table, and for the same reason, as golfcart_sensor_kit_launch's copy:
-# `pointcloud_backend` chooses between Autoware's CPU concatenator and the CUDA
-# one from autoware_cuda_pointcloud_preprocessor. Both are registered composables
-# taking the same parameter file, so the swap is a package/plugin pair.
-#
-# Kept in sync by hand rather than shared, because a sensor kit is meant to be
-# self-contained: this one is the sample-bag kit and must build with no
-# dependency on the golf cart kit.
-CONCAT_IMPL = {
-    "cpu": (
-        "autoware_pointcloud_preprocessor",
-        "autoware::pointcloud_preprocessor::PointCloudConcatenateDataSynchronizerComponent",
-    ),
-    "cuda": (
-        "autoware_cuda_pointcloud_preprocessor",
-        "autoware::cuda_pointcloud_preprocessor::CudaPointCloudConcatenateDataSynchronizerComponent",
-    ),
-}
+# CPU only, deliberately. Unlike golfcart_sensor_kit_launch, this kit does not
+# own its preprocessing: crop box, distortion correction and ring outlier
+# filtering come from the stock `common_sensor_launch` nebula container, which
+# already publishes `pointcloud_before_sync` and hardcodes
+# `use_intra_process=true`. A CUDA concatenator needs a CUDA preprocessor
+# upstream to produce the cuda_blackboard negotiation topic, so offering a
+# `pointcloud_backend` here would be a switch that loads and then receives null
+# device pointers. This kit exists to replay the Autoware sample bag, not to
+# benchmark GPU preprocessing; the golf cart kit is where that lives.
 
 
 def launch_setup(context, *args, **kwargs):
@@ -60,17 +50,10 @@ def launch_setup(context, *args, **kwargs):
         allow_substs=True,
     )
 
-    backend = LaunchConfiguration("pointcloud_backend").perform(context)
-    if backend not in CONCAT_IMPL:
-        raise RuntimeError(
-            f"pointcloud_backend must be one of {sorted(CONCAT_IMPL)}, got {backend!r}."
-        )
-    concat_package, concat_plugin = CONCAT_IMPL[backend]
-
     # set concat filter as a component
     concat_component = ComposableNode(
-        package=concat_package,
-        plugin=concat_plugin,
+        package="autoware_pointcloud_preprocessor",
+        plugin="autoware::pointcloud_preprocessor::PointCloudConcatenateDataSynchronizerComponent",
         name="concatenate_data",
         remappings=[
             ("~/input/twist", "/sensing/vehicle_velocity_converter/twist_with_covariance"),
@@ -78,22 +61,7 @@ def launch_setup(context, *args, **kwargs):
             ("output_info", "concatenated/pointcloud_info"),
         ],
         parameters=[concatenate_and_time_sync_node_param],
-        # The CUDA component publishes its cuda_blackboard handles transient_local,
-        # and rclcpp refuses that combination outright:
-        #
-        #   Component constructor threw an exception:
-        #   intraprocess communication allowed only with volatile durability
-        #
-        # It is a hard load failure, not a slowdown, so the backend decides this
-        # rather than the caller. The CPU component keeps intra-process, which is
-        # where its zero-copy inside the container comes from.
-        extra_arguments=[
-            {
-                "use_intra_process_comms": (
-                    "false" if backend == "cuda" else LaunchConfiguration("use_intra_process")
-                )
-            }
-        ],
+        extra_arguments=[{"use_intra_process_comms": LaunchConfiguration("use_intra_process")}],
     )
 
     # load concat or passthrough filter
@@ -119,11 +87,6 @@ def generate_launch_description():
     add_launch_arg("use_intra_process", "False")
     add_launch_arg("use_concat_filter", "true")
     add_launch_arg("pointcloud_container_name", "pointcloud_container")
-    # cpu | cuda; see the note on CONCAT_IMPL above.
-    add_launch_arg(
-        "pointcloud_backend",
-        EnvironmentVariable("POINTCLOUD_BACKEND", default_value="cpu"),
-    )
     add_launch_arg(
         "concatenate_and_time_sync_node_param_path",
         os.path.join(
