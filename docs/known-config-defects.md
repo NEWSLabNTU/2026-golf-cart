@@ -21,7 +21,7 @@ one-line guard is `git submodule status --recursive | grep '^+'`.
 
 ---
 
-## 1. RViz asks for an MRM overlay plugin that does not exist
+## 1. RViz asks for an MRM overlay plugin that does not exist — FIXED 2026-08-28
 
 ```
 [ERROR] [rviz2]: PluginlibFactory: The plugin for class
@@ -41,9 +41,14 @@ removed or renamed upstream.
 Relevant to phase 4-O directly. Part of the argument for building MRM
 visualization into the web monitor was that RViz already covers it. It does not.
 
-Fix: either drop the display from `golfcart.rviz`, or find what replaced it. The
-install does ship `autoware_overlay_rviz_plugin/SignalDisplay` and
+**Fixed** by removing the display from `golfcart.rviz`. It was `Enabled: false`,
+so it never rendered and nothing is lost; all it did was fail loudly on every
+startup. If an MRM overlay is wanted later the install does ship
+`autoware_overlay_rviz_plugin/SignalDisplay` and
 `autoware_string_stamped_rviz_plugin/StringStampedOverlayDisplay`.
+
+The conclusion this defect supported still stands: **RViz has never shown MRM
+state on this machine**, so phase 4-O cannot assume that coverage exists.
 
 ---
 
@@ -70,7 +75,7 @@ play_launch issue #0023), so it has never worked in either sense.
 
 ---
 
-## 3. Two nodes claim `/sensing/gnss/ublox`
+## 3. Two nodes claim `/sensing/gnss/ublox` — FIXED 2026-08-28
 
 ```
 [ERROR] duplicated_node_checker: Error: Duplicated nodes detected[/sensing/gnss/ublox]
@@ -92,6 +97,16 @@ hosts start the node and collide on the name.
 
 Two distinct bugs in one symptom: the Advantech should not start it, and the
 name collision would be a real hazard if both hosts ever did have a receiver.
+
+**Fixed** by adding `gnss_receiver:=none`, defaulted from `GNSS_RECEIVER` in
+`config/sensors.conf` (the same channel as `CAMERA_MODEL` and `IMU_SOURCE`,
+since nothing forwards an unknown launch argument down the sensing chain).
+Verified by resolving the launch: `ublox` gives 154 nodes with one
+`ublox_gps_node`, `none` gives 153 with zero.
+
+**Not yet applied on the vehicle.** The default is still `ublox` because
+`config/sensors.conf` is shared between hosts; someone has to set
+`GNSS_RECEIVER=none` on the Advantech, or gate it on `config/host`.
 
 ---
 
@@ -138,7 +153,7 @@ strings `1` and `0`.
 
 ---
 
-## 7. The web monitor still lists `/diagnostics_agg`
+## 7. The web monitor still lists `/diagnostics_agg` — FIXED 2026-08-28
 
 `src/system/golfcart_system_monitor/config/monitor_topics.yaml:57`
 
@@ -154,7 +169,7 @@ dead entry in the monitor's own table.
 
 ---
 
-## 8. The sensor kit's analyzer config carries a comment that is wrong
+## 8. The sensor kit's analyzer config carries a comment that is wrong — FIXED 2026-08-28
 
 `src/sensor_kit/golfcart_sensor_kit_launch/golfcart_sensor_kit_launch/config/diagnostic_aggregator/sensor_kit.param.yaml:3`
 
@@ -163,8 +178,10 @@ dead entry in the monitor's own table.
 `diagnostic_aggregator` **is** installed, at
 `/opt/ros/humble/share/diagnostic_aggregator`, with working `GenericAnalyzer`
 and `AnalyzerGroup` plugins. The file is unused here because Autoware chose a
-different aggregator, not because the package is missing. Fixing the comment
-needs the submodule ceremony, so it has been deferred twice.
+different aggregator, not because the package is missing.
+
+**Fixed**: the comment now says that, and says what the old one claimed, because
+the distinction decides whether the config could be revived.
 
 ---
 
@@ -209,11 +226,19 @@ Recorded so nobody re-investigates them:
 
 ## Suggested order
 
-1. **The five `system_monitor` parameters** (#4) and the `/diagnostics_agg` row
-   (#7). Cheapest, and together they remove most of the permanent red.
-2. **The RViz MRM plugin** (#1), because phase 4-O has been reasoning about MRM
-   visualization on the assumption that it works.
-3. **The u-blox split** (#3), which is a launch-config change on both hosts.
-4. `topic_state_monitor_initialpose3d` (#2), `collision_detector` (#5) and the
+**Done 2026-08-28**: #1 (RViz MRM plugin), #3 (u-blox, code landed, still needs
+`GNSS_RECEIVER=none` set on the Advantech), #7 (`/diagnostics_agg` row), #8
+(analyzer comment).
+
+Remaining, in order:
+
+1. **The five `system_monitor` parameters** (#4). The biggest remaining source
+   of permanent red, and the most involved: the param paths are hardcoded in
+   `autoware_launch/launch/components/tier4_system_component.launch.xml`, an
+   installed file, so overriding them needs a local copy of that launch file the
+   way `sample_bag_sensor_kit_launch` copies the nebula container. The device
+   list for `net_monitor` is also machine-specific, so this wants verifying on
+   the vehicle rather than guessing here.
+2. `topic_state_monitor_initialpose3d` (#2), `collision_detector` (#5) and the
    AD API door (#6) need someone to decide what they should say, not just what
    number to put in them.
