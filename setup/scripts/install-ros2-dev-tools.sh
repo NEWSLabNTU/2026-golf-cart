@@ -23,6 +23,16 @@ sudo apt-get install -y \
     python3-pytest-repeat \
     python3-pytest-rerunfailures
 
+# Build-time dependencies of Rust crates in this workspace that compile C from
+# source. nasm is needed by turbojpeg-sys, which golfcart_aruco_detector pulls
+# in: without it libjpeg-turbo's SIMD paths cannot be assembled and the build
+# stops at
+#
+#     error: failed to run custom build command for `turbojpeg-sys v1.2.0`
+#
+# which names the crate rather than the missing assembler.
+sudo apt-get install -y nasm
+
 # Initialize rosdep if not already done
 if [[ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]]; then
     echo "Initializing rosdep..."

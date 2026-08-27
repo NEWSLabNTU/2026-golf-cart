@@ -1,39 +1,55 @@
 [submodule "src/vehicle/external/autoware_manual_control"]
 	path = src/vehicle/external/autoware_manual_control
 	url = https://github.com/NEWSLabNTU/autoware_manual_control.git
+	branch = main
 [submodule "src/gnss_locator"]
 	path = src/sensor_component/external/gnss_locator
 	url = https://github.com/NEWSLabNTU/gnss_locator.git
+	branch = main
 [submodule "src/sensor_component/external/ros-nmea-reader"]
 	path = src/sensor_component/external/ros-nmea-reader
 	url = https://github.com/NEWSLabNTU/ros-nmea-reader.git
+	branch = 2026-golf
 [submodule "src/param/autoware_individual_params"]
 	path = src/param/autoware_individual_params
 	url = https://github.com/NEWSLabNTU/autoware_individual_params.git
+	branch = main
 [submodule "src/calibration/CalibrationTools"]
 	path = src/calibration/CalibrationTools
 	url = https://github.com/NEWSLabNTU/CalibrationTools.git
+	branch = 2025.02
 [submodule "src/localization/cuda_ndt_matcher"]
 	path = src/localization/cuda_ndt_matcher
 	url = https://github.com/NEWSLabNTU/cuda_ndt_matcher.git
+	branch = main
 [submodule "src/sensor_kit/golfcart_sensor_kit_launch"]
 	path = src/sensor_kit/golfcart_sensor_kit_launch
 	url = https://github.com/NEWSLabNTU/golfcart_sensor_kit_launch.git
+	branch = main
 [submodule "src/vehicle/golfcart_vehicle_launch"]
 	path = src/vehicle/golfcart_vehicle_launch
 	url = https://github.com/NEWSLabNTU/golfcart_vehicle_launch.git
+	branch = 2026-golf
 [submodule "src/system/golfcart_runtime"]
 	path = src/system/golfcart_runtime
 	url = https://github.com/NEWSLabNTU/golfcart_runtime.git
+	branch = 2026-golfcart
 [submodule "src/system/golfcart_system_monitor"]
 	path = src/system/golfcart_system_monitor
 	url = https://github.com/NEWSLabNTU/golfcart_system_monitor.git
+	branch = 2026-golf
 [submodule "src/sensor_component/external/seyond_ros_driver"]
 	path = src/sensor_component/external/seyond_ros_driver
 	url = https://github.com/NEWSLabNTU/seyond_ros_driver.git
+	branch = golfcart
 [submodule "src/sensor_component/external/xsens_mti_can_ros2_driver"]
 	path = src/sensor_component/external/xsens_mti_can_ros2_driver
 	url = https://github.com/NEWSLabNTU/xsens_mti_can_ros2_driver.git
+	branch = main
+# No branch recorded for zed-ros2-wrapper on purpose. It is pinned to the v5.4.1
+# tag because that is the ZED SDK installed on the vehicles, and recording a
+# branch would invite `git submodule update --remote` to walk it off that tag and
+# onto a release the SDK does not match.
 [submodule "src/sensor_component/external/zed-ros2-wrapper"]
 	path = src/sensor_component/external/zed-ros2-wrapper
 	url = https://github.com/stereolabs/zed-ros2-wrapper.git
