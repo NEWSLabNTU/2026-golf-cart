@@ -45,7 +45,117 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="report the transform without writing anything",
     )
+    parser.add_argument(
+        "--rviz",
+        action="store_true",
+        help=(
+            "publish the map cloud, board points, and per-cluster rejection "
+            "markers on ROS topics and hold the process open for RViz "
+            "inspection (rviz/anchor_debug.rviz); Ctrl+C to exit. Also works "
+            "when detection fails, which is the case it's for."
+        ),
+    )
+    parser.add_argument(
+        "--rviz-frame",
+        default="map_debug",
+        help=(
+            "frame_id for the topics --rviz publishes (default: map_debug); "
+            "set RViz's Fixed Frame to match"
+        ),
+    )
     return parser
+
+
+def _print_rejections(result, stream=None):
+    """Per-cluster detail for a failed or ambiguous attempt.
+
+    ``anchor_cloud``'s exception message is one flattened line so it stays
+    ROS-free and testable; a real triage needs each rejected cluster against
+    its own centroid, not a paragraph of concatenated reasons.
+
+    ``stream`` defaults to ``sys.stderr`` resolved at call time, not import
+    time: a default argument is evaluated once when the module loads, which
+    would bind the real stderr object before a test's ``capsys`` fixture ever
+    gets to swap it in.
+    """
+    stream = stream if stream is not None else sys.stderr
+    print(
+        f"  {result.n_after_gates} point(s) passed the intensity/range/height "
+        f"gates, {result.n_clusters} cluster(s) formed, "
+        f"{len(result.candidates)} survived every gate",
+        file=stream,
+    )
+    if result.candidates:
+        print("  surviving candidates:", file=stream)
+        for index, candidate in enumerate(result.candidates, start=1):
+            c = candidate.centre
+            print(
+                f"    {index}. range={candidate.range_m:.2f} m "
+                f"n={candidate.n_points} "
+                f"extents={candidate.extents[0]:.2f}x{candidate.extents[1]:.2f} "
+                f"centre=({c[0]:.2f}, {c[1]:.2f}, {c[2]:.2f})",
+                file=stream,
+            )
+    if not result.rejections:
+        return
+    print("  rejected clusters:", file=stream)
+    for index, rejection in enumerate(result.rejections, start=1):
+        c = rejection.centroid
+        print(
+            f"    {index:3d}. {rejection.reason:16s} {rejection.detail:16s} "
+            f"n={rejection.n_points:4d}  "
+            f"centroid=({c[0]:7.2f}, {c[1]:7.2f}, {c[2]:7.2f})",
+            file=stream,
+        )
+
+
+def _run_rviz_debug(levelled, intensity, result, frame_id: str):
+    """Publish debug topics and hold the process open for RViz inspection.
+
+    Reuses debug_viz.py so a map-cloud debug run draws identically to the live
+    node's ~/debug/* topics: same colours, same DELETEALL-then-redraw markers,
+    same per-cluster rejection text. Node name and topics are distinct from the
+    runtime node's ("board_pose_initializer") so this can, in principle, run
+    alongside it without clashing.
+    """
+    import rclpy
+    from rclpy.node import Node
+    from rclpy.qos import QoSDurabilityPolicy, QoSHistoryPolicy, QoSProfile
+    from sensor_msgs.msg import PointCloud2
+    from visualization_msgs.msg import MarkerArray
+
+    from .debug_viz import detection_points_cloud, rejection_marker_array, xyzi_cloud
+
+    rclpy.init(args=[])
+    node = Node("anchor_map_to_board")
+    try:
+        latched = QoSProfile(
+            depth=1,
+            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+            history=QoSHistoryPolicy.KEEP_LAST,
+        )
+        map_pub = node.create_publisher(PointCloud2, "~/debug/map_cloud", latched)
+        points_pub = node.create_publisher(PointCloud2, "~/debug/board_points", latched)
+        rejected_pub = node.create_publisher(MarkerArray, "~/debug/rejected", latched)
+
+        stamp = node.get_clock().now().to_msg()
+        map_pub.publish(xyzi_cloud(levelled, intensity, frame_id, stamp))
+        points_pub.publish(detection_points_cloud(result, frame_id, stamp))
+        rejected_pub.publish(rejection_marker_array(result, frame_id, stamp))
+
+        print(
+            f"publishing debug topics under /anchor_map_to_board on frame "
+            f"'{frame_id}' — open RViz with rviz/anchor_debug.rviz (or point "
+            "existing displays at the /anchor_map_to_board/debug/* topics and "
+            f"set Fixed Frame to '{frame_id}'). Ctrl+C here when done.",
+            file=sys.stderr,
+        )
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
 
 
 def main(argv=None) -> int:
@@ -67,10 +177,24 @@ def main(argv=None) -> int:
         )
         return 2
 
+    captured = {}
+
+    def _capture(levelled, intensity, detect_result, viewpoint):
+        captured["levelled"] = levelled
+        captured["intensity"] = intensity
+        captured["result"] = detect_result
+
     try:
-        result = anchor_cloud(cloud, params, detector_params)
+        result = anchor_cloud(cloud, params, detector_params, on_result=_capture)
     except ValueError as error:
         print(f"error: {error}", file=sys.stderr)
+        if "result" in captured:
+            _print_rejections(captured["result"])
+        if args.rviz and captured:
+            _run_rviz_debug(
+                captured["levelled"], captured["intensity"], captured["result"],
+                args.rviz_frame,
+            )
         return 1
 
     detection = result.detection
@@ -103,6 +227,11 @@ def main(argv=None) -> int:
 
     if args.dry_run:
         print("dry run: nothing written")
+        if args.rviz:
+            _run_rviz_debug(
+                captured["levelled"], captured["intensity"], captured["result"],
+                args.rviz_frame,
+            )
         return 0
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -122,6 +251,11 @@ def main(argv=None) -> int:
         "next: merge board_polygon.osm into the route's lanelet2_map.osm, then "
         "tile the cloud with autoware_pointcloud_divider"
     )
+    if args.rviz:
+        _run_rviz_debug(
+            captured["levelled"], captured["intensity"], captured["result"],
+            args.rviz_frame,
+        )
     return 0
 
 

@@ -17,6 +17,7 @@ from golfcart_board_initializer.anchor import (
     board_polygon_osm,
     fit_floor,
 )
+from golfcart_board_initializer.detector import Status
 from golfcart_board_initializer.geometry import make_transform
 from golfcart_board_initializer.pointcloud_io import PointCloud
 from golfcart_board_initializer.simulation import scenes, vlp32_sim
@@ -210,6 +211,50 @@ def test_distractors_alone_yield_no_anchor():
 
     with pytest.raises(ValueError, match="no board found"):
         anchor_cloud(cloud)
+
+
+def test_on_result_still_fires_when_detection_fails():
+    """The CLI's --rviz debug hook needs the rejected clusters, not just the
+
+    exception's flattened string — a raise must not skip the callback.
+    """
+    scene = scenes.distractor_only_scene()
+    scan = vlp32_sim.simulate(scene, vlp32_sim.SimParams(seed=1))
+    cloud = PointCloud(
+        points=scan.points + np.array([0.0, 0.0, scenes.SENSOR_HEIGHT]),
+        intensity=scan.intensity,
+    )
+
+    captured = {}
+
+    def on_result(levelled, intensity, result, viewpoint):
+        captured["levelled"] = levelled
+        captured["intensity"] = intensity
+        captured["result"] = result
+
+    with pytest.raises(ValueError, match="no board found"):
+        anchor_cloud(cloud, on_result=on_result)
+
+    assert captured, "on_result must run before the failure is raised"
+    assert captured["result"].status is Status.NO_CANDIDATE
+    assert captured["result"].n_clusters > 0
+    assert captured["result"].rejections
+    assert len(captured["levelled"]) == len(captured["intensity"])
+
+
+def test_on_result_fires_on_success_too():
+    cloud = build_map_cloud()
+    captured = {}
+
+    result = anchor_cloud(
+        cloud,
+        on_result=lambda levelled, intensity, detect_result, viewpoint: captured.update(
+            result=detect_result
+        ),
+    )
+
+    assert captured["result"].status is Status.OK
+    assert captured["result"].detection is result.detection
 
 
 def test_floor_fit_recovers_a_known_plane():

@@ -26,7 +26,7 @@ ROS-free. See docs/design/indoor_pcd_mapping_reflector_anchor.md §6.4.
 """
 
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple
 
 import numpy as np
 
@@ -173,6 +173,7 @@ def anchor_cloud(
     cloud: PointCloud,
     params: Optional[AnchorParams] = None,
     detector_params: Optional[DetectorParams] = None,
+    on_result: Optional[Callable[[np.ndarray, np.ndarray, DetectResult, np.ndarray], None]] = None,
 ) -> AnchorResult:
     """Find the board in a map cloud and compute the transform that anchors it.
 
@@ -180,6 +181,13 @@ def anchor_cloud(
     board-shaped retroreflector survives the gates: the map is supposed to hold
     one board, and picking between two would define the map frame off the wrong
     object — an error with no later symptom except that everything is shifted.
+
+    ``on_result``, if given, is called with ``(levelled_points, intensity,
+    DetectResult, viewpoint)`` right after detection runs and before either
+    outcome is decided — including on failure, when the raised ``ValueError``
+    would otherwise discard every rejected cluster. This is the hook the CLI's
+    ``--rviz`` debug output uses; this module stays free of the ROS/plotting
+    concerns that would otherwise pull in.
     """
     params = params or AnchorParams()
     if cloud.intensity is None:
@@ -208,6 +216,9 @@ def anchor_cloud(
     map_params = detector_params_for_map(detector_params)
     map_params.viewpoint = viewpoint
     result: DetectResult = detect_board(levelled, intensity, np.eye(4), map_params)
+
+    if on_result is not None:
+        on_result(levelled, intensity, result, viewpoint)
 
     if result.status is Status.AMBIGUOUS:
         raise ValueError(

@@ -25,7 +25,9 @@ It must be started while the cart can see its one known board and is stationary.
 | `golfcart_board_initializer/simulation/` | Synthetic VLP-32C scans and scenes. |
 | `golfcart_board_initializer/node.py` | ROS wiring, state machine, diagnostics. |
 | `golfcart_board_initializer/scene_publisher.py` | Publishes synthetic scans for desk testing. |
-| `rviz/board_initializer.rviz` | RViz layout for the debug topics. |
+| `golfcart_board_initializer/debug_viz.py` | Marker/cloud builders shared by the live node and `anchor_cli --rviz`. |
+| `rviz/board_initializer.rviz` | RViz layout for the live/simulated-scene debug topics. |
+| `rviz/anchor_debug.rviz` | RViz layout for `anchor_map_to_board --rviz`. |
 
 `detector.py` and `geometry.py` import no ROS. That is what lets the tests run
 with nothing installed, and it lets the offline map-anchoring step share the code
@@ -190,6 +192,8 @@ ros2 run golfcart_board_initializer anchor_map_to_board \
 | `--name` | `pointcloud_map.pcd` | Output cloud filename. |
 | `--config` | package `board_initializer.param.yaml` | Shared runtime/anchoring board parameters. |
 | `--dry-run` | off | Report result; do not write files. |
+| `--rviz` | off | Publish debug topics and hold the process open for RViz inspection. See below. |
+| `--rviz-frame` | `map_debug` | `frame_id` for the `--rviz` topics; set RViz's Fixed Frame to match. |
 
 `--config` is source of truth. It supplies detector gates, physical board
 dimensions, and `board_pose_in_map`; do not duplicate them as CLI overrides.
@@ -205,6 +209,52 @@ pose the vehicle computes at startup come from identical code — a detector bia
 cancels instead of appearing as a localization error. Two board-shaped
 retroreflectors in the map abort the run rather than picking one, since anchoring
 to the wrong object shifts the whole map with no later symptom.
+
+### Debugging a failed anchor
+
+When the tool cannot find the board, the exception message alone
+(`no board found in the map (N retroreflective clusters: ...)`) is not enough to
+triage — it flattens every rejection into one line. Every run that reaches
+detection, successful or not, now also prints a per-cluster breakdown to
+stderr:
+
+```
+error: no board found in the map (60 retroreflective clusters: ...)
+  1834 point(s) passed the intensity/range/height gates, 60 cluster(s) formed, 0 survived every gate
+  rejected clusters:
+      1. bad_width        0.41 m           n= 812  centroid=(  6.20,   1.05,   1.62)
+      2. not_planar       thickness 0.061 m n=  34  centroid=(  9.80,  -3.40,   1.10)
+      ...
+```
+
+`reason` and `centroid` are enough to tell a wrongly-gated board apart from an
+exit sign or a second reflector — but matching 60 centroids against the cloud
+by hand is still slow. Add `--rviz`:
+
+```bash
+ros2 run golfcart_board_initializer anchor_map_to_board \
+  /path/to/slam_export.ply -o /path/to/map \
+  --config /path/to/board_initializer.param.yaml --dry-run --rviz
+```
+
+This publishes, latched, under `/anchor_map_to_board/debug/`:
+
+- `map_cloud` — the full cloud in the gravity-levelled frame detection actually
+  ran on, coloured by intensity, so the retroreflector band is visible the same
+  way it is in `rviz/board_initializer.rviz`'s "Raw scan" display.
+- `board_points` — the accepted board's points (or every ambiguous candidate's).
+- `rejected` — one text marker per rejected cluster, at its centroid, with
+  reason and point count; a green arrow along the accepted board's normal when
+  one was found; red `AMBIGUOUS candidate N` labels when more than one
+  survived.
+
+Open with `rviz2 -d rviz/anchor_debug.rviz` (Fixed Frame `map_debug`, matching
+the default `--rviz-frame`). The process stays alive after printing until
+Ctrl+C — it does not need a localization stack, a bag, or even a successful
+anchor: this is the intended way to inspect a `NO_CANDIDATE` or `AMBIGUOUS`
+failure, not just a successful run. It reuses the exact marker/cloud-building
+code the live node uses for its own `~/debug/*` topics (`debug_viz.py`), so a
+rejection reads the same whether it happened on a live scan or an offline map.
 
 ### Map contract
 

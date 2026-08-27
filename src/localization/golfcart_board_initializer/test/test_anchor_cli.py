@@ -139,7 +139,13 @@ def test_distractor_only_map_exits_nonzero(tmp_path, capsys):
     write_config(config)
 
     assert main([str(source), "-o", str(tmp_path / "out"), "--config", str(config)]) == 1
-    assert "no board found" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "no board found" in err
+    # The flattened one-line summary in the exception is not enough to triage
+    # which cluster is which; each rejection must be listed against its own
+    # centroid and reason.
+    assert "rejected clusters:" in err
+    assert "cluster(s) formed" in err
 
 
 def test_cli_places_board_at_configured_translation_and_yaw(tmp_path):
