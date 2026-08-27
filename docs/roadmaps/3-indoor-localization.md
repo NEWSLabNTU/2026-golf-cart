@@ -60,8 +60,9 @@ Removing NDT removed the fallback. Three consequences, all covered in the spec:
 See [3-indoor-a-camera-calibration.md](3-indoor-a-camera-calibration.md).
 Hard blockers it must clear:
 
-- **No `*_optical_link` frames exist in the URDF.** PnP returns optical-convention
-  poses; composing through the body-frame links rotates every observation ~90°.
+- ~~**No `*_optical_link` frames exist in the URDF.**~~ Cleared 2026-08-28: each
+  camera has `camera_NAME_optical_link`, and the drivers stamp it, so a pose
+  from PnP now composes through frames of the convention it was computed in.
 - **All three camera calibration files are one file copied three times.** Checked
   2026-08-21: the principal point is 248 px off centre for the declared width,
   which is what a 1440-wide calibration looks like written into a 1920-wide file.

@@ -5,7 +5,8 @@ Design spec: [§2 A](../superpowers/specs/2026-07-27-indoor-artag-localization-d
 
 **Status: Intrinsics present but unusable — one calibration cloned across three
 cameras, at a resolution that does not match the declared one, with a distortion
-model that contradicts its own coefficients. Extrinsics not started. Still
+model that contradicts its own coefficients. Extrinsic *values* not started,
+though the frame convention they will be expressed in is now correct. Still
 blocks sub-phase D.**
 
 Last updated: 2026-08-21
@@ -187,9 +188,17 @@ this sub-phase.
       calibrations that differ only in `camera_name` are what got us here. A
       check that fails when two cameras share intrinsics costs a few lines and
       would have caught this.
-- [ ] **Extrinsic calibration, camera→base_link, per camera** — including the
-      body→optical frame convention, stated explicitly rather than folded into
-      a yaw value.
+- [x] **The body→optical frame convention, stated explicitly.** Done
+      2026-08-28. Each camera now has `camera_NAME_optical_link` as a fixed
+      child of its mounting frame, and the drivers stamp images and
+      `camera_info` with it, which is what REP-103 asks for and what every
+      projection needs. Verified by walking the expanded description to
+      `base_link`: image-down points down and each view direction points out of
+      the side its camera is on.
+- [ ] **Extrinsic calibration, camera→base_link, per camera.** The convention
+      above is fixed; the numbers are not. `sensor_kit_calibration.yaml` still
+      holds round-number guesses with roll and pitch hard-zeroed, so the frames
+      are now correctly shaped and still wrongly placed.
 - [ ] **Resolve the `usb_camera_front` phantom entry** in `sensor_kit_calibration.yaml`.
 - [ ] **Fixed-exposure camera profiles** — current config has
       `auto_exposure: true` and `auto_white_balance: true`, which cause
