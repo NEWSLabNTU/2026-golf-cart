@@ -41,11 +41,14 @@ Two rate observations worth a look. **Investigated 2026-08-26**, see
 The second one is the interesting half and the instinct above was right: the
 fused rate is not explained by the slower input. The concatenator's own
 `debug_mode` diagnostics show the Falcon present in **95.6%** of windows and the
-Velodyne in **47.2%**, against a `timeout_sec: 0.2` window and a measured
-**135 ms** mean arrival skew between the two sensors. A skew that size against a
-200 ms timeout is a coin flip per window, which is the number we measure. Most
-Velodyne scans are published and then discarded by the synchroniser rather than
-never produced.
+Velodyne in **47.2%**. The first explanation offered here was a `timeout_sec:
+0.2` window against a measured 135 ms inter-sensor arrival skew. **That was
+tested on 2026-08-28 and ruled out**: sweeping `timeout_sec` over 0.2/0.3/0.4
+left Velodyne presence flat at 48-56%, while the Falcon and all-inputs-present
+both improved, which is what a genuinely late input looks like. The Velodyne is
+not late, it is absent. The NTU bag carries it at 7.02 Hz against 3.7 Hz of
+concatenation attempts, so roughly half the scans are lost upstream of the
+synchroniser and the cause is still open.
 
 Separately, and not the same fault: RViz shows **no** Velodyne points at all,
 because a RELIABLE subscriber cannot match the driver's BEST_EFFORT publisher

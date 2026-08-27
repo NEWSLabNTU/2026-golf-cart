@@ -15,7 +15,7 @@ same complaint.
 | | Symptom | Cause | Confidence |
 |---|---|---|---|
 | **A** | RViz shows no Velodyne at all | a RELIABLE subscriber cannot match the BEST_EFFORT publisher, so it receives nothing | established |
-| **B** | NDT gets ~4 Hz of cloud, half of it Falcon-only | the concatenator's 200 ms window rejects most Velodyne scans | strong, one measurement short of proof |
+| **B** | NDT gets ~4 Hz of cloud, half of it Falcon-only | Velodyne scans are lost upstream of the concatenator; **not** the matching window, which was tested and ruled out | cause still open |
 
 Fixing A does nothing for B and vice versa.
 
@@ -114,27 +114,29 @@ the Velodyne path and is not general system load.
 
 ### The number that decides it
 
-The Velodyne raw topic was measured at **8.6 Hz** on 2026-08-10 (1290 messages
-in a 150 s bag, roadblocks.md). This run's concatenator saw a Velodyne scan
-**1.95 times a second**. If both hold in the same run, then roughly **three out
-of four Velodyne scans are published and then discarded by the synchroniser**,
-which makes this a matching problem, not a sensor rate problem.
+Settled on 2026-08-28 against the NTU CSIE-1 bag, which carries
+`/sensing/lidar/vlp32/velodyne_points` at a known **7.02 Hz** (3141 messages
+over 447.5 s). The concatenator attempted **3.7 Hz**, so about two Velodyne
+clouds were available per attempt and presence should have been near 100%. It
+was ~50%.
 
-That is the one measurement missing. The two figures come from different runs,
-so confirm them together:
+So roughly half the Velodyne scans are lost **before** the synchroniser gets to
+compare timestamps. Where, is section B's open question.
 
-```bash
-ros2 topic hz /sensing/lidar/vlp32/velodyne_points \
-              /sensing/lidar/falcon/iv_points \
-              /sensing/lidar/concatenated/pointcloud
-```
+**Do not measure this with `ros2 topic hz`.** It is a Python node and drops
+roughly three quarters of 300 KiB messages at 10 Hz. Demonstrated by playing a
+bag with nothing else running: the C++ `ros2 bag record` received 288 of 288
+scans while `ros2 topic hz` reported 2.1 Hz on the same topic in the same run.
+An earlier revision of this document recommended exactly that command, and the
+"~2 Hz" figures it produced were artifacts. Use `ros2 bag record` counts or the
+nodes' own diagnostics.
 
-- Velodyne ≈ 8-10 Hz → matching problem, go to the window analysis below.
-- Velodyne ≈ 2 Hz → sensor or decoder problem, go to the deadline section.
+### The window was the suspect, and it was wrong
 
-Both may be partly true. The two paths are not exclusive.
-
-### Why the window is the suspect
+**This section originally argued that the 200 ms `timeout_sec` was the binding
+constraint, and recommended raising it. That was tested on 2026-08-28 and is
+false.** The reasoning and the refutation are both kept, because the reasoning
+was plausible and someone will otherwise re-derive it.
 
 The matching config:
 
@@ -147,51 +149,65 @@ matching_strategy:
   lidar_timestamp_noise_window: [0.1, 0.1]
 ```
 
-The observed window between the reported minimum and maximum reference
-timestamp is a median of exactly **0.200 s** in both runs, so `timeout_sec` is
-the binding constraint.
+The argument was: the node's own `Latency (s)` field put the Falcon at a median
+509.7 ms and the Velodyne at 374.7 ms, a **135 ms differential** against a
+200 ms budget, with p90 excursions past 500 ms on both sides. A coin flip per
+window, which is what 47% looks like.
 
-Against that 200 ms budget, here is how late each input actually arrives
-relative to its own timestamp, from the node's own `Latency (s)` field:
+**The measurement.** Replayed against the NTU CSIE-1 merged bag, 75 s per run,
+read from the concatenator's own diagnostics:
 
-| | isolated: median / p90 | observable: median / p90 |
-|---|---|---|
-| Falcon | 540.8 / 808.2 ms | 509.7 / 591.3 ms |
-| Velodyne | 244.9 / 456.8 ms | 374.7 / 521.8 ms |
-| **differential** | **296 ms** | **135 ms** |
+| `timeout_sec` | `noise_window` | attempts | **Velodyne present** | Falcon | all present |
+|---|---|---|---|---|---|
+| 0.2 | 0.1 | 277 | **54.2%** | 85.2% | 39.4% |
+| 0.3 | 0.1 | 329 | **48.9%** | 90.0% | 38.9% |
+| 0.4 | 0.1 | 285 | **48.4%** | 94.0% | 42.5% |
+| 0.4 | 0.2 | 248 | **55.6%** | 92.7% | 48.4% |
 
-Two things follow.
+Velodyne presence is flat across a 2x range of the parameter. What *did*
+respond is the Falcon (85 to 94%) and all-inputs-present (39 to 48%), both
+consistent with the timeout helping a genuinely *late* input arrive. The
+Velodyne is not late; it is absent.
 
-**Both LiDARs arrive later than the entire window is wide.** That alone is
-survivable, because the collector opens on the first arrival and measures the
-timeout from there, so a common delay cancels.
+Two corrections fall out of that table.
 
-**What does not cancel is the differential, and it sits right at the threshold.**
-135 ms of mean skew against a 200 ms timeout, with p90 excursions above 500 ms
-on both sides, is a coin flip per window. A coin flip per window is exactly the
-47% we measure. This is the most economical explanation of the number, and it
-predicts the one thing a rate problem would not: that the Falcon, which usually
-opens the collector, is present 96% of the time while the input being waited on
-is present 47%.
+**`timeout_sec` is not the fix.** Raising it costs up to 400 ms of added wait on
+a moving vehicle and leaves the Velodyne where it was.
 
-`publish_previous_but_late_pointcloud: false` then decides what happens to the
-loser: the late scan is **dropped**, not published behind the others.
+**The reported window is not the configured tolerance.** The
+minimum-to-maximum reference timestamp span stayed pinned at 200 ms even at
+`noise_window: 0.2`, with the config verified live through the symlinked
+install. It reports the actual spread of what was collected, which two
+independent sensors set themselves. On a kit whose LiDARs share a clock it
+tracks the config and looks like a tolerance; here it does not.
 
-### Things to try, cheapest first
+### Where the Velodyne clouds actually go
 
-1. **Raise `timeout_sec` to 0.3 or 0.4** and re-measure the present-percentages.
-   One-line change, and the diagnostic already reports the answer. If Velodyne
-   presence jumps, the diagnosis is confirmed and the remaining question is what
-   the added latency costs NDT.
-2. **Set `lidar_timestamp_offsets`** to the measured skew rather than `[0.0,
+Not into a missed match. The arithmetic rules that out: the NTU bag carries
+`/sensing/lidar/vlp32/velodyne_points` at **7.02 Hz** while the concatenator
+attempts at **3.7 Hz**, so roughly two Velodyne clouds are available per
+attempt and presence should be near 100%. It is ~50%.
+
+Clouds are therefore being lost **upstream of any timestamp comparison**. The
+same figure appears on the vehicle (47.2% on 2026-08-25) where no per-sensor
+preprocessing ran at all, so it is not the preprocessing chain either.
+
+That is the open question. It is a counting exercise along the chain, raw to
+cropped to deskewed to outlier-filtered to collector, and the one hard rule is
+to **not use `ros2 topic hz`**: it is a Python node and drops roughly three
+quarters of 300 KiB messages at 10 Hz. Proven by playing a bag with nothing
+else running, where the C++ recorder received 288 of 288 scans and `ros2 topic
+hz` reported 2.1 Hz for the same topic. Use `ros2 bag record` or the nodes'
+own diagnostics.
+
+### Still worth doing, independent of the above
+
+1. **Set `lidar_timestamp_offsets`** to the measured skew rather than `[0.0,
    0.0]`. The two sensors are not synchronised to each other: `Use Sensor Time:
-   0` means the Velodyne is stamped on host arrival, and nothing feeds PPS. A
-   fixed offset is what this field is for, and it is more honest than widening
-   the timeout.
-3. **Consider `publish_previous_but_late_pointcloud: true`** so a late scan is
+   0` means the Velodyne is stamped on host arrival, and nothing feeds PPS.
+2. **Consider `publish_previous_but_late_pointcloud: true`** so a late scan is
    published rather than discarded. Trades freshness for coverage; whether NDT
    prefers that is a real question, not an obvious yes.
-4. Only then look at the sensor.
 
 ### The sensor side, for completeness
 
