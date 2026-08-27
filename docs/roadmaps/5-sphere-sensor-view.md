@@ -13,10 +13,10 @@ also adjusts parameters is a different program, and the value of this one comes
 from being downstream — it shows the calibration the system is *running*, not
 the file that is supposed to describe it.
 
-Last updated: 2026-08-28. **All four sub-phases are done**, and the tool has now
-been run against a real dataset — Autoware's Leo Drive bags — which falsified
-four assumptions and cost four fixes. **It has still never met this vehicle**,
-which is what remains. Candidates for what comes after are at the end.
+Last updated: 2026-08-28. **All four sub-phases are done**, plus a round of
+hardening that a real dataset forced and a first pass at the cost of running
+this on an Orin. **It has still never met this vehicle**, which is what remains
+and what should shape everything after it. Candidates are at the end.
 
 ---
 
@@ -211,6 +211,70 @@ sensors, which agree with each other by construction. The first person to run
 
 ---
 
+## Post-S4 hardening, done
+
+Everything in S1 to S4 was verified against sensors this display also generated.
+Autoware's Leo Drive bags were the first data it had not written itself, and
+they cost five fixes in two sittings. Listed because the failures are more
+instructive than the features:
+
+- [x] **Raw `sensor_msgs/Image` alongside `CompressedImage`.** Public datasets
+      frequently publish raw, and standing up a republisher per camera to look
+      at one is a poor trade for twenty lines. `rawImageToQImage` is its own
+      unit with five tests, because `bgr8` read as `rgb8` gives plausible wrong
+      colours that a visual check cannot catch.
+- [x] **An optical frame override, and the discipline not to need it.** These
+      bags publish `camera_link` and `camera_optical_link`, and it is the first
+      that satisfies the optical convention. Believing the *name* rolled every
+      image ninety degrees. The override stays for publishers that genuinely
+      name the wrong frame; the property description now says to check the axes
+      first.
+- [x] **A bound on the distortion model.** Radial polynomials turn over outside
+      their fitted range and start mapping ever-wider rays back into the image.
+      On these cameras a ray at 65 degrees landed at pixel 536 of 720. The
+      display now stops at each model's own turnover, so patches end at the
+      lens's real edge and bare sphere shows between them — a gap being an
+      honest answer where smeared texture was a lie that looked like data.
+- [x] **Layers created from the config, and empty topics tolerated.** RViz
+      assigns saved entries to properties by name and drops the rest silently,
+      and an empty topic threw out of rclcpp and took the whole config load with
+      it. Both were invisible until a config written for a different vehicle
+      met them.
+- [x] **The sphere follows its centre frame every frame.** It was placed once
+      and left behind by anything that moved it — a fixed frame of `odom` or
+      `map`, or the user switching frames in Global Options.
+
+## Performance, first pass
+
+Measured, and the measurement corrected two guesses. Details and the trap in
+[the design](../design/sphere_sensor_view.md#performance-on-the-agx-orin).
+
+- [x] **Per-stage timing**, as a property row and on stderr under
+      `GOLFCART_SPHERE_VIEW_TIMING`, which is how the numbers will be taken on
+      the vehicle over ssh. Reads `geometry 0.00 / textures 0.48 / clouds
+      0.47 ms` against the Leo bags: the whole update path is under a
+      millisecond and geometry is zero, which is the architecture's central
+      invariant holding under real data.
+- [x] **`Max Update Rate`, 10 Hz by default**, applied in the subscription
+      callback so a dropped frame costs nothing rather than costing a decode.
+      Three cameras at 30 Hz would spend two to three Orin cores decoding
+      1920x1280 JPEG faster than anyone can read it.
+- [ ] **Decode at half resolution** through libjpeg-turbo's `tjDecompress2`.
+      Four times fewer pixels to decode, convert, upload and store, and still
+      far sharper than the seam judgement it supports. Measured that Qt's
+      `setScaledSize` is *not* this: it saves 22 to 28% because Qt decodes full
+      size and scales afterwards.
+- [ ] **Take the numbers on the Orin.** Everything above was measured on a
+      workstation whose RViz runs on llvmpipe, so its CPU totals are software
+      rasterisation and say nothing about the vehicle. The instrumentation
+      exists precisely so this is a five-minute job once there is an Orin to run
+      it on.
+- [ ] **Decide the deployment.** Running RViz off-vehicle over the network, or
+      subscribing to a downscaled preview branch from the capture pipeline,
+      would each make the whole question disappear without code in this display.
+      Cheaper than any optimisation here, and worth settling before item 3 above
+      is started.
+
 ## Beyond S4 — candidates, none started
 
 S1 to S4 are done and the tool is usable. What follows is optional, ordered by
@@ -235,7 +299,14 @@ being planned around.
 **Why first.** Every return carries its true range, so there is no bowl and no
 parallax: this answers the alignment question exactly where the sphere can only
 approximate it. A wrong extrinsic shows as colour bleeding across depth
-discontinuities. It reuses `projectToPixel` and `CloudLayer` nearly unchanged.
+discontinuities. It reuses `projectToPixel` and `CloudLayer` nearly unchanged,
+and the pipeline it needs — a shared snapshot of what each camera currently is —
+is designed in
+[the design doc](../design/sphere_sensor_view.md#the-data-pipeline-the-next-phases-need).
+
+**Not a performance concern.** Colouring 33 000 returns against three cameras is
+about 100 000 polynomial evaluations once per cloud, which is milliseconds. Any
+proposal to put this on the GPU is optimising the cheap half.
 
 **Acceptance:** on a bag with a depth discontinuity, the colour boundary sits on
 the geometric one; introducing a deliberate one-degree error in a camera

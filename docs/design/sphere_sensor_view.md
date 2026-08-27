@@ -191,6 +191,12 @@ would stall RViz's frame loop. One worker thread per camera, with the newest
 decoded frame handed over and older ones dropped — this is a monitor, so
 dropping is correct.
 
+Dropping happens twice, deliberately. A rate limit in the subscription callback
+refuses frames that arrive sooner than `Max Update Rate`, before any work is
+done on them, because the cheapest decode is the one that does not happen. What
+survives that is decoded, and if a second frame finishes before the render
+thread collects the first, the first is simply overwritten.
+
 ---
 
 ## Inputs on this vehicle
@@ -253,9 +259,14 @@ A concrete first session, once phase 3A's calibration lands:
 | S3 | cloud layers, `angular` and `metric` modes, colour by intensity or range | the actual check |
 | S4 | `just tool sphere` recipe, saved RViz config, docs | somebody else can run it |
 
-S1 is the risk: if dynamic textures on `ManualObject` geometry misbehave inside
-RViz2's render loop, that is better found in a day than after the projection
-maths is written.
+S1 was the risk: if dynamic textures on `ManualObject` geometry had misbehaved
+inside RViz2's render loop, that was better found in a day than after the
+projection maths was written. It did not.
+
+All four are done, followed by a round of hardening that a real dataset forced
+and a first pass at cost. What remains is in the
+[phase doc](../roadmaps/5-sphere-sensor-view.md): finish the performance items,
+run it on the vehicle, and let that decide which of S5 to S8 is worth building.
 
 ---
 
@@ -281,7 +292,16 @@ exist, the transform chain is off by the body-to-optical rotation, and the tool
 will show a ~90° error that is real but is in the URDF, not the calibration.
 
 **Render thread stalls.** Covered above: decode off-thread, texture blit rather
-than reallocate, geometry rebuilt only on `CameraInfo` or TF change.
+than reallocate, geometry rebuilt only on `CameraInfo` or TF change. Measured
+against real data at 0.48 ms of texture work and 0.47 ms of cloud work per
+frame, with geometry at zero — so the invariant holds and the risk is retired
+for the workstation case. The Orin case is not measured yet.
+
+**Measuring on the wrong machine.** The workstation this was developed on runs
+RViz through TurboVNC on llvmpipe, so its CPU totals are software rasterisation
+and bear no relation to a board with a GPU. Two hours went into chasing a 250%
+CPU figure that was Mesa drawing point billboards. Any performance claim about
+this display should name the renderer it was measured on.
 
 ---
 
