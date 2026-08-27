@@ -231,26 +231,58 @@ one lost fragment discards the sample. The repo's CycloneDDS profile already
 handles this, and the vehicle uses it. It matters only if someone runs this
 stack without `scripts/env.sh`.
 
-### Why the transform fails: still open
+### Why the transform fails, and why the preprocessing chain already halves it
 
 Not the frame names, which was the obvious guess and is wrong: the sensor kit
 URDF publishes links named `velodyne` and `seyond`, matching `frame_id` in
-`VLP32.param.yaml` and `seyond.param.yaml`. The calibration YAML's `vlp32c` and
-`falcon` are entry names the xacro maps onto those links, not frames.
+`VLP32.param.yaml` and `seyond.param.yaml`.
 
-What to probe next, in order:
+Not TF buffer warm-up either. The warnings are spread evenly across a 67.7 s
+replay, roughly ten per decile for both LiDARs, not clustered at startup.
 
-1. **Whether the failure is time-bounded.** `is_motion_compensated: true` makes
-   the lookup time-dependent, so a cloud stamped outside the TF buffer's range
-   fails while a static lookup would succeed. `VLP32.param.yaml` runs with
-   `Use Sensor Time: 0`, so the Velodyne is stamped on host arrival while the
-   Seyond is not, which is a mechanism for exactly this asymmetry.
-2. **Whether `tf_static` is complete when the failures happen**, and whether
-   they cluster at startup or continue throughout.
-3. **`/tf` publishers for the same frame.** CLAUDE.md already records the Xsens
-   driver broadcasting `world -> imu_link` while the URDF publishes
-   `sensor_kit_base_link -> imu_link`; a second parent for a LiDAR frame would
-   produce intermittent lookup failures of exactly this shape.
+What the timestamps do show is that **the fault is about who does the transform,
+and the preprocessing added in 2026-08-27 moves it off the concatenator.** The
+crop box runs with `output_frame: base_link`, so from `self_cropped` onward the
+Velodyne cloud is already in `base_link` and the concatenator's transform is a
+no-op:
+
+| topic | frame |
+|---|---|
+| `vlp32/velodyne_points` | `velodyne` |
+| `vlp32/self_cropped/pointcloud_ex` | **`base_link`** |
+| `vlp32/pointcloud_before_sync` | **`base_link`** |
+| `falcon/iv_points` | `seyond` |
+
+That is measurable:
+
+| | attempts | Velodyne nullptr | share |
+|---|---|---|---|
+| vehicle 2026-08-25, **no** preprocessing, cloud in `velodyne` | 2210 | 1186 | **53.7%** |
+| replay 2026-08-28, **with** preprocessing, cloud in `base_link` | 344 | 94 | **27.3%** |
+
+It also explains the asymmetry. On the vehicle the Velodyne needed a transform
+and the Falcon needed one too, yet the Velodyne failed 7.8x more often; in
+replay, where the Velodyne no longer needs one, the two are level (94 against
+92). The Velodyne's disadvantage was in its own `velodyne`-to-`base_link`
+lookup, not in the concatenator generally.
+
+**So the per-sensor preprocessing chain is not only a deskew fix.** It roughly
+halves the Velodyne loss as a side effect, by doing the transform early in a
+node that can wait for TF rather than in a synchroniser that cannot.
+
+**Unproven on the vehicle.** These two rows are different machines, different
+maps and different message counts, so treat the direction as established and the
+magnitude as indicative. The chain has never run on the cart.
+
+### The remaining half
+
+94 warnings still fire for a cloud that is already in `base_link`, so a
+transform is not the only path to that nullptr. `is_motion_compensated: true`
+also makes the node interpolate twist across the cloud, and the same runs log
+`No twist is available` (52 on the vehicle) and `Twist time_stamp is too late.
+Could not interpolate.` A failed interpolation is the next thing to rule in or
+out, and `input_twist_topic_type: twist` against
+`/sensing/vehicle_velocity_converter/twist_with_covariance` is where to start.
 
 ### Still worth doing, independent of the above
 
