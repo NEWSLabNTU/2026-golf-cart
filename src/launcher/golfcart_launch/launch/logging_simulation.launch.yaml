@@ -104,21 +104,50 @@ launch:
     default: "true"
     description: "Launch RViz"
 
+# The vehicle, the sensor kit and the map travel together: a bag recorded on one
+# rig cannot be replayed against another rig's calibration or another site's map.
+# They were hardcoded to the golf cart, which meant this file could only ever
+# replay golf cart bags, and the Autoware sample bag needed a separate launch
+# tree in cuda_ndt_matcher to be replayable at all.
+#
+# Replaying the Autoware sample bag (3 LiDARs as velodyne_packets):
+#
+#   just launch-sim-logging "vehicle_model:=sample_vehicle \
+#     sensor_model:=sample_bag_sensor_kit \
+#     map_path:=./src/localization/cuda_ndt_matcher/data/sample-map"
+#
+# `sample_vehicle` is Autoware's own; only the sensor kit needed writing, because
+# sample_sensor_kit declares four LiDARs and that bag carries three.
+- arg:
+    name: vehicle_model
+    default: "golfcart_vehicle"
+    description: "Vehicle model: golfcart_vehicle | sample_vehicle"
+
+- arg:
+    name: sensor_model
+    default: "golfcart_sensor_kit"
+    description: "Sensor kit: golfcart_sensor_kit | sample_bag_sensor_kit"
+
+- arg:
+    name: map_path
+    default: "./data/COSS-map-planning"
+    description: "Map directory; must match the bag being replayed"
+
 - include:
     file: "$(find-pkg-share golfcart_launch)/launch/golfcart_autoware.launch.xml"
     arg:
     -
       name: vehicle_model
-      value: golfcart_vehicle
+      value: $(var vehicle_model)
     -
       name: is_simulation
       value: $(var is_simulation)
     -
       name: sensor_model
-      value: golfcart_sensor_kit
+      value: $(var sensor_model)
     -
       name: map_path
-      value: ./data/COSS-map-planning
+      value: $(var map_path)
     -
       name: data_path
       value: $(var data_path)
