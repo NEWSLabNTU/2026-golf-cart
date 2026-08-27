@@ -209,3 +209,162 @@ that trades fault tolerance for latency.
   and its `docs/cuda-concatenate-data.md`, `docs/cuda-pointcloud-preprocessor.md`
 - [Point cloud pre-processing design, Autoware Documentation](https://autowarefoundation.github.io/autoware-documentation/main/design/autoware-architecture/sensing/data-types/point-cloud/)
 - [Discussion #5396, type adaptation and negotiation for the CUDA pipeline](https://github.com/orgs/autowarefoundation/discussions/5396)
+
+---
+
+# Addendum: can every stage move to CUDA?
+
+**Asked 2026-08-27**: move all stages to GPU including the Nebula Velodyne
+driver, accepting that the Seyond driver stays on CPU.
+
+Short answer: **the driver cannot, and the Seyond half of the pipeline cannot
+either, for a reason that has nothing to do with CUDA.** What can move is the
+Velodyne preprocessing plus concatenation and downsampling. The ceiling on the
+whole exercise is 2.6% of this machine.
+
+## Stage by stage
+
+| Stage | CUDA implementation | Available to us? |
+|---|---|---|
+| Velodyne decode (Nebula) | none | **No.** See below |
+| Seyond decode | none (vendor CPU driver) | No, as accepted |
+| Per-sensor crop / distortion / ring outlier | `CudaPointcloudPreprocessorNode` | **Velodyne only.** Seyond blocked, see below |
+| Concatenation | `CudaPointCloudConcatenateDataSynchronizerComponent` | Yes, once at least one input is a cuda_blackboard publisher |
+| Voxel grid downsample | `CudaVoxelGridDownsampleFilterNode` | Yes |
+| Polar voxel outlier | `CudaPolarVoxelOutlierFilterNode` | Yes |
+| NDT | `cuda_ndt_matcher` (ours) | Already exists |
+
+## Blocker 1: there is no CUDA Velodyne decoder
+
+Nebula has exactly one CUDA decode effort, [PR #421 `feat(hesai): add
+CUDA-accelerated point cloud decoder`](https://github.com/tier4/nebula/pull/421):
+
+- **Hesai only**, validated on Pandar128E4X. Nothing for Velodyne.
+- **Open since 2026-03-19, last touched 2026-04-20**, not merged.
+- Opt-in twice: `-DBUILD_CUDA=ON` at build, `NEBULA_USE_CUDA=1` at runtime.
+
+Its own measurements are the argument against waiting for it. On an RTX 5080
+with ~72k points per scan:
+
+| | median | P5 | P95 |
+|---|---|---|---|
+| CPU | 6.80 ms | 6.62 ms | 7.28 ms |
+| GPU (PR #421) | **2.48 ms** | 2.41 ms | **12.77 ms** |
+
+The median improves 2.8x and the **P95 gets worse**, because the distribution is
+bimodal: 43% of scans hit a slow path dominated by the bulk device-to-host copy
+of the output buffer. The PR says a follow-up will remove that copy by keeping
+points on the GPU via cuda_blackboard. **That follow-up does not exist yet**: a
+search of the repository's issues and PRs finds no zero-copy successor.
+
+So even for Hesai, today, the merged-someday version trades a better median for a
+worse tail. For a localization pipeline the tail is what sets the deadline.
+
+Also note that aip_launcher's `cuda-all-in-one` mode does *not* mean a CUDA
+driver. `make_nebula_node(context, as_composable_node)`'s second argument is a
+placement flag, and the node it builds is the ordinary `nebula_ros`
+`<Make>RosWrapper` publishing a plain `PointCloud2`. "All in one" means the
+driver joins the shared *container*, not that it decodes on the GPU.
+
+**This is not a blocker for the rest of the chain.** `pipeline_mode:=cuda` runs a
+CPU Nebula driver into a CUDA preprocessor today; the upload happens at the
+preprocessor's input. A CPU driver does not prevent GPU preprocessing.
+
+## Blocker 2: Seyond cannot enter the CUDA preprocessor at all
+
+This is the more serious one, and it is a data-layout problem rather than a GPU
+one.
+
+`CudaPointcloudPreprocessorNode` states its input contract plainly:
+
+> This node expects that the input pointcloud follows the
+> `autoware::point_types::PointXYZIRCAEDT` layout and the output pointcloud will
+> use the `autoware::point_types::PointXYZIRC` layout.
+
+`PointXYZIRCAEDT` carries, beyond XYZ and intensity, four fields the CPU chain
+also needs: `azimuth`, `elevation`, `distance`, `time_stamp`.
+
+**Velodyne is fine.** Nebula's native `velodyne_points` is what Autoware renames
+to `pointcloud_raw_ex` (`nebula_node_container.launch.py:145`), and the `_ex`
+suffix is precisely this extended layout. Our
+`/sensing/lidar/vlp32/velodyne_points` is already the right type.
+
+**Seyond is not.** `seyond_ros_driver/.../driver/point_xyzirc.h` registers:
+
+```cpp
+POINT_CLOUD_REGISTER_POINT_STRUCT(
+    seyond::PointXYZIRC,
+    (float, x, x)(float, y, y)(float, z, z)
+    (std::uint8_t, intensity, I)
+    (std::uint8_t, return_type, R)
+    (std::uint16_t, ring, C))
+```
+
+That is `PointXYZIRC`: **no azimuth, no elevation, no distance, and no
+per-point time**. Consequences, in order:
+
+1. It cannot be fed to `CudaPointcloudPreprocessorNode`, so the Seyond branch
+   cannot be GPU-preprocessed no matter what we do to the driver.
+2. More importantly, and independent of CUDA, **the Seyond cloud can never be
+   distortion-corrected**, by CPU or GPU. Distortion correction needs a per-point
+   time offset to know where the vehicle was when each point was measured, and
+   that field does not exist in this message. Fixing this means changing the
+   driver to emit `PointXYZIRCAEDT`.
+
+There is a third, separate discrepancy in the same file. The field *names* are
+`I`, `R`, `C`, while Autoware's `PointXYZIRC` registers `intensity`,
+`return_type`, `channel` (`autoware/point_types/types.hpp:171`). The header's
+comment claims "Field names match Autoware's expected format: x, y, z, I, R, C",
+and that claim is wrong. Whether anything downstream currently reads those fields
+by name is unverified; it is worth checking with `ros2 topic echo --field` on a
+live Seyond cloud before assuming it is harmless.
+
+## What is achievable, and what it is worth
+
+Achievable today, with no upstream work:
+
+```
+Velodyne (CPU decode, PointXYZIRCAEDT)
+    -> CudaPointcloudPreprocessorNode        [GPU: crop + distortion + outlier]
+    -> pointcloud_before_sync{,/cuda}
+                                              \
+                                               -> CudaPointCloudConcatenate...  [GPU]
+                                              /      -> CudaVoxelGridDownsample [GPU]
+Seyond (CPU decode, PointXYZIRC)  -----------/            -> NDT
+    (plain PointCloud2, uploaded at the concatenator)
+```
+
+The concatenator can take one negotiated CUDA input beside one plain input;
+cuda_blackboard converts the latter. All of it must sit in one container with
+intra-process comms off.
+
+The payoff ceiling, from the 2026-08-25 bundle:
+
+| process | CPU, share of one core |
+|---|---|
+| `velodyne_ros_wrapper_node` | 6.75% |
+| `seyond_node-1` | 10.48% |
+| `pointcloud_container` (concat + NDT downsampling) | 13.76% |
+| **total** | **30.99% of one core = 2.6% of a 12-core machine** |
+
+Moving *everything* in that table to the GPU, including the driver decode that is
+not possible, would return 2.6% of the machine, which currently sits at 74% with
+26% headroom. The GPU is also uninstrumented here, so the cost side of that trade
+cannot be measured at all yet.
+
+## Recommendation
+
+Unchanged in order, sharpened in content:
+
+1. **Add the missing preprocessing for Velodyne**, and do it as
+   `CudaPointcloudPreprocessorNode` directly rather than building the CPU chain
+   first. The Velodyne already has the right point type, this is the stage the
+   pipeline is missing, and it is the stage that unlocks the CUDA concatenator.
+   Do it for the correctness win, not the throughput one.
+2. **Fix the Seyond point type** to `PointXYZIRCAEDT` in the driver. Until then
+   that branch cannot be distortion-corrected by any means, which is a
+   localization accuracy problem today, not a GPU problem. Check the `I`/`R`/`C`
+   field naming at the same time.
+3. **Do not wait on Nebula CUDA decode.** Velodyne is not implemented, the Hesai
+   PR is unmerged and stale, and its current form worsens P95.
+4. **Instrument the GPU before step 1 lands**, so the before/after is measurable.
