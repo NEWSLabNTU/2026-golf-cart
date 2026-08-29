@@ -14,12 +14,11 @@ that were written from an x86 desktop and guessed at this hardware.
 `pose_source:=cuda_ndt` **is not a convergence problem.** It localises correctly
 and agrees with Autoware's NDT to **2.8 cm RMSE** over a full replay.
 
-It is a throughput problem, and only that. It takes **415 ms per frame where
-Autoware takes 47 ms** — 8.8x slower, and 4.2x over its own configured
-`critical_upper_bound_exe_time_ms` of 100 ms. Everything that looked like a
-convergence failure follows from that one number.
+It was a throughput problem, and only that. **That is now fixed**: 415 ms per
+frame became **41 ms**, against Autoware's 47 ms on the same machine and bag.
+cuda_ndt holds 10 Hz in real time and is the faster of the two.
 
-`pose_source:=ndt` remains the setting to run on the vehicle.
+The whole cost was one CPU call — see [The 415 ms](#the-415-ms) below.
 
 ---
 
@@ -113,15 +112,16 @@ Autoware's own sample map and sample rosbag, shipped in the submodule under
 `data/` (30 s, 129 m of driving). Same map, same bag, same machine, one
 parameter set. `just run-builtin` against `just run-cuda`.
 
-| | Autoware NDT | CUDA NDT |
-|---|---|---|
-| `exe_time_ms` mean | **47.0** | **415.3** |
-| `exe_time_ms` max | 82.7 | 480.5 |
-| NVTL mean | 3.126 | 3.138 |
-| transform probability mean | 6.71 | 6.78 |
-| iterations mean | 3.13 | 2.68 |
-| initial-to-result distance mean | 0.090 m | 0.080 m |
-| poses / path | 244 / 129.3 m | 291 / 126.9 m |
+| | Autoware NDT | CUDA NDT (before) | CUDA NDT (after) |
+|---|---|---|---|
+| `exe_time_ms` mean | 47.0 | **415.3** | **40.5** |
+| `exe_time_ms` max | 82.7 | 480.5 | 56.3 |
+| NVTL mean | 3.126 | 3.138 | 3.139 |
+| transform probability mean | 6.71 | 6.78 | 6.78 |
+| iterations mean | 3.13 | 2.68 | 3.88 |
+| initial-to-result distance mean | 0.090 m | 0.080 m | 0.156 m |
+| poses / path | 244 / 129.3 m | 291 / 126.9 m | 292 / 128.9 m |
+| playback rate | 1x | 0.2x (could not hold 1x) | **1x** |
 
 Trajectory agreement against the Autoware run, over 242 matched stamps:
 
@@ -137,8 +137,8 @@ margin. **On quality, the CUDA path is equivalent to Autoware's NDT** — slight
 fewer iterations and a slightly smaller correction per frame, which is what you
 would expect from a matcher that is converging properly.
 
-The CUDA column had to be taken with the bag played at `--rate 0.2`. That is the
-whole finding, stated another way.
+The "before" column had to be taken with the bag played at `--rate 0.2`, because
+the node could not keep up at 1x. The "after" column is at full rate.
 
 ### Why it looks like a convergence failure at 1x
 
@@ -161,19 +161,60 @@ against the output before concluding anything about convergence.
 
 ---
 
+## The 415 ms
+
+Phase timing, added behind `NDT_PROFILE=1` because the crate's existing timing
+module has no call sites and collects nothing. Over 292 frames, inside
+`align_full_gpu`:
+
+| phase | mean | share |
+|---|---|---|
+| `nvtl` | **393.1 ms** | **94.5%** |
+| `optimize` | 11.6 ms | 2.8% |
+| `voxel_pack` | 8.7 ms | 2.1% |
+| `upload` | 2.4 ms | 0.6% |
+| `pipeline_new` | 0.2 ms | 0.1% |
+| total | 416.1 ms | |
+
+The GPU NDT optimisation was never slow. At 11.6 ms it is four times faster than
+Autoware's entire 47 ms frame. Everything else was one CPU call at the end.
+
+`align_full_gpu` finished by computing NVTL through `compute_nvtl_simple`: a
+serial loop over all 5000 source points, each doing a KD-tree radius search and
+f64 scoring against every voxel returned. Single-threaded, ~78 µs per point.
+
+It was redundant. `NdtScanMatcher` already owns a GPU scoring runtime and an
+uploaded copy of the voxel grid, and already scores NVTL on the GPU in
+`evaluate_nvtl` — which is why the *other* NVTL call in the node, the one before
+the timer starts, never showed up as a cost. `align_full_gpu` simply never used
+that path. The optimizer now defers NVTL to its caller and `align_gpu` fills it
+from the GPU, falling back to the same CPU routine when there is no runtime or
+no uploaded grid.
+
+The two agree to three decimal places (NVTL 3.137 vs 3.138), which is the
+check that matters — the pose gate is NVTL, so a GPU/CPU disagreement here would
+move convergence, and this one does not.
+
+**A note on what this says about profiling.** The flat frame cost and the low
+iteration count pointed at fixed per-call overhead, and there is real per-call
+overhead in this function — it rebuilds the GPU pipeline, repacks the voxel
+grid and re-uploads it on every frame, all of which are invariant between
+frames. That reasoning was correct and it was the wrong answer: those three
+together are 11.3 ms. Measuring first would have cost less than deducing.
+
 ## What to work on
 
-1. **415 ms per frame.** This is the only real problem. It needs a profile on
-   this hardware, not on a discrete GPU — the Orin's iGPU shares LPDDR5 with the
-   CPU, so the desktop's numbers do not bound it. Note the frame cost is
-   remarkably flat (min 383 ms, max 480 ms over 291 frames) and iteration count
-   is low at 2.68, which points at fixed per-call overhead rather than at the
-   optimiser doing too much work.
+1. **`voxel_pack`, 8.7 ms.** Now ~21% of the remaining frame. `align_full_gpu`
+   repacks the target grid every frame via `GpuVoxelData::from_voxel_grid`, and
+   re-uploads it, though `NdtScanMatcher` already caches exactly that at
+   `set_target` time and the grid only changes when the map is reloaded every
+   20 m. Plumbing the cached copy through would take the frame to roughly 30 ms.
 2. Only after that is the initial-pose align worth revisiting. The previous
    handover's 35.3 s align figure was measured on x86 with `particles_num: 200`;
    whatever fixes the per-frame cost likely moves it too.
-3. `pose_source` should not default to `cuda_ndt` while (1) stands. It cannot
-   hold 10 Hz, and the way it fails is silent.
+3. `pose_source:=cuda_ndt` now holds 10 Hz with margin (max 56 ms against a
+   100 ms bound) and is the faster of the two matchers. Whether it should
+   *default* to CUDA is still a call to make on vehicle data, not on this bag.
 
 ## What is still unmeasured here
 
