@@ -368,3 +368,45 @@ Unchanged in order, sharpened in content:
 3. **Do not wait on Nebula CUDA decode.** Velodyne is not implemented, the Hesai
    PR is unmerged and stale, and its current form worsens P95.
 4. **Instrument the GPU before step 1 lands**, so the before/after is measurable.
+
+---
+
+# Addendum: measured against NDT, 2026-08-29
+
+Everything above scores the pipeline on clouds. This is the first measurement
+that scores it on **localization**, which is what the pipeline exists for.
+
+`just ntu-test`, CSIE-1 merged bag, scored with
+`scripts/localization/ndt_quality_report.py` over 120 s. That script ranks on
+pose quality and deliberately does **not** rank on NVTL, because NVTL rises with
+coarser voxels and tighter crops whether or not the pose improves. NVTL is
+reported below only because it appears earlier in this session's notes.
+
+| | poses | path | scatter p50 / p95 | yaw step p50 / p95 | NVTL p50 |
+|---|---|---|---|---|---|
+| `pointcloud_backend:=cpu` | 4798 | 647.3 m | 0.001 / **0.038** m | 0.017 / **0.179** deg | 1.24 |
+| `pointcloud_backend:=cuda` | 4771 | 604.1 m | 0.001 / **0.035** m | 0.015 / **0.167** deg | 1.21 |
+
+**The two backends localize equivalently.** CUDA is marginally ahead on both p95
+figures, but the runs covered different distances (647 m against 604 m) so they
+sampled different stretches of the route, which is enough to account for a
+difference that size. Read this as "no regression", not as "CUDA is better".
+
+Both runs loaded what they claimed to: the CUDA run's container log shows
+`CudaPointcloudPreprocessorNode` and
+`CudaPointCloudConcatenateDataSynchronizerComponent`.
+
+**What this validates.** The per-sensor preprocessing chain added on 2026-08-27
+runs a full NDT replay without breaking localization, in both modes. Until now
+every measurement in this campaign had been resolution, build success or cloud
+counts.
+
+**What it does not.** Still a desktop with a discrete RTX 3090, not the Orin,
+so the GPU cost side remains unmeasured. And scatter of 1 mm at p50 against a
+smoothed path is a self-consistency measure, not accuracy against ground truth;
+it catches jitter and slip, not a systematically wrong pose.
+
+One caveat on the numbers above. The CSIE-1 bag is **stationary for its first
+90 seconds**, and a report taken there returns 1.5 m of path with scatter and
+yaw step of exactly 0.000, which looks like a flawless result and means
+nothing. Both rows here were taken after that.
