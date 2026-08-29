@@ -1,5 +1,9 @@
 # Golf Cart Documentation
 
+## Handover
+
+- [CUDA pipeline to the Orin](handover/2026-08-30-cuda-pipeline-to-orin.md) — checkpoint at parent `228e6f0`: what is validated, what is not, the libcuda symbol to check before running cuda_ndt there, and the traps that cost time
+
 ## Roadblocks
 
 - [Known Roadblocks](roadblocks.md) — Open issues blocking setup, build, or test workflows
