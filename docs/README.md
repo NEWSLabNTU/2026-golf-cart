@@ -2,6 +2,7 @@
 
 ## Handover
 
+- [CUDA NDT on the Orin](handover/2026-08-30-cuda-ndt-on-orin.md) — measured on the target: why the CUDA build failed everywhere and how the floor is pinned now, the harness fault that made empty replays look like non-convergence, and the 2.8 cm / 415 ms A/B against Autoware's NDT
 - [CUDA pipeline to the Orin](handover/2026-08-30-cuda-pipeline-to-orin.md) — checkpoint at parent `228e6f0`: what is validated, what is not, the libcuda symbol to check before running cuda_ndt there, and the traps that cost time
 
 ## Roadblocks
