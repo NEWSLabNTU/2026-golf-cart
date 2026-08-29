@@ -1,0 +1,78 @@
+<?xml version="1.0"?>
+<!--
+  The planning simulator's vehicle, with its motion published as ground truth
+  rather than as localization output.
+
+  Autoware launches this node through tier4_simulator_launch, which offers two
+  modes and neither suits an ArUco localization run:
+
+    full_motion  publishes output/odometry on /localization/kinematic_state,
+                 which is the topic the EKF in our chain is supposed to produce
+    pose_only    publishes output/pose on
+                 /localization/pose_estimator/pose_with_covariance, which is
+                 the topic the ArUco localizer is supposed to produce
+
+  Either way the simulator occupies a topic the thing under test must own, and
+  a launch include cannot remap what happens inside it. So the node is launched
+  here instead, with the same parameters and the same input remappings as
+  upstream, and its three motion outputs sent to /simulation/ground_truth/*
+  where they serve as the reference the run is scored against.
+
+  The input remappings below are copied from
+  autoware_simple_planning_simulator/launch/simple_planning_simulator.launch.py
+  and must be kept in step with it. They are the vehicle's whole interface:
+  drop one and the simulator silently ignores that command.
+-->
+<launch>
+  <arg name="vehicle_info_param_file"
+       default="$(find-pkg-share golfcart_vehicle_description)/config/vehicle_info.param.yaml"/>
+  <!-- The simulator package ships this one; the golf cart's description does
+       not carry a copy, and inventing one would be a guess wearing a filename. -->
+  <arg name="vehicle_characteristics_param_file"
+       default="$(find-pkg-share autoware_simple_planning_simulator)/param/vehicle_characteristics.param.yaml"/>
+  <arg name="simulator_model_param_file"
+       default="$(find-pkg-share golfcart_vehicle_description)/config/simulator_model.param.yaml"/>
+  <arg name="initial_engage_state" default="true"/>
+
+  <node pkg="autoware_simple_planning_simulator"
+        exec="autoware_simple_planning_simulator_node"
+        name="simple_planning_simulator"
+        namespace="simulation"
+        output="screen">
+    <param from="$(var vehicle_info_param_file)"/>
+    <param from="$(var vehicle_characteristics_param_file)"/>
+    <param from="$(var simulator_model_param_file)"/>
+    <param name="initial_engage_state" value="$(var initial_engage_state)"/>
+
+    <!-- Inputs, verbatim from upstream. -->
+    <remap from="input/vector_map" to="/map/vector_map"/>
+    <remap from="input/initialpose" to="/initialpose3d"/>
+    <remap from="input/ackermann_control_command" to="/control/command/control_cmd"/>
+    <remap from="input/actuation_command" to="/control/command/actuation_cmd"/>
+    <remap from="input/manual_ackermann_control_command" to="/vehicle/command/manual_control_cmd"/>
+    <remap from="input/gear_command" to="/control/command/gear_cmd"/>
+    <remap from="input/manual_gear_command" to="/vehicle/command/manual_gear_command"/>
+    <remap from="input/turn_indicators_command" to="/control/command/turn_indicators_cmd"/>
+    <remap from="input/hazard_lights_command" to="/control/command/hazard_lights_cmd"/>
+    <remap from="input/trajectory" to="/planning/trajectory"/>
+    <remap from="input/engage" to="/vehicle/engage"/>
+    <remap from="input/control_mode_request" to="/control/control_mode_request"/>
+
+    <!-- Vehicle status, verbatim from upstream: this is a simulated vehicle
+         interface and the rest of the stack reads it as one. -->
+    <remap from="output/twist" to="/vehicle/status/velocity_status"/>
+    <remap from="output/imu" to="/sensing/imu/imu_data"/>
+    <remap from="output/steering" to="/vehicle/status/steering_status"/>
+    <remap from="output/gear_report" to="/vehicle/status/gear_status"/>
+    <remap from="output/turn_indicators_report" to="/vehicle/status/turn_indicators_status"/>
+    <remap from="output/hazard_lights_report" to="/vehicle/status/hazard_lights_status"/>
+    <remap from="output/control_mode_report" to="/vehicle/status/control_mode"/>
+    <remap from="output/actuation_status" to="/vehicle/status/actuation_status"/>
+
+    <!-- Motion as ground truth, which is the whole point of this file. The
+         localization chain under test publishes the real topics. -->
+    <remap from="output/odometry" to="/simulation/ground_truth/kinematic_state"/>
+    <remap from="output/acceleration" to="/simulation/ground_truth/acceleration"/>
+    <remap from="output/pose" to="/simulation/ground_truth/pose_with_covariance"/>
+  </node>
+</launch>

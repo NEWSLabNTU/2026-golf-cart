@@ -41,11 +41,25 @@ Most of D4's development should happen against this.
 The fuller loop, exercising the parts stage 1 skips: the real launch graph, the
 map loaders, planning and control consuming the fused pose, and the MRM path.
 
-- [ ] **Resolve the topic conflict first.** `simple_planning_simulator` publishes
-      `/localization/kinematic_state` itself — that is exactly the topic our chain
-      is supposed to produce. Remap the simulator's output to
-      `/simulation/ground_truth/kinematic_state` so the real topic stays free for
-      the EKF, and feed `aruco_sim_detector` from the ground-truth topic.
+- [x] **Resolve the topic conflict first.** Done 2026-08-30, and it is worse
+      than this item described: Autoware offers two modes through
+      `tier4_simulator_launch` and *both* take a topic the chain under test must
+      own. `full_motion` publishes `output/odometry` on
+      `/localization/kinematic_state`, which is the EKF's output; `pose_only`
+      publishes `output/pose` on
+      `/localization/pose_estimator/pose_with_covariance`, which is the ArUco
+      localizer's. A launch include cannot remap what happens inside it, so
+      `components/planning_sim_vehicle.launch.xml` runs the node directly with
+      upstream's parameters and input remappings and sends all three motion
+      outputs to `/simulation/ground_truth/*`.
+
+      Verified: the node advertises its seven vehicle status topics, publishes
+      ground-truth odometry at 40 Hz once an initial pose arrives, and neither
+      contested topic appears at all.
+
+      The input remappings are copied from upstream and must be kept in step
+      with it: they are the simulated vehicle's whole interface, and a missing
+      one is a command the simulator ignores without complaint.
 - [ ] A tag map placed against the simulated environment, and a route.
 - [ ] Confirm planning and control engage on the ArUco-derived pose.
 - [ ] Confirm the MRM path actually stops the vehicle when the localizer reports
