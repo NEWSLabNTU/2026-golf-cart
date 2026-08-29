@@ -24,6 +24,12 @@ ament_auto_add_executable(sim_trajectory_publisher_node src/trajectory_publisher
 target_link_libraries(sim_trajectory_publisher_node Eigen3::Eigen)
 
 if(BUILD_TESTING)
+  # Geometry checks on the tag maps themselves. A tag map is corner points and
+  # nothing else, so a wrong one loads, detects, and localizes to the wrong
+  # place without complaint.
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(test_tag_map_geometry test/test_tag_map_geometry.py)
+
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
 

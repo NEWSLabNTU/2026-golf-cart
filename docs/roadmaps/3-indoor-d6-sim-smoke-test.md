@@ -60,7 +60,25 @@ map loaders, planning and control consuming the fused pose, and the MRM path.
       The input remappings are copied from upstream and must be kept in step
       with it: they are the simulated vehicle's whole interface, and a missing
       one is a command the simulator ignores without complaint.
-- [ ] A tag map placed against the simulated environment, and a route.
+- [x] **A tag map placed against the simulated environment.** Done 2026-08-30.
+      `scripts/aruco/generate_tag_map.py` reads a lanelet2 map, projects its
+      nodes into the MGRS frame Autoware uses, takes the longest road lanelet
+      chain as the route, and places facing pairs at a fixed arclength interval.
+      `aruco_sim_detector/config/sample_map_tag_map.yaml` is the result for the
+      sample map: 74 boards, 37 pairs, 3 m apart and 3 m off the lane centre.
+
+      Generated rather than hand-placed for the reason the bench fixture
+      records: boards must come in facing pairs to cold-start at all, and
+      corners are where a hand-planned layout leaves a hole. Placing at a fixed
+      arclength follows the lane through its curves and closes that hole by
+      construction.
+
+      `aruco_sim_detector/test/test_tag_map_geometry.py` checks both maps for
+      square boards of the declared size, planarity, unique ids, and pairs whose
+      normals actually oppose. A tag map is corner points and nothing else, so
+      every one of those properties is otherwise unreadable, and a wrong one
+      loads and localizes to the wrong place without complaint.
+- [ ] A route for the vehicle to drive, and a start pose on it.
 - [ ] Confirm planning and control engage on the ArUco-derived pose.
 - [ ] Confirm the MRM path actually stops the vehicle when the localizer reports
       `FAULT` — the wiring from `/diagnostics` through to a stop request is easy
