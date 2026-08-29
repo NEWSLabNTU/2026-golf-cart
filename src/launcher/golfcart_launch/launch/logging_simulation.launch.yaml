@@ -20,15 +20,25 @@ launch:
     default: ""
     description: "LiDAR model (vlp32c) - empty string uses suite default"
 
+# Defaulted from the environment, not "", for the reason golfcart.launch.yaml
+# spells out at length: an <arg> forwarded with value="" OVERRIDES the sensor
+# kit's own default rather than deferring to it, and the kit resolves both with
+# a dict lookup. An empty key is a KeyError that aborts the whole launch.
+#
+# Measured 2026-08-29: resolving this file with its own defaults and the default
+# sensor_model died with `KeyError: ''`. It only ever worked because every
+# caller either passed these explicitly or used sample_bag_sensor_kit, whose
+# sensing.launch.xml has no such lookup. The "empty string uses suite default"
+# description was never true.
 - arg:
     name: camera_model
-    default: ""
-    description: "Camera model (usb or none) - empty string uses suite default"
+    default: "$(env CAMERA_MODEL gscam)"
+    description: "Camera driver: gscam | zedx | none. Defaults to $CAMERA_MODEL."
 
 - arg:
     name: imu_source
-    default: ""
-    description: "IMU source (tamagawa) - empty string uses suite default"
+    default: "$(env IMU_SOURCE xsens)"
+    description: "IMU source: xsens | zed. Defaults to $IMU_SOURCE."
 
 - arg:
     name: gnss_receiver
@@ -50,9 +60,26 @@ launch:
     default: "false"
     description: "Enable mapless mode for indoor operation without localization"
 
+# Same coarse/fine pair as golfcart.launch.yaml, so a replay defaults to the
+# stack the vehicle runs. use_cuda:=false puts both stages back on CPU; either
+# fine argument can still be given on its own.
+- arg:
+    name: use_cuda
+    default: "true"
+    description: "Coarse GPU switch; sets the default for pose_source and pointcloud_backend"
+
+- arg:
+    name: pointcloud_backend
+    default: $(eval "'cuda' if '$(var use_cuda)'.lower() in ('true','1','yes') else 'cpu'")
+    description: "LiDAR preprocessing and concatenation: cpu | cuda. Defaults from use_cuda."
+
+- set_env:
+    name: POINTCLOUD_BACKEND
+    value: "$(var pointcloud_backend)"
+
 - arg:
     name: pose_source
-    default: "ndt"
+    default: $(eval "'cuda_ndt' if '$(var use_cuda)'.lower() in ('true','1','yes') else 'ndt'")
     description: "Pose estimation source: ndt, cuda_ndt"
 
 # Preset Configuration

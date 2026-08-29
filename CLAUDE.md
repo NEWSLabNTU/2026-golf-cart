@@ -420,14 +420,41 @@ sensor_suite:=vlp32c             # Velodyne VLP-32C
 lidar_model:=vlp32c
 camera_model:=gscam|zedx|none   # env ONLY - see below
 imu_source:=xsens|zed           # env ONLY - see below
-pointcloud_backend:=cpu|cuda    # real launch arg - see below
-gnss_receiver:=ublox|septentrio
+gnss_receiver:=ublox|septentrio|garmin|none
 ```
 
+#### GPU acceleration: one coarse switch, two fine ones
+
+**CUDA is the default.** All three are launch arguments; none is set from the
+environment by a user.
+
 ```bash
-# CPU concatenator (default) vs the CUDA one, same params and topics either way
-just launch pointcloud_backend:=cuda
+just launch                          # CUDA everywhere (default)
+just launch use_cuda:=false          # CPU everywhere
+just launch pointcloud_backend:=cpu  # CUDA NDT, CPU preprocessing
+just launch pose_source:=ndt         # CUDA preprocessing, CPU NDT
 ```
+
+`use_cuda` sets the default for `pointcloud_backend` (`cpu|cuda`) and
+`pose_source` (`ndt|cuda_ndt`). Either fine argument given explicitly wins,
+because a launch argument default is only consulted when the caller supplied
+nothing. `pose_source:=aruco` is unaffected by `use_cuda`.
+
+The same pair exists in `logging_simulation.launch.yaml` and
+`ntu_logging_sim.launch.xml`, so a replay defaults to the stack the vehicle runs.
+
+**The two stages have very different evidence behind them.**
+
+`pointcloud_backend:=cuda` is measured: a full NDT replay of the NTU CSIE-1 bag
+scored cpu at 0.038 m scatter p95 / 0.179 deg yaw p95 and cuda at 0.035 / 0.167
+over ~600 m, so it does not regress localization.
+
+`pose_source:=cuda_ndt` is **not** validated. On an x86 desktop NDT never
+activates with it, but that is a stale artifact rather than a verdict: the
+installed `cuda_ndt_matcher` is from 2026-08-17, its source has moved, and
+rebuilding on x86 fails inside the `cubecl-cuda` dependency. **Verify it on the
+Orin before trusting it**, and fall back with `pose_source:=ndt` if
+localization does not converge.
 
 **`camera_model`, `imu_source` and `tx_enabled` do NOT work as launch arguments.** They reach
 `golfcart_autoware.launch.xml`, but the path onwards runs through
@@ -438,17 +465,17 @@ instead, so `just launch "imu_source:=zed"` looks like it works and does nothing
 Set them in `config/sensors.conf`, which `scripts/env.sh` sources for both shells
 and units.
 
-**`pointcloud_backend:=cpu|cuda` IS a real launch argument**, and crosses that
-same gap without becoming a config knob. `golfcart.launch.yaml` declares it and
-then `set_env`s `POINTCLOUD_BACKEND` from it immediately before the include, so
-the value reaches the sensor kit through the environment while the interface
+**`use_cuda`, `pointcloud_backend` and `pose_source` ARE real launch arguments**,
+and cross that same gap without becoming config knobs. `golfcart.launch.yaml`
+declares them and `set_env`s `POINTCLOUD_BACKEND` immediately before the include,
+so the value reaches the sensor kit through the environment while the interface
 stays `key:=value`. Forwarding it as an argument would appear to work under
 play_launch, whose parser does not scope includes the way `ros2 launch` does, and
 would then silently stop working under stock `ros2 launch`; the environment
 survives both. Nothing needs `POINTCLOUD_BACKEND` set in a shell.
 
-It picks where the **whole preprocessing and concatenation stage** runs, not just
-the concatenator:
+`pointcloud_backend` picks where the **whole preprocessing and concatenation
+stage** runs, not just the concatenator:
 
 | | `cpu` (default) | `cuda` |
 |---|---|---|

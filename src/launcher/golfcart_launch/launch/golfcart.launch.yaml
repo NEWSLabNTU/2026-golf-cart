@@ -96,13 +96,75 @@ launch:
     default: "false"
     description: "Enable mapless mode for indoor operation without localization"
 
+# ── GPU acceleration ─────────────────────────────────────────────────────────
+#
+# One coarse switch, and a fine switch per stage that defaults from it. Both are
+# launch arguments; nothing here is set from the environment by a user.
+#
+#   just launch                                  # CUDA everywhere (the default)
+#   just launch use_cuda:=false                  # CPU everywhere
+#   just launch pointcloud_backend:=cpu          # CUDA NDT, CPU preprocessing
+#   just launch pose_source:=ndt                 # CUDA preprocessing, CPU NDT
+#
+# A fine argument given explicitly wins over the coarse one, because launch
+# argument defaults are only consulted when the caller did not supply a value.
+#
+# The two stages have VERY different amounts of evidence behind them.
+#
+# pointcloud_backend:=cuda is measured. A full NDT replay of the NTU CSIE-1 bag
+# scored cpu at 0.038 m scatter p95 / 0.179 deg yaw p95 and cuda at
+# 0.035 / 0.167 over ~600 m of driving, so it does not regress localization.
+# See docs/research/sensing/autoware-cuda-pointcloud-chain.md.
+#
+# pose_source:=cuda_ndt is NOT measured here, and on this desktop it does not
+# work: NDT never activates, logging "Max iterations reached" and "Pose
+# interpolation failed" until the harness gives up with "NDT never activated,
+# it is latched off and will not recover on its own". That is not evidence
+# against the feature. The installed cuda_ndt_matcher dates from 2026-08-17,
+# its source has moved since, and rebuilding it on an x86 desktop fails in the
+# cubecl-cuda dependency (E0425/E0432). The binary being exercised is stale.
+#
+# So: verify cuda_ndt on the Orin, where it is built and was developed, before
+# trusting this default. If localization does not converge, the first thing to
+# try is `pose_source:=ndt`, which is measured and works. `use_cuda:=false`
+# puts both stages back on CPU.
+#
+# The GPU cost side is also unmeasured on the Orin, whose iGPU shares memory
+# bandwidth with the CPU.
+- arg:
+    name: use_cuda
+    default: "true"
+    description: >-
+      Coarse GPU switch. Sets the default for pointcloud_backend and
+      pose_source; either can still be given explicitly to override it.
+
+- arg:
+    name: pointcloud_backend
+    default: $(eval "'cuda' if '$(var use_cuda)'.lower() in ('true','1','yes') else 'cpu'")
+    description: >-
+      LiDAR preprocessing and concatenation: cpu | cuda. cuda runs crop box,
+      distortion correction and ring outlier filtering as one
+      CudaPointcloudPreprocessorNode into the CUDA concatenator. Defaults from
+      use_cuda.
+
+# The sensor kit is reached through tier4_sensing_component.launch.xml and
+# tier4_sensing_launch/sensing.launch.xml, installed Autoware files that forward
+# a fixed set of arguments and drop the rest, so the value crosses that gap in
+# the environment. That is transport, not interface: the knob above is a launch
+# argument and nobody needs to set POINTCLOUD_BACKEND by hand.
+- set_env:
+    name: POINTCLOUD_BACKEND
+    value: "$(var pointcloud_backend)"
+
 - arg:
     name: pose_source
-    default: "ndt"
+    default: $(eval "'cuda_ndt' if '$(var use_cuda)'.lower() in ('true','1','yes') else 'ndt'")
     description: >-
-      Pose estimation source: ndt, cuda_ndt, aruco.
+      Pose estimation source: ndt, cuda_ndt, aruco. Defaults from use_cuda, so
+      cuda_ndt unless use_cuda:=false.
       aruco is indoor ArUco-board localization and REPLACES the scan matcher
-      entirely -- no point cloud map is loaded and no NDT runs. It requires
+      entirely -- no point cloud map is loaded and no NDT runs. It is not
+      affected by use_cuda and must be asked for by name. It requires
       aruco_tag_map_path.
 
 - arg:
@@ -153,28 +215,6 @@ launch:
     description: >-
       Localization preset: default, eagleye, aruco.
       aruco sets pose_source and additionally requires aruco_tag_map_path.
-
-# Which LiDAR concatenator loads into pointcloud_container.
-#
-# A real launch argument: `just launch pointcloud_backend:=cuda`. It reaches the
-# sensor kit through the set_env below rather than by being forwarded, because
-# the chain to the sensor kit runs through tier4_sensing_component.launch.xml and
-# tier4_sensing_launch/sensing.launch.xml, and the latter forwards exactly three
-# arguments (launch_driver, vehicle_mirror_param_file, pointcloud_container_name)
-# and drops everything else. Forwarding alone happens to work under play_launch,
-# whose parser does not scope includes the way ros2 launch does, and would then
-# silently stop working under stock `ros2 launch`. The environment survives both.
-#
-# Deliberately NOT in config/sensors.conf: unlike IMU_SOURCE and CAMERA_MODEL
-# this is not a per-machine deployment fact, it is a per-run experiment.
-- arg:
-    name: pointcloud_backend
-    default: "cpu"
-    description: "LiDAR concatenator: cpu | cuda"
-
-- set_env:
-    name: POINTCLOUD_BACKEND
-    value: "$(var pointcloud_backend)"
 
 # Include perception preset (defines perception_mode, use_traffic_light_recognition, etc.)
 - include:

@@ -39,7 +39,17 @@
   <arg name="launch_perception" default="false"/>
   <arg name="launch_planning" default="false"/>
   <arg name="launch_control" default="false"/>
-  <arg name="pose_source" default="ndt" description="ndt or cuda_ndt"/>
+  <!-- Same coarse/fine pair as golfcart.launch.yaml, so a replay defaults to the
+       same stack the vehicle runs. use_cuda:=false puts both stages back on CPU;
+       either fine argument can still be given on its own. -->
+  <arg name="use_cuda" default="true" description="coarse GPU switch for pose_source and pointcloud_backend"/>
+  <arg name="pose_source"
+       default="$(eval &quot;'cuda_ndt' if '$(var use_cuda)'.lower() in ('true','1','yes') else 'ndt'&quot;)"
+       description="ndt or cuda_ndt. Defaults from use_cuda."/>
+  <arg name="pointcloud_backend"
+       default="$(eval &quot;'cuda' if '$(var use_cuda)'.lower() in ('true','1','yes') else 'cpu'&quot;)"
+       description="cpu or cuda. Defaults from use_cuda."/>
+  <set_env name="POINTCLOUD_BACKEND" value="$(var pointcloud_backend)"/>
 
   <!-- Which recorded cloud NDT matches against. The bag carries two VLP32
        topics and they are NOT interchangeable:
