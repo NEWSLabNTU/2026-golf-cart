@@ -184,10 +184,15 @@ this sub-phase.
       the other two would reveal.
 - [ ] **Set `camera_info_rescale: false`** while verifying, so a resolution
       mismatch fails loudly instead of being silently absorbed.
-- [ ] **Make the three files impossible to confuse again.** Byte-identical
-      calibrations that differ only in `camera_name` are what got us here. A
-      check that fails when two cameras share intrinsics costs a few lines and
-      would have caught this.
+- [x] **Make the three files impossible to confuse again.** Done 2026-08-29:
+      `golfcart_sensor_kit_launch/test/test_camera_calibration.py` fails when two
+      cameras share a `camera_matrix`, when a principal point sits more than a
+      tenth of the frame from centre, or when a declared `rational_polynomial`
+      has no non-zero rational terms. All three defects are present today, so
+      the checks are marked `xfail(strict=True)`: the build stays green on
+      faults a checkerboard is needed to fix, and the day somebody recalibrates
+      they fail for passing unexpectedly, which is the prompt to delete the
+      marker.
 - [x] **The body→optical frame convention, stated explicitly.** Done
       2026-08-28. Each camera now has `camera_NAME_optical_link` as a fixed
       child of its mounting frame, and the drivers stamp images and
@@ -199,7 +204,11 @@ this sub-phase.
       above is fixed; the numbers are not. `sensor_kit_calibration.yaml` still
       holds round-number guesses with roll and pitch hard-zeroed, so the frames
       are now correctly shaped and still wrongly placed.
-- [ ] **Resolve the `usb_camera_front` phantom entry** in `sensor_kit_calibration.yaml`.
+- [x] **Resolve the `usb_camera_front` phantom entry.** Removed 2026-08-29.
+      Nothing referenced it: the description names `camera_left`,
+      `camera_right`, `camera_rear` and the ZED mounting point, and none of
+      them is this. An extrinsic for a sensor that does not exist reads as a
+      measurement and survives review by looking like its neighbours.
 - [ ] **Fixed-exposure camera profiles** — current config has
       `auto_exposure: true` and `auto_white_balance: true`, which cause
       intermittent ArUco detection through exposure hunting and motion blur.
