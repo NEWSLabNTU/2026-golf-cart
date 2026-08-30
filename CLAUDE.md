@@ -527,9 +527,16 @@ subscribes over `cuda_blackboard` and needs the `pointcloud_before_sync/cuda`
 negotiation topic that only the CUDA preprocessor publishes.
 
 **Only the Velodyne is preprocessed.** The Seyond publishes `PointXYZIRC` with no
-per-point time field, so it cannot be deskewed by CPU or GPU; it reaches the
-concatenator raw. Fixing that means changing the driver to emit
-`PointXYZIRCAEDT`.
+per-point time field, so as configured it cannot be deskewed by CPU or GPU; it
+reaches the concatenator raw.
+
+**Corrected 2026-08-30: the vendor driver already has the field.** It ships
+`seyond::PointXYZIT` with a per-point `double timestamp`, selected by
+`POINT_TYPE` in its CMakeLists and its own default. What is missing is the
+conversion into Autoware's `PointXYZIRCAEDT`, whose `time_stamp` is an offset
+from the scan start rather than an absolute double. That is a field mapping and
+some arithmetic in this repo, not a vendor change. See
+docs/research/localization/robinw-autoware-pipeline.md.
 
 Full reasoning and the measurements behind it:
 [docs/research/sensing/autoware-cuda-pointcloud-chain.md](docs/research/sensing/autoware-cuda-pointcloud-chain.md)

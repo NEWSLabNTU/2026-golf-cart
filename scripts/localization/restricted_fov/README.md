@@ -18,6 +18,8 @@ What to build if the margin proves thin:
 [ndt-revisions-for-narrow-fov.md](../../../docs/research/localization/ndt-revisions-for-narrow-fov.md).
 Why the camera analogy half-holds:
 [narrow-fov-localization-methods.md](../../../docs/research/localization/narrow-fov-localization-methods.md).
+Ranked pipeline directions:
+[robinw-autoware-pipeline.md](../../../docs/research/localization/robinw-autoware-pipeline.md).
 Related work and papers:
 [narrow-fov-related-work.md](../../../docs/research/localization/narrow-fov-related-work.md).
 

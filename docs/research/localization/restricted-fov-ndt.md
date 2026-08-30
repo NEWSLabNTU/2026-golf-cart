@@ -5,6 +5,9 @@ sees a 120 degree wedge instead of the full circle a Velodyne sweeps. NDT scan
 matching has always run here against 360 degree input. Does it still converge
 when three quarters of the horizon is gone?
 
+Pipeline design for a Robin-W on Autoware, ranked:
+[robinw-autoware-pipeline.md](robinw-autoware-pipeline.md).
+
 Related literature, including someone else's field-of-view ablation that agrees
 with the curve measured here:
 [narrow-fov-related-work.md](narrow-fov-related-work.md).

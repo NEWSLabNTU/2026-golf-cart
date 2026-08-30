@@ -361,10 +361,19 @@ Unchanged in order, sharpened in content:
    first. The Velodyne already has the right point type, this is the stage the
    pipeline is missing, and it is the stage that unlocks the CUDA concatenator.
    Do it for the correctness win, not the throughput one.
-2. **Fix the Seyond point type** to `PointXYZIRCAEDT` in the driver. Until then
-   that branch cannot be distortion-corrected by any means, which is a
-   localization accuracy problem today, not a GPU problem. Check the `I`/`R`/`C`
-   field naming at the same time.
+2. **Fix the Seyond point type** to `PointXYZIRCAEDT` in the conversion layer.
+   **Corrected 2026-08-30: the vendor driver already has the field.** It ships
+   `seyond::PointXYZIT` with a per-point `double timestamp`, selected by
+   `POINT_TYPE` in its CMakeLists and its own default. What is missing is the
+   conversion into Autoware's `PointXYZIRCAEDT`, whose `time_stamp` is an offset
+   from the scan start rather than an absolute double. That is a field mapping and
+   some arithmetic in this repo, not a vendor change. See
+   docs/research/localization/robinw-autoware-pipeline.md.
+
+   Until that conversion exists the branch cannot be distortion-corrected by any
+   means, which is a localization accuracy problem today, not a GPU problem, and
+   it matters more the denser the sensor gets. Check the `I`/`R`/`C` field naming
+   at the same time.
 3. **Do not wait on Nebula CUDA decode.** Velodyne is not implemented, the Hesai
    PR is unmerged and stale, and its current form worsens P95.
 4. **Instrument the GPU before step 1 lands**, so the before/after is measurable.

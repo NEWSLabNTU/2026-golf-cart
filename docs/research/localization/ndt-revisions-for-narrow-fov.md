@@ -18,6 +18,9 @@ Two measured facts drive the whole list:
   more than how wide it is, and that is exactly the quantity that varies along a
   route and cannot be fixed by tuning.
 
+Pipeline design for a Robin-W on Autoware, ranked:
+[robinw-autoware-pipeline.md](robinw-autoware-pipeline.md).
+
 Papers behind every direction below:
 [narrow-fov-related-work.md](narrow-fov-related-work.md).
 
