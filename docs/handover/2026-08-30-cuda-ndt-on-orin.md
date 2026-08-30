@@ -255,32 +255,51 @@ rotation for anything but small angles. `cuda_scan_matcher.param.yaml` already
 records this failure mode from 2026-08-03/04, when a euler round trip made the
 GPU read ~1.45x high and the NVTL gate had to be recalibrated against it.
 
-**This is a live bug, not just a rejected optimization.** `GpuScoringPipeline`
-is what `evaluate_nvtl_batch` uses, and that is the scorer behind the
-initial-pose align service — so `pose_source:=cuda_ndt` is ranking its
-initial-pose particles on NVTL values that are roughly 10% low and, worse,
-wrong by a pose-dependent amount. It is not on the per-scan path, so nothing
-above is affected, and it is not fixed here.
+**This was a live bug, not just a rejected optimization. It is now fixed** —
+`isometry_to_pose_vector` is the conversion that belongs at both call sites, and
+`derivatives/gpu.rs` already round-trip tests it against
+`pose_to_transform_matrix`; the two sites simply bypassed it.
+
+**A correction on its blast radius.** The first reading of this said the
+initial-pose align service ranked its particles on the wrong NVTL. That was
+wrong. The estimator scores particles with the singular `evaluate_nvtl`, which
+takes the matrix route and was always correct. What the bug actually reached:
+
+- `evaluate_nvtl_batch`, used only by `covariance.rs` for `MULTI_NDT` and
+  `MULTI_NDT_SCORE` — dormant, since the shipped config is
+  `covariance_estimation_type: 0` (FIXED).
+- `compute_per_point_scores_for_visualization`, the per-point score overlay.
+  Live, but cosmetic.
+
+A full replay after the fix is unchanged at 30.8 ms, NVTL 3.137 and 2.9 cm
+RMSE, which is the expected result: the per-scan path never used either site.
+
+The regression test took two attempts to make real, and both failures are the
+same shape as the bug. With the default config both scorers fall back to the
+same CPU routine and agree for the wrong reason, so it must force `use_gpu`.
+And with an arbitrary source cloud the pose carries it off the map, both
+scorers return 0, and it agrees again — so the source is built by pulling the
+target back through the pose, and the test asserts the fixture actually scores
+before it compares. A test that cannot fail is worse than no test.
 
 ## What to work on
 
-1. **The `GpuScoringPipeline` euler convention**, described above. Correctness,
-   not speed, and it sits under initial-pose estimation. Fixing it would also
-   make the persistent-target path usable for per-frame NVTL, though it would
-   still need to beat 11.7 ms to be worth taking.
+1. ~~The `GpuScoringPipeline` euler convention.~~ **Fixed.** The persistent-target
+   path is now correct, but still not worth taking for per-frame NVTL: it
+   measured 15.7 ms against 11.7 ms for the re-uploading path.
 2. **`upload`, 2.4 ms.** `align_full_gpu` still re-uploads the voxel grid to the
    GPU every frame even though it no longer repacks it, because the pipeline is
    constructed per call. Persisting the pipeline across frames would need
    interior mutability and invalidation on map reload.
 3. The initial-pose align. The previous handover's 35.3 s figure was measured
-   on x86 with `particles_num: 200`. Both fixes above are on that path too --
-   NVTL per particle and the per-frame repack -- so it should have moved a long
-   way, but it has not been re-measured here, and item 1 has to land before any
-   number taken from it means anything.
+   on x86 with `particles_num: 200`. The NVTL and repack fixes are both on that
+   path -- it scores every particle with `evaluate_nvtl` and aligns each one --
+   so it should have moved a long way. It has not been re-measured here, and it
+   is the last piece of `pose_source:=cuda_ndt` still unverified on the Orin.
 4. `pose_source:=cuda_ndt` now holds 10 Hz with margin (max 52.8 ms against a
    100 ms bound) and is the faster of the two matchers on the per-scan path.
    Whether it should *default* to CUDA is a call to make on vehicle data, not
-   on this bag, and not before item 1.
+   on this bag, and not before item 3.
 
 ## What is still unmeasured here
 

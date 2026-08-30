@@ -5,38 +5,50 @@
 
 ---
 
-## cuda_ndt initial-pose NVTL is scored on the wrong rotation (observed 2026-08-30)
+## cuda_ndt GPU scorer read the wrong rotation (found and fixed 2026-08-30)
 
-**Affects**: `pose_source:=cuda_ndt` initial-pose estimation only. The per-scan
-path is not affected and is validated against Autoware's NDT to 3.1 cm RMSE.
+**Fixed.** Recorded because the same defect has now appeared three times in this
+crate, and because the first assessment of its blast radius was wrong.
 
-`GpuScoringPipeline` takes poses as `[x, y, z, roll, pitch, yaw]` and builds its
-matrix with `pose_to_transform_matrix`, which composes `Rx(roll) · Ry(pitch) ·
-Rz(yaw)` — Autoware's convention. Its callers derive those angles from
-nalgebra's `Isometry3::rotation.euler_angles()`, which describes the opposite
-composition order. The two disagree for anything but small angles.
+`GpuScoringPipeline` takes poses as `[x, y, z, roll, pitch, yaw]` and rebuilds
+the rotation with `pose_to_transform_matrix`, which composes `Rx(roll) ·
+Ry(pitch) · Rz(yaw)` — Autoware's order, and what every consumer of a pose
+vector in this crate assumes. Two callers built those angles with nalgebra's
+`Isometry3::rotation.euler_angles()`, which describes the opposite composition.
+The two agree only when at most one angle is non-zero.
 
-Measured on the same 294 frames, scoring the same poses both ways:
+Measured over 294 frames, scoring the same poses both ways:
 
 | scorer | NVTL mean |
 |---|---|
-| `evaluate_nvtl_gpu` (rotation matrix, agrees with CPU to 3 decimals) | 3.138 |
-| `GpuScoringPipeline` (euler) | 2.821 |
+| `evaluate_nvtl_gpu` (isometry → matrix; agrees with the CPU scorer to 3 dp) | 3.138 |
+| `GpuScoringPipeline` (via euler angles) | 2.821 |
 
-Mean absolute difference 0.317, max 0.808 — against a convergence gate of 2.0.
+Mean absolute difference 0.317, max 0.808, against a convergence gate of 2.0.
 
-`evaluate_nvtl_batch` uses that pipeline, and it is the scorer behind the
-initial-pose align service, so particle ranking there is on values roughly 10%
-low and wrong by a pose-dependent amount.
+**What it actually affected**, which is narrower than that gap suggests:
 
-This is the same class of defect that `cuda_scan_matcher.param.yaml` records
-from 2026-08-03/04, when a euler round trip made the GPU read ~1.45x high and
-the NVTL gate was recalibrated against the wrong number. Not fixed. Found while
-evaluating whether the persistent scoring pipeline could serve per-frame NVTL;
-it could not, and the discrepancy is why.
+- `evaluate_nvtl_batch` — used only by `covariance.rs`, for `MULTI_NDT` and
+  `MULTI_NDT_SCORE`. `cuda_scan_matcher.param.yaml` ships
+  `covariance_estimation_type: 0` (FIXED), so this path was dormant.
+- `compute_per_point_scores_for_visualization` — the per-point score overlay.
+  Live, but cosmetic.
 
-Full detail in
-[handover/2026-08-30-cuda-ndt-on-orin.md](handover/2026-08-30-cuda-ndt-on-orin.md).
+**What it did not affect**, contrary to the first reading: initial-pose
+estimation. The estimator scores its particles with the singular
+`evaluate_nvtl`, which takes the matrix route and was always correct. Nor the
+per-scan path.
+
+The fix uses `isometry_to_pose_vector`, the exact inverse of
+`rotation_from_pose_angles`, which `derivatives/gpu.rs` already round-trip
+tests against `pose_to_transform_matrix`. That test passed throughout — these
+two call sites simply bypassed the converter it guards.
+
+Why it keeps recurring: nothing in the type system separates "angles in
+nalgebra's order" from "angles in Autoware's order". Both are `(f64, f64, f64)`,
+and a fixture with yaw-only motion cannot tell them apart. `cuda_scan_matcher.param.yaml`
+records the 2026-08-03/04 instance, where the NVTL gate was recalibrated against
+the wrong number rather than the number being fixed.
 
 ---
 
