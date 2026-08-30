@@ -66,7 +66,7 @@ drops unknown arguments. That is transport. Nobody sets it by hand.
 |---|---|---|
 | per-sensor preprocessing (crop, distortion, ring outlier) | **new, working** | full NDT replay, both backends |
 | `pointcloud_backend:=cuda` | **validated** | 0.035 m scatter p95 vs 0.038 cpu, over ~600 m |
-| `pose_source:=cuda_ndt` | per-frame **fixed on the Orin**; init still too slow | 40.5 ms/frame, but 23.1 s to initialise |
+| `pose_source:=cuda_ndt` | **working on the Orin**, per-frame and init | 30.7 ms/frame, 9.0 s to initialise |
 | `system_monitor` trimming | code only, never run on the cart | resolves to 5 monitors instead of 8 |
 | `GNSS_RECEIVER=none` | code only, **not applied** | needs setting on the Advantech |
 
@@ -115,23 +115,23 @@ Autoware's own NDT**.
    path is now the faster of the two**, and `cuda_ndt` holds 10 Hz in real time
    where it previously ran 4.8x slower than the sensor.
 
-4. **Initialisation still misses the caller deadline.** Re-measured on x86 after
-   taking (3), because that work targets the per-frame path and the align
-   service is separate:
+4. **Initialisation also fixed.** The batched startup phase named above as the
+   remaining cost turned out to have the *same* defect as (3), one level down:
+   `align_batch_gpu` ended every particle with the CPU NVTL pass. At
+   `n_startup_trials: 100` that was 42.2 s of a 49.1 s align on the Orin.
 
    ```
-   align phase startup: 100 particles in 14002ms (of which NVTL 3240ms)
-   align phase tpe:     100 particles in  9077ms
+   align phase startup: 100 particles in 2984ms
+   align phase tpe:     100 particles in 6020ms (sample 1603, align 4412, nvtl 0)
    ```
 
-   23.1 s, down from 35.3 s. The TPE half is 2.3x faster because it runs through
-   `align_full_gpu` and inherits the NVTL fix. **The batched startup phase does
-   not, and now dominates**: 14.0 s for 100 particles, ~108 ms each before NVTL,
-   from a call named `align_batch` that is not buying much batching.
+   49.1 s -> 9.0 s, and `pose_source:=cuda_ndt` now initialises from Monte Carlo
+   and tracks end to end: `align server succeeded.` -> EKF and NDT activated ->
+   263 poses over 129.4 m. The Orin is now 3.9x faster at this than the x86
+   desktop the 35.3 s figure came from.
 
-   So `pose_source:=cuda_ndt` still cannot initialise, `pose_source:=ndt`
-   remains the working setting, and it is still worth deciding whether the
-   default should revert until (4) lands.
+   Full detail, including the phase breakdown and a particle-count sweep, is in
+   [2026-08-30-cuda-ndt-on-orin.md](2026-08-30-cuda-ndt-on-orin.md).
 
 ---
 
@@ -170,11 +170,15 @@ git submodule status --recursive | grep '^+'
 
 ## Still open, roughly in order
 
-1. Make cuda_ndt's **initialisation** fit the caller deadline. 23.1 s, of which
-   14.0 s is the batched startup phase, which did not benefit from the NVTL fix.
-   Either make `align_batch` actually batch, or reduce `particles_num` /
-   `n_startup_trials` for the CUDA path. The per-frame path is already done.
-2. Decide whether `pose_source` should default to `cuda_ndt` before (1) lands.
+1. Validate `pose_source:=cuda_ndt` on real data. Everything measured on the
+   Orin used Autoware's sample map and bag -- 30 s, 129 m, one environment, and
+   a good GNSS prior. Nothing has run against NTU, COSS or the cart's own
+   sensors, and that is what decides whether the default should stay on CUDA.
+2. Confirm the particle split on data with a *poor* initial guess. Raising
+   `n_startup_trials` to `particles_num` measured 1.6x faster with a tighter
+   score spread, but this bag never exercises what the TPE guidance is for. The
+   numbers and the caveat are at that parameter in
+   `cuda_ndt_matcher_launch/config/cuda_scan_matcher.param.yaml`.
 3. Confirm on the cart: the preprocessing chain, the `system_monitor` trimming,
    and `GNSS_RECEIVER=none` on the Advantech. All three are code-only.
 4. The Seyond publishes `PointXYZIRC` with no per-point time, so that branch can

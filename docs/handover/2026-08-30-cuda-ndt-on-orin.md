@@ -3,9 +3,12 @@
 **Written**: 2026-08-30, on the target hardware.
 **Measured on**: NVIDIA Jetson AGX Orin Developer Kit, JetPack 6.2 (R36.4.4),
 CUDA 12.6, driver 540.4.0, 12 cores, 61 GB shared LPDDR5, `nvpmodel` MAXN.
-Supersedes the parts of
-[2026-08-30-cuda-pipeline-to-orin.md](2026-08-30-cuda-pipeline-to-orin.md)
-that were written from an x86 desktop and guessed at this hardware.
+Companion to
+[2026-08-30-cuda-pipeline-to-orin.md](2026-08-30-cuda-pipeline-to-orin.md),
+which carries the wider checkpoint and the traps. That document folds in the
+headline results; this one is the working record behind them -- the phase
+measurements, the two optimizations that were rejected on measurement, and the
+scoring defect the second one exposed.
 
 ---
 
