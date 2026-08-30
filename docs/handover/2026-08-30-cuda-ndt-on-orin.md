@@ -386,15 +386,20 @@ deliver the same work:
 | `concatenated/pointcloud` | 367, 370 | 356, 361 |
 | bag duration | 29.74 s | 29.76 s |
 
-**The comparison:**
+**The comparison**, re-measured under play_launch 0.9.0 through the justfile's
+own invocation (`--container-mode observable`), two runs per backend:
 
 | | cpu | cuda | delta |
 |---|---|---|---|
-| `pointcloud_container` CPU | 117.9%, 121.6% | 91.5%, 97.1% | **−25.5 pts (−21%)** |
-| system CPU, 12-core mean | 73.6%, 73.6% | 72.9%, 73.8% | ~0 |
-| **GPU `GR3D_FREQ`** | 2.8%, 3.4% | 35.0%, 32.6% | **+30.7 pts** |
-| `VDD_GPU_SOC` | 4329 mW | 4946 mW | +617 mW |
-| `VDD_CPU_CV` | 9649 mW | 9552 mW | −97 mW (noise) |
+| `pointcloud_container` CPU | 127.8%, 131.5% | 104.8%, 107.1% | **−23.7 pts (−18%)** |
+| system CPU, 12-core mean | 76.9%, 75.4% | 76.4%, 75.7% | ~0 |
+| **GPU `GR3D_FREQ`** | 2.0%, 2.7% | 37.5%, 33.5% | **+33.1 pts** |
+| `VDD_GPU_SOC` | 4347, 4305 mW | 4797, 4784 mW | +465 mW |
+| `VDD_CPU_CV` | 10158, 10093 mW | 10205, 10139 mW | +46 mW (noise) |
+
+The first pass, under play_launch 0.5.1 without `--container-mode`, gave
+−25.5 pts / +30.7 pts / +617 mW. Same conclusion, and the two sets of absolute
+numbers do not compare — see *What changed between the two passes* below.
 
 So the CUDA path **trades about a quarter of a core for about a third of the
 GPU, and roughly half a watt**, at equal throughput.
@@ -425,6 +430,25 @@ variable, and inadequate for anything else.
 - The CPU concatenator published marginally more clouds (367/370 against
   356/361, ~2.5%). Not investigated.
 
+### What changed between the two passes
+
+The delta held; the absolutes moved, and the process topology moved with them.
+
+`ndt_scan_matcher` is the largest consumer in the second pass at **~140% CPU in
+all four runs**, and it did not appear at all in the first — where nothing
+outside `pointcloud_container` exceeded 60%. The node is the same and it was
+running both times. What changed is that `--container-mode observable` is now
+actually accepted, so composable nodes are hosted differently and per-process
+attribution lands differently.
+
+The lesson is narrow and worth keeping: **absolute per-process CPU from
+play_launch is a function of its container mode, not just of the code.** Compare
+deltas within one configuration; do not compare absolutes across configurations.
+
+That ~140% is also worth someone's attention on its own. `cuda_ndt` runs at
+30.7 ms per frame at 10 Hz, which is 31% duty, so 1.4 cores is more than the
+alignment can account for. Not investigated here.
+
 ### A measurement that was wrong, and why
 
 The first attempt reported `pointcloud_container` at 117.7% -> 38.6%, a 3x
@@ -437,6 +461,11 @@ The harness now refuses to start if any `play_launch`, `component_container` or
 `ros2 bag` process is alive, and waits for the load average to fall below 6
 before opening its window. On a shared 12-core box that guard is not optional --
 without it the numbers are confidently wrong rather than noisy.
+
+The guard is still needed under 0.9.0: every run in the second pass left **three
+play_launch processes alive 25 seconds after SIGINT**, so the survival is not a
+0.5.1 defect. Match on `comm` when checking -- `pgrep -f play_launch` also
+matches the shell running the check.
 
 ## What is still unmeasured here
 

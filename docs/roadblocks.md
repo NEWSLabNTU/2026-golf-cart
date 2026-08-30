@@ -112,11 +112,10 @@ Any resource measurement here needs to (1) refuse to start while a
 wait for the load average to fall before opening its window. Killing the parent
 is not enough; `pkill -9 -f play_launch` plus `component_container` is.
 
-Observed under play_launch 0.5.1. It has not been retested under 0.9.0 — a
-later teardown left nothing behind, but that run force-killed after SIGINT, so
-it does not show the survival is gone. Keep the guard until something measures
-otherwise. Also beware that `pgrep -f play_launch` matches the checking command
-itself; match on `comm`, not the full command line.
+**Confirmed under 0.9.0 as well.** Four measured runs each left three
+play_launch processes alive 25 seconds after SIGINT, so this is not a 0.5.1
+defect and the upgrade does not retire the guard. Beware also that
+`pgrep -f play_launch` matches the checking command itself; match on `comm`.
 
 ---
 
