@@ -1,39 +1,43 @@
 # Checkpoint: CUDA point cloud pipeline and CUDA NDT, moving to the Orin
 
-**Written**: 2026-08-30, parent at `228e6f0`, everything pushed.
+**Written**: 2026-08-30, parent at `228e6f0`.
+**Updated**: 2026-08-30 after work on the Orin (`7af02e1`, `3d0c51a`), pinned
+at `49f83ab`. Two of my conclusions were corrected there and both corrections
+are kept in place rather than deleted.
+
 **Measured on**: an x86_64 desktop, 20 cores, discrete RTX 3090 with 24 GB of
-its own VRAM. **Not** the AGX Orin, whose iGPU shares LPDDR5 with the CPU. Every
-GPU number below is an upper bound that will not transfer.
+its own VRAM, EXCEPT where a row says Orin. The Orin's iGPU shares LPDDR5 with
+the CPU, so a desktop GPU number is an upper bound that does not transfer;
+where both exist, trust the Orin one.
 
 ---
 
-## Do this first, before running anything
+## The CUDA floor: resolved on the Orin, and I had it wrong
 
-The build fix for `cuda_ndt_matcher` takes on a risk that can only be checked on
-the Orin, and getting it wrong means the node fails to load rather than fails
-gracefully.
+**Superseded 2026-08-30 by work on the Orin (`7af02e1`). No action needed; kept
+because the reasoning is worth not repeating.**
 
-```bash
-nm -D /usr/lib/aarch64-linux-gnu/tegra/libcuda.so.1 | grep cuEventElapsedTime_v2
-```
+This section originally told you to run `nm -D` for `cuEventElapsedTime_v2`
+before anything else, because I had pinned cubecl's `cudarc` to `cuda-12080`
+and could not test the consequence. That check was run on the Orin: **JetPack
+6.2 does not export the symbol**, so the pin I left in place would have taken a
+package that compiles everywhere and made it open nowhere on the target. The
+floor is back at `cuda-12030`.
 
-- **Symbol present** -> the pin is fine, carry on.
-- **Symbol absent** -> `cuda_ndt_matcher` will fail to open libcuda at startup.
+My diagnosis behind that pin was also wrong, in a way worth naming. I reported
+that `cubecl-cuda` 0.8.1 references the CUDA 12.8 tensormap symbols
+*unconditionally at 7 sites*. It does not. They sit behind
+`#[cfg(cuda_12080)]` with a fallback branch beside them. I grepped for the
+symbol names and never read the `cfg` attributes around them.
 
-Why: `src/ndt_cuda/Cargo.toml` pins cubecl's `cudarc` to `cuda-12080`, which is
-the lowest floor that compiles (see below). `cuda-12080` also *declares*
-`cuEventElapsedTime_v2`, and cudarc's `dynamic-loading` resolves **every**
-declared symbol in `Lib::from_library()` when the library is opened, not lazily
-on call. One missing export fails the whole load. The Cargo.toml records this
-at length at the pin site.
-
-If the symbol is absent, the fix is to hold `cubecl-cuda` at a version that does
-not use the CUDA 12.8 tensormap API, which means pinning `cubecl` itself since
-`cubecl` 0.8.1 requires `cubecl-cuda` ^0.8.1. Downgrading to `cubecl` 0.8.0 was
-tried here and fails differently, with ~106 `defined multiple times` errors from
-two `cuda-*` features being enabled at once.
-
----
+The real cause is subtler and is now fixed properly: that `cfg` is set by
+`cubecl-cuda`'s own **build-dependency** copy of `cudarc`, which shells out to
+`nvcc --version` and assumes CUDA 13.0 when nvcc is off PATH. Cargo's v2
+resolver keeps build-dependency features separate from normal ones, so pinning
+the normal copy could never reach the copy that decides. The fix is a
+`[build-dependencies]` block naming the same crate at the same floor, plus a
+`build.rs` that makes cargo resolve it. Reproduced both ways on the Orin, and
+verified building clean on x86 here.
 
 ## What the launch arguments now do
 
@@ -62,7 +66,7 @@ drops unknown arguments. That is transport. Nobody sets it by hand.
 |---|---|---|
 | per-sensor preprocessing (crop, distortion, ring outlier) | **new, working** | full NDT replay, both backends |
 | `pointcloud_backend:=cuda` | **validated** | 0.035 m scatter p95 vs 0.038 cpu, over ~600 m |
-| `pose_source:=cuda_ndt` | **builds and converges, too slow to use** | 35.3 s align vs the caller deadline |
+| `pose_source:=cuda_ndt` | per-frame **fixed on the Orin**; init still too slow | 40.5 ms/frame, but 23.1 s to initialise |
 | `system_monitor` trimming | code only, never run on the cart | resolves to 5 monitors instead of 8 |
 | `GNSS_RECEIVER=none` | code only, **not applied** | needs setting on the Advantech |
 
@@ -81,33 +85,53 @@ with coarser voxels and tighter crops whether or not the pose improves.
 Equivalent. The runs covered different distances, which accounts for a gap that
 size, so read it as "no regression" rather than a CUDA win.
 
-### cuda_ndt is the open problem
+### cuda_ndt: per-frame is solved, initialisation is not
 
-Three faults were found and two are fixed.
+Four faults. Three are fixed, and the per-frame path is now **faster than
+Autoware's own NDT**.
 
-1. **It did not build on any host**, including the Orin, since the `cuda-12030`
-   pin landed. `cubecl-cuda` 0.8.1 needs `cudarc`'s `cuda-12080` bindings.
-   Fixed by raising that one pin, with the caveat at the top of this document.
+1. **It did not build on any host.** Cause and fix are in the section at the top
+   of this document; the short version is that the deciding cudarc copy is a
+   build-dependency, and it is now pinned as one.
 2. **The align service re-voxelised the map it already held.** It asks for a map
    update before estimating, matching upstream ordering, but the first call
    reports "updated" only because there is no previous position. That rebuilt
    6.6M points, 9.9 s of GPU, competing with the alignment itself. Fixed with a
    fingerprint of the points the target was built from. The log now says
    `Map update skipped: target already built from these 6607317 points`.
-3. **It converges and is still too slow.** Score 3.06, `reliable=true`, in
-   **35.3 s** against the caller deadline. Phase timing now logs on every run:
+3. **Per-frame alignment ended with a serial CPU NVTL pass.** Fixed on the Orin
+   (`3d0c51a`) by scoring NVTL on the GPU runtime the node already owned. It was
+   393 ms of a 416 ms alignment, 94.5%. Measured there over Autoware's sample
+   map and bag, 292 frames at full playback rate:
+
+   | | before | after |
+   |---|---|---|
+   | `exe_time_ms` mean | 415.3 | **40.5** |
+   | `exe_time_ms` max | 480 | 56 |
+   | NVTL | 3.138 | 3.139 |
+   | RMSE vs Autoware NDT | 0.0277 m | 0.0297 m |
+
+   Autoware's own NDT is 47.0 ms mean on the same machine and bag, so **the CUDA
+   path is now the faster of the two**, and `cuda_ndt` holds 10 Hz in real time
+   where it previously ran 4.8x slower than the sensor.
+
+4. **Initialisation still misses the caller deadline.** Re-measured on x86 after
+   taking (3), because that work targets the per-frame path and the align
+   service is separate:
 
    ```
-   align phase startup: 100 particles in 14297ms (of which NVTL 2978ms)
-   align phase tpe:     100 particles in 21037ms
+   align phase startup: 100 particles in 14002ms (of which NVTL 3240ms)
+   align phase tpe:     100 particles in  9077ms
    ```
 
-   ~113 ms per batched particle and ~210 ms per serial TPE particle, with
-   `particles_num: 200` and `n_startup_trials: 100`. The batching buys much less
-   than its name suggests and the TPE half is serial. **That is the next thing
-   to work on.** Until it lands, `pose_source:=ndt` is the working setting, and
-   it is worth deciding whether the `pose_source` default should revert to `ndt`
-   rather than shipping one that cannot initialise.
+   23.1 s, down from 35.3 s. The TPE half is 2.3x faster because it runs through
+   `align_full_gpu` and inherits the NVTL fix. **The batched startup phase does
+   not, and now dominates**: 14.0 s for 100 particles, ~108 ms each before NVTL,
+   from a call named `align_batch` that is not buying much batching.
+
+   So `pose_source:=cuda_ndt` still cannot initialise, `pose_source:=ndt`
+   remains the working setting, and it is still worth deciding whether the
+   default should revert until (4) lands.
 
 ---
 
@@ -146,8 +170,10 @@ git submodule status --recursive | grep '^+'
 
 ## Still open, roughly in order
 
-1. Make cuda_ndt's align fit the caller deadline, or reduce `particles_num` for
-   the CUDA path. 35.3 s is the whole problem.
+1. Make cuda_ndt's **initialisation** fit the caller deadline. 23.1 s, of which
+   14.0 s is the batched startup phase, which did not benefit from the NVTL fix.
+   Either make `align_batch` actually batch, or reduce `particles_num` /
+   `n_startup_trials` for the CUDA path. The per-frame path is already done.
 2. Decide whether `pose_source` should default to `cuda_ndt` before (1) lands.
 3. Confirm on the cart: the preprocessing chain, the `system_monitor` trimming,
    and `GNSS_RECEIVER=none` on the Advantech. All three are code-only.
