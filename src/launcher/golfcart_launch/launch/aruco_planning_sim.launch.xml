@@ -1,0 +1,94 @@
+<?xml version="1.0"?>
+<!--
+  Phase 3D-6 stage 2: the ArUco localization chain driving Autoware's planning
+  simulator.
+
+  Stage 1 exercises the localizer against synthetic detections with no map and
+  no planner. This adds what that skips: the map loaders, a route, planning and
+  control consuming the fused pose, and the MRM path.
+
+  Why this does not simply include planning_simulator.launch.xml. That file
+  derives launch_dummy_vehicle from scenario_simulation with a <let>, so the
+  dummy vehicle cannot be turned off from outside it, and the dummy vehicle
+  publishes the very topics this test exists to produce. The composition below
+  is the same one it performs, with its vehicle replaced by
+  components/planning_sim_vehicle.launch.xml, which sends its motion to
+  /simulation/ground_truth/* instead.
+
+  The detector is still the synthetic one: this stage is about the chain from a
+  pose to a stopped vehicle, not about image processing. Feeding it from the
+  simulator's ground truth is what makes the loop closed, the vehicle moves
+  because control acted on a pose the localizer derived from where the
+  simulator says the vehicle is.
+-->
+<launch>
+  <!-- Required, like every other launch here that needs a map: the maps live in
+       the workspace's data directory, not in a package, so a default computed
+       from a share path would be a guess about where the workspace is. -->
+  <arg name="map_path" description="lanelet2 and pointcloud map directory"/>
+  <arg name="vehicle_model" default="golfcart_vehicle"/>
+  <arg name="sensor_model" default="golfcart_sensor_kit"/>
+  <arg name="tag_map_path"
+       default="$(find-pkg-share aruco_sim_detector)/config/sample_map_tag_map.yaml"
+       description="must match the map: the boards are placed along its lanes"/>
+  <arg name="loc_config_path"
+       default="$(find-pkg-share golfcart_launch)/config/localization"/>
+  <arg name="corner_sigma_px" default="0.3"/>
+  <arg name="rviz" default="false"/>
+
+  <!-- Fault injection, same switches stage 1 uses, so the same faults can be
+       driven through the fuller loop. -->
+  <arg name="blackout" default="false"/>
+  <arg name="blackout_start" default="0.0"/>
+  <arg name="displaced_board_id" default="-1"/>
+  <arg name="displacement" default="[0.0, 0.0, 0.0]"/>
+
+  <group scoped="false">
+    <!-- Autoware without sensing, without localization and without perception:
+         localization is the thing under test and the others have no inputs in a
+         planning simulation. -->
+    <include file="$(find-pkg-share autoware_launch)/launch/autoware.launch.xml">
+      <arg name="map_path" value="$(var map_path)"/>
+      <arg name="vehicle_model" value="$(var vehicle_model)"/>
+      <arg name="sensor_model" value="$(var sensor_model)"/>
+      <arg name="launch_sensing" value="false"/>
+      <arg name="launch_localization" value="false"/>
+      <arg name="launch_perception" value="false"/>
+      <arg name="launch_vehicle_interface" value="false"/>
+      <arg name="system_run_mode" value="planning_simulation"/>
+      <arg name="launch_system_monitor" value="false"/>
+      <arg name="launch_dummy_diag_publisher" value="true"/>
+      <arg name="rviz" value="$(var rviz)"/>
+      <arg name="is_simulation" value="true"/>
+    </include>
+  </group>
+
+  <!-- The simulator, minus its vehicle. localization_sim_mode is none because
+       nothing here wants the simulator pretending to be a pose estimator. -->
+  <group>
+    <include file="$(find-pkg-share autoware_launch)/launch/components/tier4_simulator_component.launch.xml">
+      <arg name="launch_dummy_perception" value="true"/>
+      <arg name="launch_dummy_vehicle" value="false"/>
+      <arg name="launch_dummy_doors" value="true"/>
+      <arg name="localization_sim_mode" value="none"/>
+      <arg name="launch_scenario_simulator_v2_adapter" value="false"/>
+      <arg name="vehicle_model" value="$(var vehicle_model)"/>
+      <arg name="sensor_model" value="$(var sensor_model)"/>
+    </include>
+  </group>
+
+  <!-- Our vehicle, publishing motion as ground truth. -->
+  <include file="$(find-pkg-share golfcart_launch)/launch/components/planning_sim_vehicle.launch.xml"/>
+
+  <!-- The chain under test. -->
+  <include file="$(find-pkg-share golfcart_launch)/launch/components/aruco_localization.launch.xml">
+    <arg name="loc_config_path" value="$(var loc_config_path)"/>
+    <arg name="aruco_tag_map_path" value="$(var tag_map_path)"/>
+    <arg name="use_sim_detector" value="true"/>
+    <arg name="sim_corner_sigma_px" value="$(var corner_sigma_px)"/>
+    <arg name="sim_blackout" value="$(var blackout)"/>
+    <arg name="sim_blackout_start_s" value="$(var blackout_start)"/>
+    <arg name="sim_displaced_board_id" value="$(var displaced_board_id)"/>
+    <arg name="sim_displacement" value="$(var displacement)"/>
+  </include>
+</launch>

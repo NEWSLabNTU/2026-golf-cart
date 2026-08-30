@@ -399,6 +399,15 @@ launch-sim-planning:
         vehicle_model:=golfcart_vehicle \
         sensor_model:=golfcart_sensor_kit
 
+# Phase 3D-6 stage 2: ArUco localization driving the planning simulator
+sim-aruco-planning *ARGS:
+    play_launch launch \
+        --container-mode "${GOLFCART_CONTAINER_MODE:-observable}" \
+        --web-addr 0.0.0.0:8081 \
+        golfcart_launch aruco_planning_sim.launch.xml \
+        map_path:={{justfile_directory()}}/data/sample-map-planning \
+        {{ARGS}}
+
 # Launch logging simulation for rosbag replay testing
 launch-sim-logging ARGS="":
     #!/usr/bin/env bash

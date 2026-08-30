@@ -79,6 +79,28 @@ map loaders, planning and control consuming the fused pose, and the MRM path.
       every one of those properties is otherwise unreadable, and a wrong one
       loads and localizes to the wrong place without complaint.
 - [ ] A route for the vehicle to drive, and a start pose on it.
+- [~] **The stage 2 launch exists and has not been run.**
+      `aruco_planning_sim.launch.xml` composes what
+      `planning_simulator.launch.xml` composes, with its dummy vehicle replaced
+      by `planning_sim_vehicle.launch.xml` and the ArUco chain in place of the
+      localization it disables. `just sim-aruco-planning` runs it.
+
+      It cannot be that file's own include, because `launch_dummy_vehicle` is
+      derived there from `scenario_simulation` with a `<let>` and cannot be
+      overridden from outside, and the dummy vehicle publishes the topics this
+      test exists to produce.
+
+      **Unverified at runtime.** Attempts were made on a workstation carrying a
+      load average of 1100 with another full Autoware stack already up, where
+      the stock `planning_simulator.launch.xml` also produced no nodes. Nothing
+      was learned about either launch file from that, and the file should be
+      treated as untested until somebody runs it on an idle machine.
+
+      Two things were learned on the way. `data/ntu-campus-planning/r01` has no
+      `pointcloud_map.pcd`, only the lanelet2 map, so anything expecting a
+      complete map directory there will wait, including the repository's own
+      `just launch-sim-planning`. And `data/sample-map-planning` is complete,
+      which is why the tag map and this launch default to it.
 - [ ] Confirm planning and control engage on the ArUco-derived pose.
 - [ ] Confirm the MRM path actually stops the vehicle when the localizer reports
       `FAULT` — the wiring from `/diagnostics` through to a stop request is easy
