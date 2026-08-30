@@ -538,6 +538,14 @@ from the scan start rather than an absolute double. That is a field mapping and
 some arithmetic in this repo, not a vendor change. See
 docs/research/localization/robinw-autoware-pipeline.md.
 
+**And there is a second, separate gap found 2026-08-30.** `NEWSLabNTU/seyond_ros_driver`
+already emits Autoware's `PointXYZIRC` (`8e99e38`), but registers the field
+*names* as `I`, `R`, `C` where Autoware compares them literally against
+`intensity`, `return_type`, `channel`
+(`autoware_pointcloud_preprocessor/src/utility/memory.cpp`). So the cloud is
+rejected by every preprocessing node today, independently of the timestamp
+question. Three string literals. See docs/roadmaps/6-robinw-localization.md, R0-a.
+
 Full reasoning and the measurements behind it:
 [docs/research/sensing/autoware-cuda-pointcloud-chain.md](docs/research/sensing/autoware-cuda-pointcloud-chain.md)
 and [docs/research/sensing/lidar-pipeline-starvation.md](docs/research/sensing/lidar-pipeline-starvation.md).

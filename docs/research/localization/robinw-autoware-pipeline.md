@@ -6,6 +6,9 @@ and 0.15 by 0.36 degree resolution. General pipeline design, not this vehicle's
 current maintenance backlog; that is in
 [ndt-revisions-for-narrow-fov.md](ndt-revisions-for-narrow-fov.md).
 
+Sequenced with decision points in
+[docs/roadmaps/6-robinw-localization.md](../../roadmaps/6-robinw-localization.md).
+
 Every direction below is **evaluable now on existing dense-LiDAR rosbags**, with
 no Robin-W recording. What each bench can and cannot answer is at the bottom.
 
@@ -66,6 +69,24 @@ benefit — and the errors being chased here are 0.08 m.
 
 It is also a precondition for several items below, and it is plumbing rather than
 research.
+
+**A second, separate gap sits in front of it.** `NEWSLabNTU/seyond_ros_driver`
+already emits Autoware's `PointXYZIRC` (`8e99e38`), and gets the struct layout
+right, but registers the field *names* as `I`, `R`, `C`:
+
+```c++
+(std::uint8_t, intensity, I)
+(std::uint8_t, return_type, R)
+(std::uint16_t, ring,      C)
+```
+
+Autoware compares them literally — `field_intensity.name == "intensity"`,
+`"return_type"`, `"channel"` — in
+`autoware_pointcloud_preprocessor/src/utility/memory.cpp`. All three fail, so the
+Seyond cloud is refused by every preprocessing node **today**, with or without a
+timestamp. Three string literals and renaming `ring` to `channel`. The header's
+own comment asserts the names match Autoware, which is presumably why it went
+unnoticed.
 
 **Test:** ablate the distortion corrector on any dense bag that carries per-point
 time, at several speeds. The effect should grow with speed and with how fine the
