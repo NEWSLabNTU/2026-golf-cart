@@ -345,16 +345,67 @@ populate them, and NDT's was being thinned first. Resolving that is R7-d.
 **Acceptance:** know what the deployed map resolution is, and whether NDT can use
 a fine one once the scan is dense enough.
 
-### R7-b. Survey with the deployment sensor
+### R7-e. Do not over-downsample the survey map — THE ACTIVE LEVER
+
+**Constraint, stated 2026-08-31: the point cloud map comes from a survey company,
+scanned with a different sensor, and this project downsamples it.** Surveying
+with the Robin-W (R7-b below) is therefore not available. That removes the
+headline lever and replaces it with a better one, because the remaining knob is
+the one this project already controls.
+
+Robin-W against a map built by a **different, wider sensor**, varying only the
+downsample voxel:
+
+| map downsample | 0.05 m | 0.10 m | **0.20 m** | 0.40 m |
+|---|---|---|---|---|
+| Robin-W err p50 | **0.048** | 0.061 | 0.082 | 0.104 |
+| Robin-W err p95 | 0.147 | 0.168 | 0.223 | 0.248 |
+| map size, 76 m route | 104 MB | 22 MB | 4.6 MB | 1.0 MB |
+
+**At 0.05 m the Robin-W reaches 0.048, beating the deployed VLP-32C baseline of
+0.055, on a map from a different sensor.** No change of provenance, no survey
+with the vehicle's own LiDAR, no new matcher. The current 0.2 m is simply too
+coarse, and it is too coarse for the VLP-32C as well: that sensor goes 0.055 to
+**0.040** on the same 0.05 m map.
+
+The wedge gains more, 41% against the VLP-32C's 27%, exactly as the bias
+mechanism predicts — a coarse map cell displaces a surface by an amount depending
+on which part of it was seen, and only a full circle averages those displacements
+away.
+
+**Cost is the real decision, not accuracy.** Extrapolating this route, 0.05 m is
+about 1.4 MB per metre and 0.10 m about 0.3 MB per metre, so a 2 km campus route
+is roughly 2.7 GB against 600 MB. Autoware loads the map by radius rather than
+whole, so runtime memory is bounded, but the target build cost and the map
+loading are not free. **0.10 m looks like the sweet spot pending on-vehicle
+timing** — it recovers half the improvement for a fifth of the size — and 0.05 m
+is worth it only if the Orin can carry it.
+
+**Acceptance:** the deployed map's downsample voxel is known, chosen
+deliberately, and justified against measured on-vehicle load and align time
+rather than inherited.
+
+**Caveat that bounds the numbers.** The map here was built from the same pass
+that is then scored against it, so its error is correlated with the reference in
+a way a real survey map's is not. The *absolute* values are therefore optimistic.
+The *trend* should transfer, because it is about discretisation rather than
+correlation, and discretisation does not care where the map came from.
+
+### R7-b. Survey with the deployment sensor — OUT OF SCOPE
 
 On top of a fine map, building it from the wedge's own returns takes 0.078 to
 **0.057**. It helps the VLP-32C too, 0.076 to 0.067, so it is not
 wedge-specific — but the wedge gains **27% against 12%**, since less angular
 averaging means less capacity to hide a viewpoint mismatch.
 
-Cheapest thing on this list and the most urgent, because it is a decision that
-becomes expensive to reverse the moment a production map exists. Every map this
-project owns was built with a Velodyne.
+**Not available: the map is bought, not made.** Kept for two reasons. It is the
+experiment that separated map/scan mismatch from every other candidate cause,
+and it bounds what the mismatch is worth should provenance ever be negotiable.
+
+Note also that its measured gain is partly an artifact: the self-built map was
+made from the same pass that was then scored against it, so map error and
+reference error cancelled. R7-e does not have that problem to anything like the
+same degree, since the map there comes from a different sensor.
 
 **Unmeasured risk:** a self-built map is a map of a route already driven. In
 service the map is older than the drive, and nothing here says how the advantage

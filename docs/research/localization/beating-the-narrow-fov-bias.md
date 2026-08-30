@@ -11,7 +11,30 @@ recovers about half the penalty. This document is the resulting map of the
 solution space — deliberately not restricted to NDT, since the mechanism is
 matcher-independent and so are most of the remedies.
 
-## Confirmed in the real pipeline: 0.055 m, matching VLP-32C NDT
+## The answer under the real constraint: stop over-downsampling the map
+
+**The map comes from a survey company and is downsampled here**, so building it
+with the Robin-W is not an option. The remaining knob is the downsample, and it
+turns out to be the bigger one.
+
+Robin-W against a map from a **different, wider sensor**, Autoware NDT, varying
+only the map's downsample voxel:
+
+| map downsample | 0.05 m | 0.10 m | **0.20 m (current)** | 0.40 m |
+|---|---|---|---|---|
+| Robin-W err p50 | **0.048** | 0.061 | 0.082 | 0.104 |
+| map size, 76 m route | 104 MB | 22 MB | 4.6 MB | 1.0 MB |
+
+**0.048 m beats the deployed VLP-32C baseline of 0.055 m**, with no change of map
+provenance and no change of matcher. The 0.2 m default is too coarse for both
+sensors — the VLP-32C reaches 0.040 on the same map — and the wedge gains more,
+41% against 27%, as the bias mechanism predicts.
+
+The decision is cost, not accuracy: roughly 2.7 GB against 600 MB for a 2 km
+route at 0.05 m against 0.10 m. 0.10 m recovers half the gain for a fifth of the
+size.
+
+## Also confirmed, but not deployable: 0.055 m by surveying with the wedge
 
 The offline result below was re-tested inside the full Autoware NDT replay, which
 is the number that counts. **Robin-W reaches 0.055 m, the VLP-32C NDT baseline,
