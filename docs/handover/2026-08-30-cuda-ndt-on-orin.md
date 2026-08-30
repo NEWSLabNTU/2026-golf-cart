@@ -367,12 +367,85 @@ succeeded` → `NDT Activation succeeded`, then 263 poses over 129.4 m at 32.8 m
 and NVTL 3.131. That was the last piece of the CUDA path still unverified on this
 hardware.
 
+## `pointcloud_backend`: what CUDA actually costs and saves
+
+Measured on the Orin for the first time. The existing figure for this stage
+(0.035 m scatter p95 over ~600 m) is a *localization-quality* number from an x86
+desktop, and it says nothing about utilisation.
+
+Autoware's sample bag through `logging_simulation.launch.yaml` with
+`sensor_model:=sample_bag_sensor_kit`, which carries both modes. Two runs per
+backend, 31 s windows, 63 tegrastats samples each.
+
+**Throughput first, because the rest is meaningless without it.** Both backends
+deliver the same work:
+
+| | cpu | cuda |
+|---|---|---|
+| `top/pointcloud_before_sync` | 299, 299 | 298, 299 |
+| `concatenated/pointcloud` | 367, 370 | 356, 361 |
+| bag duration | 29.74 s | 29.76 s |
+
+**The comparison:**
+
+| | cpu | cuda | delta |
+|---|---|---|---|
+| `pointcloud_container` CPU | 117.9%, 121.6% | 91.5%, 97.1% | **−25.5 pts (−21%)** |
+| system CPU, 12-core mean | 73.6%, 73.6% | 72.9%, 73.8% | ~0 |
+| **GPU `GR3D_FREQ`** | 2.8%, 3.4% | 35.0%, 32.6% | **+30.7 pts** |
+| `VDD_GPU_SOC` | 4329 mW | 4946 mW | +617 mW |
+| `VDD_CPU_CV` | 9649 mW | 9552 mW | −97 mW (noise) |
+
+So the CUDA path **trades about a quarter of a core for about a third of the
+GPU, and roughly half a watt**, at equal throughput.
+
+**Use tegrastats, not play_launch, for GPU on Tegra.** Every `gpu_*` column in
+play_launch's `system_stats.csv` is empty here and its resource monitor logs
+`GPU process enumeration not supported on this system`. `GR3D_FREQ` from
+`tegrastats` is what actually reads the iGPU, and it is system-wide rather than
+per-process — which is adequate for an A/B where the backend is the only
+variable, and inadequate for anything else.
+
+### Reading these numbers honestly
+
+- **System CPU does not move.** The stage is a small part of a 161-node stack,
+  and at 73% the machine was not CPU-bound, so freeing a quarter core changed
+  nothing observable. The saving is real and it is only worth having on a
+  configuration that is actually CPU-limited.
+- **`pointcloud_container` is not just the pipeline.** It also holds
+  CenterPoint, ground filtering, clustering and the occupancy grid. Only the
+  *delta* is attributable to the backend, since everything else in the container
+  is identical between runs. The absolute 90-120% figures are not "the
+  preprocessing chain".
+- **This is not the cart's sensor set.** The sample bag carries three Velodynes
+  and all three are preprocessed. On the golf cart only the Velodyne goes
+  through this stage -- the Seyond publishes `PointXYZIRC` with no per-point
+  time and cannot be deskewed by either backend -- so the CPU saving there will
+  be smaller than a third of what is measured here.
+- The CPU concatenator published marginally more clouds (367/370 against
+  356/361, ~2.5%). Not investigated.
+
+### A measurement that was wrong, and why
+
+The first attempt reported `pointcloud_container` at 117.7% -> 38.6%, a 3x
+reduction. That was an artifact: stale `play_launch` stacks from earlier runs
+had survived their SIGINT and were still competing for the same 12 cores, and
+the load average was 278 when the "measurement" ran. The clean figure is
+117.9% -> 91.5%, a 1.29x reduction.
+
+The harness now refuses to start if any `play_launch`, `component_container` or
+`ros2 bag` process is alive, and waits for the load average to fall below 6
+before opening its window. On a shared 12-core box that guard is not optional --
+without it the numbers are confidently wrong rather than noisy.
+
 ## What is still unmeasured here
 
 - Anything on the vehicle. This is the sample map and sample bag, not NTU or
   COSS, and not the golf cart's own sensors.
-- `pointcloud_backend:=cuda` on this hardware. The 0.035 m figure in the
-  previous handover is from the desktop.
+- `pointcloud_backend:=cuda` *localization quality* on this hardware. Its
+  utilisation is now measured (above), but the 0.035 m scatter figure is still
+  the desktop's, and it was taken on the NTU CSIE-1 bag, whose Velodyne stream
+  is now known to be unreliable.
 - GPU utilisation. play_launch reports
   `GPU process enumeration not supported on this system` on Tegra, so the cost
   side of the GPU move is still not observable on the target — item 6 of the
