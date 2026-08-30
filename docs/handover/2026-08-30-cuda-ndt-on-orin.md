@@ -294,11 +294,12 @@ before it compares. A test that cannot fail is worse than no test.
 3. ~~The initial-pose align.~~ **Measured and fixed — see below.** 49.1 s → 9.9 s,
    and `pose_source:=cuda_ndt` now initialises from Monte Carlo and tracks end
    to end on the Orin. The serial TPE phase is what is left, at 6.4 s.
-4. **The serial TPE phase, 6.4 s.** 100 particles at 64 ms each, one after
-   another. It is now 64% of the align. The startup phase next to it does the
-   same work batched in 35 ms per particle, so the headroom is real, but TPE is
-   sequential by construction — each trial's sampling depends on the previous
-   result — so this is a redesign, not a fix.
+4. **The TPE phase, 6.0 s**, now 67% of the align and all of it real work:
+   4.4 s of alignments and 1.6 s of TPE sampling. Both are reducible only by
+   changing the search — fewer particles, a cheaper sampler, or batching a
+   sequential algorithm — not by deleting redundant work. `particles_num: 200`
+   and `n_startup_trials: 100` are inherited from Autoware's defaults and have
+   never been tuned for this matcher.
 5. `pose_source:=cuda_ndt` now holds 10 Hz with margin on the per-scan path
    (max 52.8 ms against a 100 ms bound), is the faster of the two matchers, and
    initialises in 9.9 s. Whether it should *default* to CUDA is a call to make
@@ -312,13 +313,12 @@ here for the first time, on the Orin:
 
 | phase | before | after |
 |---|---|---|
-| startup, 100 particles batched | 42178 ms | **3523 ms** |
-| — of which NVTL | 1192 ms | 519 ms |
-| TPE, 100 particles serial | 6898 ms | 6351 ms |
-| **total align** | **49.1 s** | **9.9 s** |
-| result | converged, 3.205, reliable | converged, 3.203, reliable |
+| startup, 100 particles batched | 42178 ms | **2984 ms** |
+| TPE, 100 particles serial | 6898 ms | **6020 ms** |
+| **total align** | **49.1 s** | **9.0 s** |
+| result | converged, 3.205, reliable | converged, 3.199, reliable |
 
-The Orin now beats the desktop figure by 3.5x.
+The Orin now beats the desktop figure by 3.9x.
 
 **What the phase split gave away.** The startup phase costs 422 ms per particle
 against 69 ms for the *serial* TPE phase beside it. A batched path six times
@@ -334,6 +334,29 @@ It was redundant twice over: the initial-pose estimator ignores
 the 1192 ms the phase line reports separately. The optimizer now defers NVTL to
 the matcher exactly as it does for `align_full_gpu`, and the matcher scores each
 aligned pose on the GPU so the field stays meaningful for callers that do read it.
+
+**A second duplicate, in both particle loops.** Each one called `evaluate_nvtl`
+on `align_result.pose` immediately after aligning to it — but `align` already
+scores NVTL at exactly that pose, on the GPU, and fills `AlignResult::nvtl`. The
+loops were recomputing a number they already held: 887 ms across the TPE
+particles and 519 ms across the startup ones.
+
+**Where the 9.0 s actually goes.** The TPE log now carries a phase breakdown,
+which is what found the above:
+
+| TPE phase, 100 particles | |
+|---|---|
+| the alignments | 4412 ms |
+| `get_next_input` (the TPE sampler) | 1603 ms |
+| NVTL | 0 ms |
+| bookkeeping | 5 ms |
+
+The sampler is CPU, ~16 ms per call, and it grows with the trial count because
+the KDE is rebuilt over every previous trial. Neither it nor the alignments are
+redundant work — reducing them means changing what the search does, not deleting
+a duplicate. The startup phase does the same alignments batched at 30 ms each
+against TPE's 44 ms, but TPE is sequential by construction: each trial's
+sampling depends on the previous result.
 
 **`pose_source:=cuda_ndt` initialises and tracks.** Verified end to end with the
 user-defined initial pose disabled: `align server succeeded.` → `EKF Activation
