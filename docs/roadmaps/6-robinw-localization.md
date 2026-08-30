@@ -9,7 +9,13 @@ Ranked directions and the reasoning: [robinw-autoware-pipeline.md](../research/l
 Measurements: [restricted-fov-ndt.md](../research/localization/restricted-fov-ndt.md).
 Literature: [narrow-fov-related-work.md](../research/localization/narrow-fov-related-work.md).
 
-Last updated: 2026-08-30. **R1, R2 and R4-a are done.** None closed the gap.
+Last updated: 2026-08-31. **R1, R2, R4-a and R4-d are done. None closed the gap.**
+
+The 1.4x penalty for a forward 120 x 70 degree wedge survived a change of
+matcher, a change of estimator structure, and every parameter swept. Treat it as
+a **geometric property of the sensor choice**, and put the remaining effort into
+the real recording (R1's open item) and R5, rather than into more algorithm work
+on an emulation.
 
 **Two matchers built on different principles lose the same fraction of accuracy
 when the wedge narrows**, which is what a geometric limit looks like rather than
@@ -274,7 +280,17 @@ config comments it as penalizing longitudinal deviation from GNSS — a descript
 of the corridor failure. Outdoors only; `scale_factor` untuned. Tune against R3's
 measurements, not blind.
 
-**R4-d. Sliding-window prior-map localization with tight IMU coupling.** The
+**R4-d. Sliding-window prior-map localization with tight IMU coupling — TRIED,
+bench cannot answer it.** Implemented with the matcher's own information matrix
+weighting each scan factor, which is the threshold-free form of the
+degeneracy-aware update. It changed nothing until the scan information was
+scaled down (an unnormalised `H` outweighs a plausible motion prior by five
+orders of magnitude), and once motion had real weight the result got monotonically
+worse. The cause is the bench: a handheld trolley's motion is not described by
+the (v_x, omega_z) model available, so integrating it injects more error than the
+scan's weak directions contain. **Untested rather than refuted** — it needs a
+platform whose relative motion genuinely beats its scans, which means the vehicle.
+ The
 structural fix and the strongest theoretical case for a narrow sensor: a
 direction unobserved in one frame is usually observed a second later. Replaces
 the pose-estimator/EKF split rather than a component inside it, which is the

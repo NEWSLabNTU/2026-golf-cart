@@ -589,6 +589,94 @@ direction unobserved in one frame is recovered from one observed a second later.
 It is the most expensive item on the roadmap and now also the only one with an
 argument left.
 
+## Sliding-window smoothing: tried, and the bench cannot answer it
+
+R4-d, the last direction with an argument left, implemented in
+`tools/sliding_window_localizer.py`: a fixed-lag window of 10 poses, each
+carrying a scan-to-map factor weighted by the matcher's **own information
+matrix**, joined by motion factors from the same measured twist and IMU yaw rate
+that feed `gyro_odometer`, solved jointly by Gauss-Newton.
+
+Using `H` as the scan weight is the soft, threshold-free form of the
+degeneracy-aware update: a direction the wedge did not observe carries almost no
+weight, so the estimate along it comes from motion instead. That is the mechanism
+the whole R4 argument rests on.
+
+### It changed nothing, then it made things worse
+
+The first runs reproduced the single-frame VGICP result to three decimals —
+0.076 / 0.093 / 0.113 for full, VLP-32C and Robin-W, identical maximum errors,
+identical yaw. **The window was doing nothing at all.**
+
+The cause is a units trap worth recording. `small_gicp`'s `H` is an unnormalised
+sum over roughly 10^5 point residuals, so its entries run 10^5 to 10^8 while a
+plausible motion information — 5 cm of expected drift between frames — is around
+400. The scan factor outweighs the motion factor by five orders of magnitude and
+the joint solve collapses to the scan-only solution. **A pose graph that silently
+ignores half its factors looks exactly like one that works.**
+
+Scaling the scan information down to give motion real influence makes the answer
+steadily worse:
+
+| scan information scale | 1.0 (scan only) | 1e-3 | 1e-4 | 1e-5 |
+|---|---|---|---|---|
+| Robin-W err p50 | **0.113** | 0.125 | 0.215 | 1.003 |
+| err max | 0.455 | 0.367 | 0.612 | 2.432 |
+
+Monotonic. The only thing that improves is the maximum error at 1e-3, which is
+smoothing doing what smoothing does — a steadier trajectory that is further from
+the truth.
+
+### Why this does not refute the idea
+
+**The motion model on this bench is worse than the scan, so there is nothing for
+the window to add.** It is a constant-velocity integration of one linear
+component and one yaw rate, on a *handheld trolley* that moves laterally and
+vertically in ways that model does not represent. Integrating it injects more
+error than the under-constrained scan directions contain.
+
+A vehicle is a much better case, and the difference is not marginal: wheel
+odometry with a non-holonomic constraint, a real IMU preintegrated between
+frames, and motion that a (v_x, omega_z) model actually describes. That is the
+configuration the literature reports gains from, and this bench cannot emulate
+it — the TIERS rig has no odometry at all, which is why the twist here is
+synthesised from the reference trajectory in the first place.
+
+So the honest reading is: **the idea is untested rather than refuted**, and
+testing it needs a platform whose relative motion is genuinely more reliable than
+its scans. That is a recording from the golf cart, not another emulation.
+
+## Where the campaign ends
+
+Five directions have now been measured against a VLP-32C baseline of 0.055 m:
+
+| direction | Robin-W result | closed the gap? |
+|---|---|---|
+| NDT as configured | 0.082 | no |
+| NDT, voxel resolution swept | 0.077 | no |
+| NDT, point budget raised 10x | 0.075 | no |
+| NDT, Laplace covariance | unstable, 1 run in 3 diverged | no |
+| VGICP | 0.113, degrades at the same rate | no |
+| Sliding window with matcher information | 0.113 to 1.003 | no |
+
+**The 1.4x penalty for a forward 120 x 70 degree wedge is robust.** It survives a
+change of matcher, a change of estimator structure, and every parameter that was
+swept. Two matchers built on different principles lose the same fraction of
+accuracy to the same crop, which is the signature of a geometric limit rather
+than an algorithmic one.
+
+That is a usable engineering result even though no method won: **the Robin-W
+costs about 1.4x the localization error of the VLP-32C it replaces, and no
+amount of tuning or matcher choice recovers it.** Whether 1.4x matters is a
+vehicle-level decision. What would change the answer, in order of expected
+effect:
+
+1. A recording from the real sensor on the real route, which retires every
+   emulation caveat at once and is the only way to test tight coupling honestly.
+2. A second sensor covering the directions the front one cannot, which the
+   direction table says carries information no algorithm can synthesise.
+3. Tight inertial coupling on a platform with real odometry.
+
 ## Still to do
 - Repeat on a route with a long featureless stretch, which is where a forward
   wedge should fail first.
