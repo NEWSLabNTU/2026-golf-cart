@@ -111,20 +111,22 @@ def reference_track(poses_file: Path, bag: Path, topic: str):
             for i in range(n)]
 
 
-def run_track(run_dir: Path):
+def run_track(run_dir: Path, topic: str = "/localization/pose_estimator/pose"):
     from rclpy.serialization import deserialize_message
     from rosidl_runtime_py.utilities import get_message
 
     reader = open_reader(find_bag(run_dir))
     types = {t.name: t.type for t in reader.get_all_topics_and_types()}
-    topic = "/localization/pose_estimator/pose"
     out = []
     while reader.has_next():
         t, data, _ = reader.read_next()
         if t != topic:
             continue
         msg = deserialize_message(data, get_message(types[t]))
-        p = msg.pose
+        # PoseStamped carries `pose`; PoseWithCovarianceStamped nests it one
+        # level deeper. Accepting both is what lets the same tool score the
+        # matcher's own output and the fused estimate the vehicle drives on.
+        p = msg.pose.pose if hasattr(msg.pose, "pose") else msg.pose
         out.append((msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9,
                     p.position.x, p.position.y, yaw_of_quat(p.orientation)))
     out.sort(key=lambda r: r[0])
@@ -139,6 +141,10 @@ def main() -> int:
     ap.add_argument("--reference-topic", required=True)
     ap.add_argument("--tolerance", type=float, default=0.06,
                     help="seconds; a pose with no reference sample this close is skipped")
+    ap.add_argument("--topic", default="/localization/pose_estimator/pose",
+                    help="pose topic to score. The default is the matcher's own "
+                         "output; pass the fusion filter's topic to score what "
+                         "the vehicle actually drives on.")
     ap.add_argument("runs", type=Path, nargs="+")
     args = ap.parse_args()
 
@@ -155,7 +161,7 @@ def main() -> int:
 
     for run_dir in args.runs:
         try:
-            track = run_track(run_dir)
+            track = run_track(run_dir, args.topic)
         except FileNotFoundError as exc:
             print(f"{run_dir.name:<16}  {exc}")
             continue

@@ -9,7 +9,14 @@ Ranked directions and the reasoning: [robinw-autoware-pipeline.md](../research/l
 Measurements: [restricted-fov-ndt.md](../research/localization/restricted-fov-ndt.md).
 Literature: [narrow-fov-related-work.md](../research/localization/narrow-fov-related-work.md).
 
-Last updated: 2026-08-30. **R1 is done.** Nothing else has started.
+Last updated: 2026-08-30. **R1 and R2 are done.** R2 did not close the gap.
+
+**A VLP-32C baseline now exists**, emulated from the same OS0-128 bag against the
+same map and reference: 0.055 m median matcher error, against the best Robin-W
+configuration's 0.077 m. Every R2 lever was swept and **the 1.4x gap survived all
+of them**, so the remaining work is R4 — estimator structure, not parameters.
+Details and the three refuted hypotheses are in
+[restricted-fov-ndt.md](../research/localization/restricted-fov-ndt.md).
 
 **This roadmap is deliberately unfinished.** Every decision point below states
 what will be measured and what the branches are, but **not the thresholds** —
@@ -148,7 +155,21 @@ that retires the emulation caveat.
 
 Both are configuration or a sweep. Neither needs new data.
 
-### R2-a. Anisotropic covariance into the EKF
+### R2-a. Anisotropic covariance into the EKF — TRIED, no gain, one run in three diverged
+
+**Measured 2026-08-30 and it is not the free win it looked like.** The first
+Robin-W run with `covariance_estimation_type: 1` beat every VLP-32C run at the
+fused output. It did not replicate: of three runs one diverged outright, 12.95 m
+matcher error and 158 degrees of yaw, a failure that never occurred in nine runs
+with fixed covariance. The other two matched fixed covariance rather than beating
+it.
+
+Not necessarily a dead end — the instability may be in how the CUDA matcher
+derives the 2x2 Laplace block rather than in the idea — but it is not a
+configuration change any more, and it needs the cause found before it is retried.
+
+The original reasoning, still sound:
+
 
 `covariance_estimation_type: 0` — FIXED_VALUE — in both
 `cuda_scan_matcher.param.yaml` and Autoware's own. Every pose carries the same
@@ -160,7 +181,20 @@ Switch to `1` (Laplace, from the Hessian already computed) and confirm the CUDA
 matcher honours it. Highest value per line changed on this whole roadmap, because
 it improves the half of the system that dominates.
 
-### R2-b. Spend the density deliberately
+### R2-b. Spend the density deliberately — TRIED, both hypotheses refuted
+
+**Resolution has a genuine optimum at 3.0**, not finer: 0.077 m against 0.082 at
+2.0, with 1.0 and 1.5 far worse. Sweep the NVTL gate down with it or the sweep
+measures the gate, which is calibrated for 2.0 and scales with voxel size.
+
+**Point budget does nothing.** `sample_num: 5000` caps every scan, so both
+sensors hand NDT the same point count; raising it to 50000 changed the error by
+2 mm. NDT saturates far below that on this scene and cannot convert the Robin-W's
+density into accuracy at all. Worth knowing before paying for density.
+
+The original reasoning, still worth reading for the third question it raises
+(*where* to keep points, which remains untested):
+
 
 Voxel resolution, keep-fraction, and whether downsampling should stay uniform.
 `resolution: 2.0` was chosen for a 32-line spinning sensor, and NDT is unusually

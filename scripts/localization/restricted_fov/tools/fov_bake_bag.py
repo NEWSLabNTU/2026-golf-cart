@@ -83,6 +83,11 @@ def main() -> int:
                     metavar=("X", "Y", "Z"))
     ap.add_argument("--keep-fraction", type=float, default=1.0)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--max-rings", type=int, default=0,
+                    help="thin to this many evenly spaced rings, 0 to keep all. "
+                         "Emulates a sensor with fewer laser lines, which "
+                         "--keep-fraction cannot: that thins within every ring "
+                         "and leaves the vertical sampling untouched.")
     args = ap.parse_args()
 
     from rosbags.highlevel import AnyReader
@@ -116,6 +121,11 @@ def main() -> int:
         PointField(name="channel", offset=14, datatype=4, count=1),
     ]
 
+    # Which rings survive is decided once, from the first cloud, and reused. A
+    # per-cloud decision would let the surviving set drift between frames and
+    # emulate a sensor whose lasers move, which is not a sensor.
+    ring_keep = None
+
     kept_total = seen_total = clouds = 0
     with AnyReader([args.source]) as reader, Writer(args.dest) as writer:
         out_conns = {}
@@ -138,6 +148,22 @@ def main() -> int:
                 if min_el > -math.pi / 2 or max_el < math.pi / 2:
                     el = np.arctan2(pts["z"].astype(np.float64) - oz, np.sqrt(horiz_sq))
                     mask &= (el >= min_el) & (el <= max_el)
+                if args.max_rings > 0 and "ring" in (pts.dtype.names or ()):
+                    if ring_keep is None:
+                        # Evenly spaced across the rings that survive the
+                        # elevation crop, so the emulated sensor's lines are
+                        # spread over its field of view rather than bunched at
+                        # one edge of the source's.
+                        present = np.unique(pts["ring"][mask])
+                        if present.size > args.max_rings:
+                            idx = np.linspace(0, present.size - 1, args.max_rings)
+                            ring_keep = set(present[np.round(idx).astype(int)].tolist())
+                        else:
+                            ring_keep = set(present.tolist())
+                        print(f"  rings: {present.size} in band -> keeping "
+                              f"{len(ring_keep)}", flush=True)
+                    mask &= np.isin(pts["ring"], list(ring_keep))
+
                 sel = pts[mask]
                 if args.keep_fraction < 1.0 and sel.shape[0]:
                     sel = sel[rng.random(sel.shape[0]) < args.keep_fraction]

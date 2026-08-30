@@ -423,6 +423,106 @@ Two things worth having:
   output, arrived at independently from the Hessian, and it is why a monitor for
   a narrow-FOV vehicle should be gated on heading.
 
+## Is a Robin-W as good as the VLP-32C it replaces?
+
+The question the whole campaign exists to answer, asked as a like-for-like
+comparison: **emulate both sensors from the same OS0-128 bag**, against the same
+map, scored against the same reference.
+
+- **VLP-32C**: 360 degrees, elevation -25..+15, decimated to 32 rings, 200 m.
+  16.6% of the source, about 0.44 M points/s.
+- **Robin-W**: 120 x 70 degrees, 70 m. 34.0% of the source, about 0.89 M points/s.
+
+The 2.0x density ratio between the two emulations is close to the real sensors'
+2.1x, so the relative sampling is faithful even though both are below the real
+absolute rates.
+
+### Answer: no, and tuning does not close it
+
+Matcher output, median error against the reference, three runs each:
+
+| configuration | err p50 | err p95 | note |
+|---|---|---|---|
+| **VLP-32C, resolution 2.0** | **0.055 / 0.055 / 0.056** | 0.131 | the target |
+| Robin-W, resolution 2.0 | 0.082 / 0.082 / 0.083 | 0.225 | 1.5x worse |
+| Robin-W, resolution 3.0 | 0.077 | 0.175 | best found |
+
+**The gap is about 1.4x and it is geometric.** Three tuning levers were swept and
+none of them closed it.
+
+**Voxel resolution has a genuine optimum at 3.0, and finer is much worse.**
+
+| resolution | 1.0 | 1.5 | 2.0 | 3.0 | 4.0 |
+|---|---|---|---|---|---|
+| err p50 | 3.900 | 1.527 | 0.082 | **0.077** | 0.114 |
+
+Swept with the NVTL convergence gate lowered to 0.5, because the gate is
+calibrated for resolution 2.0 and NVTL scales with voxel size — left alone it
+rejects every frame at resolution 1.0 and the sweep measures the gate instead of
+the geometry. The config file's own comment says to re-derive the gate when
+resolution or downsampling changes; that is not optional when sweeping either.
+
+Coarser winning is the opposite of the intuition that a denser sensor affords
+finer voxels. A narrow wedge sees fewer voxels in total, and fine ones end up
+with too few points to condition a distribution.
+
+**Point budget does nothing at all.** `random_downsample_filter` caps every scan
+at `sample_num: 5000` before NDT, so both sensors hand the matcher the same
+number of points and the Robin-W's density never reaches it. Raising the cap
+changes nothing:
+
+| sample_num | 5000 | 20000 | 50000 |
+|---|---|---|---|
+| Robin-W err p50 | 0.077 | 0.077 | 0.075 |
+| VLP-32C err p50 | 0.055 | 0.054 | 0.055 |
+
+So the density advantage is not being thrown away by the downsampler — **NDT
+saturates far below 5000 points on this scene, and cannot convert extra points
+into accuracy.** That is worth knowing before paying for density.
+
+**Range is not binding on this site.** Raising the wedge from 70 m to 200 m
+changed nothing (0.077 either way) because the sequence is a car park with
+nothing beyond 70 m. The test was null by construction and says nothing about a
+route that does have distant structure.
+
+### Laplace covariance: no gain, and it destabilised one run in three
+
+`covariance_estimation_type: 1` was the highest-ranked untested item. Scored on
+the fusion filter's output as well as the matcher's:
+
+| configuration | fused err p50, three runs |
+|---|---|
+| VLP-32C, fixed covariance | 0.458 |
+| VLP-32C, Laplace | 0.436 / 0.443 / 0.464 |
+| Robin-W, fixed covariance | 0.469 / 0.466 / 0.463 |
+| Robin-W, Laplace | 0.423 / **11.066** / 0.470 |
+
+**The first Robin-W run with Laplace beat every VLP-32C run, and it did not
+replicate.** Of three runs, one diverged outright — 12.95 m matcher error and
+158 degrees of yaw, a failure that never occurred in nine runs with fixed
+covariance. Reporting that single 0.423 would have been the exact mistake this
+document criticises elsewhere.
+
+Two cautions on that table. The fused topic is
+`pose_twist_fusion_filter/biased_pose_with_covariance`, which carries a bias term
+— every run sits near 0.45 m including the full-circle ones, so the column is
+only good for ordering within itself, not as an accuracy figure. And the
+remaining Robin-W/VLP-32C fused difference, 0.466 against 0.458, is under 2% and
+should not be read as parity.
+
+### What this means
+
+Tuning is exhausted and the gap survives it. That points the remaining work at
+**estimator structure rather than parameters** — the R4 items in
+[the phase roadmap](../../roadmaps/6-robinw-localization.md): a different
+matcher, a degeneracy-aware update, or a sliding-window estimator that can use a
+direction observed one second later. None of those is a sweep.
+
+It also puts a number on the sensor trade for the first time: on this route, a
+forward Robin-W costs about **1.4x the matcher error** of the VLP-32C it
+replaces, while localizing reliably throughout. Whether that is acceptable is a
+vehicle decision, not a localization one.
+
 ## Still to do
 - Repeat on a route with a long featureless stretch, which is where a forward
   wedge should fail first.

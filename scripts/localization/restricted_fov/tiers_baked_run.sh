@@ -26,6 +26,10 @@ AUTOWARE_ACTIVATE="$SCRIPT_DIR/activate_autoware.sh"
 
 BAKED="${1:?baked bag name}"
 LABEL="${2:?run label}"
+shift 2 || true
+# Anything left is forwarded to the launch file, so a sweep can vary
+# ndt_param_file without a copy of this script per configuration.
+EXTRA_ARGS=("$@")
 # Which set of baked bags. baked_odo carries the IMU and the synthesised vehicle
 # twist that gyro_odometer and the EKF need; without them NDT runs on a
 # constant-position prior and the same configuration diverges on some runs and
@@ -63,6 +67,7 @@ echo "=== TIERS baked run '$LABEL' from $BAKED ==="
     "vehicle_model:=sample_vehicle" \
     "input_pointcloud:=/sensing/lidar/os0/pointcloud_raw" \
     "user_defined_initial_pose:=[0.0,0.0,0.0,0.0,0.0,0.0,1.0]" \
+    ${EXTRA_ARGS[*]} \
     2>&1 | tee "$OUT_DIR/run.log"
 
 echo "=== '$LABEL' done, output in $OUT_DIR ==="
