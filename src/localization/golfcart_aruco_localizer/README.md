@@ -130,7 +130,7 @@ by walking the straights will have a hole exactly where the vehicle turns.
 Whole vehicle:
 
 ```bash
-just launch "pose_source:=aruco aruco_tag_map_path:=./data/huaxia-campus/aruco_tag_map.yaml"
+just launch "pose_source:=aruco aruco_tag_map_path:=./data/<site>/aruco_tag_map.yaml"
 ```
 
 Whole stack against synthetic detections — no map, no simulator, runs in seconds:

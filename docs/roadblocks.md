@@ -55,6 +55,24 @@ because a RELIABLE subscriber cannot match the driver's BEST_EFFORT publisher
 and receives nothing rather than less. Check with
 `ros2 topic info -v /sensing/lidar/vlp32/velodyne_points`.
 
+### NTU CSIE-1 rosbag: Velodyne cloud is not trustworthy
+
+**Reported 2026-08-30, not yet investigated.** The Velodyne point cloud in the
+`2026-08-14_NTU-campus` recordings covers only a fraction of the sensor's field
+of view. Recalled rather than measured, so confirm before relying on it either
+way.
+
+It matters because that bag was used for a lot of measurement. Anything below
+taken on it should be re-run on the Autoware sample bag before it is trusted:
+
+- the cpu vs cuda `pointcloud_backend` localization comparison
+- the concatenator's Velodyne presence figures, ~47-54% (though the 2026-08-25
+  *vehicle* run showed 47.2% independently, so that finding has separate support)
+- the `timeout_sec` sweep, whose result was null and could be null for the wrong
+  reason if the input was already degraded
+
+See docs/research/sensing/lidar-pipeline-starvation.md.
+
 ### Otobrite GMSL cameras — not enumerating
 
 The cameras are physically attached but produce nothing. The ROS topics exist

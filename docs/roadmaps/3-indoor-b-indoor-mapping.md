@@ -31,8 +31,9 @@ in parallel.
 
 ## Current state
 
-- No indoor map exists. `data/` holds the COSS practice map and the 華夏科大
-  campus map slot, both outdoor.
+- No indoor map exists. `data/` holds the COSS practice map, the NTU campus
+  map and the Autoware sample map, all outdoor. The 華夏科大 campus map is
+  planned and is not present: there is no `data/huaxia-campus/`.
 - NDT has never been validated indoors on this vehicle.
 - GNSS threading through localization is **fixed**: `gnss_enabled` now follows
   `use_gnss`. See the audit below for what it was doing before, and for the two

@@ -11,7 +11,7 @@ This is a golf cart autonomous driving system for 華夏科大 campus deployment
 - **IMU**: Tamagawa IMU (replaces MPU9250)
 - **Cameras**: USB cameras (will upgrade to Tier IV cameras later)
 - **Vehicle Interface**: Turing Drive packages (replaces Golf Cart custom PWM interface)
-- **Map**: 華夏科大 campus HDMap (COSS map for practice)
+- **Map**: COSS practice map and the NTU campus map. A 華夏科大 campus HDMap is PLANNED and does not exist; `data/huaxia-campus/` is not present.
 - **Localization**: Autoware NDT scan matching (GNSS for initialization)
 - **Planning**: Autoware built-in planner (enabled, not manual control)
 
@@ -219,7 +219,7 @@ to be pointed at. Full workflow in [CONTRIBUTING.md](CONTRIBUTING.md#submodule-w
 
 ### Data Structure
 - **data/COSS-map-planning/** - Practice map (from Golf Cart)
-- **data/huaxia-campus/** - Production map for 華夏科大 campus (to be added)
+- **data/huaxia-campus/** - planned production map. DOES NOT EXIST; nothing may depend on it.
 - **data/models/** - ML models (YOLOX, CenterPoint, TensorRT)
 
 ### Build Artifacts
@@ -242,7 +242,7 @@ Sensor configurations are in `src/param/autoware_individual_params/individual_pa
 - Main launch uses Autoware's standard launch system
 - Vehicle model: `golfcart_vehicle`
 - Sensor model: `golfcart_sensor_kit`
-- Default map: `./data/COSS-map-planning` (practice) → `./data/huaxia-campus/` (production)
+- Default map: `./data/COSS-map-planning`. The production map is planned, not present.
 
 ### Launch Parameters for Golf Cart
 

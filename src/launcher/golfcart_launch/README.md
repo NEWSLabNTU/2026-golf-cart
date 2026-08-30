@@ -102,7 +102,7 @@ not variations on one pipeline — `aruco` replaces the pipeline.
 ```bash
 just launch                                    # ndt
 just launch "pose_source:=cuda_ndt"
-just launch "pose_source:=aruco aruco_tag_map_path:=./data/huaxia-campus/aruco_tag_map.yaml"
+just launch "pose_source:=aruco aruco_tag_map_path:=./data/<site>/aruco_tag_map.yaml"
 
 # or by preset, which sets pose_source for you
 just launch "localization_preset:=aruco aruco_tag_map_path:=/path/to/aruco_tag_map.yaml"

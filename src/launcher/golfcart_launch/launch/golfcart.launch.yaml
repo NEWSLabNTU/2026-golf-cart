@@ -219,7 +219,8 @@ launch:
       Hand-surveyed ArUco board map. Required when pose_source:=aruco, ignored
       otherwise. The localizer refuses to start without it: with no map it is
       not a degraded localizer, it is a silent one.
-      Example: just launch "pose_source:=aruco aruco_tag_map_path:=./data/huaxia-campus/aruco_tag_map.yaml"
+      Example: just launch "pose_source:=aruco aruco_tag_map_path:=./data/<site>/aruco_tag_map.yaml"
+      There is no such file in this repository yet; survey a site and write one.
 
 - arg:
     name: localization_stop_check
