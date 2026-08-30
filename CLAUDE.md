@@ -539,6 +539,29 @@ pose_source:=visual    # cuVGL + cuVSLAM (camera-only, auto init from visual map
 visual_map_dir:=/path/to/visual_map  # Contains cuvgl_map/, cuvslam_map/
 ```
 
+**Working in `cuda_ndt_matcher`? Euler angles are a trap there.** A pose vector
+`[x, y, z, roll, pitch, yaw]` in that crate is Autoware's convention,
+**R = Rx·Ry·Rz**. nalgebra's `euler_angles()` and `from_euler_angles()` compose
+the **reverse**, R = Rz·Ry·Rx. The two agree only when at most one angle is
+non-zero, and both are `(f64, f64, f64)`, so nothing catches a mix-up — it has
+produced three separate bugs, each found by a number looking wrong rather than by
+a test failing. Use `optimization::types::{isometry_to_pose_vector,
+pose_vector_to_isometry, rotation_from_pose_angles, pose_angles_from_rotation}`,
+or `isometry_to_transform_matrix` when a kernel wants a 4x4 and you already hold
+an isometry. Any test for this needs roll, pitch **and** yaw all non-zero. Full
+detail, including two ways such a test silently proves nothing, is in that
+submodule's `CLAUDE.md` under *Coding Conventions*.
+
+It is also why `converged_param_nearest_voxel_transformation_likelihood` has been
+re-derived more than once: the 2026-08-03/04 occurrences moved the *scale* of
+published NVTL, so scores recorded before them do not compare with scores after.
+The 2026-08-30 occurrence did not — it reached only a dormant covariance mode and
+the RViz score overlay, and per-scan NVTL measured 3.138 either side of the fix.
+The comment at that parameter in
+`cuda_ndt_matcher_launch/config/cuda_scan_matcher.param.yaml` carries the
+history; re-derive the gate from a healthy run's score distribution, never
+inherit it.
+
 #### System Features
 ```bash
 # Localization
