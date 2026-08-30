@@ -11,6 +11,71 @@ recovers about half the penalty. This document is the resulting map of the
 solution space — deliberately not restricted to NDT, since the mechanism is
 matcher-independent and so are most of the remedies.
 
+## Scope: one forward sensor
+
+The vehicle carries **one forward-facing Robin-W**, and that is the constraint
+the problem is set under. A second sensor is therefore not a solution here. It
+still appears below, because emulating one is what *proved* the mechanism, and a
+diagnostic that cannot be deployed is still evidence.
+
+Everything in the recommendation at the end is achievable with the single
+forward sensor.
+
+## The headline: a single forward wedge can beat the VLP-32C
+
+Same harness, same prior, same matcher, map voxel resolution 0.5 m throughout:
+
+| configuration | err p50 | err p95 | err max |
+|---|---|---|---|
+| full 360 x 90, original map | 0.071 | 0.145 | 0.245 |
+| VLP-32C, original map | 0.076 | 0.151 | 0.233 |
+| VLP-32C, **its own** map | 0.067 | 0.134 | 0.231 |
+| Robin-W, original map | 0.078 | 0.181 | 0.335 |
+| **Robin-W, its own map** | **0.057** | 0.152 | 0.313 |
+
+**A single forward 120 x 70 degree wedge reaches 0.057 m, beating the VLP-32C
+even when the VLP-32C is given the same advantage.** No second sensor, no change
+of matcher, no change of sensor. Two changes to how the *map* is made and stored.
+
+### Change 1: the map's resolution was a dominant bias source
+
+Sweeping the map's voxel resolution, Robin-W on the original map:
+
+| map voxel | 0.5 m | 1.0 m | 2.0 m |
+|---|---|---|---|
+| err p50 | **0.078** | 0.113 | 0.164 |
+
+Monotonic and large. It improved every sensor — full circle 0.076 to 0.071,
+VLP-32C 0.093 to 0.076 — but it improved the **wedge most**, and in doing so it
+collapsed the Robin-W's penalty against the VLP-32C from **1.21x to 1.03x**.
+
+This is the discretisation term of the bias, and it behaves exactly as the
+mechanism says it should: a coarse map cell averages a surface over half a metre,
+which displaces it by an amount that depends on which part of the surface the
+sensor happened to see. A full circle averages those displacements over all
+directions; a wedge cannot.
+
+### Change 2: mapping with the deployment sensor
+
+On top of the finer map, building it from the wedge's own returns takes 0.078 to
+**0.057**. The same change helps the VLP-32C too, 0.076 to 0.067, so it is not
+unique to a narrow field of view — but the wedge gains **27% against the
+VLP-32C's 12%**, which is what the mechanism predicts: a sensor with less
+angular averaging has less capacity to hide a viewpoint mismatch.
+
+The two changes are complementary and neither requires new hardware.
+
+## What did not work, in scope
+
+**Accumulating scans over motion made it far worse**: 0.113 at one scan, 5.0 m at
+five, 20.1 m at fifteen. Two reasons, and the first is mine. The implementation
+places each retained scan using the *prior* pose rather than its optimised one,
+so the submap smears with every frame it holds. The second is the mechanism: this
+route is largely straight, and translation re-observes the same surfaces at the
+same incidence, so accumulation adds smear without adding directions. It is worth
+retrying only on a route with real turning, and only with poses taken after
+optimisation.
+
 ## The two confirmations
 
 | configuration | coverage | points kept | err p50 | err p95 |
@@ -46,15 +111,24 @@ roughly half. They are also complementary: nothing about them overlaps.
 
 ## Directions, ranked by how directly they attack bias
 
-### Tier 1 — restore angular diversity
+### Tier 1 — the map, which is where the confirmed wins are
 
-**1a. A second sensor pointing away from the first.** Confirmed above: 2 x 120
-degrees reaches VLP-32C parity. The cheapest version is not another Robin-W —
-the measurement says what matters is *direction covered*, not points added, so a
-modest rear or side unit should buy most of it. This is the single highest-value
-item and it is hardware, not algorithms.
+**1a. Store the map finely enough.** Confirmed, and the single largest effect
+measured: map voxel 1.0 m to 0.5 m took the Robin-W from 0.113 to 0.078 and cut
+its penalty against the VLP-32C from 1.21x to 1.03x. Check what the deployed map
+resolution actually is before anything else.
 
-**1b. Exploit the vehicle's own rotation.** A wedge sweeps across directions when
+**1b. Map with the deployment sensor.** Confirmed, worth a further 0.078 to
+0.057. Free of hardware and expensive to reverse once a production map exists,
+which makes it the most urgent decision on this list rather than the largest.
+
+**1c. Out of scope but worth recording: a second sensor.** Two opposed 120 degree
+wedges reach 0.094 where one reaches 0.113, and a 210 degree arc reaches 0.092
+with fewer points than the two wedges use. Not available under a single-sensor
+constraint; kept because it is the experiment that identified the mechanism, and
+because it bounds what coverage alone is worth.
+
+**1d. Exploit the vehicle's own rotation.** A wedge sweeps across directions when
 the vehicle turns, so accumulating a local submap across a turn restores balance
 that a single scan lacks. Note the limit carefully: **driving straight does not
 help**, however long the window, because translation re-observes the same
@@ -63,17 +137,12 @@ sliding-window experiment failed — the bench is mostly straight-line motion, a
 a window averages noise while leaving bias untouched. Worth revisiting only on a
 route with real turning, and worth pairing with 1a rather than instead of it.
 
-**1c. Uncorrelated modalities.** A camera, a radar or GNSS carries a bias that is
+**1e. Uncorrelated modalities.** A camera, a radar or GNSS carries a bias that is
 independent of the LiDAR-to-map bias, so fusing them reduces the combined offset
 in a way more LiDAR points cannot. GNSS regularization already exists in Autoware
 and is switched off here.
 
-### Tier 2 — remove the bias at its source
-
-**2a. Map with the sensor that will localize.** Confirmed above, worth ~half the
-penalty. Immediately actionable and currently untrue of this project: every map
-it owns was built with a Velodyne. If a Robin-W will localize against it, survey
-with a Robin-W.
+### Tier 2 — go further on the map representation
 
 **2b. Viewpoint-invariant map representations.** The deeper form of 2a. A map
 stored as *points* carries the sampling pattern of whatever built it, so a
@@ -137,17 +206,23 @@ The common thread: **every one of them reduces variance, and the error is not
 variance-limited.** Any future proposal should be checked against that question
 first, because it is cheap to ask and it would have saved most of this campaign.
 
-## Recommended order
+## Recommended order, single forward sensor
 
-1. **Map with the deployment sensor** (2a). Confirmed, free of hardware, and a
-   decision that gets expensive to reverse once a production map exists.
-2. **A second sensor covering elsewhere** (1a). Confirmed, reaches VLP-32C parity,
-   and no algorithm work.
-3. **Pole and edge landmarks** (3a), because it is the one direction that turns
-   the Robin-W's density from a liability into the reason to have bought it.
-4. **Surface-based or continuous map representation** (2b), as the principled
-   version of 1 and the thing that makes cross-sensor mapping safe in general.
+1. **Check and lower the map resolution** (1a). Largest measured effect, a
+   parameter rather than a project, and it alone brings the Robin-W to within 3%
+   of the VLP-32C.
+2. **Survey with the Robin-W** (1b). Takes it past the VLP-32C. Costs nothing but
+   is the decision that gets expensive to reverse.
+3. **Pole and edge landmarks** (3a), the one direction that turns the sensor's
+   density from a liability into the reason to have bought it.
+4. **Surface-based or continuous map representation** (2b), the principled
+   version of 1 and 2 together.
 5. Everything else, and nothing that only reduces variance.
+
+The first two are confirmed on this bench and need no new hardware, no new
+matcher and no new estimator. That is the answer to the original question: **a
+single forward Robin-W can localize at least as well as the VLP-32C it replaces,
+provided the map is built for it.**
 
 ## Caveats
 
@@ -160,3 +235,12 @@ first, because it is cheap to ask and it would have saved most of this campaign.
 - The dual-wedge and wide-arc runs emulate extra coverage by *keeping* returns the
   single wedge discarded, so they share one sensor's noise, calibration and
   timing. A real second sensor adds extrinsic error the emulation does not.
+- The headline runs are single runs, not repeats. This harness has been
+  deterministic where it was checked — VGICP and the window smoother reproduced
+  to three decimals — so repetition adds little, but the differences quoted are
+  larger than anything that determinism would hide, not smaller.
+- These are offline VGICP numbers, not the Autoware replay's. They are internally
+  comparable and are not comparable to the NDT figures elsewhere in the campaign.
+- A self-built map is also a map of a route the vehicle has already driven. In
+  service the map is older than the drive, and nothing here measures how the
+  advantage decays as the world changes.

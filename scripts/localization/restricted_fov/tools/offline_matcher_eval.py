@@ -128,6 +128,14 @@ def main() -> int:
     ap.add_argument("--twist-topic",
                     default="/sensing/vehicle_velocity_converter/twist_with_covariance")
     ap.add_argument("--imu-topic", default="/sensing/imu/imu_data")
+    ap.add_argument("--accumulate", type=int, default=1,
+                    help="register the union of the last N scans instead of one. "
+                         "Single-sensor way to widen the observed arc: the wedge "
+                         "sweeps across directions as the vehicle turns, so an "
+                         "accumulated submap sees more of the surroundings than "
+                         "any one scan. Expected to help only where the vehicle "
+                         "actually rotates -- translation re-observes the same "
+                         "surfaces at the same incidence.")
     ap.add_argument("--limit", type=int, default=0, help="stop after N clouds")
     args = ap.parse_args()
 
@@ -173,6 +181,7 @@ def main() -> int:
     poses, stamps, times = [], [], []
     T = np.eye(4)
     prev_T = np.eye(4)
+    history: list[tuple[np.ndarray, np.ndarray]] = []   # (pose, points)
 
     with AnyReader([args.bag]) as reader:
         conns = [c for c in reader.connections if c.topic == args.topic]
@@ -211,8 +220,23 @@ def main() -> int:
             else:
                 init = T.copy()
 
+            scan = xyz
+            if args.accumulate > 1:
+                history.append((init.copy(), xyz))
+                if len(history) > args.accumulate:
+                    history.pop(0)
+                # Bring every retained scan into the current frame through the
+                # poses they were seen at. Errors in those poses smear the
+                # submap, which is the cost of the wider arc it buys.
+                parts = []
+                inv = np.linalg.inv(init)
+                for T_k, pts_k in history:
+                    rel = inv @ T_k
+                    parts.append(pts_k @ rel[:3, :3].T + rel[:3, 3])
+                scan = np.concatenate(parts, axis=0)
+
             source, _ = small_gicp.preprocess_points(
-                xyz, args.downsample, num_threads=args.threads)
+                scan, args.downsample, num_threads=args.threads)
 
             t0 = time.perf_counter()
             if args.method.upper() == "VGICP":
