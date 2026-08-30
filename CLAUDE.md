@@ -429,16 +429,24 @@ gnss_receiver:=ublox|septentrio|garmin|none
 environment by a user.
 
 ```bash
-just launch                          # CUDA everywhere (default)
-just launch use_cuda:=false          # CPU everywhere
-just launch pointcloud_backend:=cpu  # CUDA NDT, CPU preprocessing
-just launch pose_source:=ndt         # CUDA preprocessing, CPU NDT
+just launch                          # CUDA preprocessing + concatenation (default)
+just launch use_cuda:=false          # both back on CPU
+just launch pointcloud_backend:=cpu  # same, spelled out
 ```
 
-`use_cuda` sets the default for `pointcloud_backend` (`cpu|cuda`) and
-`pose_source` (`ndt|cuda_ndt`). Either fine argument given explicitly wins,
-because a launch argument default is only consulted when the caller supplied
-nothing. `pose_source:=aruco` is unaffected by `use_cuda`.
+`use_cuda` sets the default for `pointcloud_backend` (`cpu|cuda`) and nothing
+else. An explicit `pointcloud_backend:=` wins over it, because a launch argument
+default is only consulted when the caller supplied nothing.
+
+**`pose_source` is deliberately NOT governed by `use_cuda`.** It selects a
+localization *method* (`ndt`, `cuda_ndt`, `aruco`, `yabloc`, `eagleye`), and only
+two of those are the same algorithm on different hardware. Deriving it from a GPU
+switch meant `use_cuda:=false` silently rewrote a deliberate `yabloc` or
+`eagleye` choice to `ndt`. Ask for GPU NDT by name:
+
+```bash
+just launch pose_source:=cuda_ndt    # not yet usable, see below
+```
 
 The same pair exists in `logging_simulation.launch.yaml` and
 `ntu_logging_sim.launch.xml`, so a replay defaults to the stack the vehicle runs.
@@ -449,12 +457,12 @@ The same pair exists in `logging_simulation.launch.yaml` and
 scored cpu at 0.038 m scatter p95 / 0.179 deg yaw p95 and cuda at 0.035 / 0.167
 over ~600 m, so it does not regress localization.
 
-`pose_source:=cuda_ndt` is **not** validated. On an x86 desktop NDT never
-activates with it, but that is a stale artifact rather than a verdict: the
-installed `cuda_ndt_matcher` is from 2026-08-17, its source has moved, and
-rebuilding on x86 fails inside the `cubecl-cuda` dependency. **Verify it on the
-Orin before trusting it**, and fall back with `pose_source:=ndt` if
-localization does not converge.
+`pose_source:=cuda_ndt` is **half done**. Its per-frame cost is now excellent,
+40.5 ms mean on the Orin against Autoware's own 47.0 ms on the same bag, at 3.0
+cm RMSE. But its align service takes ~23 s against the caller's deadline, so the
+stack never initialises. `ndt` is the default and the working setting until that
+lands. See
+[docs/handover/2026-08-30-cuda-pipeline-to-orin.md](docs/handover/2026-08-30-cuda-pipeline-to-orin.md).
 
 **`camera_model`, `imu_source` and `tx_enabled` do NOT work as launch arguments.** They reach
 `golfcart_autoware.launch.xml`, but the path onwards runs through

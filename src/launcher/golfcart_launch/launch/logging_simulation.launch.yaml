@@ -66,7 +66,7 @@ launch:
 - arg:
     name: use_cuda
     default: "true"
-    description: "Coarse GPU switch; sets the default for pose_source and pointcloud_backend"
+    description: "Coarse GPU switch; sets the default for pointcloud_backend"
 
 - arg:
     name: pointcloud_backend
@@ -77,10 +77,13 @@ launch:
     name: POINTCLOUD_BACKEND
     value: "$(var pointcloud_backend)"
 
+# Not derived from use_cuda: pose_source picks a localization METHOD, and only
+# two of its values are the same algorithm on different hardware. Same reasoning
+# as golfcart.launch.yaml, which spells it out. cuda_ndt is asked for by name.
 - arg:
     name: pose_source
-    default: $(eval "'cuda_ndt' if '$(var use_cuda)'.lower() in ('true','1','yes') else 'ndt'")
-    description: "Pose estimation source: ndt, cuda_ndt"
+    default: "ndt"
+    description: "Pose estimation source: ndt, cuda_ndt, aruco, yabloc, eagleye"
 
 # Preset Configuration
 - arg:

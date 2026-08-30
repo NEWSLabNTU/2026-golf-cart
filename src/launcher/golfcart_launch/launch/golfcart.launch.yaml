@@ -156,15 +156,53 @@ launch:
     name: POINTCLOUD_BACKEND
     value: "$(var pointcloud_backend)"
 
+# Localization preset, included BEFORE pose_source is declared.
+#
+# Order is the whole point. A preset that names pose_source (aruco does) only
+# takes effect if its <arg> is the FIRST declaration of that name: in ROS 2
+# launch a later re-declaration cannot lower an already-set configuration.
+# While this include sat below, `localization_preset:=aruco` was a silent no-op
+# that ran a scan matcher instead, and said nothing about it.
+#
+# An explicit `pose_source:=` on the command line still wins over both, because
+# a value supplied by the caller outranks any declaration default.
+- arg:
+    name: localization_preset
+    default: "default"
+    description: >-
+      Localization preset: default, eagleye, aruco.
+      aruco sets pose_source and additionally requires aruco_tag_map_path.
+
+# Include localization preset (defines twist_source)
+- include:
+    file: "$(find-pkg-share golfcart_launch)/config/localization/preset/$(var localization_preset)_preset.yaml"
+
+# pose_source is a METHOD selector, not an accelerator switch, and is
+# deliberately NOT derived from use_cuda.
+#
+# Its values are aruco, ndt, cuda_ndt, yabloc and eagleye. Only two of those
+# are the same algorithm on different hardware; the other three have no GPU
+# counterpart to switch to. Deriving this from use_cuda meant a GPU toggle
+# silently changed which localizer ran: `use_cuda:=false` rewrote a deliberate
+# `yabloc` or `eagleye` choice to `ndt`, which is not a thing a GPU switch
+# should ever do.
+#
+# Defaulted to `ndt` rather than `cuda_ndt` because cuda_ndt cannot yet
+# initialise. Its per-frame cost is excellent, 40.5 ms against Autoware's
+# 47.0 ms on the Orin, but its align service takes ~23 s against the caller's
+# deadline so the stack never starts. Ask for it by name once that lands:
+#
+#   just launch pose_source:=cuda_ndt
+#
+# See docs/handover/2026-08-30-cuda-pipeline-to-orin.md.
 - arg:
     name: pose_source
-    default: $(eval "'cuda_ndt' if '$(var use_cuda)'.lower() in ('true','1','yes') else 'ndt'")
+    default: "ndt"
     description: >-
-      Pose estimation source: ndt, cuda_ndt, aruco. Defaults from use_cuda, so
-      cuda_ndt unless use_cuda:=false.
+      Pose estimation source: ndt, cuda_ndt, aruco, yabloc, eagleye.
+      A localization_preset may set this; an explicit value here wins over it.
       aruco is indoor ArUco-board localization and REPLACES the scan matcher
-      entirely -- no point cloud map is loaded and no NDT runs. It is not
-      affected by use_cuda and must be asked for by name. It requires
+      entirely -- no point cloud map is loaded and no NDT runs. It requires
       aruco_tag_map_path.
 
 - arg:
@@ -209,20 +247,9 @@ launch:
     default: "lidar_only"
     description: "Perception preset: lidar_only, camera_lidar_fusion, minimal"
 
-- arg:
-    name: localization_preset
-    default: "default"
-    description: >-
-      Localization preset: default, eagleye, aruco.
-      aruco sets pose_source and additionally requires aruco_tag_map_path.
-
 # Include perception preset (defines perception_mode, use_traffic_light_recognition, etc.)
 - include:
     file: "$(find-pkg-share golfcart_launch)/config/perception/preset/$(var perception_preset)_preset.yaml"
-
-# Include localization preset (defines twist_source)
-- include:
-    file: "$(find-pkg-share golfcart_launch)/config/localization/preset/$(var localization_preset)_preset.yaml"
 
 - include:
     file: "$(find-pkg-share golfcart_launch)/launch/golfcart_autoware.launch.xml"
