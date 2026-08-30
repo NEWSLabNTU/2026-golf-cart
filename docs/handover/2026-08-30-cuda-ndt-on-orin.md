@@ -15,8 +15,8 @@ that were written from an x86 desktop and guessed at this hardware.
 and agrees with Autoware's NDT to **2.8 cm RMSE** over a full replay.
 
 It was a throughput problem, and only that. **That is now fixed**: 415 ms per
-frame became **41 ms**, against Autoware's 47 ms on the same machine and bag.
-cuda_ndt holds 10 Hz in real time and is the faster of the two.
+frame became **31 ms**, against Autoware's 47 ms on the same machine and bag.
+cuda_ndt holds 10 Hz in real time and is comfortably the faster of the two.
 
 The whole cost was one CPU call — see [The 415 ms](#the-415-ms) below.
 
@@ -114,22 +114,22 @@ parameter set. `just run-builtin` against `just run-cuda`.
 
 | | Autoware NDT | CUDA NDT (before) | CUDA NDT (after) |
 |---|---|---|---|
-| `exe_time_ms` mean | 47.0 | **415.3** | **40.5** |
-| `exe_time_ms` max | 82.7 | 480.5 | 56.3 |
-| NVTL mean | 3.126 | 3.138 | 3.139 |
+| `exe_time_ms` mean | 47.0 | **415.3** | **30.7** |
+| `exe_time_ms` max | 82.7 | 480.5 | 52.8 |
+| NVTL mean | 3.126 | 3.138 | 3.138 |
 | transform probability mean | 6.71 | 6.78 | 6.78 |
-| iterations mean | 3.13 | 2.68 | 3.88 |
-| initial-to-result distance mean | 0.090 m | 0.080 m | 0.156 m |
-| poses / path | 244 / 129.3 m | 291 / 126.9 m | 292 / 128.9 m |
+| iterations mean | 3.13 | 2.68 | 3.30 |
+| initial-to-result distance mean | 0.090 m | 0.080 m | 0.119 m |
+| poses / path | 244 / 129.3 m | 291 / 126.9 m | 294 / 129.8 m |
 | playback rate | 1x | 0.2x (could not hold 1x) | **1x** |
 
 Trajectory agreement against the Autoware run, over 242 matched stamps:
 
 | | |
 |---|---|
-| 2D RMSE | **0.0277 m** |
-| mean / p50 | 0.0219 m / 0.0161 m |
-| p95 / max | 0.0559 m / 0.1022 m |
+| 2D RMSE | **0.0309 m** |
+| mean / p50 | 0.0241 m / 0.0175 m |
+| p95 / max | 0.0610 m / 0.1203 m |
 | \|dz\| mean / max | 0.0039 m / 0.0237 m |
 
 The integration suite's own tolerance is 0.3 m RMSE. This passes with 10x
@@ -202,19 +202,85 @@ grid and re-uploads it on every frame, all of which are invariant between
 frames. That reasoning was correct and it was the wrong answer: those three
 together are 11.3 ms. Measuring first would have cost less than deducing.
 
+## Where the frame goes now
+
+Two rounds of this, each measured rather than reasoned about. After the NVTL
+move, `voxel_pack` was 18.1 ms of 34.5 -- it grew in share *and* in absolute
+terms once it stopped competing with a 390 ms CPU pass for memory bandwidth.
+`align_full_gpu` rebuilt `GpuVoxelData` from the target grid on every scan: 16
+floats per voxel over 11601 voxels, allocated and filled, for a value that only
+changes when the map is reloaded. `NdtScanMatcher` already keeps that packing
+from `set_target`, so it now hands it down.
+
+Current split, 294 frames at full rate:
+
+| phase | mean | note |
+|---|---|---|
+| `optimize` | 14.4 ms | the GPU Newton loop; the real work |
+| `gpu_nvtl` | 13.2 ms | scored in `align_gpu`, outside the phase line |
+| `upload` | 2.4 ms | source points, and the voxel grid re-uploaded per frame |
+| `pipeline_new` | 0.3 ms | |
+| `exe_time_ms` | 30.7 ms | |
+
+### A rejected optimization, and the bug it exposed
+
+`gpu_nvtl` is 13.2 ms because `evaluate_nvtl_gpu` re-uploads the whole voxel
+grid on every call. `GpuScoringPipeline` holds exactly that data persistently
+from `set_target`, so routing the per-frame NVTL through it looked like the
+obvious next win.
+
+**It is not, on two counts, and the second one matters much more.**
+
+It was slower: 15.7 ms against 11.7 ms for the re-uploading path, measured side
+by side on the same frames. And it returned a *different number*: NVTL 2.821
+against 3.138, mean absolute difference 0.317, max 0.808.
+
+The re-uploading path is the correct one — it agrees with the CPU
+`compute_nvtl_simple` to three decimals, which is how the NVTL move was
+validated in the first place. So `GpuScoringPipeline` is scoring the wrong
+rotation.
+
+The cause is a convention mismatch, and it is the same one this project has
+been bitten by before:
+
+- `GpuScoringPipeline` is addressed with `[x, y, z, roll, pitch, yaw]` and
+  builds its matrix with `pose_to_transform_matrix`, which composes
+  **`Rx(roll) · Ry(pitch) · Rz(yaw)`** — Autoware's convention.
+- Every caller derives those angles from `nalgebra`'s
+  `Isometry3::rotation.euler_angles()`, which describes the **opposite**
+  composition order.
+
+Feeding one convention's angles to the other's builder gives a different
+rotation for anything but small angles. `cuda_scan_matcher.param.yaml` already
+records this failure mode from 2026-08-03/04, when a euler round trip made the
+GPU read ~1.45x high and the NVTL gate had to be recalibrated against it.
+
+**This is a live bug, not just a rejected optimization.** `GpuScoringPipeline`
+is what `evaluate_nvtl_batch` uses, and that is the scorer behind the
+initial-pose align service — so `pose_source:=cuda_ndt` is ranking its
+initial-pose particles on NVTL values that are roughly 10% low and, worse,
+wrong by a pose-dependent amount. It is not on the per-scan path, so nothing
+above is affected, and it is not fixed here.
+
 ## What to work on
 
-1. **`voxel_pack`, 8.7 ms.** Now ~21% of the remaining frame. `align_full_gpu`
-   repacks the target grid every frame via `GpuVoxelData::from_voxel_grid`, and
-   re-uploads it, though `NdtScanMatcher` already caches exactly that at
-   `set_target` time and the grid only changes when the map is reloaded every
-   20 m. Plumbing the cached copy through would take the frame to roughly 30 ms.
-2. Only after that is the initial-pose align worth revisiting. The previous
-   handover's 35.3 s align figure was measured on x86 with `particles_num: 200`;
-   whatever fixes the per-frame cost likely moves it too.
-3. `pose_source:=cuda_ndt` now holds 10 Hz with margin (max 56 ms against a
-   100 ms bound) and is the faster of the two matchers. Whether it should
-   *default* to CUDA is still a call to make on vehicle data, not on this bag.
+1. **The `GpuScoringPipeline` euler convention**, described above. Correctness,
+   not speed, and it sits under initial-pose estimation. Fixing it would also
+   make the persistent-target path usable for per-frame NVTL, though it would
+   still need to beat 11.7 ms to be worth taking.
+2. **`upload`, 2.4 ms.** `align_full_gpu` still re-uploads the voxel grid to the
+   GPU every frame even though it no longer repacks it, because the pipeline is
+   constructed per call. Persisting the pipeline across frames would need
+   interior mutability and invalidation on map reload.
+3. The initial-pose align. The previous handover's 35.3 s figure was measured
+   on x86 with `particles_num: 200`. Both fixes above are on that path too --
+   NVTL per particle and the per-frame repack -- so it should have moved a long
+   way, but it has not been re-measured here, and item 1 has to land before any
+   number taken from it means anything.
+4. `pose_source:=cuda_ndt` now holds 10 Hz with margin (max 52.8 ms against a
+   100 ms bound) and is the faster of the two matchers on the per-scan path.
+   Whether it should *default* to CUDA is a call to make on vehicle data, not
+   on this bag, and not before item 1.
 
 ## What is still unmeasured here
 

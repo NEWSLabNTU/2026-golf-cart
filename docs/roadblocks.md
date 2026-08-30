@@ -5,6 +5,41 @@
 
 ---
 
+## cuda_ndt initial-pose NVTL is scored on the wrong rotation (observed 2026-08-30)
+
+**Affects**: `pose_source:=cuda_ndt` initial-pose estimation only. The per-scan
+path is not affected and is validated against Autoware's NDT to 3.1 cm RMSE.
+
+`GpuScoringPipeline` takes poses as `[x, y, z, roll, pitch, yaw]` and builds its
+matrix with `pose_to_transform_matrix`, which composes `Rx(roll) · Ry(pitch) ·
+Rz(yaw)` — Autoware's convention. Its callers derive those angles from
+nalgebra's `Isometry3::rotation.euler_angles()`, which describes the opposite
+composition order. The two disagree for anything but small angles.
+
+Measured on the same 294 frames, scoring the same poses both ways:
+
+| scorer | NVTL mean |
+|---|---|
+| `evaluate_nvtl_gpu` (rotation matrix, agrees with CPU to 3 decimals) | 3.138 |
+| `GpuScoringPipeline` (euler) | 2.821 |
+
+Mean absolute difference 0.317, max 0.808 — against a convergence gate of 2.0.
+
+`evaluate_nvtl_batch` uses that pipeline, and it is the scorer behind the
+initial-pose align service, so particle ranking there is on values roughly 10%
+low and wrong by a pose-dependent amount.
+
+This is the same class of defect that `cuda_scan_matcher.param.yaml` records
+from 2026-08-03/04, when a euler round trip made the GPU read ~1.45x high and
+the NVTL gate was recalibrated against the wrong number. Not fixed. Found while
+evaluating whether the persistent scoring pipeline could serve per-frame NVTL;
+it could not, and the discrepancy is why.
+
+Full detail in
+[handover/2026-08-30-cuda-ndt-on-orin.md](handover/2026-08-30-cuda-ndt-on-orin.md).
+
+---
+
 ## Sensor status (observed 2026-08-10)
 
 Measured from a live two-host run of `just launch-all "record:=true"` and the
