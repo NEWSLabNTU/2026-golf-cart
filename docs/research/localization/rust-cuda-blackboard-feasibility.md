@@ -59,6 +59,43 @@ All four, not any one:
 
 Item 1 is the expensive one and it is upstream work in rclrs, unrelated to CUDA.
 
+## Status of the localization preprocessing chain
+
+Checked against the installed Autoware 1.5.0, since item 4 turns on it.
+
+`tier4_localization_launch/launch/util/util.launch.xml` loads three composable
+nodes into `pointcloud_container`, with `use_intra_process=true`:
+
+| stage | today | CUDA equivalent shipped in 1.5.0 |
+|---|---|---|
+| `CropBoxFilterComponent` (±60 m, base_link) | **CPU** | none standalone. Cropping exists only fused inside `CudaPointcloudPreprocessorNode`, which also does distortion correction and ring-outlier filtering and needs per-point time — not usable here |
+| `VoxelGridDownsampleFilterComponent` (0.5 m) | **CPU** | **`CudaVoxelGridDownsampleFilterNode` — shipped, blackboard-native, and unused** |
+| `RandomDownsampleFilterComponent` (`sample_num: 5000`) | **CPU** | none |
+
+So one of the three has a drop-in, and it is the middle one.
+
+Two things follow, and they are the reason this is not a quick win:
+
+**A partial conversion costs more than it saves.**
+`CudaVoxelGridDownsampleFilterNode` is blackboard-native — `CudaPointCloud2` on
+both its input and its output. Inserting it between the CPU crop box and the CPU
+random downsample would add a host→device transfer at its input and a
+device→host at its output, two transfers to replace one CPU filter.
+
+**The missing piece is at the end, which is the worst place for it.**
+`RandomDownsampleFilterComponent` has no CUDA version, and it is the last stage.
+Whatever precedes it, the cloud must come back to the host for it to run. It is
+also why `cuda_ndt` always receives exactly 5000 points.
+
+Converting this chain therefore means writing a CUDA random downsample (or
+dropping that stage and getting the point budget from the voxel size instead),
+plus a standalone CUDA crop box. Neither exists upstream today.
+
+Note also that the three CPU stages already pass shared pointers between
+themselves via intra-process comms. The only serialisation on this path is the
+final hop out of the container into `cuda_ndt`'s own process — which is the
+1.56 ms decode, and the only part transport work could remove.
+
 ## Item 4 is why the prize is currently zero
 
 `cuda_ndt_matcher` subscribes to `/localization/util/downsample/pointcloud`. The
@@ -125,6 +162,8 @@ If the goal is the NDT node's CPU, the ordering by return on effort is:
    11.0% — roughly ten times what zero-copy could offer, for a fraction of the
    work.
 2. **Make the localization preprocessing chain GPU-native** (item 4). This is
-   the prerequisite for any of the rest, is independently useful, and does not
-   need Rust anything.
+   the prerequisite for any of the rest and needs no Rust work — but it is not
+   free either: one of its three stages has a shipped CUDA node, and the other
+   two would have to be written, including the last stage in the chain. Scope it
+   before starting; a partial conversion is worse than none.
 3. Only then is transport worth revisiting — and CUDA IPC, not a Rust blackboard.
