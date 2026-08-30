@@ -111,7 +111,24 @@ def reference_track(poses_file: Path, bag: Path, topic: str):
             for i in range(n)]
 
 
+def track_from_poses_file(path: Path):
+    """Read a KITTI poses file plus its .stamps sidecar.
+
+    Lets a candidate matcher evaluated outside ROS by offline_matcher_eval.py be
+    scored against the same reference as a full Autoware replay, with the same
+    code doing the scoring.
+    """
+    mats = np.loadtxt(path).reshape(-1, 3, 4)
+    stamps = np.loadtxt(path.with_suffix(".stamps")).reshape(-1)
+    n = min(mats.shape[0], stamps.shape[0])
+    return [(stamps[i] / 1e9, mats[i][0, 3], mats[i][1, 3],
+             yaw_of_matrix(mats[i][:, :3])) for i in range(n)]
+
+
 def run_track(run_dir: Path, topic: str = "/localization/pose_estimator/pose"):
+    if run_dir.suffix == ".txt":
+        return track_from_poses_file(run_dir)
+
     from rclpy.serialization import deserialize_message
     from rosidl_runtime_py.utilities import get_message
 

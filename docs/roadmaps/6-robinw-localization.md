@@ -9,7 +9,13 @@ Ranked directions and the reasoning: [robinw-autoware-pipeline.md](../research/l
 Measurements: [restricted-fov-ndt.md](../research/localization/restricted-fov-ndt.md).
 Literature: [narrow-fov-related-work.md](../research/localization/narrow-fov-related-work.md).
 
-Last updated: 2026-08-30. **R1 and R2 are done.** R2 did not close the gap.
+Last updated: 2026-08-30. **R1, R2 and R4-a are done.** None closed the gap.
+
+**Two matchers built on different principles lose the same fraction of accuracy
+when the wedge narrows**, which is what a geometric limit looks like rather than
+an algorithmic one. R4-d, sliding-window estimation with tight inertial coupling,
+is now the only direction with an argument left, because it is the only one that
+does not treat each scan independently.
 
 **A VLP-32C baseline now exists**, emulated from the same OS0-128 bag against the
 same map and reference: 0.055 m median matcher error, against the best Robin-W
@@ -242,7 +248,14 @@ Only entered on R3's evidence. All four are measurable on the existing benches;
 `data/tiers/baked_odo/` holds one sequence at four fields of view and
 `compare_to_reference.py` scores anything that consumes a bag and emits poses.
 
-**R4-a. VGICP instead of NDT.** Reported as accurate as GICP, faster, and robust
+**R4-a. VGICP instead of NDT — TRIED, does not close the gap.** Measured
+2026-08-30 offline against the same map and reference: it loses accuracy to a
+narrow wedge at the same rate as NDT, 1.49x against 1.54x relative to each
+matcher's own full-FOV run. Better worst case (0.46 m against 0.81) and roughly
+ten times faster, but not differentially better under a restricted field of view.
+Details in [restricted-fov-ndt.md](../research/localization/restricted-fov-ndt.md).
+The original reasoning:
+ Reported as accurate as GICP, faster, and robust
 to voxel resolution — it deletes R2-b's first question rather than answering it.
 Against it: NDT is what Autoware ships and what this project's CUDA work
 accelerates. Nothing measured here says VGICP handles a wedge better; that is the

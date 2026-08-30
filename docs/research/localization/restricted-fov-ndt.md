@@ -523,6 +523,72 @@ forward Robin-W costs about **1.4x the matcher error** of the VLP-32C it
 replaces, while localizing reliably throughout. Whether that is acceptable is a
 vehicle decision, not a localization one.
 
+## VGICP: tried, and it does not close the gap
+
+The first R4 item, run offline against the same map and the same reference by
+`tools/offline_matcher_eval.py`, using `small_gicp`'s Gaussian voxel map target.
+No Autoware integration was needed to answer the question.
+
+| matcher | full 360x90 | VLP-32C emul | Robin-W emul | ratio to own full | max err | ms/frame |
+|---|---|---|---|---|---|---|
+| NDT, full Autoware replay | 0.050 | 0.055 | 0.077 | **1.54x** | 0.81 | ~4-8 |
+| VGICP, offline harness | 0.076 | 0.093 | 0.113 | **1.49x** | 0.46 | 0.4-1.4 |
+
+**VGICP degrades with field of view at the same rate as NDT** — 1.49x against
+1.54x, measured against each matcher's own full-FOV run so the harness difference
+cancels. It is not more robust to a narrow wedge, and swapping matcher does not
+recover the Robin-W's 1.4x penalty.
+
+A correction to an impression formed mid-experiment: comparing the two emulated
+sensors directly gave VGICP 1.22x against NDT's 1.40x, which looked like a real
+robustness advantage. It is not — that ratio conflates the field-of-view change
+with the ring-count change, and against each matcher's own full-circle baseline
+the two are indistinguishable.
+
+**The prior was not the limitation either.** VGICP was first run with a
+constant-velocity prior from its own history, weaker than the EKF pose NDT gets.
+Re-running it with a prior integrated from the same measured twist and IMU yaw
+rate that feeds `gyro_odometer` moved the Robin-W result from 0.117 to 0.113 m.
+Whatever separates these matchers, it is not the quality of the initial guess.
+
+### What VGICP is actually better at
+
+Two things, neither of which is the problem being solved:
+
+- **Worst case.** Maximum error 0.28 / 0.35 / 0.46 m against NDT's 0.81 / 0.98.
+  It wanders less, even where its median is worse.
+- **Speed.** 0.4 to 1.4 ms per frame against NDT's several, on a CPU, single
+  process, with no GPU.
+
+Both are worth remembering if the constraint ever becomes tail latency or compute
+budget rather than accuracy. Neither argues for a matcher swap today.
+
+### Caveat that keeps this from being a verdict on VGICP
+
+The two rows are not measured under the same pipeline. NDT ran through the full
+Autoware stack — crop box, ring outlier filter, EKF fusion — and VGICP ran on raw
+bag clouds straight into the matcher. So VGICP's **absolute** numbers are
+handicapped and its worse median is partly the missing pipeline.
+
+What survives that asymmetry is the ratio, because each matcher is compared
+against its own full-FOV run through its own harness. The conclusion is therefore
+narrow and safe: **VGICP is not differentially better under a restricted field of
+view.** It is not "VGICP is worse than NDT".
+
+### Where that leaves R4
+
+The per-frame matcher is not where the field-of-view penalty lives. Two matchers
+built on different principles — distribution-to-point and voxelised
+distribution-to-distribution — lose the same fraction of their accuracy when the
+wedge narrows, which is what a *geometric* limit looks like rather than an
+algorithmic one.
+
+That points the remaining work at the one direction that does not treat each scan
+independently: **sliding-window estimation with tight inertial coupling**, where a
+direction unobserved in one frame is recovered from one observed a second later.
+It is the most expensive item on the roadmap and now also the only one with an
+argument left.
+
 ## Still to do
 - Repeat on a route with a long featureless stretch, which is where a forward
   wedge should fail first.
