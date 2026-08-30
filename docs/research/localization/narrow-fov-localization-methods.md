@@ -9,6 +9,10 @@ should be treated like a camera -- holds up.
 Everything here is read, not measured. The measurements are in the other
 document. Where the two touch, that is said explicitly.
 
+**Papers and links live in [narrow-fov-related-work.md](narrow-fov-related-work.md).**
+This document is the argument; that one is the survey, including an independent
+field-of-view ablation whose 90-degree degradation lands within 25% of ours.
+
 ## The camera analogy is half right, and the half that fails is the useful half
 
 The similarity is real and it is about **conditioning**. A sensor that sees 120

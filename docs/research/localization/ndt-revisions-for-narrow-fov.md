@@ -18,6 +18,9 @@ Two measured facts drive the whole list:
   more than how wide it is, and that is exactly the quantity that varies along a
   route and cannot be fixed by tuning.
 
+Papers behind every direction below:
+[narrow-fov-related-work.md](narrow-fov-related-work.md).
+
 ## Tier 1: two config lines, both currently set the wrong way for a narrow FOV
 
 These are defaults inherited from a full-circle sensor. Neither is code.

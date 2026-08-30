@@ -18,6 +18,8 @@ What to build if the margin proves thin:
 [ndt-revisions-for-narrow-fov.md](../../../docs/research/localization/ndt-revisions-for-narrow-fov.md).
 Why the camera analogy half-holds:
 [narrow-fov-localization-methods.md](../../../docs/research/localization/narrow-fov-localization-methods.md).
+Related work and papers:
+[narrow-fov-related-work.md](../../../docs/research/localization/narrow-fov-related-work.md).
 
 No Robin-W recording exists, so both arms emulate one by discarding the returns
 it would never have received.

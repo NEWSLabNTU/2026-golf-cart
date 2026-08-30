@@ -5,6 +5,10 @@ sees a 120 degree wedge instead of the full circle a Velodyne sweeps. NDT scan
 matching has always run here against 360 degree input. Does it still converge
 when three quarters of the horizon is gone?
 
+Related literature, including someone else's field-of-view ablation that agrees
+with the curve measured here:
+[narrow-fov-related-work.md](narrow-fov-related-work.md).
+
 **No Robin-W recording exists**, so the only way to ask the question now is to
 take a bag from a spinning sensor and throw away the returns a Robin-W would
 never have received. This document is about how far that stands in for the real
