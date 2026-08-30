@@ -76,6 +76,12 @@ def main() -> int:
     ap.add_argument("--topic", required=True, help="cloud topic to restrict")
     ap.add_argument("--min-bearing", type=float, default=-180.0)
     ap.add_argument("--max-bearing", type=float, default=180.0)
+    ap.add_argument("--extra-window", action="append", default=[], metavar="MIN,MAX",
+                    help="keep a second (or third) bearing wedge as well. "
+                         "Emulates a rig with more than one sensor, which is the "
+                         "direct test of whether the narrow-FOV penalty is an "
+                         "uncancelled bias: two opposed wedges see the same total "
+                         "solid angle as one wide one but from opposite sides.")
     ap.add_argument("--min-elevation", type=float, default=-90.0)
     ap.add_argument("--max-elevation", type=float, default=90.0)
     ap.add_argument("--max-range", type=float, default=float("inf"))
@@ -101,13 +107,21 @@ def main() -> int:
     typestore = get_typestore(Stores.ROS2_HUMBLE)
     PointField = typestore.types["sensor_msgs/msg/PointField"]
 
-    lo = math.radians(args.min_bearing)
-    hi = math.radians(args.max_bearing)
-    # Wrap only a non-positive difference, so a full circle stays 2pi instead of
-    # collapsing to zero and discarding everything.
-    width = hi - lo
-    while width <= 0.0:
-        width += 2.0 * math.pi
+    def as_window(lo_deg, hi_deg):
+        lo_r = math.radians(lo_deg)
+        hi_r = math.radians(hi_deg)
+        # Wrap only a non-positive difference, so a full circle stays 2pi
+        # instead of collapsing to zero and discarding everything.
+        w = hi_r - lo_r
+        while w <= 0.0:
+            w += 2.0 * math.pi
+        return lo_r, w
+
+    windows = [as_window(args.min_bearing, args.max_bearing)]
+    for spec in args.extra_window:
+        a, _, b = spec.partition(",")
+        windows.append(as_window(float(a), float(b)))
+    lo, width = windows[0]
     min_el, max_el = math.radians(args.min_elevation), math.radians(args.max_elevation)
     ox, oy, oz = args.origin
     rng = np.random.default_rng(args.seed)
@@ -142,7 +156,10 @@ def main() -> int:
                 y = pts["y"].astype(np.float64) - oy
                 horiz_sq = x * x + y * y
 
-                mask = ((np.arctan2(y, x) - lo) % (2.0 * math.pi)) <= width
+                bearing = np.arctan2(y, x)
+                mask = np.zeros(bearing.shape, dtype=bool)
+                for w_lo, w_width in windows:
+                    mask |= ((bearing - w_lo) % (2.0 * math.pi)) <= w_width
                 if math.isfinite(args.max_range):
                     mask &= horiz_sq <= args.max_range ** 2
                 if min_el > -math.pi / 2 or max_el < math.pi / 2:
