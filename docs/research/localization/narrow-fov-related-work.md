@@ -100,12 +100,38 @@ What won, though, was **not** better feature extraction. The direct methods did:
   continuous-time trajectory estimation is enough without an IMU, which is the
   contrarian position in this set and worth knowing exists.
 
-**This matters for our choice of estimator.** NDT models local distributions
-rather than extracting features, so it is already on the winning side of that
-split — the golf cart does not need to abandon it to follow the literature. What
-the literature is unanimous about instead is *where the fusion happens*: these
-systems fuse the IMU **inside** the estimator, whereas Autoware registers with
-NDT and fuses afterwards in `ekf_localizer`.
+**This matters for our choice of estimator, but only narrowly.** NDT models
+local distributions rather than extracting features, so it sits in the family
+that won that particular split. **That is a statement about which family, not a
+claim that NDT wins it, and it should not be read as one.**
+
+Three reasons not to:
+
+- **Two independent axes.** Feature-vs-direct is one; loose-vs-tight coupling is
+  another. NDT is on the good side of the first and the bad side of the second,
+  because Autoware registers with NDT and fuses afterwards in `ekf_localizer`.
+  Much of the LIO line's advantage comes from the axis NDT-as-deployed does not
+  have.
+- **Different problem.** FAST-LIO2 and Point-LIO are odometry; we localize
+  against a prior map. The prior-map analogue is the sliding-window work below,
+  which should be expected to *beat* one-shot NDT under a restricted field of
+  view rather than lose to it.
+- **NDT is not the accuracy leader even among classical registration.** GICP-based
+  methods generally beat ICP and NDT
+  ([benchmark](https://arxiv.org/pdf/2003.12841)), and NDT is unusually sensitive
+  to voxel resolution — 2.717 m against 7.119 m across a resolution change in one
+  evaluation. [VGICP](https://staff.aist.go.jp/shuji.oishi/assets/papers/preprint/VoxelGICP_ICRA2021.pdf)
+  matches GICP's accuracy while being faster and robust to that parameter. NDT is
+  here for speed, maturity, Autoware integration and the CUDA work already done,
+  not because it is the most accurate option available.
+
+**No head-to-head was measured.** Every number in this campaign is NDT against
+itself at different fields of view. Nothing here compares NDT to GICP, VGICP,
+FAST-LIO2 or a sliding-window prior-map localizer, at any field of view, so the
+campaign supports "NDT is adequate at 120 degrees forward" and nothing stronger.
+
+What the literature *is* unanimous about is where the fusion happens: these
+systems fuse the IMU **inside** the estimator.
 
 Our own data is a sharp demonstration of why that matters. On the TIERS rig,
 which has no wheel odometry, the identical configuration gave median errors of
@@ -186,3 +212,11 @@ Then [Tightly Coupled Range Inertial Localization on a 3D Prior
 Map](https://arxiv.org/pdf/2402.05540) as the concrete upgrade path, and
 [FAST-LIO2](https://arxiv.org/pdf/2107.06829) for why tight coupling is the
 baseline rather than an enhancement.
+
+## The comparison nobody here has run
+
+Whether NDT is the *right* matcher for a narrow field of view is open. It is
+cheap to answer now: `data/tiers/baked_odo/` holds the same sequence at four
+fields of view and `compare_to_reference.py` scores anything against a common
+trajectory, so a candidate only has to consume a bag and emit poses. VGICP and a
+sliding-window prior-map localizer are the two worth running first.
