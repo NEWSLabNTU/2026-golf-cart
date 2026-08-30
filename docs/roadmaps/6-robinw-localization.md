@@ -387,10 +387,18 @@ Autoware NDT replay, Robin-W wedge, scored against the same reference:
 |---|---|---|---|
 | **VLP-32C, original map** (the bar) | **0.055** | 0.131 | as deployed today |
 | Robin-W, original map, resolution 3.0 | 0.077 | 0.175 | best before R7 |
-| Robin-W, original map, res 2.0 + dense | 0.082 | 0.226 | **dense alone does nothing** |
+| Robin-W, original map, stock res + dense | 0.082 | 0.226 | **dense alone is worse than stock** |
 | Robin-W, **surveyed map**, res 3.0 | 0.064 | 0.168 | survey alone |
-| **Robin-W, surveyed map, res 2.0 + dense** | **0.055 / 0.055 / 0.055** | 0.210 | **parity, 3 runs** |
+| **Robin-W, surveyed map, stock res + dense** | **0.055 / 0.055 / 0.055** | 0.210 | **parity, 3 runs** |
+| the same, with the stock convergence gate too | 0.054 | 0.208 | gate change was inert |
 | VLP-32C, its own surveyed map | 0.053 | 0.132 | the bar, equally treated |
+
+**In stock terms the whole recipe is two changes**: build the prior map with the
+Robin-W, and raise `random_downsample_filter`'s `sample_num` from 5000 to 50000.
+Stock resolution, stock convergence gate, stock matcher. The parity runs above
+used a param file that also lowered the NVTL gate from 2.0 to 0.5, left over from
+the resolution sweep; re-running with the stock gate gives 0.054, so it
+contributed nothing.
 
 **What did the work, in order:**
 
@@ -398,11 +406,14 @@ Autoware NDT replay, Robin-W wedge, scored against the same reference:
    takes 0.077 to 0.064. Without it, nothing else helps: the same dense, finer
    configuration on the original map scores 0.082, *worse* than the stock
    settings.
-2. **A finer matcher resolution only becomes usable once the map matches the
-   sensor.** On the original map, 3.0 beat 2.0. On the surveyed map, 2.0 with a
-   dense scan beats 3.0, 0.055 against 0.064. That is the bias mechanism showing
-   its face: fine voxels are only worth having when the map does not disagree
-   with the scan at a coarser scale than the voxels themselves.
+2. **Surveying removes the need for the resolution tuning, rather than shifting
+   it.** `resolution: 2.0` is the **stock** value. On the original map it had to
+   be tuned up to 3.0 to reach 0.077; on the surveyed map stock 2.0 beats the
+   tuned 3.0, 0.055 against 0.064. The 3.0 was compensating for map/scan
+   mismatch, not for the sensor, and once the mismatch is gone the compensation
+   costs accuracy. That is the bias mechanism showing its face: coarse voxels are
+   only worth having when the map disagrees with the scan at a coarser scale than
+   the voxels themselves.
 3. Point budget matters **only in combination**. Raising it on the original map
    changed nothing, as it had every previous time.
 
