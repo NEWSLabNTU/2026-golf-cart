@@ -147,6 +147,27 @@ launch:
       CudaPointcloudPreprocessorNode into the CUDA concatenator. Defaults from
       use_cuda.
 
+# The localization preprocessing chain -- crop box, voxel grid, random
+# downsample -- that feeds NDT. Separate from pointcloud_backend on purpose:
+# that one selects the SENSING chain, this one a different set of nodes in the
+# same container, and the two are useful independently.
+#
+# NOT derived from use_cuda, unlike pointcloud_backend, and defaulted to cpu.
+# This stage measured ~19% of one core on an AGX Orin, which is under the bar
+# that would justify moving it, and two of its three CUDA nodes are new code on
+# the path that decides what NDT sees. The switch exists so the question can be
+# answered on the vehicle rather than argued about; see
+# docs/roadmaps/5-gpu-localization-preprocessing.md.
+#
+# Only fully GPU-resident when pointcloud_backend is also cuda, since that is
+# what puts the concatenated cloud on the blackboard for it to read.
+- arg:
+    name: localization_pointcloud_backend
+    default: "cpu"
+    description: >-
+      NDT input preprocessing: cpu | cuda. Whole-stage, like
+      pointcloud_backend; the halves cannot be mixed.
+
 # The sensor kit is reached through tier4_sensing_component.launch.xml and
 # tier4_sensing_launch/sensing.launch.xml, installed Autoware files that forward
 # a fixed set of arguments and drop the rest, so the value crosses that gap in

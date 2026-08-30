@@ -7,11 +7,16 @@ C++/CUDA against the same package and conventions.
 Background: [rust-cuda-blackboard-feasibility.md](../research/localization/rust-cuda-blackboard-feasibility.md),
 which is where this phase came from and which explains what it does *not* buy.
 
-Last updated: 2026-08-31. **L0 is done and it closes the gate.** The three
-filters cost about 19% of one core. The stop rule written below says stop, so
-L1–L4 are not started and should not be without a reason that L0 does not
-supply. The measurement and its rig are recorded so the decision can be
-revisited on the cart's own sensors.
+Last updated: 2026-08-31. **L0 measured ~19% of a core, which closes the gate
+this document set. L1–L4 were then built anyway, on an explicit call**: the
+number cannot be checked on the cart's own sensors from here, and the switch is
+what makes that check possible. Everything below is implemented, tested and
+defaulted to `cpu`, so the CUDA path costs nothing until someone asks for it.
+
+**Status: L1–L4 done.** `golfcart_cuda_preprocessor` provides the two filters
+Autoware does not ship; `localization_pointcloud_backend:=cuda` selects the GPU
+chain. 37 tests pass. What has *not* happened is the measurement that justifies
+using it — see *What is still open* at the end.
 
 ---
 
@@ -129,7 +134,7 @@ host→device transfer at its input and a device→host at its output: two trans
 to replace one CPU stage. Either the chain converts end to end or it does not
 convert.
 
-## Work items — not started, gated by L0 above
+## Work items — all done
 
 ### L1 — CUDA crop box
 
@@ -186,6 +191,53 @@ The sensing chain is selected by `pointcloud_backend:=cpu|cuda`, whole-stage,
 with the two halves refusing to mix. Do the same here rather than inventing a
 second idiom, and keep CPU reachable: this chain feeds localization, and a GPU
 regression must be revertible from the command line.
+
+## What was built
+
+`src/sensing/golfcart_cuda_preprocessor`, following the conventions of
+`autoware_cuda_pointcloud_preprocessor` (which was fetched to
+`~/repos/autoware_universe_ref` as the reference the earlier draft asked for):
+
+| | |
+|---|---|
+| `CudaCropBoxFilterNode` | L1. Axis-aligned crop, inclusive bounds, `negative` to invert. Drops non-finite points in **both** polarities — a NaN compares false against every bound, so a naive `negative` would keep it. |
+| `CudaRandomDownsampleFilterNode` | L2. Exact `sample_num` by random-key sort, not thresholding: thresholding gives a binomial count around the target, and the CPU component promises *at most* `sample_num`. Output preserves input order; the seed is a call counter, so a replay is reproducible. |
+| `CudaVoxelGridDownsampleFilterNode` | L3. Autoware's, adopted unchanged, with this repo's 0.5 m voxel parameters rather than the package's 0.3/0.3/0.1 defaults. |
+| `localization_pointcloud_backend` | L4. `cpu` (default) or `cuda`, whole-stage. |
+
+Both new nodes read and write `cuda_blackboard::CudaPointCloud2`, so the three
+chain GPU-resident. The blackboard publisher also carries a plain `PointCloud2`
+on a compatible topic, which is how the chain still feeds `cuda_ndt_matcher` —
+an rclrs node that cannot read the blackboard — without any change to it.
+
+**Verified**: 37 tests, 0 failures (12 GPU gtest cases plus copyright, cppcheck,
+lint_cmake, xmllint). The gtest cases cover inclusive bounds on all six faces and
+at the corners, NaN and ±inf in both polarities, byte-exact whole-point survival
+including padding, exact output counts, order preservation, distinct subsets
+across calls, empty input, and unreadable layouts. They skip rather than fail
+where there is no GPU. End to end on the Orin over Autoware's sample bag, both
+branches publish `/localization/util/downsample/pointcloud` at the same rate
+(388 clouds cpu, 398 cuda) with point counts in the same range (mean 1193 against
+1254, both capped at 2000).
+
+## What is still open
+
+**The measurement that would justify turning it on.** L0 said ~19% of a core on
+*this* bag and *this* sensor set. The reason to build anyway was that the cart's
+VLP-32C plus Seyond may produce a materially larger cloud than the sample's
+119k points at the crop box, and the chain scales roughly with input points.
+Nobody has recorded the cart's concatenated point count.
+
+So the next step is not more code. It is: record
+`/sensing/lidar/concatenated/pointcloud` on the vehicle, read `width × height`,
+re-run the L0 rig, and then compare `localization_pointcloud_backend:=cpu`
+against `:=cuda` on vehicle data. If the cloud is around 120k like the sample,
+leave the default alone.
+
+**Not yet measured at all**: what the CUDA chain costs. L0 measured the CPU
+chain; the GPU one has been checked for correctness and equivalence, never for
+speed. It could be slower — kernel launches and, with a CPU sensing chain, a
+host-to-device copy at the first stage.
 
 ## What this phase does not do
 

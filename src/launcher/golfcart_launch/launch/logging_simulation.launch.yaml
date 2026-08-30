@@ -73,6 +73,21 @@ launch:
     default: $(eval "'cuda' if '$(var use_cuda)'.lower() in ('true','1','yes') else 'cpu'")
     description: "LiDAR preprocessing and concatenation: cpu | cuda. Defaults from use_cuda."
 
+# The localization preprocessing chain -- crop box, voxel grid, random
+# downsample -- that feeds NDT. Separate from pointcloud_backend on purpose:
+# that one selects the SENSING chain, this one a different set of nodes in the
+# same container, and they are useful independently. Not derived from use_cuda
+# either, because this stage was measured at ~19% of a core on an AGX Orin and
+# is not obviously worth moving; see
+# docs/roadmaps/5-gpu-localization-preprocessing.md.
+#
+# Only fully GPU-resident when pointcloud_backend is also cuda, since that is
+# what puts the concatenated cloud on the blackboard.
+- arg:
+    name: localization_pointcloud_backend
+    default: "cpu"
+    description: "NDT input preprocessing: cpu | cuda"
+
 - set_env:
     name: POINTCLOUD_BACKEND
     value: "$(var pointcloud_backend)"
