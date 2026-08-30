@@ -291,15 +291,55 @@ before it compares. A test that cannot fail is worse than no test.
    GPU every frame even though it no longer repacks it, because the pipeline is
    constructed per call. Persisting the pipeline across frames would need
    interior mutability and invalidation on map reload.
-3. The initial-pose align. The previous handover's 35.3 s figure was measured
-   on x86 with `particles_num: 200`. The NVTL and repack fixes are both on that
-   path -- it scores every particle with `evaluate_nvtl` and aligns each one --
-   so it should have moved a long way. It has not been re-measured here, and it
-   is the last piece of `pose_source:=cuda_ndt` still unverified on the Orin.
-4. `pose_source:=cuda_ndt` now holds 10 Hz with margin (max 52.8 ms against a
-   100 ms bound) and is the faster of the two matchers on the per-scan path.
-   Whether it should *default* to CUDA is a call to make on vehicle data, not
-   on this bag, and not before item 3.
+3. ~~The initial-pose align.~~ **Measured and fixed — see below.** 49.1 s → 9.9 s,
+   and `pose_source:=cuda_ndt` now initialises from Monte Carlo and tracks end
+   to end on the Orin. The serial TPE phase is what is left, at 6.4 s.
+4. **The serial TPE phase, 6.4 s.** 100 particles at 64 ms each, one after
+   another. It is now 64% of the align. The startup phase next to it does the
+   same work batched in 35 ms per particle, so the headroom is real, but TPE is
+   sequential by construction — each trial's sampling depends on the previous
+   result — so this is a redesign, not a fix.
+5. `pose_source:=cuda_ndt` now holds 10 Hz with margin on the per-scan path
+   (max 52.8 ms against a 100 ms bound), is the faster of the two matchers, and
+   initialises in 9.9 s. Whether it should *default* to CUDA is a call to make
+   on vehicle data, not on this bag.
+
+## The initial-pose align: 49.1 s → 9.9 s
+
+The previous handover measured 35.3 s for this on an **x86 desktop with a
+discrete RTX 3090**, and concluded `cuda_ndt` could not initialise. Measured
+here for the first time, on the Orin:
+
+| phase | before | after |
+|---|---|---|
+| startup, 100 particles batched | 42178 ms | **3523 ms** |
+| — of which NVTL | 1192 ms | 519 ms |
+| TPE, 100 particles serial | 6898 ms | 6351 ms |
+| **total align** | **49.1 s** | **9.9 s** |
+| result | converged, 3.205, reliable | converged, 3.203, reliable |
+
+The Orin now beats the desktop figure by 3.5x.
+
+**What the phase split gave away.** The startup phase costs 422 ms per particle
+against 69 ms for the *serial* TPE phase beside it. A batched path six times
+slower per item than the sequential one is not a tuning problem, it is a defect.
+
+`align_batch_gpu` ended every particle with `compute_nvtl` on the CPU — the same
+serial per-point KD-tree pass taken off the per-scan path earlier, still present
+here and run once per particle. At `n_startup_trials: 100` that was 42.2 s of the
+49.1 s.
+
+It was redundant twice over: the initial-pose estimator ignores
+`AlignResult::nvtl` and recomputes NVTL itself immediately afterwards, which is
+the 1192 ms the phase line reports separately. The optimizer now defers NVTL to
+the matcher exactly as it does for `align_full_gpu`, and the matcher scores each
+aligned pose on the GPU so the field stays meaningful for callers that do read it.
+
+**`pose_source:=cuda_ndt` initialises and tracks.** Verified end to end with the
+user-defined initial pose disabled: `align server succeeded.` → `EKF Activation
+succeeded` → `NDT Activation succeeded`, then 263 poses over 129.4 m at 32.8 ms
+and NVTL 3.131. That was the last piece of the CUDA path still unverified on this
+hardware.
 
 ## What is still unmeasured here
 
