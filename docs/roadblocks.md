@@ -52,7 +52,7 @@ the wrong number rather than the number being fixed.
 
 ---
 
-## play_launch on the Orin is 0.5.1; every `just launch*` recipe needs 0.10.0 (observed 2026-08-30)
+## play_launch on the Orin was 0.5.1, breaking every `just launch*` recipe (fixed 2026-08-30)
 
 Every launch verb in the justfile passes `--container-mode`, in seven places
 (`just launch`, `launch-up`, `launch-sim-logging`, `launch-sim-planning`,
@@ -76,15 +76,24 @@ Consequence: every `just launch*` recipe fails immediately on this Orin, before
 anything starts. Nothing in the error names the version, so it reads as a
 justfile defect.
 
-**Fix**: reinstall play_launch from the source checkout. Until then, invoking
-play_launch directly without `--container-mode` works, which is what the
-measurements in
-[handover/2026-08-30-cuda-ndt-on-orin.md](handover/2026-08-30-cuda-ndt-on-orin.md)
-did.
+**Fixed** by `pip install --upgrade play_launch`, which brings **0.9.0** — the
+latest release, and the version that already carries `--container-mode`. Every
+flag this repo passes (`--container-mode`, `--web-addr`, `--parser`) is present
+in it, checked against the binary before installing. `just --evaluate` and
+`just --list` both pass afterwards, and
+`logging_simulation.launch.yaml` reaches `Startup complete` through the
+justfile's own invocation.
 
-Not fixed here: reinstalling a tool outside this repository is the machine
-owner's call, and the two versions are far enough apart that the replay
-behaviour may differ in ways this repo's recipes assume.
+The source checkout is an unreleased **0.10.0**, and was not used: building it
+means a full Rust build of a tree that is itself two commits behind its origin,
+to gain nothing this repository asks for.
+
+**Note for anyone re-reading the measurements** in
+[handover/2026-08-30-cuda-ndt-on-orin.md](handover/2026-08-30-cuda-ndt-on-orin.md):
+they were taken under 0.5.1, invoking play_launch directly without
+`--container-mode`. The A/B is unaffected — both arms ran under the same
+version — but absolute CPU figures include that version's monitoring overhead
+and should not be compared against numbers taken under 0.9.0.
 
 ---
 
@@ -102,6 +111,12 @@ Any resource measurement here needs to (1) refuse to start while a
 `play_launch`, `component_container` or `ros2 bag` process is alive, and (2)
 wait for the load average to fall before opening its window. Killing the parent
 is not enough; `pkill -9 -f play_launch` plus `component_container` is.
+
+Observed under play_launch 0.5.1. It has not been retested under 0.9.0 — a
+later teardown left nothing behind, but that run force-killed after SIGINT, so
+it does not show the survival is gone. Keep the guard until something measures
+otherwise. Also beware that `pgrep -f play_launch` matches the checking command
+itself; match on `comm`, not the full command line.
 
 ---
 
