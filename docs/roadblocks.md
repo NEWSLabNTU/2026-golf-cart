@@ -52,6 +52,59 @@ the wrong number rather than the number being fixed.
 
 ---
 
+## play_launch on the Orin is 0.5.1; every `just launch*` recipe needs 0.10.0 (observed 2026-08-30)
+
+Every launch verb in the justfile passes `--container-mode`, in seven places
+(`just launch`, `launch-up`, `launch-sim-logging`, `launch-sim-planning`,
+`ntu-test up`, ...). The play_launch installed on this machine does not have it,
+in any position:
+
+```
+$ play_launch --version
+play_launch 0.5.1
+$ play_launch launch ... --container-mode observable ...
+error: unexpected argument '--container-mode' found
+```
+
+It is not a justfile bug. The source checkout at `~/repos/play_launch` is
+**0.10.0** and does have the flag; the install at
+`~/.local/lib/python3.10/site-packages/play_launch` is from 2026-08-03 and is
+five minor versions behind. `pip show play_launch` reports the stale one, and
+`~/.local/bin/play_launch` resolves to it.
+
+Consequence: every `just launch*` recipe fails immediately on this Orin, before
+anything starts. Nothing in the error names the version, so it reads as a
+justfile defect.
+
+**Fix**: reinstall play_launch from the source checkout. Until then, invoking
+play_launch directly without `--container-mode` works, which is what the
+measurements in
+[handover/2026-08-30-cuda-ndt-on-orin.md](handover/2026-08-30-cuda-ndt-on-orin.md)
+did.
+
+Not fixed here: reinstalling a tool outside this repository is the machine
+owner's call, and the two versions are far enough apart that the replay
+behaviour may differ in ways this repo's recipes assume.
+
+---
+
+## Measuring anything on this Orin needs a stale-process guard (observed 2026-08-30)
+
+`play_launch` stacks survive their SIGINT here. Two consecutive replay runs left
+six of them alive, competing for the same 12 cores, and the load average reached
+**278** while a "measurement" was running.
+
+The result was not noise, it was a confident wrong answer: `pointcloud_container`
+appeared to drop from 117.7% to 38.6% CPU between backends, a 3x win. Re-measured
+on a quiet machine, the same comparison is 117.9% to 91.5% — 1.29x.
+
+Any resource measurement here needs to (1) refuse to start while a
+`play_launch`, `component_container` or `ros2 bag` process is alive, and (2)
+wait for the load average to fall before opening its window. Killing the parent
+is not enough; `pkill -9 -f play_launch` plus `component_container` is.
+
+---
+
 ## Sensor status (observed 2026-08-10)
 
 Measured from a live two-host run of `just launch-all "record:=true"` and the
