@@ -7,8 +7,11 @@ C++/CUDA against the same package and conventions.
 Background: [rust-cuda-blackboard-feasibility.md](../research/localization/rust-cuda-blackboard-feasibility.md),
 which is where this phase came from and which explains what it does *not* buy.
 
-Last updated: 2026-08-31. **Nothing started.** L0 is a measurement, and it is a
-gate: if it comes back small, this phase should not happen.
+Last updated: 2026-08-31. **L0 is done and it closes the gate.** The three
+filters cost about 19% of one core. The stop rule written below says stop, so
+L1–L4 are not started and should not be without a reason that L0 does not
+supply. The measurement and its rig are recorded so the decision can be
+revisited on the cart's own sensors.
 
 ---
 
@@ -54,6 +57,52 @@ vehicle actually moves.
 The rest of this phase is several weeks of CUDA work, and the alternative uses
 of that time are better. Write the number into this document either way.
 
+### L0 result — 2026-08-31, and it says stop
+
+Measured on the Orin by loading the same three components, with this repo's own
+parameter files, into a dedicated `component_container_mt` that holds nothing
+else, alongside a normal `pointcloud_backend:=cuda` replay of Autoware's sample
+bag. A container with only these three in it attributes exactly, which
+`pointcloud_container` cannot — it also carries CenterPoint, ground filtering,
+clustering and the occupancy grid.
+
+| | |
+|---|---|
+| container total, two runs | 19.7%, 22.5% of one core |
+| — of which worker threads | 15.9%, 18.8% |
+| — of which DDS receive (`recvMC`) | 3.8%, 3.7% |
+| clouds through each stage | 369, 369, 369 |
+| crop box, self-reported `debug/processing_time_ms` | 1.906 ms mean, 1.863 p50, 7.184 p95 |
+
+**Call it ~19% of one core.** The `recvMC` share is an artefact of the rig: the
+isolated chain receives its input over DDS, while the real chain gets it
+intra-process from the concatenator in the same container. So 22.5% is an upper
+bound and ~18.8% is the closer figure.
+
+**That is under the stop rule, and the wider context makes it weaker still.**
+19% of one core is 1.6% of this 12-core machine, and the system was not
+CPU-bound when it was measured — 73% across all cores. Converting the chain
+would not even recover all of it: the GPU version still pays kernel launches and,
+until the whole chain converts, transfers.
+
+For comparison, four structural fixes to `cuda_ndt_matcher` in the same session
+took that node from 40.0% of a core to 11.0% — about 1.5 cores' worth of the
+same currency, for a fraction of the effort, and with no new CUDA code on a
+safety-relevant path.
+
+**Reasons this could still be worth doing**, none of which L0 supplies:
+
+- The cart's sensors are not this bag. One VLP-32C plus a Seyond, at a different
+  point count, could move the number. Re-run the rig on vehicle data before
+  concluding for the vehicle.
+- If the Orin becomes CPU-bound for another reason, 0.19 cores stops being
+  noise. It is not today.
+- If the chain has to become blackboard-native anyway to serve something else,
+  this work comes along with it rather than being justified on its own.
+
+The rig is reusable: an isolated container launch plus per-thread sampling of
+its process. It is the right way to re-answer this on the vehicle.
+
 ## What already exists, and what does not
 
 Checked against the installed Autoware 1.5.0:
@@ -80,7 +129,7 @@ host→device transfer at its input and a device→host at its output: two trans
 to replace one CPU stage. Either the chain converts end to end or it does not
 convert.
 
-## Work items
+## Work items — not started, gated by L0 above
 
 ### L1 — CUDA crop box
 
