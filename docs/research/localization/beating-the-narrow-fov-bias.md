@@ -11,6 +11,23 @@ recovers about half the penalty. This document is the resulting map of the
 solution space — deliberately not restricted to NDT, since the mechanism is
 matcher-independent and so are most of the remedies.
 
+## Confirmed in the real pipeline: 0.055 m, matching VLP-32C NDT
+
+The offline result below was re-tested inside the full Autoware NDT replay, which
+is the number that counts. **Robin-W reaches 0.055 m, the VLP-32C NDT baseline,
+across three runs with no spread.**
+
+Surveying the map with the wedge is what makes it possible: alone it gives 0.077
+to 0.064, and the same dense finer configuration *without* it scores 0.082, worse
+than stock. A finer matcher resolution only becomes usable once the map stops
+disagreeing with the scan at a coarser scale than the voxels themselves.
+
+Caveats that matter: p95 is still 1.6x worse than the VLP-32C's, 0.210 against
+0.131, so this is median parity and not tail parity; and an equally-surveyed
+VLP-32C reaches 0.053, so the claim is parity with the bar as deployed rather
+than superiority. Full table in
+[the phase roadmap](../../roadmaps/6-robinw-localization.md), section R7-X.
+
 ## Scope: one forward sensor
 
 The vehicle carries **one forward-facing Robin-W**, and that is the constraint

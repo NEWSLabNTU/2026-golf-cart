@@ -37,7 +37,9 @@ EXTRA_ARGS=("$@")
 BAKED_DIR="${BAKED_DIR:-baked_odo}"
 
 BAG="$ROOT/data/tiers/$BAKED_DIR/$BAKED"
-MAP="$ROOT/data/tiers/road01_map"
+# Which prior map. The default is the one built from the full sensor; a map
+# surveyed with the wedge itself is the lever being tested.
+MAP="$ROOT/data/tiers/${MAP_DIR:-road01_map}"
 
 for required in "$BAG" "$MAP/pointcloud_map.pcd"; do
     [[ -e "$required" ]] || { echo "missing: $required" >&2; exit 1; }

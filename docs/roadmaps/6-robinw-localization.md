@@ -9,13 +9,24 @@ Ranked directions and the reasoning: [robinw-autoware-pipeline.md](../research/l
 Measurements: [restricted-fov-ndt.md](../research/localization/restricted-fov-ndt.md).
 Literature: [narrow-fov-related-work.md](../research/localization/narrow-fov-related-work.md).
 
-Last updated: 2026-08-31. **R1, R2, R4-a and R4-d are done. None closed the gap.**
+Last updated: 2026-08-31. **The phase has been re-ordered around a mechanism.**
 
-The 1.4x penalty for a forward 120 x 70 degree wedge survived a change of
-matcher, a change of estimator structure, and every parameter swept. Treat it as
-a **geometric property of the sensor choice**, and put the remaining effort into
-the real recording (R1's open item) and R5, rather than into more algorithm work
-on an emulation.
+R2, R4-a and R4-d all failed, and understanding *why* changed the plan. The
+penalty is **systematic bias, not noise**: a scan-to-map matcher measures
+agreement with the map, that disagreement is fixed per surface, and a full circle
+collects opposing pulls that cancel while a wedge collects pulls that sum. See
+[why-narrow-fov-costs-accuracy.md](../research/localization/why-narrow-fov-costs-accuracy.md).
+
+Everything that failed reduced **variance**, and the error is not
+variance-limited. Everything that has since worked attacks the **map**. Under a
+single-forward-sensor constraint, two map changes took a 120 x 70 degree wedge
+from 0.113 m to 0.057 m in the offline harness, past an equally-treated VLP-32C
+at 0.067. The phases below are re-ordered accordingly: **R7 is now the active
+work**, and R5 is out of scope because the vehicle carries one sensor.
+
+**Scope: one forward-facing Robin-W.** A second sensor is not available. The
+dual-wedge experiment stays on record because it identified the mechanism, not
+as a proposal.
 
 **Two matchers built on different principles lose the same fraction of accuracy
 when the wedge narrows**, which is what a geometric limit looks like rather than
@@ -304,7 +315,149 @@ whole cost.
 
 ---
 
-## R5 — Sensor configuration
+## R7 — The map (ACTIVE)
+
+The confirmed direction, and the only one that has moved the number. All of it is
+achievable with one forward sensor. Measured in the offline VGICP harness unless
+stated; the same levers are being re-tested inside the Autoware NDT pipeline,
+which is what the phase's acceptance depends on.
+
+### R7-a. Map resolution — largest single effect
+
+Robin-W, original map, sweeping the resolution the *matcher* voxelises the map
+at:
+
+| map voxel | 0.5 m | 1.0 m | 2.0 m |
+|---|---|---|---|
+| err p50 | **0.078** | 0.113 | 0.164 |
+
+Monotonic, and it collapsed the Robin-W's penalty against the VLP-32C from
+**1.21x to 1.03x**. It helps every sensor and helps the wedge most, exactly as
+the bias mechanism predicts: a coarse cell displaces a surface by an amount that
+depends on which part of it was seen, and only a full circle averages those
+displacements away.
+
+**Note the direction disagreement with NDT**, which got catastrophically worse at
+fine resolution (3.900 m at 1.0). The suspected cause is interaction with
+`random_downsample_filter`'s cap of 5000 points: fine voxels need a dense scan to
+populate them, and NDT's was being thinned first. Resolving that is R7-d.
+
+**Acceptance:** know what the deployed map resolution is, and whether NDT can use
+a fine one once the scan is dense enough.
+
+### R7-b. Survey with the deployment sensor
+
+On top of a fine map, building it from the wedge's own returns takes 0.078 to
+**0.057**. It helps the VLP-32C too, 0.076 to 0.067, so it is not
+wedge-specific — but the wedge gains **27% against 12%**, since less angular
+averaging means less capacity to hide a viewpoint mismatch.
+
+Cheapest thing on this list and the most urgent, because it is a decision that
+becomes expensive to reverse the moment a production map exists. Every map this
+project owns was built with a Velodyne.
+
+**Unmeasured risk:** a self-built map is a map of a route already driven. In
+service the map is older than the drive, and nothing here says how the advantage
+decays as the world changes.
+
+### R7-c. Viewpoint-invariant map representation
+
+The principled version of R7-a and R7-b together. A map stored as *points*
+carries the sampling pattern of whatever built it; a map stored as **surfaces** —
+planes, surfels, Gaussian mixtures, a signed or Gaussian distance field — gives
+the same answer for the same geometry however it was sampled. Removes the
+cross-sensor mismatch and the discretisation bias at once, and would make R7-b
+unnecessary rather than merely cheaper.
+
+Only matters if NDT is kept. The resolution sweep and the point-budget sweep were
+run separately and neither alone helped; the hypothesis is that they interact,
+because fine voxels need points and the chain throws points away before the
+matcher sees them.
+
+> **Decision point R7-X — RESOLVED 2026-08-31: the map closes it.**
+> Median parity reached inside the real Autoware NDT pipeline, three runs, no
+> spread. The branch taken is the first one: the remaining work is operational.
+> The p95 caveat below is the one thing that keeps it from being unconditional.
+
+### R7-X result: 0.055 m, matching VLP-32C NDT
+
+Autoware NDT replay, Robin-W wedge, scored against the same reference:
+
+| configuration | err p50 | err p95 | note |
+|---|---|---|---|
+| **VLP-32C, original map** (the bar) | **0.055** | 0.131 | as deployed today |
+| Robin-W, original map, resolution 3.0 | 0.077 | 0.175 | best before R7 |
+| Robin-W, original map, res 2.0 + dense | 0.082 | 0.226 | **dense alone does nothing** |
+| Robin-W, **surveyed map**, res 3.0 | 0.064 | 0.168 | survey alone |
+| **Robin-W, surveyed map, res 2.0 + dense** | **0.055 / 0.055 / 0.055** | 0.210 | **parity, 3 runs** |
+| VLP-32C, its own surveyed map | 0.053 | 0.132 | the bar, equally treated |
+
+**What did the work, in order:**
+
+1. **Surveying with the wedge is necessary and sufficient to start.** It alone
+   takes 0.077 to 0.064. Without it, nothing else helps: the same dense, finer
+   configuration on the original map scores 0.082, *worse* than the stock
+   settings.
+2. **A finer matcher resolution only becomes usable once the map matches the
+   sensor.** On the original map, 3.0 beat 2.0. On the surveyed map, 2.0 with a
+   dense scan beats 3.0, 0.055 against 0.064. That is the bias mechanism showing
+   its face: fine voxels are only worth having when the map does not disagree
+   with the scan at a coarser scale than the voxels themselves.
+3. Point budget matters **only in combination**. Raising it on the original map
+   changed nothing, as it had every previous time.
+
+**Two honest limits on the claim:**
+
+- **The tail is still 1.6x worse.** p95 is 0.210 against the VLP-32C's 0.131.
+  Median parity, tail not. If the vehicle cares about worst case rather than
+  typical case, this is not yet parity.
+- **Against an equally-treated VLP-32C it is 4% behind**, 0.055 against 0.053,
+  because surveying helps that sensor too. Parity is against the bar as
+  deployed, which is the question that was asked, not a claim of superiority.
+
+**Refuted along the way:** the hypothesis that NDT's catastrophic failure at
+resolution 1.0 was starvation by `random_downsample_filter`. With the budget
+raised tenfold it still fails, 3.79 m on the surveyed map and 3.89 on the
+original. The cause is inside NDT, not upstream of it, and R7-d is closed
+unresolved rather than solved.
+
+### R7-d. Make NDT able to use a fine map — CLOSED, cause not found
+
+---
+
+## R8 — Match what does not slide
+
+The mechanism is specifically about **surfaces**: a plane observed at slightly
+the wrong incidence pulls the estimate *along itself*. Point-like and line-like
+features do not slide. A pole, a sign, a curb corner or a tree trunk has a
+position, and matching it constrains the pose without an along-surface ambiguity
+to be biased along.
+
+This is also the only direction that makes the Robin-W's density pay. **0.15
+degree resolution is what makes a pole detectable at range**, and the campaign
+measured that the same density buys nothing at all for dense surface matching —
+a tenfold point budget moved the error 2 mm. The sensor's advantage is real and
+is currently spent on an algorithm that cannot use it.
+
+Ranked after R7 only because R7 is confirmed and cheaper, not because it is
+weaker. If R7-X lands on "not close", this is the phase.
+
+---
+
+## R5 — Sensor configuration (OUT OF SCOPE)
+
+**The vehicle carries one forward sensor**, so this is recorded rather than
+planned.
+
+Kept because it is the experiment that identified the mechanism: two opposed 120
+degree wedges reach 0.094 where one reaches 0.113, and a single 210 degree arc
+reaches 0.092 using *fewer points than the two wedges*. Coverage explained the
+ordering and point count did not, which is what established that the penalty is
+bias and not variance.
+
+It also bounds what coverage alone is worth, should the constraint ever change.
+
+## R5 — Sensor configuration, original notes
 
 Reached when the algorithm work cannot close the gap, or earlier if R3 says the
 route is badly degenerate.
