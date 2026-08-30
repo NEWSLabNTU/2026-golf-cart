@@ -187,17 +187,24 @@ launch:
 # `yabloc` or `eagleye` choice to `ndt`, which is not a thing a GPU switch
 # should ever do.
 #
-# Defaulted to `ndt` rather than `cuda_ndt` because cuda_ndt cannot yet
-# initialise. Its per-frame cost is excellent, 40.5 ms against Autoware's
-# 47.0 ms on the Orin, but its align service takes ~23 s against the caller's
-# deadline so the stack never starts. Ask for it by name once that lands:
+# Defaulted to `cuda_ndt`. Per-frame it is the faster of the two
+# implementations: 40.5 ms mean on the Orin against Autoware's own 47.0 ms on
+# the same map and bag, at 3.0 cm RMSE, holding 10 Hz in real time.
 #
-#   just launch pose_source:=cuda_ndt
+# KNOWN GAP, and it is the one that bites first. Its align service has been
+# measured at ~23 s against the caller's deadline, so `/localization/initialize`
+# times out and the scan matcher stays latched off. The last x86 measurement was
+# 14.0 s in the batched startup phase plus 9.1 s in TPE. If the stack comes up
+# and never localizes, that is this, and the one-argument fallback is:
 #
+#   just launch pose_source:=ndt
+#
+# Re-measure on the Orin before assuming the number still holds: the per-frame
+# path already improved 10x there and the align path may have moved with it.
 # See docs/handover/2026-08-30-cuda-pipeline-to-orin.md.
 - arg:
     name: pose_source
-    default: "ndt"
+    default: "cuda_ndt"
     description: >-
       Pose estimation source: ndt, cuda_ndt, aruco, yabloc, eagleye.
       A localization_preset may set this; an explicit value here wins over it.

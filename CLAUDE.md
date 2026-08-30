@@ -442,10 +442,11 @@ default is only consulted when the caller supplied nothing.
 localization *method* (`ndt`, `cuda_ndt`, `aruco`, `yabloc`, `eagleye`), and only
 two of those are the same algorithm on different hardware. Deriving it from a GPU
 switch meant `use_cuda:=false` silently rewrote a deliberate `yabloc` or
-`eagleye` choice to `ndt`. Ask for GPU NDT by name:
+`eagleye` choice to `ndt`. It now has its own default, `cuda_ndt`:
 
 ```bash
-just launch pose_source:=cuda_ndt    # not yet usable, see below
+just launch pose_source:=ndt      # CPU NDT; the fallback if init hangs
+just launch use_cuda:=false       # CPU preprocessing, still cuda_ndt
 ```
 
 The same pair exists in `logging_simulation.launch.yaml` and
@@ -457,11 +458,15 @@ The same pair exists in `logging_simulation.launch.yaml` and
 scored cpu at 0.038 m scatter p95 / 0.179 deg yaw p95 and cuda at 0.035 / 0.167
 over ~600 m, so it does not regress localization.
 
-`pose_source:=cuda_ndt` is **half done**. Its per-frame cost is now excellent,
-40.5 ms mean on the Orin against Autoware's own 47.0 ms on the same bag, at 3.0
-cm RMSE. But its align service takes ~23 s against the caller's deadline, so the
-stack never initialises. `ndt` is the default and the working setting until that
-lands. See
+`pose_source:=cuda_ndt` is the **default**, and is half done. Per-frame it is
+the faster of the two: 40.5 ms mean on the Orin against Autoware's own 47.0 ms
+on the same bag, at 3.0 cm RMSE, holding 10 Hz in real time.
+
+**Its align service has been measured at ~23 s against the caller's deadline**,
+so `/localization/initialize` times out and the scan matcher stays latched off.
+If the stack comes up and never localizes, that is this, and the fallback is
+`pose_source:=ndt`. Re-measure on the Orin before assuming the number holds: the
+per-frame path improved 10x there and the align path may have moved with it. See
 [docs/handover/2026-08-30-cuda-pipeline-to-orin.md](docs/handover/2026-08-30-cuda-pipeline-to-orin.md).
 
 **`camera_model`, `imu_source` and `tx_enabled` do NOT work as launch arguments.** They reach
