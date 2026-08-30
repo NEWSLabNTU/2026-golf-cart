@@ -163,6 +163,17 @@ launch:
     default: "./data/COSS-map-planning"
     description: "Map directory; must match the bag being replayed"
 
+# Seed pose for the replay. Empty means no seed, and the pose initializer then
+# waits on GNSS or the align service. A bag whose site has no captured pose
+# needs this: without it the scan matcher runs from an arbitrary prior and
+# produces a flailing trajectory that still looks like output.
+#
+#   Autoware sample bag: initial_pose:="[89571.0, 42301.0, -3.3, 0.0, 0.0, 0.28, 0.96]"
+- arg:
+    name: initial_pose
+    default: "[]"
+    description: "x, y, z, qx, qy, qz, qw. A 7-element list seeds the pose."
+
 - include:
     file: "$(find-pkg-share golfcart_launch)/launch/golfcart_autoware.launch.xml"
     arg:
@@ -178,6 +189,9 @@ launch:
     -
       name: map_path
       value: $(var map_path)
+    -
+      name: initial_pose
+      value: $(var initial_pose)
     -
       name: data_path
       value: $(var data_path)

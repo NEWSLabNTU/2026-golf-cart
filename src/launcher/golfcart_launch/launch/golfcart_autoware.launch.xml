@@ -134,9 +134,27 @@
   </group>
 
   <!-- Localization -->
+  <!--
+    Seed pose for a replay. Empty means "no seed", and the pose initializer then
+    waits on GNSS or on the align service. tier4_localization_launch enables
+    user_defined_initial_pose only when this is a 7-element list, so any other
+    value is inert rather than wrong.
+
+    It exists because without it a bag whose site has no captured pose has no
+    way to start: the localization component below already accepted the argument
+    and forwarded it, but nothing above ever passed one, so the scan matcher ran
+    from an arbitrary prior and produced a flailing trajectory that still looked
+    like output. The Autoware sample bag starts at
+    [89571.0, 42301.0, -3.3, 0.0, 0.0, 0.28, 0.96].
+  -->
+  <arg name="initial_pose" default="[]"
+       description="x, y, z, qx, qy, qz, qw. A 7-element list seeds the pose; anything else is ignored"/>
+
   <!-- Golf Cart: Use golfcart_launch's localization component with custom config -->
   <group if="$(var launch_localization)">
-    <include file="$(find-pkg-share golfcart_launch)/launch/components/tier4_localization_component.launch.xml"/>
+    <include file="$(find-pkg-share golfcart_launch)/launch/components/tier4_localization_component.launch.xml">
+      <arg name="initial_pose" value="$(var initial_pose)"/>
+    </include>
   </group>
 
   <!-- Perception -->
