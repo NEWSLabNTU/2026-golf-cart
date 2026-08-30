@@ -445,9 +445,71 @@ The lesson is narrow and worth keeping: **absolute per-process CPU from
 play_launch is a function of its container mode, not just of the code.** Compare
 deltas within one configuration; do not compare absolutes across configurations.
 
-That ~140% is also worth someone's attention on its own. `cuda_ndt` runs at
-30.7 ms per frame at 10 Hz, which is 31% duty, so 1.4 cores is more than the
-alignment can account for. Not investigated here.
+### Correction: that ~140% is not cuda_ndt
+
+An earlier revision of this document read the ~140% as `cuda_ndt` and called it
+unexplained, since 30.7 ms per frame at 10 Hz is 31% duty and 1.4 cores is far
+more than that accounts for. **It is not cuda_ndt.** Every one of those four
+runs was running Autoware's C++ node:
+
+```
+$ head -c 80 play_log/*/node/ndt_scan_matcher/cmdline
+/opt/autoware/1.5.0/lib/autoware_ndt_scan_matcher/autoware_ndt_scan_matcher_node
+```
+
+`logging_simulation.launch.yaml` defaults `pose_source: ndt`, and says why —
+*"cuda_ndt is asked for by name"*. The measurement never asked. The node is
+called `ndt_scan_matcher` under either setting, which is what made the
+misreading easy: the process name says which algorithm only if you look at
+`cmdline`.
+
+Nothing else in that section is affected. The pointcloud A/B varies
+`pointcloud_backend`, not `pose_source`, and both arms ran the same C++ NDT.
+
+**And the 140% is not anomalous.** Sampling that process per-thread shows four
+threads at ~31% each — pclomp's OpenMP pool, `num_threads: 4` in the NDT
+parameters. Multi-threaded CPU NDT costing about four threads is the design
+working, not a defect.
+
+### cuda_ndt's own CPU, and whether it spins
+
+Measured in `cuda_ndt_matcher`'s own replay harness, which tracks correctly, with
+alignment confirmed from the node's `Callback stats` line — 50 alignments inside
+the 20 s window, and no warnings in the log for that period:
+
+| | |
+|---|---|
+| total | **40.0%** of one core |
+| main thread | 21.3% |
+| ~13 runtime pool threads | ~1.3% each |
+| DDS `recvMC` | 0.7% |
+
+**It does not busy-wait on the GPU.** No thread is pegged; the cost is spread
+across the cubecl/CUDA pool in small slices. A spin-wait would show at least one
+thread at or above the alignment's duty cycle, and none is.
+
+What this does **not** establish is a CPU ratio between the two matchers. A
+matched pair needs both running the same harness, at the same playback rate,
+both verifiably tracking, and several attempts diverged instead — one Autoware
+run covered 2.3 m of the route rather than 129.8 m while reporting plausible
+per-frame numbers. Anyone wanting that ratio should check the recorded path
+length before trusting a CPU figure.
+
+### Profiling on this hardware
+
+`perf` is not usable: `/usr/bin/perf` is the Ubuntu wrapper and reports
+`WARNING: perf not found for kernel 5.15.148`, wanting `linux-tools-5.15.148-tegra`,
+for which apt has no candidate. The numbers above come from sampling
+`/proc/<pid>/task/*/stat` instead, which gives per-thread CPU but no symbols.
+
+Three traps when scripting this, all of which produced a wrong PID or none:
+
+- `comm` truncates at 15 characters, so the process is `cuda_ndt_matche`, and
+  `pgrep -x cuda_ndt_matcher` never matches.
+- The map path contains `cuda_ndt_matcher`, so `pgrep -f cuda_ndt_matcher`
+  matches play_launch and the harness script instead of the node.
+- `ros2 topic echo` cannot see these nodes here — the same daemon problem that
+  defeats `ros2 topic list`. Detect activity from the node's own log.
 
 ### A measurement that was wrong, and why
 
