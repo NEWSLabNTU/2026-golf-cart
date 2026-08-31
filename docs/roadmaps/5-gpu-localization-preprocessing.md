@@ -242,14 +242,17 @@ verified at 5000 points in every arm so the work is equal.
 
 | | sensing cpu<br/>localization cpu | sensing cuda<br/>localization **cpu** | sensing cuda<br/>localization **cuda** |
 |---|---|---|---|
-| system CPU, 12-core mean | 67.1% | 62.9% | **60.6%** |
+| system CPU, 12-core mean | 67.1%¹ | 62.9% | **60.6%** |
 | GPU `GR3D_FREQ` | 46.7% | 52.5% | 53.6% |
 | `VDD_CPU_CV` | 8204 mW | 7408 mW | 6934 mW |
 | `VDD_GPU_SOC` | 6550 mW | 7393 mW | 7226 mW |
-| NDT `exe_time_ms` | 48.9 | 27.1 | 28.3 |
-| NVTL | **2.124** | 3.108 | 3.106 |
-| poses published | **70** of 192 | 198 | 193 |
-| path | 137.2 m | 127.7 m | 127.6 m |
+| NDT `exe_time_ms` | 32.8 / 31.3 | 27.1 | 28.3 |
+| NVTL | 3.090 / 3.091 | 3.108 | 3.106 |
+| poses published | 166 / 168 | 198 | 193 |
+| path | 127.0 / 127.1 m | 127.7 m | 127.6 m |
+
+¹ The leftmost column's resource figures are from the contaminated run described
+below and have not been retaken; its localization figures have been, twice.
 
 **Read the middle two columns against each other — that is this phase.** Holding
 sensing on CUDA and swapping only the localization chain moves system CPU 62.9%
@@ -263,35 +266,40 @@ drift. **Nothing here argues for changing the default**, and nothing argues the
 work was wrong either — it argues the question has to be asked on a sensor set
 that produces a bigger cloud.
 
-**What the first column shows is not this phase's doing.** See below.
+## A retracted finding: `pointcloud_backend:=cpu` does **not** degrade `cuda_ndt`
 
-## A separate finding: `pointcloud_backend:=cpu` degrades `cuda_ndt`
+An earlier revision of this document reported that the CPU sensing chain fed
+`cuda_ndt` unusable clouds — NVTL 2.124 against 3.106, only 70 of 192 alignments
+passing the gate — and called it the most consequential open item. **That was
+measurement contamination, and the claim is withdrawn.**
 
-The leftmost column above is not "the CPU pipeline costs more". It is the CPU
-*sensing* chain failing to feed `cuda_ndt` usable clouds: NVTL 2.124 against
-3.106, only **70 of 192 alignments passing the convergence gate**, and
-`exe_time` 48.9 ms against 28.3 — the matcher working harder and still being
-rejected.
+Another user was running an LCTK calibration on the same machine at the time:
+`lctk_launch calibrate.launch.py` with RViz at 382% CPU, a board detector, a
+solver and a bag player. The stack was being starved, and starved frames fail
+the convergence gate.
 
-The middle column isolates it. With sensing on CUDA and localization on CPU,
-everything returns to normal (NVTL 3.108, 198 poses). **So the localization chain
-is not implicated at all; the CPU sensing chain is.**
+Re-measured twice on an idle machine, same configuration:
 
-Not a cloud-size problem: exactly one cloud out of 290 came in under 4000 points,
-so the content differs rather than the count. Distortion correction is the first
-place to look — the CPU chain runs `distortion_corrector` as its own component
-where the CUDA path fuses deskew into one kernel sequence.
+| | NVTL | poses | path | `exe_time` |
+|---|---|---|---|---|
+| CPU sensing, run 1 | 3.090 | 166 | 127.0 m | 32.8 ms |
+| CPU sensing, run 2 | 3.091 | 168 | 127.1 m | 31.3 ms |
+| CUDA sensing | 3.108 | 193 | 128.8 m | 28.0 ms |
 
-**This contradicts nothing that was previously measured, and that is the trap.**
-The existing "cpu and cuda sensing are equivalent" result (0.038 m against
-0.035 m scatter) was taken with *Autoware's* NDT on the NTU bag. A run here with
-`pose_source:=ndt` and CPU sensing is also healthy — NVTL 3.141, 293 poses. The
-degradation appears only in the combination `pointcloud_backend:=cpu` with
-`pose_source:=cuda_ndt`, which nothing had exercised before.
+And the clouds the two chains hand NDT are the same to the precision that
+matters — identical layout (`point_step` 16, `x@0 y@4 z@8`, same frame), no
+non-finite points in either, and over 40 clouds and 200k points the range
+distribution matches at p50 32.55 m against 32.54 m with the same extremes.
 
-Anyone running `use_cuda:=false` while asking for `cuda_ndt` by name would hit
-it, and would see a plausible-looking pose stream at a third of the rate rather
-than an error.
+What survives is a modest, believable difference: CUDA sensing publishes about
+16% more poses and runs about 4 ms per frame faster. Nothing that would stop
+anyone using `use_cuda:=false` with `cuda_ndt`.
+
+**The lesson is the one already in roadblocks, extended.** The guard there
+refuses to measure beside a live stack, and it did fire — but the processes
+belonged to another user, so they could not be cleaned up and waiting was the
+only correct response. A measurement guard has to check *ownership*, not just
+existence, and "not mine" means wait rather than kill.
 
 ## Two defects this measurement exposed in the switch — both fixed
 

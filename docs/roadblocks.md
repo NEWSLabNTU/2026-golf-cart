@@ -117,6 +117,15 @@ play_launch processes alive 25 seconds after SIGINT, so this is not a 0.5.1
 defect and the upgrade does not retire the guard. Beware also that
 `pgrep -f play_launch` matches the checking command itself; match on `comm`.
 
+**This is a shared machine, and the guard must check ownership.** On 2026-08-31
+another user's LCTK calibration — RViz at 382% CPU, a board detector, a solver
+and a bag player — ran during a measurement and produced a clean, wrong,
+confidently-reported result: `cuda_ndt` appeared to fail 122 of 192 alignments
+on the CPU sensing chain. It reproduced as healthy twice on an idle machine.
+Check `ps -eo user` before concluding anything, and before trying to clear
+what looks like a stale stack: if the processes are not yours, waiting is the
+only correct response.
+
 ---
 
 ## Sensor status (observed 2026-08-10)
