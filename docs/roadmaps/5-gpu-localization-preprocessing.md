@@ -293,19 +293,41 @@ Anyone running `use_cuda:=false` while asking for `cuda_ndt` by name would hit
 it, and would see a plausible-looking pose stream at a third of the rate rather
 than an error.
 
-## A defect this measurement exposed in the switch itself
+## Two defects this measurement exposed in the switch — both fixed
 
-`localization_pointcloud_backend` **does not reach `pose_source:=ndt`.** That
-path goes through `tier4_localization_launch/launch/localization.launch.xml` to
-Autoware's own `util/util.launch.xml`, which has no switch; only the `cuda_ndt`
-path routes through this repo's copy.
+`pose_source` and the pointcloud backends are independent choices. The switch did
+not honour that.
 
-Worse, the two paths do not agree on the point budget. Autoware's path uses
-`golfcart_launch/config/.../random_downsample_filter.param.yaml` at
-`sample_num: 2000`; the `cuda_ndt` path uses `cuda_ndt_matcher_launch`'s at
-5000. So a naive "full CPU against full GPU" comparison silently hands the two
-arms clouds of different sizes — which is how the first attempt at the table
-above came out meaningless, and why every arm in it holds `pose_source` fixed.
+**It did not reach `pose_source:=ndt` at all.** That path went through
+`tier4_localization_launch/launch/localization.launch.xml`, and Autoware includes
+the preprocessing chain from inside `pose_twist_estimator.launch.xml` guarded by
+`use_ndt_pose`, with no way to substitute it. An installed file cannot be edited,
+and loading a second chain beside it would collide on node names and be silently
+dropped.
+
+Fixed by routing `pose_source:=ndt` through this repo's existing drop-in,
+`cuda_ndt_matcher_launch/launch/autoware_localization.launch.xml`, which launches
+the same node set and goes through the `util.launch.xml` that carries the switch.
+`yabloc` and `eagleye` still take Autoware's path. Every parameter is passed
+explicitly from `loc_config_path`, so this changes which launch file runs and
+nothing else.
+
+**And flipping the switch moved the parameters, not just the hardware.** The CUDA
+branch read its own files while the CPU branch read the caller's — 2000 points
+against 5000 on the `ndt` path, and different crop bounds too. So a measurement
+across the switch compared two different amounts of work. That is how the first
+attempt at the table above came out meaningless, and why every arm in it holds
+`pose_source` fixed.
+
+Fixed by having both branches take the same
+`ndt_scan_matcher/pointcloud_preprocessor/*_param_path` the caller passes. That
+required the CUDA crop box to declare the two extra keys the CPU component's file
+carries: `output_frame`, which it asserts rather than honours since it does not
+transform, and `processing_time_threshold_sec`, which it ignores.
+
+Verified with `pose_source:=ndt` on both backends: same point budget (2000
+either way), NVTL 3.086 against 3.089, path 125.4 m against 126.5 m. The switch
+now changes hardware and nothing else, for either localizer.
 
 ## What this phase does not do
 

@@ -39,6 +39,28 @@ CudaCropBoxFilterNode::CudaCropBoxFilterNode(const rclcpp::NodeOptions & node_op
   // wrong points and nothing downstream would report it.
   expected_frame_ = declare_parameter<std::string>("input_frame", "");
 
+  // Declared so that one parameter file can drive either backend, and the
+  // localization chain's cpu/cuda switch changes hardware and nothing else.
+  // Both come from the CPU component's file:
+  //
+  //   output_frame  the CPU filter transforms into it; this one does not, so a
+  //                 value differing from input_frame is rejected rather than
+  //                 quietly ignored — that would be cropping in one frame while
+  //                 claiming another.
+  //   processing_time_threshold_sec  a diagnostic threshold on the CPU
+  //                 component. Accepted and unused here; this node publishes no
+  //                 such diagnostic, and erroring on it would make the shared
+  //                 parameter file impossible.
+  const auto output_frame = declare_parameter<std::string>("output_frame", "");
+  (void)declare_parameter<double>("processing_time_threshold_sec", 0.0);
+
+  if (!output_frame.empty() && !expected_frame_.empty() && output_frame != expected_frame_) {
+    throw std::runtime_error(
+      "cuda_crop_box_filter: input_frame '" + expected_frame_ + "' and output_frame '" +
+      output_frame + "' differ. This filter does not transform between frames; crop upstream, "
+      "or use the CPU crop box, which does.");
+  }
+
   if (params.min_x > params.max_x || params.min_y > params.max_y || params.min_z > params.max_z) {
     throw std::runtime_error(
       "cuda_crop_box_filter: an inverted bound was given (min greater than max); "
