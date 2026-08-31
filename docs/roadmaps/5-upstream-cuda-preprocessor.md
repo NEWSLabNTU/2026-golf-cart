@@ -23,7 +23,7 @@ localization matcher goes to Autoware.
 |---|---|
 | **U0 — fix before the split** | **not started**, and one item may change the pitch |
 | **U1 — extract** | **done** — both nodes ported, tested and pushed as two branches on `jerry73204/autoware_universe` |
-| **U2 — publish** | **prepared, not opened.** Opening a PR against the foundation is the one irreversible step and is held for an explicit go-ahead |
+| **U2 — publish** | **opened as a draft**, [autoware_universe#13301](https://github.com/autowarefoundation/autoware_universe/pull/13301), 2026-08-31. Now waiting on CI and review |
 
 ## U0 — fix before the split
 
@@ -98,29 +98,35 @@ What that does **not** cover: the package's real link step, the CMake wiring as
 CMake sees it, and the launch files. Upstream CI is the first thing that will
 exercise those, which is a reason to open the first PR as a draft.
 
-## U2 — publish (prepared)
+## U2 — publish (opened)
 
-Everything up to the irreversible step is ready. What remains is a decision, not
-work:
+[autoware_universe#13301](https://github.com/autowarefoundation/autoware_universe/pull/13301),
+draft, from `jerry73204:feat/cuda-standalone-filters` onto `main` at `afe69ff`.
+23 files, +1839 lines, no deletions.
 
-1. **Open the crop box PR as a draft.** Both commits are already signed off as
-   `aeon <jerry73204@gmail.com>`, the identity this account's other public
-   pushes use, so the DCO bot has what it needs. Draft on purpose — the CMake
-   link step has never run here, and the design-file and docs requirements are
-   what reviewers catch first.
+**One pull request, not two.** The nodes were prepared on separate branches and
+then collapsed, because splitting them meant stacking the second on the first —
+its diff would have carried the first's commit until that merged, showing
+reviewers the crop box twice. One review of a coherent pair beats two reviews of
+half a capability, and the pair is the point: neither node alone keeps a chain
+on the device.
 
-   No `Co-Authored-By` trailer, unlike this repository's commits: a co-author
-   without their own sign-off is what trips DCO bots. The assistance belongs in
-   the PR body instead.
-2. Address review. Expect questions about the new test directory (this package
-   has none today) and about why the node does not transform frames.
-3. **Random downsample PR**, referencing the first. Lead with the algorithm
-   choice: exact `sample_num` by random-key sort rather than thresholding,
-   because thresholding gives a binomial count where the CPU component promises
-   *at most* `sample_num`.
-4. **`is_dense` issue**, once U0 settles which side is wrong.
-5. After both merge: bump this repo's Autoware, delete
-   `golfcart_cuda_preprocessor`, keep only the launch integration.
+Remaining:
+
+1. **Fix what CI finds.** Nine workflows touch the diff. `dco` and
+   `semantic-pull-request` should pass as written; both commits are signed off as
+   `aeon <jerry73204@gmail.com>`, and there is deliberately no `Co-Authored-By`
+   trailer, because a co-author without their own sign-off is what trips DCO
+   bots — the AI assistance is disclosed in the PR body instead. `clang-format`
+   was checked locally against upstream's own config. Everything else runs there
+   first, and `spell-check-differential` and `clang-tidy-differential` are where
+   new-package pull requests actually churn.
+2. Address review, then mark ready. Six TIER IV codeowners on this path are
+   requested automatically. Expect questions about the new test directory and
+   about `input_frame` dropping rather than transforming.
+3. **`is_dense` issue**, once U0 settles which side is wrong.
+4. After merge: bump this repo's Autoware, delete `golfcart_cuda_preprocessor`,
+   keep only the launch integration.
 
 **Lead with capability, not performance.** The honest argument is that a
 preprocessing chain cannot stay GPU-resident without these two nodes, which is
