@@ -39,6 +39,7 @@ Completed or superseded planning documents.
 - [Vehicle Interface Fault Handling](roadmaps/2-vehicle-interface-fault-handling.md) — ROS-sub / CAN-msg drop handling
 - [Standalone Vehicle-Interface Refactor](roadmaps/2-vehicle-interface-standalone-refactor.md) — one `just vehicle interface` recipe with `tx=` / `keyboard=` options ([design](design/vehicle_interface_standalone.md))
 - [Xsens Driver Hardening](roadmaps/2-xsens-driver-hardening.md) — IMU CAN driver UB fixes, socket reopen, diagnostics
+- [CUDA Pipeline Data Flow](design/cuda-pipeline-data-flow.md) — the three GPU switches, what runs in which process, where the two copies are, and why one container is load-bearing
 - [GPU Localization Preprocessing](roadmaps/5-gpu-localization-preprocessing.md) — moving the NDT input chain off the CPU: what Autoware already ships, the two filters that must be written, and the measurement that gates whether to start
 
 ---
