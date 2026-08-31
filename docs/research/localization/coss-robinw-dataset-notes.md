@@ -62,6 +62,28 @@ map**, every 10 m in x and y and every 45 degrees of yaw.
   optimum anywhere.
 - A correct registration scores well under 1.
 
+**Re-run after finding a flaw in that search.** The grid steps 10 m while the
+correspondence distance was 3 m, so a true pose between grid points would have no
+correspondences and could not converge -- the flat score was partly the search
+failing to reach anything. Repeated at a 20 m correspondence distance and 60
+iterations: median 41.7 and 50.6, best non-degenerate 40.5 with 1424 inliers,
+which is a mean squared residual around 40 and so an RMS near 6 m. Still not a
+fit. The conclusion survives the correction.
+
+**Three other explanations ruled out**, so this is not a guess:
+
+- *The clouds are not tilted.* Fitting a plane to near-field ground gives a
+  normal 0.4 to 0.5 degrees from vertical on both sensors, with ground at
+  z = -0.4 to -0.75. They are level and genuinely in `base_link`, so an
+  unapplied extrinsic is not the cause.
+- *The frame is right.* `configed/merge_downsampled.pcd` and its `_shift`
+  twin differ by exactly `(-304731.375, -2768113.5, 0)` with zero variance,
+  which is the TWD97-to-local shift. The deployed map is already in the local
+  frame and the seed lies inside it.
+- *The map area is right.* `20251226/output_downsampled.pcd`, 5.46 M points,
+  has exactly the deployed map's extent, so the deployed map is an edit of it
+  rather than a different region.
+
 So the scan does not fit this map at any pose. The map itself is sound and
 unusually dense -- 4.9 M points, 3.8 cm nearest-neighbour spacing, 130 x 75 m --
 so this is a correspondence problem, not a quality one. Candidate causes, in
@@ -72,6 +94,25 @@ order of suspicion:
    `lanelet2_map_orig_v10_axis_shift.osm` beside `lanelet2_map.osm`, which says
    an axis shift was applied to this map at some point.
 3. A different map version than the vehicle was running on 2025-11-14.
+
+## The survey pipeline, for the density question
+
+Tracing the map to source also answers the density question raised separately:
+
+| stage | artefact | size |
+|---|---|---|
+| survey delivery, TWD97 | `pt01/02/03_TWD97.pcd` | **133.1 M points**, 2.6 GB |
+| merged | `configed/merged.pcd` | 450 MB |
+| ground-only, downsampled | `merge_downsampled{,_shift}.pcd` | 42.7 k points |
+| 0.2 m version | `pt04_merge_0.2.pcd` | 108.8 k points |
+| 2025-12 rebuild | `20251226/output_downsampled.pcd` | 5.46 M points |
+| **deployed** | `data/COSS-map-planning` | **4.90 M points**, 3.8 cm spacing |
+
+**The survey supplies 133 M points and the vehicle uses 4.9 M**, a 27-fold
+reduction. The deployed 3.8 cm spacing already sits at the good end of the
+density sweep, so COSS is not over-downsampled -- but the headroom is there, and
+the same vendor pipeline for a future site can clearly deliver whatever density
+is asked for.
 
 ## What is needed
 
