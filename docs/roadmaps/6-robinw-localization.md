@@ -373,6 +373,27 @@ mechanism predicts — a coarse map cell displaces a surface by an amount depend
 on which part of it was seen, and only a full circle averages those displacements
 away.
 
+**What "downsample voxel" means in actual spacing**, since the setting and the
+resulting density are not the same thing:
+
+| map | voxel | points | size | nearest-neighbour p50 | points/m2 |
+|---|---|---|---|---|---|
+| current | 0.20 m | 301k | 4.6 MB | 0.112 m | 115 |
+| | 0.10 m | 1.47M | 22.4 MB | 0.062 m | 560 |
+| | 0.05 m | 6.82M | 104 MB | 0.033 m | 2607 |
+| | 0.40 m | 64k | 1.0 MB | 0.194 m | 25 |
+
+Nearest-neighbour spacing tracks the voxel at roughly 0.6x it all the way down to
+0.05 m, which says the **voxel is the binding constraint, not the source data**.
+The accumulated cloud can fill 5 cm cells, so downsampling to 0.2 m is discarding
+detail that exists rather than smoothing noise that does not.
+
+That matters for the vendor conversation. A survey company's mobile mapping
+system typically delivers 1 to 3 cm spacing, and a terrestrial scanner finer, so
+the density this result needs is **below what such a map already contains**. The
+question to ask is not whether they can supply it but what this project should
+keep.
+
 **Cost is the real decision, not accuracy.** Extrapolating this route, 0.05 m is
 about 1.4 MB per metre and 0.10 m about 0.3 MB per metre, so a 2 km campus route
 is roughly 2.7 GB against 600 MB. Autoware loads the map by radius rather than
