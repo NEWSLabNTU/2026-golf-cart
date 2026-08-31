@@ -37,7 +37,7 @@ port rather than a push.
 | `CudaRandomDownsampleFilterNode` | **Yes.** No CUDA equivalent exists at all. Together with the crop box it lets a preprocessing chain stay GPU-resident end to end, which today it cannot. |
 | The `is_dense` inconsistency | **Yes, as a small separate issue.** The CPU concatenator publishes `is_dense=False` where the CUDA one publishes `True`, on clouds that measurably contain no non-finite points either way. One of the two is wrong. |
 | `localization_pointcloud_backend` | **Maybe, later.** It is useful, but it is a `tier4_localization_launch` change in a different repository, and upstream may prefer their own idiom. Offer it after the nodes land, if asked. |
-| `cuda_ndt_matcher` | **No.** It is Rust on `rclrs`. Autoware is C++; there is no path for it, and the feasibility note explains why even its transport cannot reach the blackboard. |
+| `cuda_ndt_matcher` | **No, and not because it is unwelcome.** It already has its own home at `NEWSLabNTU/cuda_ndt_matcher` and is developed there. It is also Rust on `rclrs` against a C++ codebase, so there is no path even if that changed. Nothing about the localization matcher is in scope here. |
 
 ## Per-node file manifest
 
@@ -109,22 +109,69 @@ The nodes work, are tested, and are none of them upstream-shaped yet:
 - **Reviewers** come from `.github/CODEOWNERS`, which for this package is six
   TIER IV maintainers. `CHANGELOG.rst` is release-tooling output — do not hand-edit.
 
-## Sequencing
+## Roadmap: fix, extract, publish
 
-Two PRs, not one. They are independent nodes, they will be reviewed by the same
-people, and a rejected crop box should not block a random downsample.
+Three stages. The ordering matters because each one is cheaper to do before the
+next: fixing is cheapest in this repo, restructuring is cheapest before review,
+and review is cheapest when neither is outstanding.
 
-1. **Crop box.** The stronger case — it unblocks a GPU-resident chain and the
-   gap is easy to demonstrate.
-2. **Random downsample.** Land after, referencing the first. Its design note is
-   the interesting part: an exact `sample_num` by random-key sort rather than
-   thresholding, because thresholding gives a binomial count around the target
-   where the CPU component promises *at most* `sample_num`.
-3. **The `is_dense` question** as an issue, not a PR. Ask which of the two
-   concatenators is right before proposing a change to either.
+### U0 — fix before the split
 
-Open a draft PR early. The design-file and docs requirements are the ones
-outside contributors most often miss, and reviewers will say so quickly.
+Everything here is easier while the code still lives in one repo with a working
+replay harness attached. None of it is easier after the fork.
+
+| | why it blocks |
+|---|---|
+| **Measure what the CUDA chain costs** | Never timed. Correctness and equivalence are established; speed is not. The first question any reviewer asks is "is it faster?", and "we did not measure" is a bad answer for a GPU contribution. It could also be *slower* — kernel launches, and a host-to-device copy at the first stage when sensing is on CPU. |
+| **Node-level tests** | The 12 gtest cases cover the filter classes only. The parameter validation — inverted bounds, `sample_num <= 0`, the frame-mismatch rejection — is untested, and so is component loading. Upstream is adding a test directory to a package that has none, so what lands there should be worth the precedent. |
+| **Settle the `is_dense` question** | Needed before the issue can be filed usefully. The CPU concatenator says `False` and the CUDA one `True` on clouds measured clean either way. Decide which is right, with evidence, before asking upstream to change either. |
+| **Isolate the two compatibility parameters** | `output_frame` and `processing_time_threshold_sec` exist only so one parameter file drives both backends *here*. They should not go up. Make their removal a deletion rather than an untangling. |
+| **Exercise on the vehicle, if the chance comes** | Not a blocker, but every number so far is Autoware's 30 s sample bag with three Velodynes. One run on VLP-32C plus Seyond would make the PR's claims about real sensors rather than a tutorial fixture. |
+
+### U1 — extract
+
+Fork `autowarefoundation/autoware_universe` to `jerry73204/autoware_universe`,
+branch per node, and move the code into their layout. Mechanical, but there is
+more of it than it looks:
+
+1. Files into the per-node layout above, including `design/*.node.yaml` and
+   `docs/*.md`.
+2. Namespace, package name and include guards renamed together —
+   `ros-include-guard` will catch a miss.
+3. Their CMake idiom adopted: legacy `find_package(CUDA)` with the explicit
+   `-gencode` list and the `CUDA_VERSION` conditional, not our
+   `enable_language(CUDA)`.
+4. The two compatibility parameters removed.
+5. `pre-commit run --all-files` until clean. This is where most first-PR churn
+   goes, and it is free to absorb now rather than in review.
+6. Build and run the tests against upstream's tree, not ours — different CMake,
+   different dependency set.
+
+**Do not** port the downstream launch integration. `util.launch.xml` and
+`localization_pointcloud_backend` stay here.
+
+### U2 — publish
+
+1. **Draft PR: crop box.** Open it early and unfinished. The design-file and docs
+   requirements are what reviewers catch first, and a draft gets that feedback
+   before the work is polished. Semantic title, DCO sign-off on every commit.
+2. **Address review.** Expect questions about the test directory, and about
+   whether the node should transform frames — it deliberately does not, and the
+   answer is in the header comment.
+3. **PR: random downsample**, referencing the first. Lead with the algorithm
+   choice: exact `sample_num` by random-key sort rather than thresholding,
+   because thresholding gives a binomial count where the CPU component promises
+   *at most* `sample_num`.
+4. **Issue: `is_dense`**, once U0 has settled which side is wrong.
+5. **After both merge**: bump this repo to an Autoware carrying them, delete
+   `golfcart_cuda_preprocessor`, and keep only the launch integration. Leaving a
+   local fork of code that exists upstream is how the two drift.
+
+**Lead with capability, not performance.** The honest argument is that a
+preprocessing chain cannot stay GPU-resident without these two nodes, which is
+demonstrable from upstream's own package. Our measured saving — about 19% of one
+core, with no visible system effect — argues weakly, and quoting it invites the
+reviewer to conclude the work is not worth taking.
 
 ## What stays downstream
 
