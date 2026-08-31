@@ -22,7 +22,7 @@ localization matcher goes to Autoware.
 | | |
 |---|---|
 | **U0 — fix before the split** | **not started**, and one item may change the pitch |
-| **U1 — extract** | **done** — both nodes ported into upstream's layout on `feat/cuda-crop-box-filter` in `jerry73204/autoware_universe` |
+| **U1 — extract** | **done** — both nodes ported, tested and pushed as two branches on `jerry73204/autoware_universe` |
 | **U2 — publish** | **prepared, not opened.** Opening a PR against the foundation is the one irreversible step and is held for an explicit go-ahead |
 
 ## U0 — fix before the split
@@ -62,17 +62,56 @@ What the port involved, beyond copying files:
   `schema/<node>.schema.json` matching their draft-07 shape, and a row in the
   README's filter table.
 
+- **Tests came too**, which the package had none of. Twelve gtest cases, seven on
+  the crop box and five on the downsample, ported with the sources and wired
+  through `ament_add_gtest` against `cuda_pointcloud_preprocessor_lib`. Only
+  `ament_cmake_gtest` was added to `package.xml`; the existing `BUILD_TESTING`
+  block already runs the linters, so the new one does not repeat them.
+- **Two branches, not one**, because they are two pull requests:
+  `feat/cuda-crop-box-filter` carries the crop box and the test wiring, and
+  `feat/cuda-random-downsample-filter` sits on top of it. The second is stacked
+  rather than independent because it reuses the first's test target, and the PR
+  should say so.
+
 Not ported, and deliberately: the downstream launch integration.
 `util.launch.xml` and `localization_pointcloud_backend` stay in this repository.
+
+### What was verified, and how
+
+`colcon build` **cannot configure this package on this machine, before any of my
+changes.** The installed Autoware 1.5.0 exports
+`autoware_pointcloud_preprocessor::pointcloud_preprocessor_filter_base` with
+`INTERFACE_INCLUDE_DIRECTORIES` pointing at `/output/workspace/install/...`, the
+path inside the container it was built in, which does not exist here. Checked
+against a pristine `git stash` of the upstream tree: it fails identically. This
+is the binary install, not the port.
+
+So the four sources were compiled directly, with the include set harvested from
+this repository's own working build of `golfcart_cuda_preprocessor`, and the
+tests linked against those objects plus `libcuda_blackboard`. All four compile
+clean, `nm` confirms both components register under
+`autoware::cuda_pointcloud_preprocessor`, and **all 12 tests pass on the Orin's
+GPU** — before and again after reformatting. `clang-format` with upstream's own
+`.clang-format` reports no violations.
+
+What that does **not** cover: the package's real link step, the CMake wiring as
+CMake sees it, and the launch files. Upstream CI is the first thing that will
+exercise those, which is a reason to open the first PR as a draft.
 
 ## U2 — publish (prepared)
 
 Everything up to the irreversible step is ready. What remains is a decision, not
 work:
 
-1. **Open the crop box PR as a draft.** Semantic title, DCO sign-off. Draft on
-   purpose — the design-file and docs requirements are what reviewers catch
-   first, and a draft gets that feedback before polish.
+1. **Open the crop box PR as a draft.** Both commits are already signed off as
+   `aeon <jerry73204@gmail.com>`, the identity this account's other public
+   pushes use, so the DCO bot has what it needs. Draft on purpose — the CMake
+   link step has never run here, and the design-file and docs requirements are
+   what reviewers catch first.
+
+   No `Co-Authored-By` trailer, unlike this repository's commits: a co-author
+   without their own sign-off is what trips DCO bots. The assistance belongs in
+   the PR body instead.
 2. Address review. Expect questions about the new test directory (this package
    has none today) and about why the node does not transform frames.
 3. **Random downsample PR**, referencing the first. Lead with the algorithm
@@ -91,9 +130,10 @@ invites the reviewer to conclude the work is not worth taking.
 
 ## Honest caveats
 
-- The upstream package has **no test directory**. Whatever lands there sets a
-  precedent for it, so the tests should be worth having rather than merely
-  present.
+- The upstream package had **no test directory**, and this adds one. That sets a
+  precedent, so the twelve cases were chosen to pin behaviour a reader would
+  otherwise have to infer — inclusive bounds on all six faces, the exact-count
+  guarantee, order preservation — rather than to raise a coverage number.
 - These nodes have run against one 30 s bag on one machine. That is enough to
   claim correctness and not enough to claim performance, and the PR should say
   so rather than let a reviewer assume otherwise.
