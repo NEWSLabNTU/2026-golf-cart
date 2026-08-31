@@ -234,10 +234,78 @@ re-run the L0 rig, and then compare `localization_pointcloud_backend:=cpu`
 against `:=cuda` on vehicle data. If the cloud is around 120k like the sample,
 leave the default alone.
 
-**Not yet measured at all**: what the CUDA chain costs. L0 measured the CPU
-chain; the GPU one has been checked for correctness and equivalence, never for
-speed. It could be slower — kernel launches and, with a CPU sensing chain, a
-host-to-device copy at the first stage.
+### Measured, 2026-08-31: the CUDA chain neither helps nor hurts here
+
+Full-pipeline A/B on the Orin, Autoware's sample bag, `pose_source:=cuda_ndt`
+held constant in every arm so the matcher is not a variable, and the NDT input
+verified at 5000 points in every arm so the work is equal.
+
+| | sensing cpu<br/>localization cpu | sensing cuda<br/>localization **cpu** | sensing cuda<br/>localization **cuda** |
+|---|---|---|---|
+| system CPU, 12-core mean | 67.1% | 62.9% | **60.6%** |
+| GPU `GR3D_FREQ` | 46.7% | 52.5% | 53.6% |
+| `VDD_CPU_CV` | 8204 mW | 7408 mW | 6934 mW |
+| `VDD_GPU_SOC` | 6550 mW | 7393 mW | 7226 mW |
+| NDT `exe_time_ms` | 48.9 | 27.1 | 28.3 |
+| NVTL | **2.124** | 3.108 | 3.106 |
+| poses published | **70** of 192 | 198 | 193 |
+| path | 137.2 m | 127.7 m | 127.6 m |
+
+**Read the middle two columns against each other — that is this phase.** Holding
+sensing on CUDA and swapping only the localization chain moves system CPU 62.9%
+to 60.6%, about 2 points of twelve cores, with NVTL and `exe_time` identical to
+three digits. So the CUDA chain is *equivalent in quality* and its cost saving is
+at the edge of what this measurement resolves.
+
+That is exactly what L0 predicted. 19% of one core is 1.6% of this machine, and
+a 2-point move across a 60% baseline is not distinguishable from run-to-run
+drift. **Nothing here argues for changing the default**, and nothing argues the
+work was wrong either — it argues the question has to be asked on a sensor set
+that produces a bigger cloud.
+
+**What the first column shows is not this phase's doing.** See below.
+
+## A separate finding: `pointcloud_backend:=cpu` degrades `cuda_ndt`
+
+The leftmost column above is not "the CPU pipeline costs more". It is the CPU
+*sensing* chain failing to feed `cuda_ndt` usable clouds: NVTL 2.124 against
+3.106, only **70 of 192 alignments passing the convergence gate**, and
+`exe_time` 48.9 ms against 28.3 — the matcher working harder and still being
+rejected.
+
+The middle column isolates it. With sensing on CUDA and localization on CPU,
+everything returns to normal (NVTL 3.108, 198 poses). **So the localization chain
+is not implicated at all; the CPU sensing chain is.**
+
+Not a cloud-size problem: exactly one cloud out of 290 came in under 4000 points,
+so the content differs rather than the count. Distortion correction is the first
+place to look — the CPU chain runs `distortion_corrector` as its own component
+where the CUDA path fuses deskew into one kernel sequence.
+
+**This contradicts nothing that was previously measured, and that is the trap.**
+The existing "cpu and cuda sensing are equivalent" result (0.038 m against
+0.035 m scatter) was taken with *Autoware's* NDT on the NTU bag. A run here with
+`pose_source:=ndt` and CPU sensing is also healthy — NVTL 3.141, 293 poses. The
+degradation appears only in the combination `pointcloud_backend:=cpu` with
+`pose_source:=cuda_ndt`, which nothing had exercised before.
+
+Anyone running `use_cuda:=false` while asking for `cuda_ndt` by name would hit
+it, and would see a plausible-looking pose stream at a third of the rate rather
+than an error.
+
+## A defect this measurement exposed in the switch itself
+
+`localization_pointcloud_backend` **does not reach `pose_source:=ndt`.** That
+path goes through `tier4_localization_launch/launch/localization.launch.xml` to
+Autoware's own `util/util.launch.xml`, which has no switch; only the `cuda_ndt`
+path routes through this repo's copy.
+
+Worse, the two paths do not agree on the point budget. Autoware's path uses
+`golfcart_launch/config/.../random_downsample_filter.param.yaml` at
+`sample_num: 2000`; the `cuda_ndt` path uses `cuda_ndt_matcher_launch`'s at
+5000. So a naive "full CPU against full GPU" comparison silently hands the two
+arms clouds of different sizes — which is how the first attempt at the table
+above came out meaningless, and why every arm in it holds `pose_source` fixed.
 
 ## What this phase does not do
 
