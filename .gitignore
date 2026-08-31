@@ -72,3 +72,6 @@ data/tiers/
 
 # Restricted-FOV campaign run output (see scripts/localization/restricted_fov).
 data/fov_study/
+
+# COSS recordings copied from the NAS: ~9 GB of upstream rosbags.
+data/coss/
