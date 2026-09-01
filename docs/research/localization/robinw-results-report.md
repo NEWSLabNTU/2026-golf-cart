@@ -1,105 +1,176 @@
 # Robin-W localization: results
 
-**Question.** The golf cart replaces a 360-degree VLP-32C with a forward-facing
-Seyond Robin-W, 120 x 70 degrees. Can Autoware's NDT localize as well?
+The golf cart replaces a 360° VLP-32C with a forward-facing Seyond Robin-W,
+120° × 70°. Can Autoware's NDT localize as well?
 
-**Answer.** Yes, with one change to the map. Robin-W reaches **0.048 m** against
-the VLP-32C's **0.055 m**.
+**Yes — with one change to the map. Robin-W reaches 0.048 m against the
+VLP-32C's 0.055 m.** No NDT parameter gets there.
 
 ---
 
 ## Setup
 
 No Robin-W recording paired with a map exists, so both sensors are **emulated
-from one recording** by discarding returns each would not have received.
+from one recording** by discarding the returns each would not have received.
 
 | | |
 |---|---|
-| Recording | TIERS `Road01`, Ouster OS0-128, 2048 x 128 @ 10 Hz |
-| | 110 s, 76 m, walking pace, outdoor car park |
-| Robin-W | crop to 120 x 70 deg, 70 m -> 34% of points |
-| VLP-32C | 360 deg, -25..+15 deg, 32 rings, 200 m -> 16.6% of points |
-| Map | built from the **full** 360-degree cloud along a KISS-ICP trajectory |
-| Pipeline | Autoware NDT replay, CUDA scan matcher, stock config |
-| Score | median error against the KISS-ICP trajectory |
+| Recording | TIERS `Road01` — Ouster OS0-128, 2048×128 @ 10 Hz. 110 s, 76 m, walking pace, outdoor car park |
+| Robin-W | crop to 120°×70°, 70 m → 34% of points |
+| VLP-32C | 360°, −25..+15°, 32 rings, 200 m → 16.6% of points |
+| Map | built from the **full** 360° cloud along a KISS-ICP trajectory |
+| Pipeline | Autoware NDT replay, CUDA scan matcher |
+| Score | median error vs the KISS-ICP trajectory, 1106 frames |
 
-The 2.0x density ratio between the emulations matches the real sensors' 2.1x.
+The 2.0× density ratio between the emulations matches the real sensors' 2.1×.
 
-**Limits.** Emulation, not the sensor. Walking pace, so deskew is untested. The
-reference is the LiDAR odometry that also built the map, so this measures
-agreement with the map's frame, not absolute accuracy, and absolute values are
-optimistic. Comparisons between rows are sound; the metres are not field accuracy.
+> **Limits.** Emulation, not the sensor. Walking pace, so deskew is untested. The
+> reference is the LiDAR odometry that also built the map, so this measures
+> agreement with the map's frame, not absolute accuracy, and the values are
+> optimistic. Row-to-row comparisons hold; the metres are not field accuracy.
+
+**The bar: VLP-32C, stock config — 0.055 / 0.055 / 0.056 over three runs.**
 
 ---
 
-## Result
+## NDT parameters: what each one is worth
 
-Only the map's downsample voxel changes. Stock NDT throughout.
+Robin-W wedge throughout. One parameter varies per table; everything else stock.
 
-| map downsample | err p50 | err p95 |
+### `ndt.resolution` — the matcher's voxel size
+
+| resolution | err p50 | err p95 | frames | |
+|---|---|---|---|---|
+| 1.0 | 3.900 | 5.332 | 1078 | diverges |
+| 1.5 | 1.527 | 3.531 | 827 | diverges |
+| 2.0 *(stock)* | 0.082 | 0.223 | 1106 | |
+| **3.0** | **0.077** | **0.175** | 1106 | best |
+| 4.0 | 0.114 | 0.340 | 1106 | |
+
+Optimum is **coarser** than stock, not finer — the opposite of the intuition that
+a denser sensor affords finer voxels. A narrow wedge sees fewer voxels, and fine
+ones hold too few points to condition a distribution. Below 2.0 it collapses.
+
+Swept with the NVTL convergence gate lowered to 0.5, because the gate is
+calibrated for 2.0 and NVTL scales with voxel size — leaving it alone measures
+the gate, not the geometry.
+
+### `random_downsample_filter.sample_num` — points reaching the matcher
+
+| sample_num | Robin-W p50 | VLP-32C p50 |
 |---|---|---|
-| 0.40 m | 0.104 | 0.248 |
-| **0.20 m — current** | **0.082** | 0.223 |
-| 0.10 m | 0.061 | 0.168 |
-| **0.05 m** | **0.048** | 0.147 |
-| *VLP-32C, 0.20 m — the bar* | *0.055* | *0.131* |
+| 5 000 *(stock)* | 0.077 | 0.055 |
+| 20 000 | 0.077 | 0.054 |
+| 50 000 | 0.075 | 0.055 |
 
-**0.05 m beats the deployed VLP-32C on both p50 and p95.** 0.10 m is the
-pragmatic point: 0.061, at 22 MB per 76 m against 104 MB.
+**Ten times the points moves the error 2 mm.** NDT saturates far below 5 000
+points on this scene and cannot convert the Robin-W's density into accuracy.
+Worth knowing before paying for a dense sensor.
+
+### `covariance_estimation_type` — fixed vs Laplace
+
+| setting | run 1 | run 2 | run 3 |
+|---|---|---|---|
+| 0, fixed *(stock)* | 0.077 | 0.077 | 0.077 |
+| 1, Laplace | 0.073 | **12.950** | 0.077 |
+
+No gain, and **one run in three diverged** — a failure absent from nine runs with
+fixed covariance. The first Laplace run looked like a win; it did not replicate.
+
+### `converged_param_nearest_voxel_transformation_likelihood` — the gate
+
+| gate | err p50 |
+|---|---|
+| 2.0 *(stock)* | 0.054 |
+| 0.5 | 0.055 |
+
+Inert at these settings — all runs publish every frame either way. It matters
+only when sweeping resolution, where it silently rejects fine-voxel runs.
+
+### Combinations
+
+| config | err p50 | err p95 |
+|---|---|---|
+| stock | 0.082 | 0.223 |
+| res 3.0 | 0.077 | 0.175 |
+| res 2.0 + 50 000 points | 0.082 | 0.226 |
+| res 1.0 + 50 000 points | 3.790 | 5.347 |
+
+Dense sampling alone is **worse than stock**. Fine voxels still fail even with
+ten times the points, so their collapse is not starvation by the downsampler.
+
+**Best achievable by NDT tuning alone: 0.077, against the bar's 0.055.**
+
+---
+
+## The map: what actually closes it
+
+Stock NDT throughout. Only the map's downsample voxel changes.
+
+| map downsample | err p50 | err p95 | map size / 76 m |
+|---|---|---|---|
+| 0.40 m | 0.104 | 0.248 | 1.0 MB |
+| 0.20 m *(current)* | 0.082 | 0.223 | 4.6 MB |
+| 0.10 m | 0.061 | 0.168 | 22 MB |
+| **0.05 m** | **0.048** | **0.147** | 104 MB |
+| *VLP-32C, 0.20 m — the bar* | *0.055* | *0.131* | |
+
+**0.05 m beats the deployed VLP-32C on both p50 and p95**, with stock NDT.
+0.10 m is the pragmatic point: 0.061 at a fifth of the size.
 
 The same change helps the VLP-32C too — it reaches 0.040 — so this is not a
-Robin-W trick. But the wedge gains more, 41% against 27%.
+Robin-W trick. But the wedge gains more, **41% against 27%**.
 
-**COSS is already at 3.8 cm spacing and needs no change.** This is guidance for
-the next site: the survey company delivers 133 M points and the vehicle currently
-keeps 4.9 M.
+Surveying the map with the Robin-W itself reaches 0.055 and removes the need for
+the resolution tuning (stock 2.0 then beats the tuned 3.0). Not deployable here:
+the map is bought from a survey company.
 
----
-
-## What failed first
-
-| attempt | err p50 | why it failed |
-|---|---|---|
-| stock NDT | 0.082 | the 1.5x gap |
-| NDT resolution swept | 0.077 | small gain |
-| point budget x10 | 0.075 | nothing |
-| Laplace covariance | unstable | 1 run in 3 diverged |
-| VGICP instead of NDT | — | degraded at the same rate, 1.49x vs 1.54x |
-| sliding-window smoothing | worse | removed noise, left bias |
-| survey the map with the Robin-W | 0.055 | works, but the map is bought |
-
-Every one of them **reduces variance**. That was the mistake.
+> **COSS is already at 3.8 cm spacing and needs no change.** This is guidance for
+> the next site. The survey company delivers 133 M points; the vehicle keeps 4.9 M.
 
 ---
 
-## Why the map is the answer
+## Why parameters can't fix it and the map can
 
 The penalty is **bias, not noise**.
 
 - Noise is the same for every sensor: 0.050 / 0.057 / 0.058.
 - Bias nearly doubles from full circle to wedge, and lands **cross-track**.
 - The Robin-W carries **more** information than the VLP-32C, pins its
-  worst-constrained axis **1.7x better**, and is **better conditioned** — and is
+  worst-constrained axis **1.7× better**, and is **better conditioned** — and is
   still worse. So it is not an observability problem.
 
 A scan-to-map matcher measures agreement with the map, and map disagreement is
-fixed per surface. A full circle collects opposing pulls that cancel. A 120-degree
+fixed per surface. A full circle collects opposing pulls that cancel; a 120°
 wedge has no opposing side, so they sum. Coarse map cells are one such
-disagreement, which is why the map's resolution is the lever and why the wedge
-gains most from fixing it.
+disagreement — hence the map resolution is the lever, and the wedge gains most
+from fixing it.
 
 Confirmed independently: two opposed wedges reach 0.094 where one reaches 0.113,
-and a 210-degree arc reaches 0.092 using **fewer points** than the two wedges.
-Coverage explains it; point count does not.
+and a 210° arc reaches 0.092 using **fewer points** than the two wedges. Coverage
+explains the ordering; point count does not.
+
+### Everything that failed, and the pattern
+
+| attempt | outcome |
+|---|---|
+| NDT resolution swept | 0.077, small gain |
+| point budget ×10 | 2 mm |
+| Laplace covariance | no gain, 1 run in 3 diverged |
+| VGICP instead of NDT | degraded at the same rate, 1.49× vs 1.54× |
+| sliding-window smoothing | worse — removed noise, left bias |
+
+**Every one of them reduces variance.** The error is not variance-limited. That
+question is cheap to ask and would have saved most of this campaign.
 
 ---
 
 ## Open
 
-**Real Robin-W data is blocked.** Four COSS recordings exist (`data/coss/`). All
-four are stationary, and their scans do not register to the COSS map at any of
-832 poses searched across it. Cause unresolved — the map area, frame and the
-scans' levelness all check out.
+**Real Robin-W data is blocked.** Four COSS recordings exist. All four are
+stationary, and their scans do not register to the COSS map at any of 832 poses
+searched across it. Cause unresolved — the map's area, frame, and the scans'
+levelness all check out.
 
 Next: a moving Robin-W recording paired with its correct map. Everything that
 matters — bias at speed, deskew, the prior chain — needs motion.
