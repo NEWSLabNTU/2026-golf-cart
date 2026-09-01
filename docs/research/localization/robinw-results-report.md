@@ -1,10 +1,40 @@
 # Robin-W localization: results
 
 The golf cart replaces a 360° VLP-32C with a forward-facing Seyond Robin-W,
-120° × 70°. Can Autoware's NDT localize as well?
+120° × 70°. It can localize as well — **0.048 m against the VLP-32C's 0.055 m** —
+with one change, and it is not to NDT.
 
-**Yes — with one change to the map. Robin-W reaches 0.048 m against the
-VLP-32C's 0.055 m.** No NDT parameter gets there.
+---
+
+## The working configuration
+
+Change the map. Leave NDT alone.
+
+| | value | note |
+|---|---|---|
+| **map downsample** | **0.05 m** | currently 0.20 m — this is the whole change |
+| `ndt.resolution` | 2.0 | stock |
+| `sample_num` | 5 000 | stock |
+| `covariance_estimation_type` | 0, fixed | stock |
+| NVTL gate | 2.0 | stock |
+
+| | err p50 | err p95 | map size / 76 m |
+|---|---|---|---|
+| **Robin-W, this config** | **0.048** | **0.147** | 104 MB |
+| Robin-W, 0.10 m map | 0.061 | 0.168 | 22 MB |
+| Robin-W, 0.20 m map *(today)* | 0.082 | 0.223 | 4.6 MB |
+| *VLP-32C, 0.20 m — the bar* | *0.055* | *0.131* | |
+
+Beats the deployed VLP-32C on p50 **and** p95. **0.10 m is the pragmatic point**:
+0.061 at a fifth of the size.
+
+The same change helps the VLP-32C too — it reaches 0.040 — so this is not a
+Robin-W trick. But the wedge gains more, **41% against 27%**.
+
+> **COSS is already at 3.8 cm and needs no change.** This is guidance for the next
+> site. The survey company delivers 133 M points; the vehicle keeps 4.9 M.
+
+**Best achievable by NDT tuning alone: 0.077.** The rest of this report is why.
 
 ---
 
@@ -23,13 +53,12 @@ from one recording** by discarding the returns each would not have received.
 | Score | median error vs the KISS-ICP trajectory, 1106 frames |
 
 The 2.0× density ratio between the emulations matches the real sensors' 2.1×.
+The bar is three runs: 0.055 / 0.055 / 0.056.
 
 > **Limits.** Emulation, not the sensor. Walking pace, so deskew is untested. The
 > reference is the LiDAR odometry that also built the map, so this measures
 > agreement with the map's frame, not absolute accuracy, and the values are
 > optimistic. Row-to-row comparisons hold; the metres are not field accuracy.
-
-**The bar: VLP-32C, stock config — 0.055 / 0.055 / 0.056 over three runs.**
 
 ---
 
@@ -51,11 +80,11 @@ Optimum is **coarser** than stock, not finer — the opposite of the intuition t
 a denser sensor affords finer voxels. A narrow wedge sees fewer voxels, and fine
 ones hold too few points to condition a distribution. Below 2.0 it collapses.
 
-Swept with the NVTL convergence gate lowered to 0.5, because the gate is
-calibrated for 2.0 and NVTL scales with voxel size — leaving it alone measures
-the gate, not the geometry.
+Swept with the NVTL gate lowered to 0.5, because the gate is calibrated for 2.0
+and NVTL scales with voxel size — leaving it alone measures the gate, not the
+geometry.
 
-### `random_downsample_filter.sample_num` — points reaching the matcher
+### `sample_num` — points reaching the matcher
 
 | sample_num | Robin-W p50 | VLP-32C p50 |
 |---|---|---|
@@ -77,15 +106,15 @@ Worth knowing before paying for a dense sensor.
 No gain, and **one run in three diverged** — a failure absent from nine runs with
 fixed covariance. The first Laplace run looked like a win; it did not replicate.
 
-### `converged_param_nearest_voxel_transformation_likelihood` — the gate
+### NVTL convergence gate
 
 | gate | err p50 |
 |---|---|
 | 2.0 *(stock)* | 0.054 |
 | 0.5 | 0.055 |
 
-Inert at these settings — all runs publish every frame either way. It matters
-only when sweeping resolution, where it silently rejects fine-voxel runs.
+Inert at these settings. It matters only when sweeping resolution, where it
+silently rejects fine-voxel runs.
 
 ### Combinations
 
@@ -96,37 +125,8 @@ only when sweeping resolution, where it silently rejects fine-voxel runs.
 | res 2.0 + 50 000 points | 0.082 | 0.226 |
 | res 1.0 + 50 000 points | 3.790 | 5.347 |
 
-Dense sampling alone is **worse than stock**. Fine voxels still fail even with
-ten times the points, so their collapse is not starvation by the downsampler.
-
-**Best achievable by NDT tuning alone: 0.077, against the bar's 0.055.**
-
----
-
-## The map: what actually closes it
-
-Stock NDT throughout. Only the map's downsample voxel changes.
-
-| map downsample | err p50 | err p95 | map size / 76 m |
-|---|---|---|---|
-| 0.40 m | 0.104 | 0.248 | 1.0 MB |
-| 0.20 m *(current)* | 0.082 | 0.223 | 4.6 MB |
-| 0.10 m | 0.061 | 0.168 | 22 MB |
-| **0.05 m** | **0.048** | **0.147** | 104 MB |
-| *VLP-32C, 0.20 m — the bar* | *0.055* | *0.131* | |
-
-**0.05 m beats the deployed VLP-32C on both p50 and p95**, with stock NDT.
-0.10 m is the pragmatic point: 0.061 at a fifth of the size.
-
-The same change helps the VLP-32C too — it reaches 0.040 — so this is not a
-Robin-W trick. But the wedge gains more, **41% against 27%**.
-
-Surveying the map with the Robin-W itself reaches 0.055 and removes the need for
-the resolution tuning (stock 2.0 then beats the tuned 3.0). Not deployable here:
-the map is bought from a survey company.
-
-> **COSS is already at 3.8 cm spacing and needs no change.** This is guidance for
-> the next site. The survey company delivers 133 M points; the vehicle keeps 4.9 M.
+Dense sampling alone is **worse than stock**. Fine voxels still fail with ten
+times the points, so their collapse is not starvation by the downsampler.
 
 ---
 
@@ -159,6 +159,7 @@ explains the ordering; point count does not.
 | Laplace covariance | no gain, 1 run in 3 diverged |
 | VGICP instead of NDT | degraded at the same rate, 1.49× vs 1.54× |
 | sliding-window smoothing | worse — removed noise, left bias |
+| survey the map with the Robin-W | 0.055 — works, but the map is bought |
 
 **Every one of them reduces variance.** The error is not variance-limited. That
 question is cheap to ask and would have saved most of this campaign.
