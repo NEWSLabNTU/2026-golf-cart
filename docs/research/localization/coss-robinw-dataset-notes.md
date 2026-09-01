@@ -114,6 +114,45 @@ density sweep, so COSS is not over-downsampled -- but the headroom is there, and
 the same vendor pipeline for a future site can clearly deliver whatever density
 is asked for.
 
+## The 2024-11-26 CoSS dataset: moves, but not usable either
+
+Two bags, 239 s and 203 s, copied to `data/coss2024/`. Full Autoware system
+recordings, and unlike the 2025 set **the vehicle does move** -- cloud centroid
+spans 4.0 x 9.0 m and 5.0 x 9.9 m, far beyond parked jitter.
+
+Three things rule them out anyway:
+
+- **Wrong sensor.** `/sensing/lidar/bf_lidar/points_raw` is a Blickfeld:
+  **44 to 65 degrees azimuth, 26 degrees elevation, 7.4 k points, 6 to 7 m median
+  range**, frame `lidar`. That is far narrower and roughly ten times sparser than
+  the Robin-W's 116 x 61 degrees and 85 k points, so it cannot stand in for
+  either sensor in the comparison.
+- **No reference.** `/localization/kinematic_state`,
+  `/localization/pose_estimator/pose_with_covariance` and the rest are declared
+  in the bag and carry **zero messages** -- the stack was launched but
+  localization never ran. `/api/vehicle/kinematics` and `/sensing/gnss/pose` are
+  likewise empty, and `velocity_status` uses `autoware_auto_vehicle_msgs`, which
+  Autoware 1.5.0 no longer provides.
+- **They do not register to the COSS map either.** Same 832-pose search: median
+  error per inlier 38.6 and 39.2, best candidates degenerate with zero inliers.
+
+## Three recordings, two sensors, two years, one map, no fit
+
+| recording | sensor | fits the COSS map? |
+|---|---|---|
+| 2025-11-14 `robin_1` | Robin-W, 116 x 61 deg, 85 k pts | no, median 41.7 |
+| 2025-11-14 `vlp32_1` | VLP-32C concatenated, 42 k pts | no, median 50.6 |
+| 2024-11-26 | Blickfeld, 44 deg, 7.4 k pts | no, median 38.6 |
+
+The weakest of those tests is the Blickfeld, whose short-range 7 k-point cloud is
+genuinely hard to register against a large map. The Robin-W is not: 85 k points
+out to 92 m is a strong cloud, and it fails the same way.
+
+That the failure is common to three independent recordings, while the map itself
+is internally sound and dense, points at **the map covering a different area than
+these recordings were made in**. 130 x 75 m is one plaza; the COSS site is
+larger.
+
 ## What is needed
 
 Two answers, either of which unblocks work that is otherwise ready to run:

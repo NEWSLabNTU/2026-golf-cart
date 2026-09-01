@@ -75,3 +75,5 @@ data/fov_study/
 
 # COSS recordings copied from the NAS: ~9 GB of upstream rosbags.
 data/coss/
+data/coss2024/
+data/coss_maps/
