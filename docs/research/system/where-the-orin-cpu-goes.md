@@ -115,7 +115,7 @@ filter PR: a launch-file change worth 14 points of a 12-core Orin.
 *already-composable* nodes are hosted; a `<node>` is an executable and stays a
 process.
 
-## Finding 2 — the GNSS node respawned 137 times, and may be paying for Finding 1
+## Finding 2 — the GNSS node respawned 137 times, which taints Finding 1's price
 
 `ublox` reads 0.00% CPU in both runs. It is not idle. It is crash-looping:
 
@@ -124,7 +124,11 @@ terminate called after throwing an instance of 'std::runtime_error'
   what():  U-Blox: Could not open serial port :/dev/ublox-gps open: No such file or directory
 ```
 
-The receiver was not plugged in. Distinct PIDs on the `ublox` row:
+The receiver was not plugged in for this capture. That is a property of the
+capture, not a defect in the stack, and needs no fix.
+
+It is recorded here because of what it does to the *rest* of the numbers.
+Distinct PIDs on the `ublox` row:
 
 | run | spawns | duration | one every |
 |---|---|---|---|
@@ -132,30 +136,15 @@ The receiver was not plugged in. Distinct PIDs on the `ublox` row:
 | observable | **137** | 534 s | **3.9 s** |
 
 Each spawn creates a DDS participant, announces it over SPDP to every peer, then
-dies and forces a participant-removal in every peer. That is 274 graph-churn
-events in nine minutes, and *every one of the other 60 processes does work for
-each of them.*
+dies and forces a participant-removal in every peer — 274 graph-churn events in
+nine minutes, each of which every one of the other 60 processes does work for.
 
-Two consequences.
-
-First, it is a straightforward bug: the node should not be launched when the
-device is absent, or should back off instead of respawning at 0.26 Hz.
-
-Second, and more important for Finding 1: **discovery churn at this rate is
-exactly the shape that produces a uniform per-process floor.** The floor may be
-substantially this node's fault rather than an inherent ROS 2 tax. The archive
-cannot separate the two — but the experiment that can is cheap and needs no
-vehicle motion:
-
-> Bring the stack up with the ublox node not launched. Re-read the trivial
-> nodes' `cpu_user_secs`. If the 4.88% band drops, Finding 1's price tag drops
-> with it and the composition work should be re-costed before it is started.
-
-Note the direction of the rate change: the respawn interval got *shorter* after
-participants were collapsed (5.7 s → 3.9 s), consistent with each restart cycle
-being gated on discovery latency.
-
-**Do this before acting on Finding 1.**
+Discovery churn at that rate is exactly the shape that produces a uniform
+per-process floor, so **some unknown part of Finding 1's 4.88% may be this
+node's fault rather than an inherent per-process cost.** The archive cannot
+separate the two. Re-read the floor from any capture taken with the receiver
+present before committing large work to Finding 1; the number can only come
+down.
 
 ## Finding 3 — rviz2 is the single largest consumer
 
@@ -173,7 +162,9 @@ This is an operating decision rather than a defect, but it should be a deliberat
 one: run RViz on the other machine over the DDS link, or default it off on the
 master and opt in. Worth about 5 points of host CPU.
 
-## Finding 4 — 200 log lines a second, and one of them reports data loss
+## Finding 4 — the Seyond driver throws away 60% of the LiDAR
+
+The stderr volume is what draws the eye:
 
 | process | stderr | lines | rate |
 |---|---|---|---|
@@ -181,44 +172,159 @@ master and opt in. Worth about 5 points of host CPU.
 | `pointcloud_container` | 2.8 MB | 28,714 | 54/s |
 
 Every line is a formatted string, a write, **and a `/rosout` DDS publish**.
-
-The `seyond` total breaks down as 37,716 INFO lines of per-frame convert/callback
-statistics and — the part that matters —
-
-```
-37,701  [WARN] stage_client_deliver.cpp: drop data in deliver stage.
-```
-
-**The Seyond driver dropped data ~70 times a second for the entire run.** That
-is a correctness finding, not a logging one, and it is invisible unless someone
-reads the stderr file. It deserves its own investigation; the pipeline-starvation
-research (`docs/research/sensing/lidar-pipeline-starvation.md`) is the place to
-start.
-
 `pointcloud_container`'s share is Autoware's concatenator running at INFO,
-printing per-cloud arrival latency and per-collector timing. That is debug output
-left switched on.
+printing per-cloud arrival latency and per-collector timing — debug output left
+switched on, and free to turn off.
 
-## Finding 5 — there is no GPU telemetry, and there cannot be
+The Seyond half is not a logging problem. 37,701 of its lines are
 
-Every `gpu_*` column is empty in both sessions. The archive README calls this "a
-limitation of the capture". It is worse than that: it is structural.
+```
+[WARN] stage_client_deliver.cpp:61 drop data in deliver stage.
+```
+
+and the SDK prints that once per **ten** drops (`stats_dropped_jobs_ % 10 == 1`).
+Its own cumulative counters, on the last line of the run:
+
+```
+deliver queue#0  added=628,636  finished=251,406  dropped=377,005  blocked=0
+                 active_time=507,917ms / elapsed=535,932ms  ratio=94.77%
+```
+
+**60% of everything the driver received never reached ROS.** The drop count is
+not a rate that settled — it started at zero (`total_dropped=0` seven seconds in)
+and climbed for the whole run, reaching 65% in the final window.
+
+`docs/research/sensing/lidar-pipeline-starvation.md` recorded the same counter
+and left it there, reasoning that it "is inside the vendor driver, upstream of
+ROS entirely". **That is not correct, and it is why the trail went cold.** The
+deliver stage's consume callback is the ROS publish. Following it through the
+vendored SDK:
+
+```
+StageClientDeliver::process_job_        drops when the queue hands it prefer=false
+  -> DriverLidar::lidar_data_callback   per packet
+     -> frame_publish_cb_               once per frame, on the same thread
+        -> ROSAdapter::publishFrame     pcl -> PointCloud2 -> publish()
+```
+
+The deliver stage is a **single worker** (`worker_num = 1`, hardcoded in
+`lidar_client.cpp`) and it was **busy 94.77% of the whole run**. `blocked=0`
+says it never waited on a downstream queue of its own: it simply could not
+finish jobs fast enough, so the producer marked the backlog non-preferred and
+`process_job_` freed the buffers instead of parsing them.
+
+Where the time goes is the interesting part. The driver's own per-callback
+histogram:
+
+```
+callback mean/std/max = 2.10ms / 20.28 / 770.06
+convert_xyz    mean/std/max/total = 0.00ms / 0.00 / 0.00 / 0
+```
+
+Sphere-to-XYZ conversion never ran — this Falcon sends XYZ directly. The
+per-point work left is a coordinate swizzle and a `push_back` into a vector
+whose capacity survives `clear()`, which cannot cost 2 ms for the 787 points in
+a packet. And a standard deviation ten times the mean, with a **770 ms**
+maximum, is not steady cost at all: it is a small number of very long stalls.
+
+The stall has a candidate, and it is one this repo built itself. The driver
+publishes:
+
+```cpp
+rclcpp::QoS qos(rclcpp::KeepLast(10));
+qos.reliable();
+inno_frame_pub_ = node_ptr_->create_publisher<sensor_msgs::msg::PointCloud2>(...);
+```
+
+190,263,198 points over 3,677 frames is 51,743 points per frame, and
+`publishFrame` writes them at `point_step = 16`: **828 kB per message**. Against
+that, `config/cyclonedds/*.xml` sets
+
+```xml
+<Watermarks><WhcHigh>500kB</WhcHigh></Watermarks>
+```
+
+`whc_high` counts *unacknowledged* bytes, and Cyclone blocks the writer above it
+— the string is in `libddsc` verbatim:
+
+```
+writer %x:%x:%x:%x waiting for whc to shrink below low-water mark (whc %zu low=%u high=%u)
+```
+
+A single Seyond frame is 1.6x the high watermark on its own. If the subscriber
+is slow to acknowledge — and the concatenator in `pointcloud_container` is busy
+enough to be printing 54 log lines a second — `publish()` blocks in the deliver
+thread, the queue behind it fills, and the producer starts dropping. That
+matches every measured symptom, including the one the earlier document found
+puzzling: **giving the machine 15 points of CPU back did not help**, because the
+thread is not waiting for CPU, it is waiting for acknowledgements.
+
+This is a hypothesis with strong support, not a proven cause. The stall could
+also be allocation, or preemption on a host that peaked at 98%. Three cheap
+tests, in order:
+
+1. Turn on Cyclone's throttle trace (`<Tracing><Category>throttle</Category>`)
+   and look for the `waiting for whc to shrink` line on the Seyond writer. This
+   settles it outright.
+2. Publish best-effort, or `KeepLast(1)`, and re-read `total_dropped`. A
+   best-effort writer has nothing to wait for.
+3. Raise `WhcHigh` past one frame — 4 MB — and re-read the same counter.
+
+None needs the vehicle to move. Note that (3) trades against the reason
+`WhcHigh` was left at 500 kB in the first place, so prefer (2) if it holds:
+a LiDAR frame is worthless by the time a retransmit would deliver it, and every
+other point cloud publisher in the stack is already best-effort.
+
+Whatever the fix, the size of the prize is fixed: NDT currently sees a
+concatenated cloud that is missing 60% of one of its two sensors.
+
+## Finding 5 — there is no GPU telemetry, and it is a 30-line script away
+
+Every `gpu_*` column is empty in both sessions. The archive README calls this
+"a limitation of the capture". It is narrower than that, and much easier to fix
+than it sounds.
+
+`play_launch` reads GPU state through NVML. **NVML does not exist on Jetson:**
 
 ```
 $ ls /usr/lib/aarch64-linux-gnu/libnvidia-ml*
 (nothing)
 ```
 
-`play_launch` samples GPU state through NVML. **NVML does not exist on Jetson.**
-`tegrastats` is the only source of `GR3D_FREQ`, `VDD_GPU_SOC` and friends on this
-board, and nothing in the capture path reads it.
+That is not a missing package — there is no NVML on Tegra at all, and no version
+of `play_launch` can fill those columns on this board. The consequence is that
+**no run record this project has ever taken carries a GPU number.** Every GPU
+figure in `docs/roadmaps/5-gpu-localization-preprocessing.md` was read off a
+hand-run `tegrastats` beside the stack, which is why they exist for two
+deliberate A/B sessions and for nothing else.
 
-This blocks U0 of the CUDA upstreaming phase
+But everything wanted is in sysfs, root-free, and it is the same set of rails
+`tegrastats` prints:
+
+```
+/sys/devices/platform/gpu.0/load              GPU busy, per-mille
+/sys/class/devfreq/17000000.gpu/cur_freq      GPU clock, Hz
+/sys/class/hwmon/hwmon1/  (ina3221)           VDD_GPU_SOC, VDD_CPU_CV, VIN_SYS_5V0
+/sys/class/thermal/thermal_zone*/             per-zone temperature
+```
+
+Verified on this board rather than assumed. Idle, then under a CUDA kernel:
+
+```
+gpu load=  0.6%   VDD_GPU_SOC= 3987 mW   gpu-thermal=48.0 C
+gpu load= 99.8%   VDD_GPU_SOC=19928 mW   gpu-thermal=52.0 C
+gpu load= 99.8%   VDD_GPU_SOC=24710 mW   gpu-thermal=52.5 C
+```
+
+`scripts/profiling/jetson_gpu_sampler.py` (`just profile gpu`) writes those to
+CSV on play_launch's own 2 s cadence, with an ISO-8601 timestamp column in
+play_launch's format so the two files join on time. Run it beside a capture and
+the GPU columns stop being empty.
+
+That unblocks U0 of the CUDA upstreaming phase
 (`docs/roadmaps/5-upstream-cuda-preprocessor.md`), which needs the CUDA chain
-timed on the vehicle. Until a tegrastats sampler exists, every GPU number this
-project quotes comes from a hand-run `tegrastats` beside the stack, not from the
-run record — which is why the A/B numbers in
-`docs/roadmaps/5-gpu-localization-preprocessing.md` had to be gathered by hand.
+timed on the vehicle, and it removes the reason every GPU comparison so far had
+to be staged by hand.
 
 ## Finding 6 — `play_launch --sched` is available and unused
 
@@ -234,15 +340,14 @@ it is complementary to Finding 1 rather than an alternative to it.
 
 ## Ranked
 
-| # | finding | worth | confidence | cost |
-|---|---|---|---|---|
-| 2 | ublox respawn storm | unknown, gates #1 | certain | trivial |
-| 1 | compose 35 standalone nodes | ~14 pp host CPU | high, pending #2 | upstream launch overlays |
-| 3 | rviz2 on the vehicle | ~5 pp host CPU | certain | policy |
-| 4 | Seyond dropping data at 70/s | correctness | certain | investigation |
-| 4b | log spam, ~200 lines/s | small | certain | trivial |
-| 5 | no GPU telemetry on Jetson | blocks CUDA U0 | certain | write a tegrastats sampler |
-| 6 | `--sched` affinity / RT priority | latency, not throughput | untested | a platform YAML |
+| # | finding | worth | cost |
+|---|---|---|---|
+| 5 | no GPU telemetry on Jetson | unblocks CUDA U0 | **done** — `just profile gpu` |
+| 4 | Seyond drops 60% of its packets | NDT sees a crippled cloud | one QoS line, if the WHC theory holds |
+| 1 | compose 34 standalone nodes | ~14 pp host CPU | upstream launch overlays |
+| 3 | rviz2 on the vehicle | ~5 pp host CPU | policy |
+| 4b | log spam, ~200 lines/s | small | trivial |
+| 6 | `--sched` affinity / RT priority | latency, not throughput | a platform YAML |
 
 ## Method
 

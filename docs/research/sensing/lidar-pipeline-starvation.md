@@ -306,9 +306,17 @@ since before the optimization.
 
 **Falcon**: the Seyond SDK logs `drop data in deliver stage` **24,670 times
 (77/s)** in the isolated run and **37,701 times (70/s)** in the observable one.
-That is inside the vendor driver, upstream of ROS entirely. It did not improve
-when the machine got 15 points of CPU back, which argues for a driver-internal
-queue rather than starvation.
+
+> **Superseded.** This paragraph used to read "that is inside the vendor driver,
+> upstream of ROS entirely", and that is wrong — the deliver stage's consume
+> callback *is* the ROS publish. The SDK prints one warning per ten drops, so the
+> real figure is **377,005 drops against 628,636 packets: 60% of the Falcon
+> never reaches ROS.** The deliver stage is a single worker that was busy 94.77%
+> of the run, stalling up to 770 ms inside a callback that publishes an 828 kB
+> `PointCloud2` on a RELIABLE writer against a 500 kB `WhcHigh`. See
+> [Where the Orin's CPU actually goes](../system/where-the-orin-cpu-goes.md),
+> finding 4 — including why "it did not improve when the machine got 15 points
+> of CPU back" is evidence *for* that explanation rather than against it.
 
 Neither NIC is saturated: the Velodyne link carries 15.69 Mbit/s against a
 100 Mbit/s capacity, and the Falcon link 65.86 Mbit/s against 1000. The
