@@ -62,3 +62,7 @@ data/ntu-campus-merged
 # Typst output. The .typ beside it is the source and is tracked; no .pdf has
 # ever been committed here. Each carries its own `typst compile` line.
 docs/design/*.pdf
+
+# Resource-measurement archives pulled off the NAS for analysis. 355 MB
+# unpacked per capture, and the source of record is the NAS, not this repo.
+data/measurements/
