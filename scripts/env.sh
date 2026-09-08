@@ -147,7 +147,7 @@ golfcart_resolve_dds_profile() {
 #   RMW_IMPLEMENTATION           rmw_cyclonedds_cpp | rmw_zenoh_cpp
 #   CYCLONEDDS_URI               kept under cyclonedds, UNSET under zenoh
 #   ZENOH_SESSION_CONFIG_URI     set under zenoh when a profile exists for the role
-#   ZENOH_ROUTER_CONFIG_URI      likewise
+#   ZENOH_ROUTER_CHECK_ATTEMPTS  -1 under zenoh: skip the router check entirely
 #
 # The unsets are load-bearing, not tidiness. Each RMW ignores the other's
 # variables, so a stale CYCLONEDDS_URI cannot misconfigure zenoh -- but it can
@@ -197,7 +197,6 @@ golfcart_resolve_rmw() {
             RMW_IMPLEMENTATION=rmw_zenoh_cpp
             unset CYCLONEDDS_URI
             local sess="${root}/config/zenoh/${GOLFCART_HOST}-session.json5"
-            local rout="${root}/config/zenoh/${GOLFCART_HOST}-router.json5"
             # There is deliberately no loopback profile. Single-machine
             # operation wants precisely rmw_zenoh's shipped defaults -- peer
             # sessions on localhost, one local router, no LAN listener -- and
@@ -206,19 +205,24 @@ golfcart_resolve_rmw() {
             # when the package is upgraded. See config/zenoh/README.md.
             if [ -f "$sess" ]; then
                 ZENOH_SESSION_CONFIG_URI="$sess"; export ZENOH_SESSION_CONFIG_URI
+                # These profiles run NO Zenoh router -- peers discover each other
+                # by multicast, the way CycloneDDS does with SPDP. Without this,
+                # every node spends a second looking for a router that does not
+                # exist and then logs a warning about proceeding without one.
+                # -1 means "skip the check"; 0 would mean "wait forever".
+                ZENOH_ROUTER_CHECK_ATTEMPTS=-1; export ZENOH_ROUTER_CHECK_ATTEMPTS
             else
-                unset ZENOH_SESSION_CONFIG_URI
-            fi
-            if [ -f "$rout" ]; then
-                ZENOH_ROUTER_CONFIG_URI="$rout"; export ZENOH_ROUTER_CONFIG_URI
-            else
-                unset ZENOH_ROUTER_CONFIG_URI
+                # No profile for this role (loopback). Fall back to rmw_zenoh's
+                # shipped defaults, which DO expect a router on localhost:7447 --
+                # so leave the router check alone rather than disabling a check
+                # that is, for that configuration, correct.
+                unset ZENOH_SESSION_CONFIG_URI ZENOH_ROUTER_CHECK_ATTEMPTS
             fi
             ;;
         *)
             GOLFCART_RMW=cyclonedds
             RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-            unset ZENOH_SESSION_CONFIG_URI ZENOH_ROUTER_CONFIG_URI
+            unset ZENOH_SESSION_CONFIG_URI ZENOH_ROUTER_CHECK_ATTEMPTS
             ;;
     esac
 
@@ -366,8 +370,9 @@ golfcart_dds_problems() {
     # none of it -- it carries data over TCP and discovers through a router
     # -- so under zenoh this function has nothing to say and saying it
     # anyway would send an operator to tune sysctls that cannot help.
-    # Zenoh's own precondition is the router process, and that is checked
-    # where it can be acted on: scripts/zenoh/ensure_router.sh.
+    # Zenoh's own precondition is that the interface carrying this host's LAN
+    # address has the MULTICAST flag, and that is checked where it can be acted
+    # on: scripts/rmw/ensure.sh.
     [ "${GOLFCART_RMW:-cyclonedds}" = "cyclonedds" ] || return 0
     rmem=$(sysctl -n net.core.rmem_max 2>/dev/null || echo 0)
     if [ "${rmem}" -lt 16777216 ]; then

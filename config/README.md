@@ -13,7 +13,7 @@ changing a value here changes it for every consumer on both hosts.
 | `runtime.conf` | shell assignments | how play_launch runs composable nodes (`GOLFCART_CONTAINER_MODE`), and which middleware this host uses (`GOLFCART_RMW`) |
 | `recording/master_topics.txt`<br>`recording/orin_topics.txt` | one topic per line, `#` comments | what each host records |
 | `cyclonedds/{master,orin,loopback}.xml` | CycloneDDS XML | DDS network profiles, one per role |
-| `zenoh/{master,orin}-{router,session}.json5` | Zenoh JSON5 | Zenoh profiles, used only when `GOLFCART_RMW=zenoh`. **Generated** — see [`zenoh/README.md`](zenoh/README.md) |
+| `zenoh/{master,orin}-session.json5` | Zenoh JSON5 | Zenoh session profiles, used only when `GOLFCART_RMW=zenoh`. **Generated** — see [`zenoh/README.md`](zenoh/README.md) |
 
 Formats are deliberately unlike each other: the topic lists are edited by hand and
 diffed per line, so a flat list beats YAML; `multi_machine.conf` is sourced by
@@ -184,9 +184,12 @@ when it starts and its port does not depend on the RMW, so a leftover daemon
 answers every graph query from an empty world. `scripts/rmw/ensure.sh` handles
 that on every launch; by hand it is `just rmw daemon-stop`.
 
-Under `zenoh` each host also needs an `rmw_zenohd` router running, without which
-nodes publish and are discovered by nobody, silently. Full reasoning, the
-topology, and what is not yet measured: [`zenoh/README.md`](zenoh/README.md).
+Under `zenoh` there is no extra daemon: peers discover each other by multicast
+scouting and link directly, the same shape as the CycloneDDS setup. What must
+hold instead is that the interface carrying this host's LAN address has the
+`MULTICAST` flag — without it every node starts, publishes and is discovered by
+nobody. Full reasoning, the topology, and what is not yet measured:
+[`zenoh/README.md`](zenoh/README.md).
 
 ```bash
 just rmw status         # what this host is actually on

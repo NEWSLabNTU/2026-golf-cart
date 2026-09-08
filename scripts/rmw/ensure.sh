@@ -5,9 +5,9 @@
 #     scripts/rmw/ensure.sh --status # report only, change nothing, always exit 0
 #
 # It replaces the direct call to scripts/iceoryx/ensure_roudi.sh in the launch
-# recipes, and dispatches to that or to scripts/zenoh/ensure_router.sh depending
-# on GOLFCART_RMW. It also does the one thing neither of those can: deal with a
-# ros2 daemon left behind by the OTHER middleware.
+# recipes, and dispatches on GOLFCART_RMW. It also does the one thing neither
+# middleware's own check can: deal with a ros2 daemon left behind by the OTHER
+# middleware.
 #
 # THE DAEMON
 #
@@ -48,6 +48,17 @@ fi
 WANT_RMW="${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}"
 HAVE_RMW="$(golfcart_daemon_rmw)"
 
+# The address the zenoh session profile binds, and the interface that owns it.
+# Discovery is multicast here -- there is no router -- so an interface without
+# the MULTICAST flag means nodes never find each other, silently.
+zenoh_listen_addr() {
+    [ -n "${ZENOH_SESSION_CONFIG_URI:-}" ] || return 1
+    sed -n 's|^ *"tcp/\([0-9.]*\):0".*|\1|p' "${ZENOH_SESSION_CONFIG_URI}" | head -1
+}
+zenoh_iface_for() {
+    ip -o addr show 2>/dev/null | awk -v a="$1" '$4 ~ "^"a"/" {print $2; exit}'
+}
+
 if [ "${STATUS_ONLY}" = "1" ]; then
     printf 'GOLFCART_RMW       %s\n' "${GOLFCART_RMW:-cyclonedds}"
     printf 'RMW_IMPLEMENTATION %s\n' "${WANT_RMW}"
@@ -55,12 +66,18 @@ if [ "${STATUS_ONLY}" = "1" ]; then
         "${GOLFCART_HOST:-?}" "${GOLFCART_DDS_PROFILE_SOURCE:-?}"
     case "${GOLFCART_RMW:-cyclonedds}" in
         zenoh)
-            printf 'session config     %s\n' "${ZENOH_SESSION_CONFIG_URI:-(unset - rmw_zenoh defaults)}"
-            printf 'router config      %s\n' "${ZENOH_ROUTER_CONFIG_URI:-(unset - rmw_zenoh defaults)}"
-            if timeout 1 bash -c 'exec 3<>/dev/tcp/127.0.0.1/7447' 2>/dev/null; then
-                printf 'local router       UP on 127.0.0.1:7447\n'
+            printf 'session config     %s\n' "${ZENOH_SESSION_CONFIG_URI:-(unset - rmw_zenoh defaults, which expect a router)}"
+            addr="$(zenoh_listen_addr || true)"
+            if [ -n "$addr" ]; then
+                iface="$(zenoh_iface_for "$addr")"
+                printf 'listen address     %s (%s)\n' "$addr" "${iface:-no interface has this address}"
+                if [ -n "$iface" ] && ip link show "$iface" 2>/dev/null | grep -q MULTICAST; then
+                    printf 'discovery          multicast, %s has MULTICAST\n' "$iface"
+                else
+                    printf 'discovery          multicast, but %s lacks MULTICAST - nodes will not find each other\n' "${iface:-?}"
+                fi
             else
-                printf 'local router       DOWN - nodes will not discover each other\n'
+                printf 'discovery          rmw_zenoh defaults (router on localhost:7447)\n'
             fi
             ;;
         *)
@@ -99,7 +116,39 @@ fi
 # ── Transport-specific preconditions ─────────────────────────────────────────
 case "${GOLFCART_RMW:-cyclonedds}" in
     zenoh)
-        "${REPO_ROOT}/scripts/zenoh/ensure_router.sh" || exit 1
+        # No router to start -- discovery is multicast. What CAN be wrong is the
+        # interface: the session profile advertises a fixed LAN address, and if
+        # nothing owns it, or the interface carrying it has no MULTICAST flag,
+        # every node comes up and discovers nobody with no error anywhere.
+        addr="$(zenoh_listen_addr || true)"
+        if [ -n "$addr" ]; then
+            iface="$(zenoh_iface_for "$addr")"
+            if [ -z "$iface" ]; then
+                {
+                    echo ""
+                    echo "ERROR: the zenoh session profile binds ${addr}, but no interface"
+                    echo "       on this host has that address."
+                    echo "         ${ZENOH_SESSION_CONFIG_URI}"
+                    echo "       Nodes would start, publish, and discover nobody."
+                    echo "       Check the LAN is up, or regenerate the profiles after"
+                    echo "       fixing config/multi_machine.conf:"
+                    echo "           scripts/zenoh/generate_profiles.sh"
+                    echo ""
+                } >&2
+                exit 1
+            fi
+            if ! ip link show "$iface" 2>/dev/null | grep -q MULTICAST; then
+                {
+                    echo ""
+                    echo "ERROR: ${iface} (${addr}) has no MULTICAST flag."
+                    echo "       This deployment runs no Zenoh router, so multicast"
+                    echo "       scouting is the only way nodes discover each other."
+                    echo "       Enable it:  sudo ip link set ${iface} multicast on"
+                    echo ""
+                } >&2
+                exit 1
+            fi
+        fi
         ;;
     *)
         # No-op unless the resolved CycloneDDS profile enables <SharedMemory>,

@@ -2,18 +2,16 @@
 # Regenerate config/zenoh/*.json5 from the rmw_zenoh_cpp defaults installed on
 # this machine.
 #
-#     scripts/zenoh/generate_profiles.sh          # write config/zenoh/
+#     scripts/zenoh/generate_profiles.sh           # write config/zenoh/
 #     scripts/zenoh/generate_profiles.sh --check   # exit 1 if they are stale
 #
 # WHY GENERATE RATHER THAN HAND-WRITE
 #
 # Zenoh fills every absent key from ITS OWN defaults, which are not the same as
-# rmw_zenoh's. rmw_zenoh ships two ~815-line files that turn multicast scouting
-# OFF, pin sessions to localhost, size the SHM transport-optimization pool and
-# raise queries_default_timeout to 600 s. A short hand-written profile listing
-# only the keys we care about would silently discard all of that -- most
-# damagingly it would re-enable multicast scouting, because upstream Zenoh
-# defaults it to true and rmw_zenoh defaults it to false.
+# rmw_zenoh's. rmw_zenoh ships an ~820-line session config that turns multicast
+# scouting OFF, pins sessions to localhost, sizes the SHM transport-optimization
+# pool and raises queries_default_timeout to 600 s. A short hand-written profile
+# listing only the keys we care about would silently discard all of that.
 #
 # So each profile here is a FULL COPY of the shipped default with a named,
 # auditable set of edits applied. The edit list below is the entire difference
@@ -23,7 +21,7 @@
 # --check is what keeps that claim true across a package upgrade. Bumping
 # ros-humble-rmw-zenoh-cpp changes the shipped defaults underneath us, and a
 # profile generated against 0.1.9 would then be a silent 800-line divergence
-# rather than a two-key one. `just service doctor` runs the check.
+# rather than a three-key one. `just service doctor` runs the check.
 set -euo pipefail
 
 REPO_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
@@ -42,13 +40,12 @@ if command -v ros2 >/dev/null 2>&1 && ros2 pkg prefix rmw_zenoh_cpp >/dev/null 2
 fi
 [ -d "${SHARE}" ] || SHARE="/opt/ros/humble/share/rmw_zenoh_cpp/config"
 
-ROUTER_DEFAULT="${SHARE}/DEFAULT_RMW_ZENOH_ROUTER_CONFIG.json5"
 SESSION_DEFAULT="${SHARE}/DEFAULT_RMW_ZENOH_SESSION_CONFIG.json5"
 
-if [ ! -f "${ROUTER_DEFAULT}" ] || [ ! -f "${SESSION_DEFAULT}" ]; then
+if [ ! -f "${SESSION_DEFAULT}" ]; then
     {
-        echo "ERROR: rmw_zenoh_cpp default configs not found under:"
-        echo "         ${SHARE}"
+        echo "ERROR: rmw_zenoh_cpp default config not found at:"
+        echo "         ${SESSION_DEFAULT}"
         echo "       Install the package first:"
         echo "         sudo apt install ros-humble-rmw-zenoh-cpp"
     } >&2
@@ -69,7 +66,7 @@ ORIN_IP="${ORIN_SSH##*@}"   # strip the user@ prefix; the host part is the addre
 for ip in "${MASTER_IP}" "${ORIN_IP}"; do
     if ! printf '%s' "$ip" | grep -Eq '^[0-9]+(\.[0-9]+){3}$'; then
         echo "ERROR: '${ip}' is not a dotted-quad address." >&2
-        echo "       Zenoh listen/connect endpoints must be addresses, not hostnames:" >&2
+        echo "       Zenoh listen endpoints must be addresses, not hostnames:" >&2
         echo "       name resolution is one more thing that can fail on the exact" >&2
         echo "       link these profiles exist to establish." >&2
         exit 1
@@ -77,18 +74,16 @@ for ip in "${MASTER_IP}" "${ORIN_IP}"; do
 done
 
 emit() {
-    # emit <default-file> <out-file> <role-description> <python-edit-args...>
-    local src="$1" dst="$2" desc="$3"; shift 3
-    python3 - "$src" "$dst" "$desc" "$@" <<'PYEOF'
+    # emit <out-file> <role-description> <edit-spec...>   (specs are old<US>new<US>note)
+    local dst="$1" desc="$2"; shift 2
+    python3 - "${SESSION_DEFAULT}" "$dst" "$desc" "$@" <<'PYEOF'
 import sys
 
 src, dst, desc = sys.argv[1], sys.argv[2], sys.argv[3]
-edits = sys.argv[4:]           # flat list of old\x1fnew pairs
-
 text = open(src, encoding="utf-8").read()
 
 applied = []
-for spec in edits:
+for spec in sys.argv[4:]:
     old, new, note = spec.split("\x1f")
     n = text.count(old)
     if n != 1:
@@ -108,8 +103,7 @@ header = [
     "// below is stock EXCEPT the following edits:",
     "//",
 ]
-for note in applied:
-    header.append(f"//   * {note}")
+header += [f"//   * {n}" for n in applied]
 header += [
     "//",
     "// Re-run the generator after upgrading ros-humble-rmw-zenoh-cpp;",
@@ -122,75 +116,89 @@ PYEOF
 
 # ── The edits, stated once ───────────────────────────────────────────────────
 #
-# Topology: peer mesh over the LAN. Nodes stay Zenoh peers and open DIRECT links
-# to each other, on both hosts; the routers exist only to carry discovery. The
-# alternative -- nodes in client mode with the routers brokering every message --
-# is the path rmw_zenoh's README documents, and it was rejected here because it
-# puts the master's own PointCloud2 traffic through an extra process hop even
-# though both ends are on the same box.
+# Topology: a peer clique discovered by multicast, with NO Zenoh router.
 #
-# Two edits make that work, and neither is optional:
+# This is deliberately the same shape as the CycloneDDS deployment it replaces --
+# multicast discovery, then direct point-to-point links between peers -- and it
+# is the reason there is no rmw_zenohd anywhere in this repo.
 #
-#   listen on the LAN address (sessions only)
+# The router is not architecturally required by rmw_zenoh. It is required only
+# because rmw_zenoh ships `scouting.multicast.enabled: false`, which leaves
+# router gossip as the sole discovery path. Zenoh has had Cyclone's SPDP-style
+# multicast discovery all along; it is simply switched off. Measured on the
+# master, single host, talker/listener over 25 s:
+#
+#     router up, multicast off (stock)   25 published  25 heard  0 duplicated
+#     no router, multicast on            26 published  26 heard  0 duplicated
+#
+# The router-less run also does not emit the "Scouting delay elapsed before
+# start conditions are met" warning that every node logs under the router
+# arrangement.
+#
+# Dropping the router removes a whole failure mode rather than merely a process:
+# with a router configured but absent, nodes do not fail and do not hang -- they
+# start, publish, and are discovered by nobody, behind a single log line that
+# says "Proceeding with initialization".
+#
+# Three edits, and none is optional:
+#
+#   scouting.multicast.enabled -> true
+#       The whole point. Without it nothing discovers anything once the router
+#       is gone.
+#
+#   connect.endpoints -> empty
+#       Stock points every session at tcp/localhost:7447. With no router there,
+#       each session would retry that endpoint forever (exit_on_failure.peer is
+#       false, so it is not fatal, just permanent and noisy).
+#
+#   listen.endpoints -> the host's LAN address
 #       Stock sessions listen on tcp/localhost:0, so the locator a node
-#       advertises is 127.0.0.1 -- reachable from nothing on the other host. A
-#       peer on the orin cannot dial a peer on the master no matter what
-#       discovery tells it. Binding the specific LAN address, rather than
-#       0.0.0.0, keeps the LiDAR nets (192.168.7.1, 172.168.1.1) and the 4G NIC
-#       out of the advertised locator set -- otherwise every remote peer tries
-#       those unreachable addresses first and eats a connect timeout per link.
+#       advertises is 127.0.0.1 -- reachable from nothing on the other host.
+#       Multicast would announce the peer and the far side still could not dial
+#       it. Binding the specific LAN address rather than 0.0.0.0 keeps the LiDAR
+#       nets (192.168.7.1, 172.168.1.1) and the 4G NIC out of the advertised
+#       locator set, so a remote peer does not spend a connect timeout on each
+#       unreachable address before finding the one that works.
 #
-#   gossip multihop (routers and sessions)
-#       Stock gossip is single-hop: router A announces its own direct neighbours
-#       and nothing re-propagates. A peer on the master therefore learns that
-#       router B exists but never that the orin's peers do. It does eventually
-#       converge -- each peer autoconnects to the REMOTE router, and is then a
-#       direct neighbour of it, and learns the far side that way -- but the
-#       route there opens an extra cross-host link per peer and the timing is
-#       nobody's design. Multihop makes router A propagate router B's
-#       neighbours, so a peer learns the far side in one step and connects
-#       straight to it.
+# NOT edited, and worth knowing: `routing.peer.mode` stays "peer_to_peer". That
+# is Zenoh's clique topology -- every peer linked directly to every other -- and
+# it is already the shipped default. "clique" is the name Zenoh's documentation
+# gives that topology, not a value the config accepts; the accepted values are
+# "peer_to_peer" and "linkstate", as the comment above that key in each
+# generated file says.
 #
-# Cost, recorded here because it is the thing to measure first: peers
-# autoconnect to peers (scouting.gossip.autoconnect.peer = ["router","peer"]),
-# so this is a FULL MESH across both hosts -- links scale with the square of the
-# PROCESS count. Process count, not node count: rmw_zenoh opens one session per
-# context, and config/runtime.conf keeps GOLFCART_CONTAINER_MODE=observable, so
-# composable nodes share their container's session. Under `isolated` that same
-# mesh is drawn between ~149 processes instead, which is the shape of the
-# problem that made CycloneDDS unusable in the first place.
+# Cost, recorded here because it is the thing to measure first: a clique means
+# links scale with the square of the PROCESS count. Process, not node --
+# rmw_zenoh opens one session per context, and config/runtime.conf keeps
+# GOLFCART_CONTAINER_MODE=observable, so composable nodes share their
+# container's session. Under `isolated` the same mesh is drawn between ~149
+# processes, which is the shape of the problem that made CycloneDDS unusable in
+# the first place.
 
-MULTIHOP_EDIT=$'      multihop: false,\x1f      multihop: true,\x1fgossip multihop enabled (stock: false)'
+MULTICAST_EDIT=$'      /// ROS setting: disable multicast discovery by default\n      enabled: false,\x1f      /// ROS setting: ENABLED HERE. This deployment runs no Zenoh router, so\n      /// multicast scouting is the only discovery path. See\n      /// scripts/zenoh/generate_profiles.sh and config/zenoh/README.md.\n      enabled: true,\x1fscouting.multicast.enabled -> true (stock: false)'
 
-emit "${ROUTER_DEFAULT}" "${OUT_DIR}/master-router.json5" \
-    "Zenoh router for the MASTER host (cart AGX Orin, ${MASTER_IP}). Listens on the stock tcp/[::]:7447 and dials nobody: the orin's router is the side that initiates, so that a master restart is recovered by the orin's existing connect-retry loop rather than needing one here." \
-    "${MULTIHOP_EDIT}"
+CONNECT_EDIT=$'    /// ROS setting: By default connect to the Zenoh router on localhost on port 7447.\n    endpoints: [\n      "tcp/localhost:7447"\n    ],\x1f    /// ROS setting: EMPTIED HERE. There is no Zenoh router to connect to;\n    /// peers find each other by multicast scouting and then link directly.\n    endpoints: [\n    ],\x1fconnect.endpoints -> empty, no router (stock: tcp/localhost:7447)'
 
-emit "${ROUTER_DEFAULT}" "${OUT_DIR}/orin-router.json5" \
-    "Zenoh router for the ORIN host (slave Jetson, ${ORIN_IP}). Dials the master's router; connect.exit_on_failure.router is stock false and the retry loop caps at 4 s, so this comes up whether or not the master is already running, and reconnects on its own if the master restarts." \
-    "${MULTIHOP_EDIT}" \
-    "$(printf '    endpoints: [\n      // "<proto>/<address>"\n    ],\x1f    endpoints: [\n      "tcp/%s:7447"\n    ],\x1fconnect.endpoints -> the master router (stock: empty)' "${MASTER_IP}")"
-
-emit "${SESSION_DEFAULT}" "${OUT_DIR}/master-session.json5" \
-    "Zenoh session for every ROS process on the MASTER host. Stays mode:\"peer\" and keeps the stock connect to the local router on tcp/localhost:7447 for discovery." \
-    "${MULTIHOP_EDIT}" \
+emit "${OUT_DIR}/master-session.json5" \
+    "Zenoh session for every ROS process on the MASTER host (cart AGX Orin, ${MASTER_IP}). Peer mode, multicast discovery, direct peer links. No Zenoh router runs anywhere in this deployment." \
+    "${MULTICAST_EDIT}" "${CONNECT_EDIT}" \
     "$(printf '      "tcp/localhost:0"\x1f      "tcp/%s:0"\x1flisten.endpoints -> the LAN address (stock: tcp/localhost:0)' "${MASTER_IP}")"
 
-emit "${SESSION_DEFAULT}" "${OUT_DIR}/orin-session.json5" \
-    "Zenoh session for every ROS process on the ORIN host. Mirror of master-session.json5 with the address swapped." \
-    "${MULTIHOP_EDIT}" \
+emit "${OUT_DIR}/orin-session.json5" \
+    "Zenoh session for every ROS process on the ORIN host (slave Jetson, ${ORIN_IP}). Mirror of master-session.json5 with the address swapped." \
+    "${MULTICAST_EDIT}" "${CONNECT_EDIT}" \
     "$(printf '      "tcp/localhost:0"\x1f      "tcp/%s:0"\x1flisten.endpoints -> the LAN address (stock: tcp/localhost:0)' "${ORIN_IP}")"
 
-# No loopback profile, deliberately. Single-machine operation wants exactly the
-# shipped defaults -- peer sessions on localhost, one local router, no LAN
-# listener -- so scripts/env.sh leaves ZENOH_SESSION_CONFIG_URI and
-# ZENOH_ROUTER_CONFIG_URI UNSET for the loopback role. An unset variable is a
-# stronger statement than a file that happens to be byte-identical to the
-# default: it cannot drift.
+# No loopback profile, deliberately. Single-machine operation gets the shipped
+# defaults, because scripts/env.sh leaves ZENOH_SESSION_CONFIG_URI UNSET for that
+# role -- a stronger guarantee than a checked-in copy that is byte-identical
+# today, since the copy can drift when the package is upgraded.
+#
+# Note what that means: under the loopback role a node still expects a router,
+# because the stock config points at one and has multicast off. Single-machine
+# zenoh is not a path this repo has set up; the two-host profiles are.
 
 if [ "${CHECK_ONLY}" = "1" ]; then
-    # emit() has just overwritten the files; ask git whether that changed
-    # anything. Untracked (never generated) counts as stale too.
     if ! git -C "${REPO_ROOT}" diff --quiet -- config/zenoh 2>/dev/null \
        || [ -n "$(git -C "${REPO_ROOT}" ls-files --others --exclude-standard -- config/zenoh)" ]; then
         {
