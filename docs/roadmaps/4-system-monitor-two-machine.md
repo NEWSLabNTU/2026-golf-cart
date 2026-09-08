@@ -82,9 +82,13 @@ loaded anyway.
 **This is a play_launch bug that was already fixed upstream and not installed
 here.** `19e5abc6`, "fix(parser): honour if/unless on composable_node (#7)",
 landed 2026-08-22 00:41 and is on `origin/main`; the wheel installed on this
-machine is 0.9.0 dated **2026-08-21 17:05**, under seven hours older. The
+machine was 0.9.0 dated **2026-08-21 17:05**, under seven hours older. The
 `container.rs` comment upstream describes exactly this symptom. So the two
 staleness problems, M-1 and M-2, are the same Aug-21 snapshot seen twice.
+
+play_launch has since been rebuilt and installed on the Advantech (**0.10.0**),
+and the minimal case above now resolves to `['/a', '/t/c']` under both parsers.
+The orin is a different story — see M-H.
 
 `golfcart_system_monitor_nodes.launch.xml` now uses the `<group if>` +
 `<load_composable_node>` form regardless, because it resolves identically under
@@ -219,30 +223,69 @@ gave 147 and eight.
 `is_orin_host` group. Resolves under both parsers to five `orin_`-prefixed
 monitors with `net_monitor_orin.param.yaml` and `ntp_server` = the master.
 
-### M-E: deploy to the orin — BLOCKED, and the blocker is not this phase's
+### M-E: deploy to the orin — DONE
 
-The orin's checkout is at `5b30dec` (2026-08-14), **233 commits behind**, and it
-cannot fetch: its remote is `git@github.com:...` and it has no DNS. `just build`
-there is also 25 days stale.
+Resolved by installing the orin's public key on the master, which made the orin
+able to ssh *back*. That turned the transport around: the orin fetches from the
+master as an ordinary git remote, so there is no push into a checked-out repo, no
+`receive.denyCurrentBranch`, no side refs to clean up afterwards.
 
-The documented update path assumes the orin pulls from GitHub itself
-(`docs/multi-machine.md:404-406`), which has never been possible without name
-resolution. No rsync or git-push path to the orin exists in the repository today
-— `scripts/multi_machine/on_orin.sh:96` is ssh command execution only, and
-`bag_fetch_orin.sh:149` pulls bags the other way.
+```bash
+# on the orin
+git remote add master ubuntu@192.168.125.100:/mnt/external/2026-golf-cart
+git fetch master main
+git -C src/localization/cuda_ndt_matcher checkout -- Cargo.lock   # build artifact; blocks the update
+git merge --ff-only master/main
+git submodule foreach --quiet '
+  gd=$(git rev-parse --absolute-git-dir | sed "s|.*/\.git/modules/|.git/modules/|")
+  git fetch -q ubuntu@192.168.125.100:/mnt/external/2026-golf-cart/$gd \
+      "+refs/heads/*:refs/remotes/mstr/heads/*" "+refs/remotes/origin/*:refs/remotes/mstr/origin/*"
+'
+git submodule update --init --recursive
+```
 
-The recommended route is `git push` from the master into the orin's checkout over
-the existing ssh key, to a **side ref** (`refs/heads/master-sync`) because
-`receive.denyCurrentBranch` is at its default `refuse`, followed by pushing each
-submodule's objects into the matching `.git/modules/<name>` so `just checkout`
-can resolve them without network. All 13 submodule pointers on `main` are already
-on long-lived fork branches, so this transports only published commits and does
-not touch the Submodule Pointer Rule. Two constraints: never commit on the orin,
-and `src/localization/cuda_ndt_matcher`'s dirty `Cargo.lock` must be discarded
-first or `git submodule update` aborts.
+`5b30dec` → `d37d4f7`, 233 commits, fast-forward, all 13 submodules clean. Both
+refspecs are needed: `cuda_ndt_matcher/tests/rosbag_replay`'s pinned SHA is
+reachable only from `refs/remotes/origin/main` in the master's gitdir, not from
+any local head, so fetching heads alone leaves `git submodule update` asking
+GitHub for a commit it cannot reach.
 
-The orin cannot ssh back to the master (`Permission denied (publickey,password)`),
-so the transport has to be master-initiated.
+Nothing here touches the Submodule Pointer Rule: every pointer on `main` is
+already on a long-lived fork branch, so this transports only published commits.
+Two standing constraints — never commit on the orin, since such a commit would
+exist nowhere else, and the orin keeps a `master` remote and `mstr/*` tracking
+refs afterwards.
+
+The orin has since also been given internet through a phone hotspot on
+`wlP1p1s0`, so a plain `git pull` works there again; the fetch-from-master path
+remains the one that works with no uplink at all.
+
+Two things found while rebuilding it, neither caused by this phase:
+
+- **`install/` there held a fully dangling `golfcart_board_initializer`** — the
+  package was deleted upstream in `84b33f6` and colcon never prunes, so
+  `find-pkg-share` could still resolve it to nothing. `golfcart_launch` was
+  rebuilt from scratch to clear the same class of leftover in its own tree; the
+  board initializer's is still there.
+- **OpenCV**: the orin's 4.8.0 from NVIDIA's apt shadowed Ubuntu's 4.5.4 and
+  carried no `aruco` module, so `golfcart_aruco_localizer` failed with `Could NOT
+  find OpenCV (missing: aruco)` — and under plain `just build` that one failure
+  aborts the whole build, which is how a 44-package build looked like a success.
+  Fixed by re-running `./setup.sh` on the orin.
+
+`just build` does not forward its `*FLAGS` to colcon — only `--clean` is read
+(`justfile:59`) — so building past a failure means invoking colcon directly, and
+then `scripts/_env_guard.sh` must be sourced by hand or the build fails with
+`No module named 'ament_package'` a long way from the cause.
+
+**Why this was blocked, and the documentation gap it exposed.** The orin's only
+remote was `git@github.com:...` and it had no DNS, so the documented update path
+— `docs/multi-machine.md:404-406`, which assumes the orin pulls from GitHub
+itself — had never been possible on that machine. No rsync or git-push path
+existed either: `scripts/multi_machine/on_orin.sh:96` is ssh command execution
+only, and `bag_fetch_orin.sh:149` pulls bags the other way. That doc still
+describes the GitHub pull as the way to update the orin and should say what to do
+when the machine has no uplink.
 
 ### M-F: a GPU diagnostic that works on Jetson — NOT STARTED
 
@@ -266,6 +309,28 @@ It is the only one of the three disabled monitors that has a real answer on this
 hardware; `hdd_monitor` needs a daemon nobody wants and `voltage_monitor` needs a
 CMOS battery that does not exist.
 
+### M-H: play_launch versions drifted between the machines — CLOSED, with a gap left
+
+Found while fixing M-2. The two hosts were running launch resolvers a month
+apart:
+
+| | before | after |
+|---|---|---|
+| Advantech | 0.9.0, 2026-08-21 | **0.10.0**, 2026-09-08 |
+| orin | 0.5.1, **2026-08-07** | **0.10.0** |
+
+The units on both hosts resolve the *same* launch files with these binaries, so
+the machines could disagree about what the launch tree means — and both old
+versions predate `19e5abc6`, so both had the `if=` bug M-2 is about. Both are now
+0.10.0, built from `/mnt/external/play_launch` and installed on the orin from the
+same wheel; the minimal case resolves to `['/a', '/t/c']` under the Rust parser
+on both.
+
+**The gap that remains: nothing pins or checks this.** A launch resolver is part
+of the deployed system, and the drift was invisible until someone went looking —
+there is no reason it will not happen again. `just service doctor` is the obvious
+place for a version comparison across the pair, and it does not do one today.
+
 ### M-G: system monitor leaves in the diagnostic graph — NOT STARTED, needs 4-O
 
 `autoware-main.yaml` has no system monitor leaves, so none of these rows reach
@@ -275,17 +340,29 @@ rather than here.
 
 ## Verification status
 
-Resolved, both parsers, on the bench: master mode (144 nodes, five monitors,
-`net_monitor_master.param.yaml`) and the orin component standalone (five
-`orin_`-prefixed monitors, `net_monitor_orin.param.yaml`, `ntp_server`
-192.168.125.100).
+Resolved on the machine each mode belongs to:
 
-`host:=orin` and `host:=all` cannot be resolved end-to-end on the Advantech at
-all: both include the ZED camera and `zed_wrapper` is not built here, so the dump
-fails at `Package 'zed_wrapper' not found`. That is pre-existing and unrelated to
-this phase, but it means the `is_orin_host` gate has been verified by the
-resolved value (`is_orin_host: 'false'` in master mode) and by the component in
-isolation, not by a full single-machine dump.
+| what | where | result |
+|---|---|---|
+| `host:=master`, both parsers | Advantech | 144 nodes, five monitors, `net_monitor_master.param.yaml` (was 147 and eight under the Rust parser) |
+| `host:=orin` | orin | 11 nodes, five `orin_`-prefixed monitors |
+| `orin_system_monitor.launch.xml` standalone, both parsers | Advantech | five `orin_` monitors, `net_monitor_orin.param.yaml`, `ntp_server` 192.168.125.100 merged over Autoware's thresholds |
+| the `is_orin` / `is_orin_host` gate, all three modes | Advantech | see below |
 
-**Nothing here has run on the vehicle, and the orin still has none of it** — see
-M-E.
+The gate was verified on a reduced launch file carrying only the two `<let>`s and
+one stand-in node per group, because neither machine can resolve `host:=all`
+end-to-end — the Advantech has no `zed_wrapper`, and on the orin the full master
+stack dies at `KeyError: 'rear_overhang'` for want of the vehicle description.
+Both are pre-existing environment gaps, unrelated to this phase.
+
+| `host` | `is_orin` group (the ZED) | `is_orin_host` group (the monitors) |
+|---|---|---|
+| `master` | absent | absent |
+| `orin` | present | present |
+| `all` | present | **absent** |
+
+That last row is the property this phase turns on: in single-machine mode the
+camera group still fires, and the monitor group does not.
+
+**Nothing here has run on the vehicle.** The orin now carries the code — see
+M-E — but no stack has been brought up on either machine since.
