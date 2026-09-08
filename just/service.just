@@ -36,7 +36,7 @@ ssh-setup DEST="":
 # What this host's golfcart units are doing.
 host-status:
     #!/usr/bin/env bash
-    for u in golfcart-launch golfcart-record golfcart-watchdog; do
+    for u in golfcart-launch golfcart-record golfcart-watchdog golfcart-zenoh-router; do
         state=$(systemctl --user is-active "${u}.service" 2>/dev/null)
         [ "$state" = "inactive" ] && ! systemctl --user cat "${u}.service" >/dev/null 2>&1 && continue
         printf '%s: %-18s %s\n' "$(hostname)" "${u#golfcart-}" "$state"
@@ -48,6 +48,16 @@ host-status:
     # or unsets it on every invocation, so it matches what a running unit was
     # started with. With nothing set, the unit would resolve config/vehicle.conf,
     # so that is what gets reported instead.
+    # Which middleware this host is on. Both machines must agree: the two RMWs
+    # share no wire protocol, so a mismatched pair does not error - each comes up
+    # cleanly and simply never sees the other's topics. That is the single most
+    # confusing state this deployment can be in, so it is reported first-class,
+    # next to the units, on both hosts.
+    RMW=$(
+        GOLFCART_ENV_RESOLVE_ONLY=1 GOLFCART_ENV_QUIET=1 \
+        bash -c 'source {{justfile_directory()}}/scripts/env.sh; printf "%s" "${GOLFCART_RMW}"'
+    ) || RMW="?"
+    printf '%s: %-18s %s\n' "$(hostname)" "middleware" "${RMW}"
     TX=$(systemctl --user show-environment 2>/dev/null | sed -n 's/^GOLFCART_TX_ENABLED=//p')
     TX_FROM=unit-env
     if [ -z "${TX}" ]; then

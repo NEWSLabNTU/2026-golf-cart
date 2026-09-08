@@ -57,8 +57,8 @@ fi
 # The watchdog is orin-only: it exists to notice a missing master, which is not a
 # question the master can ask about itself.
 case "${ROLE}" in
-    master) UNITS=(golfcart-launch.service golfcart-record.service) ;;
-    orin)   UNITS=(golfcart-launch.service golfcart-record.service golfcart-watchdog.service) ;;
+    master) UNITS=(golfcart-zenoh-router.service golfcart-launch.service golfcart-record.service) ;;
+    orin)   UNITS=(golfcart-zenoh-router.service golfcart-launch.service golfcart-record.service golfcart-watchdog.service) ;;
 esac
 
 # ExecStart per unit, as absolute paths into the resolved repo. Kept here rather
@@ -69,6 +69,7 @@ exec_start_for() {
         golfcart-launch.service)   echo "${REPO_DIR}/scripts/multi_machine/launch_unit_exec.sh" ;;
         golfcart-record.service)   echo "${REPO_DIR}/scripts/recording/record_unit_exec.sh" ;;
         golfcart-watchdog.service) echo "${REPO_DIR}/scripts/multi_machine/watchdog.sh" ;;
+        golfcart-zenoh-router.service) echo "${REPO_DIR}/scripts/zenoh/router_unit_exec.sh" ;;
     esac
 }
 

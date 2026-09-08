@@ -132,6 +132,137 @@ golfcart_resolve_dds_profile() {
     export GOLFCART_HOST GOLFCART_DDS_PROFILE GOLFCART_DDS_PROFILE_SOURCE CYCLONEDDS_URI
 }
 
+# ── RMW selection ────────────────────────────────────────────────────────────
+#
+# GOLFCART_RMW (config/runtime.conf) picks the middleware; the role resolved by
+# golfcart_resolve_dds_profile above picks the profile within it.
+#
+# Call this AFTER that function -- it reads $GOLFCART_HOST -- and AFTER Autoware's
+# setup.bash, which exports an RMW_IMPLEMENTATION of its own and would otherwise
+# win. That ordering is the whole reason this is a function called at the bottom
+# rather than an export next to the profile resolution.
+#
+# Sets (and exports):
+#   GOLFCART_RMW                 validated middleware name: cyclonedds | zenoh
+#   RMW_IMPLEMENTATION           rmw_cyclonedds_cpp | rmw_zenoh_cpp
+#   CYCLONEDDS_URI               kept under cyclonedds, UNSET under zenoh
+#   ZENOH_SESSION_CONFIG_URI     set under zenoh when a profile exists for the role
+#   ZENOH_ROUTER_CONFIG_URI      likewise
+#
+# The unsets are load-bearing, not tidiness. Each RMW ignores the other's
+# variables, so a stale CYCLONEDDS_URI cannot misconfigure zenoh -- but it can
+# absolutely mislead the person running `env | grep -i dds` to find out why two
+# hosts stopped seeing each other, and that is the failure this file exists to
+# make legible.
+golfcart_resolve_rmw() {
+    local root="${GOLFCART_REPO_ROOT}"
+    local quiet="${GOLFCART_ENV_QUIET:-0}"
+
+    # runtime.conf is sourced here as well as in the main body below. The
+    # GOLFCART_ENV_RESOLVE_ONLY path (scripts/doctor.sh, and the host-role probe
+    # in the launch recipe) never reaches that body and still has to know which
+    # RMW this host is on. Every key in runtime.conf is written ${VAR:-default},
+    # so sourcing it twice is idempotent and an exported override still wins.
+    if [ -z "${GOLFCART_RMW:-}" ] && [ -f "${root}/config/runtime.conf" ]; then
+        # shellcheck source=/dev/null
+        . "${root}/config/runtime.conf"
+    fi
+    GOLFCART_RMW="${GOLFCART_RMW:-cyclonedds}"
+
+    case "${GOLFCART_RMW}" in
+        zenoh)
+            # Refuse to half-switch. Without the package, RMW_IMPLEMENTATION
+            # names a library that rmw_implementation cannot dlopen, and every
+            # ros2 process dies with "failed to load shared library" -- which
+            # reads as a broken install, not as a middleware that was never
+            # installed. Fall back loudly instead, exactly as an unknown DDS
+            # profile does above.
+            if [ ! -f /opt/ros/humble/lib/librmw_zenoh_cpp.so ] \
+               && ! (command -v ros2 >/dev/null 2>&1 && ros2 pkg prefix rmw_zenoh_cpp >/dev/null 2>&1); then
+                if [ "$quiet" != "1" ]; then
+                    echo "============================================================" >&2
+                    echo "ERROR: GOLFCART_RMW=zenoh, but rmw_zenoh_cpp is not installed." >&2
+                    echo "  Install it on THIS host:" >&2
+                    echo "      sudo apt install ros-humble-rmw-zenoh-cpp" >&2
+                    echo "  FALLING BACK TO cyclonedds." >&2
+                    echo "============================================================" >&2
+                fi
+                GOLFCART_RMW=cyclonedds
+            fi
+            ;;
+    esac
+
+    case "${GOLFCART_RMW}" in
+        zenoh)
+            RMW_IMPLEMENTATION=rmw_zenoh_cpp
+            unset CYCLONEDDS_URI
+            local sess="${root}/config/zenoh/${GOLFCART_HOST}-session.json5"
+            local rout="${root}/config/zenoh/${GOLFCART_HOST}-router.json5"
+            # There is deliberately no loopback profile. Single-machine
+            # operation wants precisely rmw_zenoh's shipped defaults -- peer
+            # sessions on localhost, one local router, no LAN listener -- and
+            # leaving both variables UNSET guarantees that in a way a
+            # checked-in byte-identical copy cannot, because the copy can drift
+            # when the package is upgraded. See config/zenoh/README.md.
+            if [ -f "$sess" ]; then
+                ZENOH_SESSION_CONFIG_URI="$sess"; export ZENOH_SESSION_CONFIG_URI
+            else
+                unset ZENOH_SESSION_CONFIG_URI
+            fi
+            if [ -f "$rout" ]; then
+                ZENOH_ROUTER_CONFIG_URI="$rout"; export ZENOH_ROUTER_CONFIG_URI
+            else
+                unset ZENOH_ROUTER_CONFIG_URI
+            fi
+            ;;
+        *)
+            GOLFCART_RMW=cyclonedds
+            RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+            unset ZENOH_SESSION_CONFIG_URI ZENOH_ROUTER_CONFIG_URI
+            ;;
+    esac
+
+    export GOLFCART_RMW RMW_IMPLEMENTATION
+}
+
+# Which RMW the RUNNING ros2 daemon was started with, or "" if none is running.
+#
+# The daemon binds its middleware at startup and keeps it for its lifetime, so
+# after a GOLFCART_RMW switch a leftover daemon answers `ros2 topic list`,
+# `ros2 node list` and every other graph query from the OTHER middleware's view
+# of the world -- which is empty. Nothing errors. The stack is up and healthy and
+# the CLI reports nothing at all, which is indistinguishable from a launch that
+# silently failed.
+#
+# Read off the daemon's own ARGV, not inferred and not from our environment.
+# ros2cli spawns it as `... ros2cli.daemon --rmw-implementation <name>
+# --ros-domain-id N`, and its source says those arguments are passed "only for
+# visibility in the process list" -- so the process list is exactly where the
+# answer is, and it stays correct even when the shell that started the daemon is
+# long gone. /proc/<pid>/environ is the fallback for a daemon started some other
+# way.
+#
+# Worth knowing why a stale daemon is invisible rather than noisy: ros2cli's
+# get_port() is base 11511 plus ROS_DOMAIN_ID and nothing else. The RMW is not in
+# it. So a CycloneDDS daemon and a Zenoh daemon claim the SAME port, the CLI
+# happily talks to whichever got there first, and it answers every graph query
+# from a middleware where nothing is published.
+golfcart_daemon_rmw() {
+    local pid args
+    for pid in $(pgrep -f 'ros2cli\.daemon|_ros2_daemon' 2>/dev/null); do
+        args=$(tr '\0' '\n' < "/proc/${pid}/cmdline" 2>/dev/null \
+               | grep -A1 -x -- '--rmw-implementation' | tail -1)
+        if [ -n "$args" ] && [ "$args" != "--rmw-implementation" ]; then
+            printf '%s' "$args"
+        else
+            tr '\0' '\n' < "/proc/${pid}/environ" 2>/dev/null \
+                | sed -n 's/^RMW_IMPLEMENTATION=//p' | head -1
+        fi
+        return 0
+    done
+    return 0
+}
+
 # ── Sourcing third-party setup files safely ──────────────────────────────────
 # direnv evaluates .envrc under `set -euo pipefail`, and ROS/colcon setup files
 # are not written for that (e.g. /opt/ros/humble/setup.bash reads
@@ -156,6 +287,7 @@ golfcart_dds_profiles() {
 
 if [ "${GOLFCART_ENV_RESOLVE_ONLY:-0}" = "1" ]; then
     golfcart_resolve_dds_profile
+    golfcart_resolve_rmw
 else
 
 # ── Autoware / ROS 2 ─────────────────────────────────────────────────────────
@@ -174,7 +306,9 @@ else
         echo "=========================================="
     fi
 
-    export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+    # RMW_IMPLEMENTATION is NOT set here. golfcart_resolve_rmw at the bottom
+    # of this file owns it, for both branches, and must run after whichever
+    # setup.bash was sourced.
 
     # Unset ROS_LOCALHOST_ONLY if present
     if [[ -v ROS_LOCALHOST_ONLY ]]; then
@@ -225,6 +359,16 @@ netdev_backlog=$(sysctl -n net.core.netdev_max_backlog 2>/dev/null || echo "0")
 # start ROS call golfcart_require_dds and refuse to run.
 golfcart_dds_problems() {
     local problems="" rmem
+    # Every check below is about CycloneDDS: the 16MB floor comes from the
+    # <SocketReceiveBufferSize min=> in config/cyclonedds/*.xml, RouDi is
+    # Cyclone's shared-memory transport, and the lo MULTICAST flag matters
+    # only because the loopback profile pins that interface. Zenoh needs
+    # none of it -- it carries data over TCP and discovers through a router
+    # -- so under zenoh this function has nothing to say and saying it
+    # anyway would send an operator to tune sysctls that cannot help.
+    # Zenoh's own precondition is the router process, and that is checked
+    # where it can be acted on: scripts/zenoh/ensure_router.sh.
+    [ "${GOLFCART_RMW:-cyclonedds}" = "cyclonedds" ] || return 0
     rmem=$(sysctl -n net.core.rmem_max 2>/dev/null || echo 0)
     if [ "${rmem}" -lt 16777216 ]; then
         problems="${problems}
@@ -359,10 +503,9 @@ if [ -f "${GOLFCART_REPO_ROOT}/config/vehicle.conf" ]; then
     export GOLFCART_TX_ENABLED
 fi
 
-# The DDS profiles are CycloneDDS XML, so the RMW has to match them. Set
-# unconditionally: the branch above only exports it when Autoware is missing, and
-# a unit that inherits a different RMW would silently ignore CYCLONEDDS_URI.
-export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+# RMW_IMPLEMENTATION is resolved below by golfcart_resolve_rmw, together with
+# the matching transport config. It must happen after Autoware's setup.bash,
+# which exports an RMW of its own, and after the profile role is known.
 
 # ROS_LOCALHOST_ONLY would confine this host to itself, the exact opposite of
 # what a two-machine deployment needs. Autoware's setup.bash unsets it too, but
@@ -382,6 +525,7 @@ unset ROS_LOCALHOST_ONLY
 # starts, so this file cannot repair a running one, and stopping it would be a
 # surprising side effect of opening a shell. `just service doctor` reports it instead.
 golfcart_resolve_dds_profile
+golfcart_resolve_rmw
 
 # ── Recording ────────────────────────────────────────────────────────────────
 # Record to the external SSD when it is mounted. The root filesystem has only a

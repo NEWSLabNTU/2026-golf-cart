@@ -89,4 +89,11 @@ echo "record_unit_exec: role=${ROLE} writing ${OUTPUT_DIR}/${BAG_NAME} (${#TOPIC
 # recorder rather than on a wrapper shell. Bag finalization — the metadata.yaml
 # that was 0 bytes on every foreground-stopped bag — depends on the recorder
 # receiving that signal directly.
+# Middleware preconditions, as in launch_unit_exec.sh. This matters more here
+# than anywhere else: with GOLFCART_RMW=zenoh and no router, `ros2 bag record`
+# starts, subscribes, reports no error, and writes a bag containing zero messages
+# on every topic. A recording is the one artefact of a test drive that cannot be
+# taken again, so it is worth refusing to start over.
+"${WORKSPACE}/scripts/rmw/ensure.sh" || exit 1
+
 exec ros2 bag record -o "${OUTPUT_DIR}/${BAG_NAME}" "${TOPICS[@]}"
