@@ -127,7 +127,13 @@ if [ "${GOLFCART_RMW:-cyclonedds}" = "zenoh" ]; then
     # every node starts, publishes and discovers nobody, with no error anywhere.
     zaddr=$(sed -n 's|^ *"tcp/\([0-9.]*\):0".*|\1|p' "${ZENOH_SESSION_CONFIG_URI:-/dev/null}" 2>/dev/null | head -1)
     if [ -z "$zaddr" ]; then
-        info "no listen address in the session profile (loopback role uses rmw_zenoh defaults)"
+        fail "no Zenoh profile for the '${GOLFCART_HOST:-?}' role"
+        info "nodes would fall back to rmw_zenoh defaults, which expect a router"
+        info "on localhost:7447 that this deployment never starts - so nothing"
+        info "would discover anything, silently, on either machine."
+        info "config/host is gitignored; on this machine run one of:"
+        info "    echo master > config/host"
+        info "    echo orin   > config/host"
     else
         ziface=$(ip -o addr show 2>/dev/null | awk -v a="$zaddr" '$4 ~ "^"a"/" {print $2; exit}')
         if [ -z "$ziface" ]; then
