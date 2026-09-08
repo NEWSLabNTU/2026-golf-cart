@@ -852,6 +852,28 @@ absent topic does not.
 - **Driver**: `xsens_mti_can_ros_driver`, launched by `imu.launch.xml`
 - **Raw topic**: `/sensing/imu/xsens/imu_raw`
 - **Frame**: `imu_link`
+- **Parameters**: `golfcart_sensor_kit_launch/config/xsens_mti_can.param.yaml`,
+  **not** the driver submodule's own `param/xsens_mti_can_ros_node.yaml`. It is a
+  full copy, not an override — the driver merges nothing, so a partial file would
+  drop `can_interface`, `frame_id` and every `pub_*` flag. Two values differ from
+  the driver's copy and both describe *this* MTi's MT Manager output
+  configuration, which is why they live in the sensor kit:
+  - `start_frame_id: 17` (0x11 StatusWord). The driver dispatches a sample group
+    when it sees the start frame, and this MTi emits 0x11/0x32/0x34/0x51 — never
+    the default 0x05 (SampleTime), so with the default it never dispatches and
+    every topic advertises without publishing.
+  - `time_option: "host"`. It emits neither 0x07 (UTCTime) nor 0x05, so both
+    device-clock options fall back to the host clock anyway, once per sample,
+    behind a 5 s throttled warning. Restore `mti_utc` once UTC Time is enabled in
+    MT Manager and the MTi has GNSS reception.
+- **The top-level key is `/**`, and must stay that way.** The node's
+  fully-qualified name is `/sensing/imu/xsens/xsens_mti_can_ros_node` —
+  `imu.launch.xml` pushes the `imu` and `xsens` namespaces — so a bare
+  `xsens_mti_can_ros_node:` key normalises to `/xsens_mti_can_ros_node` and
+  matches nothing. Nothing warns: the parameters are dropped and the driver runs
+  on its compiled-in defaults, which reproduces the "advertises but never
+  publishes" symptom above by a completely separate route. Any future param file
+  for a namespaced node in this repo has the same trap.
 - **Known issue**: the driver has `pub_transform: true`, broadcasting
   `world -> imu_link` while the URDF publishes `sensor_kit_base_link -> imu_link`.
   That frame has two parents today.
