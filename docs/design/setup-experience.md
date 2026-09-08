@@ -4,7 +4,9 @@
 *use* rather than parts that fail. Four complaints drove this, and investigating
 them turned up three more.
 
-Nothing here is implemented. This is a proposal.
+**Implemented 2026-09-02.** The five decisions below were answered and the
+design built; this document is kept as the record of what was wrong and why the
+replacement is shaped the way it is. `setup/README.md` documents the result.
 
 ---
 
@@ -279,15 +281,33 @@ from. Proposed order:
 
 ---
 
-## Decisions needed
+## Decisions, as answered
 
-1. **Iceoryx** — drop it, or keep it explicit and off by default? The comment
-   defending it and the campaign note contradict each other.
-2. **pacmod and gdown** — confirm these are dead. Both look it, but neither is
-   mine to remove.
-3. **Textual or questionary** — a real TUI with a live log, or a lighter
-   checkbox prompt.
-4. **Does `just` stay in the setup path?** Proposal drops it there and keeps it
-   everywhere else in the repo.
-5. **Profile names** — `laptop` / `orin` / `vehicle` / `ci`, or something that
-   matches how the team already talks about these machines.
+1. **Iceoryx — dropped.** It never worked because the runtime caps publisher
+   ports at a compiled-in count this stack exceeds. Confirmed safe while
+   removing it: `config/cyclonedds/*.xml` has carried
+   `<SharedMemory><Enable>false</Enable>` since that was measured, and
+   `scripts/env.sh` only demands iox-roudi when a resolved profile enables
+   shared memory.
+2. **pacmod and gdown — dropped.**
+3. **Textual**, with the menu closing before any install runs. Installs are apt,
+   sudo and kernel modules; they prompt, and their output is what you need when
+   one fails, so the terminal is handed back rather than captured.
+4. **`just` leaves the setup path** and becomes an ordinary setup step, since the
+   rest of the repo needs it. `setup/justfile` is deleted.
+5. **Profile names kept**, with per-step customization in the menu: a profile
+   sets defaults and every step stays individually selectable.
+
+## What shipped
+
+| | |
+|---|---|
+| `setup/setup.sh` | 586 lines → 74, bootstrap only |
+| `setup/justfile` | deleted; steps live in `registry.py` |
+| steps offered in the menu | 16 of 25 → **25 of 25** |
+| ungated hidden steps | 1 (`iceoryx`) → 0 |
+| forks per keystroke | ~50-100 → 0 |
+| state | one empty file per step → `.state.json` with `stale` detection |
+
+Old command forms (`./setup.sh status`, `./setup.sh <step>`) still work.
+`clean-markers` reports where state moved to rather than failing.

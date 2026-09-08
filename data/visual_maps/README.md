@@ -33,5 +33,7 @@ just launch pose_source:=visual visual_map_dir:=./data/visual_maps/my_location
 ## Notes
 
 - Maps are created using NVIDIA Isaac ROS mapping tools
-- Requires `./setup.sh isaac-ros` to be run first
+- Requires Isaac ROS, which setup no longer installs: cuVSLAM/cuVGL were
+  dropped from the project on 2026-09-02 and `pose_source` lost its `isaac`
+  and `visual` options. These maps are historical.
 - Maps are specific to the environment and camera calibration

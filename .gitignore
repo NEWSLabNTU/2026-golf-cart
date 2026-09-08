@@ -77,3 +77,8 @@ data/fov_study/
 data/coss/
 data/coss2024/
 data/coss_maps/
+
+# Setup bootstrap environment and state, both machine-local.
+setup/.venv/
+setup/.state.json
+setup/.markers/

@@ -319,42 +319,42 @@ Standard ROS 2 conventions: setup.py/setup.cfg, test files for copyright/flake8/
 
 ### Setup Script Architecture
 
-The setup system (`setup/`) uses a two-layer design:
+`./setup.sh` is a **bootstrap only**: it installs uv, builds `setup/.venv`, and
+hands off to `setup/main.py`. Everything with logic in it is Python.
 
-1. **`setup.sh`** - Interactive wrapper that asks all questions upfront before any installation begins
-2. **`justfile`** - Recipe definitions that perform actual installations
+```bash
+./setup.sh                       # menu (textual)
+./setup.sh --status              # what is installed; works without the venv
+./setup.sh --list                # every step, and whether it applies here
+./setup.sh --profile vehicle -y  # no prompts
+./setup.sh --rerun opencv        # forget one step's state, run it again
+./setup.sh --reset-env           # rebuild the venv
+```
 
-**Adding new optional components:**
+**Every step is declared in `setup/golfcart_setup/registry.py` and nowhere else.**
+Adding one means adding a `Step(...)` there; there is no wrapper recipe to write
+and no menu array to update. This replaced a system in which the menu offered 16
+entries while `just setup` ran 25 steps -- the thirteen invisible ones included
+two that wrote udev rules and three that installed sensor drivers.
 
-1. Add installation script to `setup/scripts/install-<name>.sh`
-2. Add recipe to `setup/justfile`:
-   ```just
-   # Direct recipe (for manual invocation)
-   my-component: _init
-       @just _run my-component "{{scripts_dir}}/install-my-component.sh"
+`setup/justfile` is **gone**. Setup no longer uses `just`; `just` is instead an
+ordinary setup step, since the rest of the repo needs it. Every other justfile in
+the repo is unaffected.
 
-   # Conditional recipe (for interactive setup)
-   _setup-my-component:
-       #!/usr/bin/env bash
-       if [[ "${INSTALL_MY_COMPONENT}" == "y" ]]; then
-           just my-component
-       else
-           printf "{{yellow}}⊘{{nc}} my-component skipped (user choice)\n"
-       fi
-   ```
-3. Add `_setup-my-component` to the `setup:` recipe chain
-4. Add question in `setup.sh` `interactive_setup()` function:
-   ```bash
-   INSTALL_MY_COMPONENT="n"
-   printf "${YELLOW}Optional:${NC} My Component description\n"
-   if ask_yes_no "Install My Component?" "n"; then
-       INSTALL_MY_COMPONENT="y"
-   fi
-   export INSTALL_MY_COMPONENT="$INSTALL_MY_COMPONENT"
-   ```
-5. Update summary output and status display
+**State is `setup/.state.json`, not marker files.** It records status, timestamp
+and a digest of what each step would run, so a step whose install script has been
+edited shows as *stale* rather than done -- the case marker files could not
+express. An existing `.markers/` directory is imported on first run.
 
-**Key pattern:** Questions are asked at the start, choices exported as env vars, justfile conditionals execute based on those vars.
+Profiles (`laptop`, `orin`, `vehicle`, `ci`) are presets over the same step list;
+every step stays individually selectable. The suggested profile comes from
+detection and is never a restriction, because machines get provisioned before
+their hardware arrives.
+
+Dropped 2026-09-02, with reasons in the registry docstring: `iceoryx` (publisher
+port cap; `config/cyclonedds/*.xml` has had SharedMemory off since it was
+measured), `pacmod` (unreferenced, and added an apt source with `trusted=yes`),
+`gdown` (unused), `isaac-ros` (out of the plan).
 
 ### Preset System
 
