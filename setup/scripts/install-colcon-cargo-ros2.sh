@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install/upgrade colcon-cargo-ros2 (Rust support for colcon)
+# Rust build support: colcon-cargo-ros2, plus clang/libclang for bindgen
 #
 # Two packages build with ament_cargo — golfcart_vehicle_interface and
 # cuda_ndt_matcher — and `just build` passes --cargo-args accordingly. Without
@@ -9,6 +9,27 @@
 # the missing extension, so it is worth installing up front.
 
 set -e
+
+# ---------------------------------------------------------------------------
+# clang and libclang-dev
+#
+# bindgen loads libclang at *runtime* through libloading, so a missing
+# libclang-dev is not a link error at build time: the crate that uses it panics
+# mid-build with
+#
+#   Unable to find libclang: "couldn't find any valid shared libraries
+#   matching: ['libclang.so', ...]"
+#
+# naming neither apt nor this package. `clang` itself comes along because the
+# cc crate shells out to a C compiler for the CUDA and CAN glue.
+# ---------------------------------------------------------------------------
+if ! dpkg -s libclang-dev >/dev/null 2>&1 || ! command -v clang >/dev/null 2>&1; then
+    echo "Installing clang and libclang-dev (bindgen needs libclang at runtime)..."
+    sudo apt-get update
+    sudo apt-get install -y clang libclang-dev
+else
+    echo "clang and libclang-dev already installed."
+fi
 
 # 0.5.1 is the floor: earlier releases do not emit the [patch.crates-io]
 # entries the two Rust packages rely on, so a stale install fails the build

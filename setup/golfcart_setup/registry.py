@@ -4,12 +4,14 @@ Dropped from the previous system, by decision on 2026-09-02:
 
 * `iceoryx` -- installed unconditionally and absent from the menu, defended by a
   comment calling it "required, like the RMW itself". It is not: iceoryx caps
-  publisher ports at a count this stack exceeds, the cap is compiled in, and
-  `config/cyclonedds/*.xml` has carried `<SharedMemory><Enable>false</Enable>`
-  since that was measured. `scripts/env.sh` only demands iox-roudi when a
-  resolved profile actually enables shared memory, so nothing needs it while it
-  is off. Re-enabling it means rebuilding iceoryx from source with a raised
-  limit, which the deleted installer did not do either.
+  publisher ports at a count this stack exceeds, and the cap is compiled in, so
+  the failure is a hard abort at participant creation rather than a fallback to
+  the network transport. Iceoryx was then removed from the whole project, not
+  only from setup -- `config/iceoryx/`, `scripts/iceoryx/`, the
+  `iox-roudi.service` unit, the `<SharedMemory>` blocks in all three CycloneDDS
+  profiles, and the guards in `scripts/env.sh` and the justfile. Re-enabling it
+  means rebuilding iceoryx from source with a raised limit, which the deleted
+  installer did not do either. See `config/README.md`.
 * `pacmod` -- an AutonomouStuff apt source, added with `trusted=yes` so
   signatures are not checked. Nothing under `src/` references pacmod; the
   vehicle interface is Turing Drive.
@@ -72,11 +74,13 @@ STEPS: list[Step] = [
     ),
     Step(
         id="colcon-cargo-ros2",
-        label="colcon-cargo-ros2 (Rust support)",
-        why="Two workspace packages build with ament_cargo. Without this colcon "
-            "skips them silently and the build aborts later, confusingly.",
+        label="Rust build support (colcon-cargo-ros2, clang, libclang-dev)",
+        why="Two workspace packages build with ament_cargo. Without the colcon "
+            "extension it skips them silently and the build aborts later, "
+            "confusingly; without libclang, bindgen panics mid-build.",
         group="Toolchain",
         run=[_S("install-colcon-cargo-ros2.sh")],
+        requires=Requires(sudo=True),
         after=("ros2-dev-tools",),
         profiles=_on(*ALL),
     ),
