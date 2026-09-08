@@ -19,13 +19,13 @@ status:
 ensure:
     @{{justfile_directory()}}/scripts/rmw/ensure.sh
 
-# Stop the ros2 daemon. Needed after changing GOLFCART_RMW by hand.
-#
 # The daemon binds its middleware at startup and keeps it for its whole life,
 # and its port is 11511 + ROS_DOMAIN_ID with no RMW in it -- so a daemon from the
 # other setting sits on the same port and answers `ros2 topic list` from a
 # middleware where nothing is published. Nothing errors; the graph is just empty.
 # `just launch` handles this for you; a bare `ros2 topic list` does not.
+
+# Stop the ros2 daemon - needed after changing GOLFCART_RMW by hand
 [no-cd]
 daemon-stop:
     @ros2 daemon stop 2>/dev/null || true
@@ -42,11 +42,11 @@ regen:
 check:
     @{{justfile_directory()}}/scripts/zenoh/generate_profiles.sh --check
 
-# What this host is actually linked to.
-#
 # The first thing to run when master and orin cannot see each other. Under zenoh
 # the peer links ARE the data path, so a host with no links to the other machine
 # has failed discovery, whatever the topic list says.
+
+# Show what this host is actually linked to: nodes, peer links, multicast group
 [no-cd]
 peers:
     #!/usr/bin/env bash
