@@ -351,10 +351,16 @@ every step stays individually selectable. The suggested profile comes from
 detection and is never a restriction, because machines get provisioned before
 their hardware arrives.
 
-Dropped 2026-09-02, with reasons in the registry docstring: `iceoryx` (publisher
-port cap; `config/cyclonedds/*.xml` has had SharedMemory off since it was
-measured), `pacmod` (unreferenced, and added an apt source with `trusted=yes`),
-`gdown` (unused), `isaac-ros` (out of the plan).
+Dropped 2026-09-02, with reasons in the registry docstring: `pacmod`
+(unreferenced, and added an apt source with `trusted=yes`), `gdown` (unused),
+`isaac-ros` (out of the plan).
+
+**Iceoryx was removed from the project entirely**, not just from setup: the
+runtime, `config/iceoryx/`, `scripts/iceoryx/`, the `iox-roudi.service` unit, the
+`<SharedMemory>` blocks in all three CycloneDDS profiles, and the guards in
+`scripts/env.sh` and the justfile. It capped publisher ports at a compile-time
+constant this stack exceeds and aborted at participant creation rather than
+falling back. See `config/README.md`.
 
 ### Preset System
 

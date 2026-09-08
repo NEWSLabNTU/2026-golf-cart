@@ -230,20 +230,6 @@ golfcart_dds_problems() {
         problems="${problems}
   - net.core.rmem_max is ${rmem}; the DDS profile requires at least 16777216"
     fi
-    # Only when the resolved profile actually enables shared memory. With SHM
-    # on and RouDi absent, participant creation HANGS rather than failing, so
-    # nothing downstream ever prints an error - but SHM is off by default here
-    # (iceoryx runs out of publisher ports on a stack this size), and demanding
-    # RouDi regardless would block every launch for an unused transport.
-    _gc_profile="${CYCLONEDDS_URI#file://}"
-    if [ -n "${_gc_profile}" ] && [ -f "${_gc_profile}" ] \
-       && grep -q '<Enable>true</Enable>' "${_gc_profile}" 2>/dev/null \
-       && ! { [ -S /tmp/roudi ] && pgrep -x iox-roudi >/dev/null 2>&1; }; then
-        problems="${problems}
-  - iox-roudi is not running, and the DDS profiles enable <SharedMemory>.
-    Start it with:  systemctl --user start iox-roudi.service"
-    fi
-    unset _gc_profile
     if [ "${CYCLONEDDS_URI:-}" != "${CYCLONEDDS_URI#*loopback.xml}" ] \
        && ! ip link show lo 2>/dev/null | grep -q MULTICAST; then
         problems="${problems}

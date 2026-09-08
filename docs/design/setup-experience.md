@@ -283,12 +283,15 @@ from. Proposed order:
 
 ## Decisions, as answered
 
-1. **Iceoryx — dropped.** It never worked because the runtime caps publisher
-   ports at a compiled-in count this stack exceeds. Confirmed safe while
-   removing it: `config/cyclonedds/*.xml` has carried
-   `<SharedMemory><Enable>false</Enable>` since that was measured, and
-   `scripts/env.sh` only demands iox-roudi when a resolved profile enables
-   shared memory.
+1. **Iceoryx — dropped, and then removed from the project entirely.** It never
+   worked because the runtime caps publisher ports at a compiled-in count this
+   stack exceeds, so the failure is a hard abort at participant creation rather
+   than a fallback to the network transport. Dropping the setup step left the
+   rest of the plumbing standing, which is worse than either state, so the
+   removal went the whole way: `config/iceoryx/`, `scripts/iceoryx/`, the
+   `iox-roudi.service` unit, the `<SharedMemory>` blocks in all three
+   CycloneDDS profiles, and the guards in `scripts/env.sh` and the justfile.
+   Reasoning kept in `config/README.md`.
 2. **pacmod and gdown — dropped.**
 3. **Textual**, with the menu closing before any install runs. Installs are apt,
    sudo and kernel modules; they prompt, and their output is what you need when
