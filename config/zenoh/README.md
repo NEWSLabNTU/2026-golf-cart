@@ -167,8 +167,11 @@ echo master > config/host          echo orin > config/host
 ros-humble-rmw-zenoh-cpp`. Without it `scripts/env.sh` falls back to cyclonedds
 *loudly* rather than pointing `RMW_IMPLEMENTATION` at a library that cannot load.
 
-`GOLFCART_RMW=zenoh` itself needs no action — it is the default in
-`config/runtime.conf` on this branch.
+**4. `GOLFCART_RMW=zenoh`.** The default is `cyclonedds`, here as on main —
+zenoh is what is being evaluated, not what is relied on. Opt in per run with
+`GOLFCART_RMW=zenoh just launch-all`, or edit `config/runtime.conf` on **both**
+machines once they are meant to stay on it. A one-off `GOLFCART_RMW=` on the
+master is not forwarded to the orin.
 
 ### If the orin uses a separate checkout
 
