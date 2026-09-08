@@ -45,6 +45,7 @@ result is the prior at all.
 from __future__ import annotations
 
 import argparse
+import math
 import sys
 import time
 from pathlib import Path
@@ -136,6 +137,11 @@ def main() -> int:
                          "any one scan. Expected to help only where the vehicle "
                          "actually rotates -- translation re-observes the same "
                          "surfaces at the same incidence.")
+    ap.add_argument("--init-pose", type=float, nargs=7, default=None,
+                    metavar=("X", "Y", "Z", "QX", "QY", "QZ", "QW"),
+                    help="seed pose in the map frame. Required whenever the map "
+                         "is not in the sensor's own start frame, which is every "
+                         "real surveyed map.")
     ap.add_argument("--limit", type=int, default=0, help="stop after N clouds")
     args = ap.parse_args()
 
@@ -180,7 +186,16 @@ def main() -> int:
 
     poses, stamps, times = [], [], []
     T = np.eye(4)
-    prev_T = np.eye(4)
+    if args.init_pose is not None:
+        x, y, z, qx, qy, qz, qw = args.init_pose
+        n = math.sqrt(qx * qx + qy * qy + qz * qz + qw * qw) or 1.0
+        qx, qy, qz, qw = qx / n, qy / n, qz / n, qw / n
+        T = np.array([
+            [1 - 2 * (qy * qy + qz * qz), 2 * (qx * qy - qz * qw), 2 * (qx * qz + qy * qw), x],
+            [2 * (qx * qy + qz * qw), 1 - 2 * (qx * qx + qz * qz), 2 * (qy * qz - qx * qw), y],
+            [2 * (qx * qz - qy * qw), 2 * (qy * qz + qx * qw), 1 - 2 * (qx * qx + qy * qy), z],
+            [0.0, 0.0, 0.0, 1.0]])
+    prev_T = T.copy()
     history: list[tuple[np.ndarray, np.ndarray]] = []   # (pose, points)
 
     with AnyReader([args.bag]) as reader:
