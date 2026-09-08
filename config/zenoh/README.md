@@ -3,8 +3,9 @@
 `rmw_zenoh_cpp` as an alternative to CycloneDDS, selected per host by
 `GOLFCART_RMW` in [`config/runtime.conf`](../runtime.conf).
 
-Nothing here is measured against CycloneDDS yet. It is set up, verified to carry
-topics on one host, and ready for the two-machine run.
+Verified across both machines: topics flow master↔orin over direct peer links,
+with no router anywhere. Nothing here is measured *against* CycloneDDS yet — no
+CPU, latency or throughput comparison has been made.
 
 ## Why
 
@@ -147,13 +148,59 @@ cyclonedds do **not** fail — each comes up cleanly and never sees the other's
 topics. `just service host-status` prints the effective middleware on both, and
 it is the first thing to check when cross-host topics are missing.
 
+## Verified across both hosts
+
+Talker on one machine, listener on the other, multicast discovery, no router:
+
+| direction | published | heard | duplicated |
+|---|---|---|---|
+| orin → master | 35 | 27 | 0 |
+| master → orin | 30 | 28 | 0 |
+
+(The listener starts a few seconds after the talker in this harness, which is
+where the difference goes; no message arrived twice in either direction.)
+
+The data path is genuinely point-to-point. With a listener on the master and a
+talker on the orin, `ss` shows the link held by the **node process itself**:
+
+```
+ESTAB  192.168.125.100:45385  192.168.125.101:36904  users:(("listener",pid=91527))
+```
+
+No router, no broker, no third process in the path — the same shape as
+CycloneDDS.
+
+**One-shot publishes are reliable cross-host: 8/8.** This is the shape of every
+operator action here — initialpose, engage, MRM clear — and of anything a script
+fires and forgets, so it was worth checking that a process which exits
+immediately can still complete discovery. It can. `ros2 topic pub --times 3`
+likewise delivered all 8 of 8.
+
 ## Known rough edges
 
-**Graph convergence is slower than DDS.** A `ros2 topic list` run immediately
-after a node starts can under-report — a publisher's liveliness token has to
-reach the querying session over a peer link that may still be forming. Measured
-on one host: reliable (8/8) once settled a few seconds, intermittently missing a
-topic before that. Give it a moment before believing an empty list.
+**`ros2 ... --no-daemon` is unreliable across hosts. Do not use it here.**
+This is the single most important operational note on this page, because it
+inverts the DDS habit of reaching for `--no-daemon` to get a "truthful" answer.
+With a talker on the orin and the master querying:
+
+| | remote `/chatter` seen |
+|---|---|
+| `ros2 topic list --no-daemon` | **1 / 6** |
+| `ros2 topic list` (daemon, settled) | 6 / 6 |
+| `ros2 node list` (daemon, settled) | 6 / 6 |
+
+The daemon is a long-lived peer: it holds established links to everything and
+accumulates the graph. A `--no-daemon` invocation opens a fresh session that has
+to discover, link and query inside one short-lived process, and cross-host it
+usually does not finish in time.
+
+Note the scope carefully — this is **graph introspection only**. Publishing and
+subscribing match fine, one-shot publishes land 8/8, and the stack's own
+long-lived nodes are unaffected. It is the *listing* that lies.
+
+So: use the daemon (the default), give it a few seconds after launch, and if a
+topic seems missing run `just rmw status` to check the daemon's middleware
+before believing it.
 
 **Multicast on a shared segment.** `192.168.125.0/24` carries the 4G router and
 whatever else is plugged into it, and `ROS_DOMAIN_ID` is unset — so any other
@@ -161,5 +208,7 @@ ROS 2 machine that joins this LAN on zenoh merges into this graph. The same
 caveat already applies to the CycloneDDS profiles; see
 [`config/cyclonedds/master.xml`](../cyclonedds/master.xml).
 
-**Not yet tested across the two machines.** Everything above was measured on the
-master alone.
+**The full stack has not been run on zenoh yet.** Everything verified so far is
+transport-level — talker/listener, one-shot publishes, the CLI. No Autoware
+launch has come up on it, and no CPU or latency comparison against CycloneDDS
+exists, which is the entire point of the exercise.
