@@ -331,6 +331,27 @@ if [ -f "${GOLFCART_REPO_ROOT}/config/sensors.conf" ]; then
     export IMU_SOURCE CAMERA_MODEL GNSS_RECEIVER
 fi
 
+# ── Multi-machine addresses ──────────────────────────────────────────────────
+# config/multi_machine.conf is the only place either machine's address is
+# written down. It was already the single source for the ssh-based scripts in
+# scripts/multi_machine/, which each source it directly; exporting the master's
+# address here extends that to the launch tree.
+#
+# golfcart.launch.yaml declares a `master_ip` argument defaulting to
+# $(env GOLFCART_MASTER_IP), which is how ntp_monitor on the orin learns which
+# host to measure its clock against. Deliberately no fallback literal in the
+# launch file: a second copy of an address is exactly what this avoids, and an
+# unset variable fails loudly at launch rather than silently measuring against
+# the wrong machine.
+#
+# The conf assigns MASTER_IP from ${GOLFCART_MASTER_IP:-...}, so an address
+# exported before this point still wins and the round-trip is stable.
+if [ -f "${GOLFCART_REPO_ROOT}/config/multi_machine.conf" ]; then
+    # shellcheck source=/dev/null
+    . "${GOLFCART_REPO_ROOT}/config/multi_machine.conf"
+    export GOLFCART_MASTER_IP="${MASTER_IP}"
+fi
+
 # ── play_launch runtime ──────────────────────────────────────────────────────
 # GOLFCART_CONTAINER_MODE picks how composable nodes are run. It is resolved
 # here rather than baked into each caller so that `just launch`, the systemd

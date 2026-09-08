@@ -41,7 +41,7 @@
     <arg name="system_monitor_mem_monitor_param_path" value="$(find-pkg-share autoware_launch)/config/system/system_monitor/mem_monitor.param.yaml"/>
     <!-- Ours: names the interfaces instead of ["*"], which made this monitor
          ERROR forever on the Orin's always-down l4tbr0. -->
-    <arg name="system_monitor_net_monitor_param_path" value="$(find-pkg-share golfcart_launch)/config/system/system_monitor/net_monitor.param.yaml"/>
+    <arg name="system_monitor_net_monitor_param_path" value="$(find-pkg-share golfcart_launch)/config/system/system_monitor/net_monitor_master.param.yaml"/>
     <arg name="system_monitor_ntp_monitor_param_path" value="$(find-pkg-share autoware_launch)/config/system/system_monitor/ntp_monitor.param.yaml"/>
     <arg name="system_monitor_process_monitor_param_path" value="$(find-pkg-share autoware_launch)/config/system/system_monitor/process_monitor.param.yaml"/>
     <arg name="system_monitor_voltage_monitor_param_path" value="$(find-pkg-share autoware_launch)/config/system/system_monitor/voltage_monitor.param.yaml"/>
@@ -89,7 +89,7 @@
       <arg name="mem_monitor_config_file" value="$(find-pkg-share autoware_launch)/config/system/system_monitor/mem_monitor.param.yaml"/>
       <arg name="ntp_monitor_config_file" value="$(find-pkg-share autoware_launch)/config/system/system_monitor/ntp_monitor.param.yaml"/>
       <arg name="process_monitor_config_file" value="$(find-pkg-share autoware_launch)/config/system/system_monitor/process_monitor.param.yaml"/>
-      <arg name="net_monitor_config_file" value="$(find-pkg-share golfcart_launch)/config/system/system_monitor/net_monitor.param.yaml"/>
+      <arg name="net_monitor_config_file" value="$(find-pkg-share golfcart_launch)/config/system/system_monitor/net_monitor_master.param.yaml"/>
     </include>
   </group>
 </launch>

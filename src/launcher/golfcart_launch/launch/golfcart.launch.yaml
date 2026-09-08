@@ -20,6 +20,37 @@ launch:
     name: is_orin
     value: $(eval "'$(var host)' in ('orin', 'all')")
 
+# is_orin means "the ZED is on this machine", which is true in single-machine
+# mode too. is_orin_host means "this machine is the second box", which is not.
+#
+# The distinction matters for anything that describes a MACHINE rather than a
+# DEVICE. A camera exists once wherever it hangs, so its group keys on is_orin.
+# A system monitor set describes the host it runs on, and under `host:=all`
+# there is one host, already covered by the master's set - so gating that on
+# is_orin would launch two sets of monitors on one machine, with the orin's
+# net_monitor watching eno1, an interface the Advantech does not have, ERROR
+# forever.
+- let:
+    name: is_orin_host
+    value: $(eval "'$(var host)' == 'orin'")
+
+# Address of the master, resolved from the environment rather than written here.
+#
+# scripts/env.sh exports GOLFCART_MASTER_IP by sourcing config/multi_machine.conf,
+# which is the only file in the repository that spells out either machine's
+# address. Anything in the launch tree that needs it takes $(var master_ip) from
+# here - today that is the orin's ntp_monitor, which measures its clock offset
+# against the master.
+#
+# No fallback literal on purpose: a second copy of an address is exactly what
+# this avoids. If it is unset the launch fails loudly, which beats silently
+# measuring against the wrong machine. `.envrc` and the systemd units both
+# source scripts/env.sh, so it is set on every path that starts this stack.
+- arg:
+    name: master_ip
+    default: $(env GOLFCART_MASTER_IP)
+    description: "Master's address; from config/multi_machine.conf via scripts/env.sh"
+
 - arg:
     name: is_simulation
     default: "false"
@@ -419,6 +450,28 @@ launch:
         -
           name: camera_model
           value: zedx
+
+# Autoware's system_monitor for the orin - cpu, mem, net, ntp, process.
+#
+# is_orin_host, NOT is_orin: under `host:=all` the master's set already covers
+# the one machine there is, and launching both would put two of every monitor on
+# it. See the <let> above.
+#
+# The rows reach the master by themselves. diagnostic_updater publishes to the
+# absolute topic /diagnostics, both hosts share a DDS domain, and hardware_id is
+# the hostname, so the master's web UI on :8080 shows both machines. Node names
+# are prefixed `orin_` inside the include, because diagnostic_updater builds the
+# status name from the node name without its namespace and the two hosts would
+# otherwise publish identical names.
+- group:
+    if: $(var is_orin_host)
+    children:
+    - include:
+        file: "$(find-pkg-share golfcart_launch)/launch/components/orin_system_monitor.launch.xml"
+        arg:
+        -
+          name: master_ip
+          value: $(var master_ip)
 
 # Rosbag recording used to live here, as one `node:` entry per host. It is now a
 # separate systemd unit (golfcart-record.service ->

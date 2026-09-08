@@ -1,0 +1,43 @@
+# net_monitor for the orin (the second AGX Orin, hostname `orin`).
+#
+# Same reasoning as net_monitor_master.param.yaml next door, different machine:
+# `devices` names the interfaces instead of `["*"]`, because NetMonitor reports
+# ERROR if any single monitored interface is down and this box has six that
+# always are.
+#
+# From `ip -br link` on the orin:
+#
+#   lo          loopback, carries intra-host DDS
+#   eno1        the only link that is UP; 192.168.125.101, the master link
+#
+# Deliberately absent, all currently DOWN:
+#
+#   wlP1p1s0    wifi, unused on the vehicle
+#   can0, can1  the orin has no CAN bus wired; the vehicle interface is the
+#               master's job
+#   l4tbr0      L4T USB device-mode bridge, down unless the board is being used
+#               as a USB device. This is the interface that made Network Usage
+#               ERROR on 100% of reports on the Advantech.
+#   usb0, usb1  report "Not Supported" for ioctl(SIOCETHTOOL) rather than ERROR,
+#               and carry nothing
+#   docker0     bridge with no containers on it
+#
+# Compare against `ip -br link` if the hardware changes. An interface that is
+# not listed is simply not monitored, which is a mild and visible failure.
+#
+# enable_traffic_monitor is false here and on the master: it needs the
+# `traffic_reader` daemon from /opt/autoware/1.5.0/lib/autoware_system_monitor/,
+# which no unit starts on either machine, and without it NetMonitor logs
+# "Failed to connect socket. No such file or directory" every cycle. Bandwidth
+# is better answered by scripts/profiling/ anyway.
+/**:
+  ros__parameters:
+    devices: ["lo", "eno1"]
+    monitor_program: "greengrass"
+    enable_traffic_monitor: false
+    crc_error_check_duration: 1
+    crc_error_count_threshold: 1
+    reassembles_failed_check_duration: 1
+    reassembles_failed_check_count: 1
+    udp_buf_errors_check_duration: 1
+    udp_buf_errors_check_count: 1

@@ -1,0 +1,66 @@
+<?xml version="1.0"?>
+<!--
+  Autoware's system_monitor, on the orin.
+
+  The master gets its copy through golfcart_autoware.launch.xml ->
+  tier4_system_component.launch.xml, and that whole subtree is master-only. The
+  orin's group in golfcart.launch.yaml held nothing but the ZED camera, so
+  until now no CPU, memory, network, NTP or process monitoring existed for the
+  second machine at all: every system_monitor row in the 2026-08-28 capture
+  carries hardware_id `advantech`, and `orin` appears zero times.
+
+  Nothing has to be bridged for those rows to reach the master.
+  diagnostic_updater publishes to the absolute topic "/diagnostics", both hosts
+  share a DDS domain, and hardware_id is the hostname, so the master's web UI
+  sees both machines as soon as this runs. The aggregator stays master-only,
+  which is correct - one diagnostic graph per vehicle.
+
+  The same five monitors run here as on the master, and the same three are left
+  out, for the same reasons plus one:
+
+    gpu_monitor      There is no libnvidia-ml.so on this box - Autoware's
+                     GPUMonitor is NVML-only in this build and reports
+                     "No message was set" for all five of its checks. jtop does
+                     not use NVML either (jtop/core/gpu.py:27 reads
+                     /sys/class/devfreq/), and scripts/profiling/jetson_gpu_sampler.py
+                     already reads the working sysfs paths on both machines. A
+                     GPU diagnostic here means wrapping that, not fixing this.
+    hdd_monitor      Wants an hdd_reader daemon that no unit starts.
+    voltage_monitor  No CMOS battery to read.
+
+  This file is included on `host:=orin` ONLY, never on `host:=all` - see the
+  gate in golfcart.launch.yaml and the reason there.
+-->
+<launch>
+  <arg name="master_ip" description="Address of the master, for the NTP offset check"/>
+
+  <group>
+    <push-ros-namespace namespace="system_monitor"/>
+    <include file="$(find-pkg-share golfcart_launch)/launch/components/golfcart_system_monitor_nodes.launch.xml">
+      <arg name="launch_gpu_monitor" value="false"/>
+      <arg name="launch_hdd_monitor" value="false"/>
+      <arg name="launch_voltage_monitor" value="false"/>
+
+      <!--
+        Prefixes every node name, so this machine's diagnostics are
+        "orin_cpu_monitor: CPU Usage" rather than colliding with the master's
+        "cpu_monitor: CPU Usage". diagnostic_updater derives the status name
+        from the node name without its namespace, so a namespace would not have
+        done it. Full reasoning in the file being included.
+      -->
+      <arg name="monitor_name_prefix" value="orin_"/>
+
+      <!-- No DNS on this machine; its chrony syncs from the master anyway. -->
+      <arg name="ntp_server" value="$(var master_ip)"/>
+
+      <!-- Host-agnostic: thresholds and socket paths, no device names. -->
+      <arg name="cpu_monitor_config_file" value="$(find-pkg-share autoware_launch)/config/system/system_monitor/cpu_monitor.param.yaml"/>
+      <arg name="mem_monitor_config_file" value="$(find-pkg-share autoware_launch)/config/system/system_monitor/mem_monitor.param.yaml"/>
+      <arg name="ntp_monitor_config_file" value="$(find-pkg-share autoware_launch)/config/system/system_monitor/ntp_monitor.param.yaml"/>
+      <arg name="process_monitor_config_file" value="$(find-pkg-share autoware_launch)/config/system/system_monitor/process_monitor.param.yaml"/>
+
+      <!-- Machine-specific: this box's interfaces, not the Advantech's. -->
+      <arg name="net_monitor_config_file" value="$(find-pkg-share golfcart_launch)/config/system/system_monitor/net_monitor_orin.param.yaml"/>
+    </include>
+  </group>
+</launch>

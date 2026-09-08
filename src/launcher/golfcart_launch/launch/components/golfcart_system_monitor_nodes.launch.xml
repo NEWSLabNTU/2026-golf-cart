@@ -28,32 +28,123 @@
   <arg name="launch_hdd_monitor" default="true"/>
   <arg name="launch_voltage_monitor" default="true"/>
 
+  <!--
+    Node-name prefix, empty on the master and "orin_" on the orin.
+
+    Both machines publish to the same absolute /diagnostics topic - the
+    publisher in diagnostic_updater is hardcoded to "/diagnostics", not a
+    relative name - and diagnostic_updater builds each status name as
+    `node_name + ": " + task_name` (diagnostic_updater.hpp:593), where node_name
+    is get_name(), WITHOUT the namespace. So two hosts running the same monitors
+    publish byte-identical names like "cpu_monitor: CPU Usage", and a namespace
+    cannot separate them; only the node name can.
+
+    Nothing breaks today, because golfcart_system_monitor keys its table on
+    hardware_id/name and hardware_id is the hostname. But a diagnostic graph
+    leaf matches on name alone, so the moment phase 4-O adds system monitor
+    leaves, one leaf would be fed by two machines and flip between them
+    silently. The prefix is what makes each leaf addressable.
+
+    The alternative is the `diagnostic_updater.use_fqn` parameter
+    (diagnostic_updater.hpp:418), which swaps get_name() for the fully-qualified
+    name. It is not used here because it only separates the hosts if they also
+    get different namespaces, and it renames the master's existing leaves as a
+    side effect.
+  -->
+  <arg name="monitor_name_prefix" default=""/>
+
+  <!--
+    NTP server to measure the clock against.
+
+    The default matches autoware_launch's ntp_monitor.param.yaml, so the master
+    behaves exactly as before. The orin passes the master's address instead: it
+    has no DNS (`ntp.nict.jp` does not resolve there) and its chrony already
+    syncs from the master, so the master is both the reachable answer and the
+    correct one - what matters on the orin is its offset from the machine it
+    shares a DDS domain with, not from a public stratum 2.
+
+    Overriding one field rather than shipping a second param file keeps the
+    address out of this tree entirely: it arrives as $(var master_ip), which
+    golfcart.launch.yaml resolves from $(env GOLFCART_MASTER_IP), which
+    scripts/env.sh exports from config/multi_machine.conf. That conf is the only
+    file in the repository with either machine's address in it.
+
+    The order matters: this <param> comes after <param from=...>, and later
+    parameters override earlier ones.
+  -->
+  <arg name="ntp_server" default="ntp.nict.jp"/>
+
   <group>
-    <node_container pkg="rclcpp_components" exec="component_container_mt" name="system_monitor_container" namespace="system_monitor" output="screen">
-      <composable_node pkg="autoware_system_monitor" plugin="CPUMonitor" name="cpu_monitor">
+    <node_container pkg="rclcpp_components" exec="component_container_mt" name="$(var monitor_name_prefix)system_monitor_container" namespace="system_monitor" output="screen">
+      <composable_node pkg="autoware_system_monitor" plugin="CPUMonitor" name="$(var monitor_name_prefix)cpu_monitor">
         <param from="$(var cpu_monitor_config_file)"/>
       </composable_node>
-      <composable_node pkg="autoware_system_monitor" plugin="MemMonitor" name="mem_monitor">
+      <composable_node pkg="autoware_system_monitor" plugin="MemMonitor" name="$(var monitor_name_prefix)mem_monitor">
         <param from="$(var mem_monitor_config_file)"/>
       </composable_node>
-      <composable_node pkg="autoware_system_monitor" plugin="NetMonitor" name="net_monitor">
+      <composable_node pkg="autoware_system_monitor" plugin="NetMonitor" name="$(var monitor_name_prefix)net_monitor">
         <param from="$(var net_monitor_config_file)"/>
       </composable_node>
-      <composable_node pkg="autoware_system_monitor" plugin="NTPMonitor" name="ntp_monitor">
+      <composable_node pkg="autoware_system_monitor" plugin="NTPMonitor" name="$(var monitor_name_prefix)ntp_monitor">
         <param from="$(var ntp_monitor_config_file)"/>
+        <param name="server" value="$(var ntp_server)"/>
       </composable_node>
-      <composable_node pkg="autoware_system_monitor" plugin="ProcessMonitor" name="process_monitor">
+      <composable_node pkg="autoware_system_monitor" plugin="ProcessMonitor" name="$(var monitor_name_prefix)process_monitor">
         <param from="$(var process_monitor_config_file)"/>
       </composable_node>
-      <composable_node pkg="autoware_system_monitor" plugin="HddMonitor" name="hdd_monitor" if="$(var launch_hdd_monitor)">
-        <param from="$(var hdd_monitor_config_file)"/>
-      </composable_node>
-      <composable_node pkg="autoware_system_monitor" plugin="GPUMonitor" name="gpu_monitor" if="$(var launch_gpu_monitor)">
-        <param from="$(var gpu_monitor_config_file)"/>
-      </composable_node>
-      <composable_node pkg="autoware_system_monitor" plugin="VoltageMonitor" name="voltage_monitor" if="$(var launch_voltage_monitor)">
-        <param from="$(var voltage_monitor_config_file)"/>
-      </composable_node>
     </node_container>
+
+    <!--
+      The three optional monitors are loaded into the container above rather
+      than declared inside it, because `if=` ON A <composable_node> IS SILENTLY
+      IGNORED BY play_launch's default (Rust) parser.
+
+      That is not a theoretical concern: it is how this file's gating came to be
+      believed working while it was not. `if=` on the composable node resolves
+      correctly under `ros2 launch` and under play_launch's Python parser, and
+      is dropped by the Rust parser that `just launch` and the systemd units
+      actually use - so the resolved model kept all eight monitors and the three
+      that cannot succeed on an Orin would still have run on the vehicle.
+
+      (Written without the two-hyphen spelling of that parser option on
+      purpose: XML forbids a double hyphen inside a comment, and every parser
+      here rejects the file outright when one appears.)
+
+      Minimal reproduction, with the argument false: a <composable_node
+      if="$(var false_arg)"> is present in the Rust parser's model and absent
+      from the Python parser's. A <group if=…> wrapping a <load_composable_node>
+      is absent under BOTH, and present under both when the argument is true.
+      So the group form is the one that means the same thing everywhere, which
+      is the only property worth having here.
+
+      `target` is relative on purpose. This file is always included under a
+      pushed `system_monitor` namespace, and that push belongs to the caller
+      (tier4_system_component.launch.xml on the master,
+      orin_system_monitor.launch.xml on the orin); an absolute target would
+      hardcode one caller's idea of where the container lives.
+    -->
+    <group if="$(var launch_hdd_monitor)">
+      <load_composable_node target="system_monitor/$(var monitor_name_prefix)system_monitor_container">
+        <composable_node pkg="autoware_system_monitor" plugin="HddMonitor" name="$(var monitor_name_prefix)hdd_monitor">
+          <param from="$(var hdd_monitor_config_file)"/>
+        </composable_node>
+      </load_composable_node>
+    </group>
+
+    <group if="$(var launch_gpu_monitor)">
+      <load_composable_node target="system_monitor/$(var monitor_name_prefix)system_monitor_container">
+        <composable_node pkg="autoware_system_monitor" plugin="GPUMonitor" name="$(var monitor_name_prefix)gpu_monitor">
+          <param from="$(var gpu_monitor_config_file)"/>
+        </composable_node>
+      </load_composable_node>
+    </group>
+
+    <group if="$(var launch_voltage_monitor)">
+      <load_composable_node target="system_monitor/$(var monitor_name_prefix)system_monitor_container">
+        <composable_node pkg="autoware_system_monitor" plugin="VoltageMonitor" name="$(var monitor_name_prefix)voltage_monitor">
+          <param from="$(var voltage_monitor_config_file)"/>
+        </composable_node>
+      </load_composable_node>
+    </group>
   </group>
 </launch>

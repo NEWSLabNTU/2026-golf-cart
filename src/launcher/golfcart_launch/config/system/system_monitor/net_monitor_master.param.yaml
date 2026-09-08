@@ -1,4 +1,7 @@
-# net_monitor for the golf cart.
+# net_monitor for the master (the Advantech AGX Orin, hostname `advantech`).
+#
+# The orin has its own copy next door; neither file is the unmarked default,
+# because the device list below is true of exactly one machine.
 #
 # Differs from the Autoware default in one line: `devices` names the interfaces
 # instead of `["*"]`.
@@ -23,12 +26,22 @@
 #
 # Deliberately absent: l4tbr0, usb0, usb1, usb2. The usb* devices report
 # "Not Supported" for ioctl(SIOCETHTOOL) rather than ERROR, so they are not the
-# cause, but they carry nothing either.
+# cause, but they carry nothing either. Also absent: enxce9701bbd030, the USB
+# ethernet uplink, which is up but is a bench convenience rather than part of
+# the vehicle.
+#
+# enable_traffic_monitor was true and is now false. It needs the
+# `traffic_reader` daemon from /opt/autoware/1.5.0/lib/autoware_system_monitor/,
+# which no unit starts on either machine, so NetMonitor logged
+# "Failed to connect socket. No such file or directory" on every cycle — the one
+# permanently-red check left after the 2026-08-28 pass. Starting the daemon is
+# the alternative; bandwidth is better answered by scripts/profiling/, so this
+# check is not worth a unit.
 /**:
   ros__parameters:
     devices: ["lo", "enP5p3s0", "enP5p4s0", "enP5p5s0", "enP5p6s0"]
     monitor_program: "greengrass"
-    enable_traffic_monitor: true
+    enable_traffic_monitor: false
     crc_error_check_duration: 1
     crc_error_count_threshold: 1
     reassembles_failed_check_duration: 1

@@ -244,6 +244,28 @@ Sensor configurations are in `src/param/autoware_individual_params/individual_pa
 - Sensor model: `golfcart_sensor_kit`
 - Default map: `./data/COSS-map-planning`. The production map is planned, not present.
 
+### Writing launch XML
+
+**Never put a double hyphen inside an XML comment.** `--` is illegal there per the
+XML spec — it ends the comment early — so a file containing one is rejected
+outright, by every parser, before any launch logic runs. The comments in this
+repository carry a lot of reasoning, and the natural things to write in them are
+exactly the things that break this: a command-line flag (`--parser python`,
+`--symlink-install`, `--packages-select`), or an em dash typed as two hyphens.
+
+The failure is loud but the message does not name the cause:
+
+```
+Error: Rust parser error while parsing golfcart_launch: XML parsing error: comment at 97:5 contains '--'
+ParseError: not well-formed (invalid token): line 104, column 61
+```
+
+Write the flag in prose instead ("play_launch's Python parser", "colcon's
+symlink install"), and use a real em dash or a single hyphen for punctuation.
+Same rule for `.launch.xml`, `.urdf`, `.xacro` and `package.xml`. YAML launch
+files are unaffected — `#` comments have no such restriction, which is why
+`golfcart.launch.yaml` can say `--parser` freely.
+
 ### Launch Parameters for Golf Cart
 
 #### LiDAR Configuration
