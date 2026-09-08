@@ -4,12 +4,57 @@
 ./setup.sh                       # open the menu
 ./setup.sh --status              # what is installed
 ./setup.sh --list                # every step, and whether it applies here
-./setup.sh --profile vehicle -y  # no prompts, for SSH and CI
 ./setup.sh --rerun opencv        # forget one step's state and run it again
 ./setup.sh --reset-env           # rebuild the setup venv, then exit
 ```
 
 `./setup.sh status` and `./setup.sh <step>` still work.
+
+### In the menu
+
+| key | |
+|---|---|
+| `↑` `↓`, `j` `k` | move between steps |
+| `space` | tick / untick the focused step |
+| `tab` | switch between the step list and the profile picker |
+| `↑` `↓` then `enter` | in the profile picker: highlight, then apply |
+| `a` / `n` / `r` | all / none / back to the profile's defaults |
+| `enter` | review the selection, then install |
+| `q` | quit without installing |
+
+Enter opens a review dialog rather than installing straight away — it names
+every step, flags any the machine does not look to need, and `escape` returns to
+the menu with the selection intact.
+
+### Unattended
+
+Every flagged form runs on the system `python3` and never builds the venv; only
+the menu needs it.
+
+```bash
+./setup.sh --run --profile vehicle --yes        # the profile's steps, no prompts
+./setup.sh --run --all --skip tensorrt-engines  # everything bar one step
+./setup.sh --only ros2 ros2-dev-tools --yes     # exactly these
+./setup.sh --dry-run --json --profile ci        # what would run, as JSON
+./setup.sh --status --json                      # state, for a health check
+./setup.sh --run --profile orin -y --keep-going # do not stop at the first failure
+```
+
+| flag | |
+|---|---|
+| `--run` | run the resolved selection without opening the menu |
+| `--profile P` | preset selection; detected when omitted |
+| `--all` | every step, not just the profile's |
+| `--only STEP...` | exactly these, done or not |
+| `--skip STEP...` | subtract from whatever else was selected |
+| `--force` | run selected steps even if already done |
+| `--keep-going` | continue past a failure instead of stopping |
+| `--dry-run` | resolve and print, install nothing |
+| `--json` | machine-readable `--list`, `--status`, `--dry-run` |
+| `--yes` / `-y` | no prompts |
+
+With no terminal and no flags, setup says which flag was wanted instead of
+trying to draw a menu.
 
 ## How it fits together
 
@@ -29,8 +74,10 @@ setup/golfcart_setup/
 setup/scripts/            the install scripts steps call
 ```
 
-`--status`, `--list` and `--help` import only the standard library and run
-straight from `python3`, so they still work when the venv is the broken thing.
+`main.py` imports Textual lazily and nothing else outside the standard library,
+so every form except the menu runs straight from `python3`. That is two things
+at once: an unattended install does not stop to build an environment it will not
+use, and `--status` / `--list` keep working when the venv is the broken thing.
 
 ## Profiles
 

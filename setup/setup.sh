@@ -10,10 +10,11 @@
 # re-forking `tput` and `cut` on every keystroke. That is what made it laggy, and
 # it is why the menu lives in Python now.
 #
-#   ./setup.sh                open the menu
-#   ./setup.sh --status       what is installed  (no venv needed)
+#   ./setup.sh                open the menu  (the only path that needs the venv)
+#   ./setup.sh --status       what is installed
 #   ./setup.sh --list         every step and whether it applies here
-#   ./setup.sh --profile vehicle --yes
+#   ./setup.sh --run --profile vehicle --yes
+#   ./setup.sh --run --all --skip tensorrt-engines
 #   ./setup.sh --rerun opencv
 #   ./setup.sh --reset-env    rebuild the venv, then exit
 
@@ -29,21 +30,21 @@ RED='\033[0;31m'; YELLOW='\033[0;33m'; BLUE='\033[0;34m'; NC='\033[0m'
 
 die() { printf "${RED}✗${NC} %s\n" "$1" >&2; exit 1; }
 
-# These read state and never import anything outside the standard library, so
-# they must keep working when the venv is the thing that is broken -- which is
-# exactly when someone needs to see what state the machine is in.
-for arg in "$@"; do
-    case "$arg" in
-        --status|--list|--help|-h)
-            exec python3 "$MAIN" "$@" ;;
-    esac
-done
-
 if [[ "${1:-}" == "--reset-env" ]]; then
     rm -rf "$VENV"
     printf "${YELLOW}→${NC} Removed %s\n" "$VENV"
     printf "Run ./setup.sh again to rebuild it.\n"
     exit 0
+fi
+
+# Only the menu needs the venv: `main.py` imports Textual lazily and nothing
+# else outside the standard library, so every flagged form -- --status, --list,
+# --run, --only, --rerun, --dry-run -- runs on the system python3. That matters
+# twice: an unattended install does not stop to build an environment it will
+# not use, and the state-reading commands keep working when the venv is the
+# thing that is broken, which is exactly when someone needs them.
+if [[ $# -gt 0 ]]; then
+    exec python3 "$MAIN" "$@"
 fi
 
 command -v python3 >/dev/null || die "python3 not found (expected on Ubuntu 22.04)"

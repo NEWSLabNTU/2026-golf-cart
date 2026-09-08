@@ -39,6 +39,25 @@ def cmd_list(args) -> int:
     state = State()
     status = _statuses(state)
     profile = args.profile or machine.suggested_profile()
+    if args.json:
+        import json
+        print(json.dumps({
+            "profile": profile,
+            "arch": machine.arch,
+            "jetson": machine.is_jetson,
+            "steps": [
+                {
+                    "id": s.id, "label": s.label, "group": s.group,
+                    "status": status[s.id],
+                    "default": s.default_for(profile),
+                    "applicable": machine.applicable(s)[0],
+                    "reason": machine.applicable(s)[1],
+                    "sudo": s.requires.sudo,
+                }
+                for s in STEPS
+            ],
+        }, indent=2))
+        return 0
     group = None
     print(f"Profile: {profile}   host: {machine.arch}"
           f"{'  (jetson)' if machine.is_jetson else ''}\n")
@@ -57,6 +76,13 @@ def cmd_list(args) -> int:
 def cmd_status(args) -> int:
     state = State()
     status = _statuses(state)
+    if args.json:
+        import json
+        print(json.dumps({
+            s.id: {"status": status[s.id], **(state.record(s.id) or {})}
+            for s in STEPS
+        }, indent=2))
+        return 0
     counts: dict[str, int] = {}
     for value in status.values():
         counts[value] = counts.get(value, 0) + 1
@@ -75,24 +101,36 @@ def cmd_status(args) -> int:
     return 0
 
 
+def _known(ids, what: str) -> set:
+    unknown = [i for i in ids if i not in BY_ID]
+    if unknown:
+        print(f"unknown step(s) for {what}: {', '.join(unknown)}", file=sys.stderr)
+        print("Run --list to see them all.", file=sys.stderr)
+        raise SystemExit(2)
+    return set(ids)
+
+
 def _select(args, machine: Machine, state: State) -> list:
+    """Resolve the selection the way the menu would, without the menu.
+
+    `--only` is exact and skips the done-check, because naming a step is already
+    saying you want it. Everything else starts from a profile (or `--all`),
+    drops what is already done unless `--force`, then subtracts `--skip`.
+    """
+    skip = _known(args.skip or (), "--skip")
     if args.only:
-        unknown = [s for s in args.only if s not in BY_ID]
-        if unknown:
-            print(f"unknown step(s): {', '.join(unknown)}", file=sys.stderr)
-            raise SystemExit(2)
-        return ordered(set(args.only))
+        return ordered(_known(args.only, "--only") - skip)
 
     profile = args.profile or machine.suggested_profile()
     status = _statuses(state)
     chosen = set()
     for step in STEPS:
-        if not step.default_for(profile):
+        if not (args.all or step.default_for(profile)):
             continue
         if not args.force and status[step.id] == "ok":
             continue
         chosen.add(step.id)
-    return ordered(chosen)
+    return ordered(chosen - skip)
 
 
 def cmd_run(args) -> int:
@@ -105,11 +143,25 @@ def cmd_run(args) -> int:
 
     steps = _select(args, machine, state)
     if not steps:
-        print("Nothing to do: everything selected is already done.")
+        print("Nothing to do: the selection is empty -- already done, "
+              "or subtracted by --skip.")
         print("Use --force to re-run, or --only <step> to pick one.")
         return 0
 
-    profile = args.profile or machine.suggested_profile()
+    if args.json:
+        # Describing a run and performing one are different requests; making
+        # --json imply "do not install" would be a silent no-op the day someone
+        # adds it to a working command line.
+        if not args.dry_run:
+            print("--json describes a selection: pair it with --dry-run.",
+                  file=sys.stderr)
+            return 2
+        import json
+        print(json.dumps([s.id for s in steps]))
+        return 0
+
+    profile = "--only" if args.only else ("all" if args.all
+                                          else args.profile or machine.suggested_profile())
     print(f"Profile: {profile}   {len(steps)} step(s) to run\n")
     for step in steps:
         ok, reason = machine.applicable(step)
@@ -128,7 +180,8 @@ def cmd_run(args) -> int:
             return 0
         print()
 
-    failures = Runner(state, machine).run_all(steps)
+    failures = Runner(state, machine).run_all(
+        steps, stop_on_error=not args.keep_going)
     print()
     if failures:
         print(f"{failures} step(s) failed. Re-run to resume; "
@@ -192,7 +245,15 @@ def main(argv=None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="Profiles:\n" + "\n".join(
             f"  {name:<9} {PROFILE_HELP[name]}" for name in PROFILES
-        ),
+        ) + """
+
+Unattended:
+  setup.sh --run --profile vehicle --yes     the profile's steps, no prompts
+  setup.sh --run --all --skip tensorrt-engines opencv
+  setup.sh --only ros2 ros2-dev-tools --yes  exactly these
+  setup.sh --dry-run --json --profile ci     what would run, as a JSON list
+  setup.sh --run --profile orin -y --keep-going
+""",
     )
     ap.add_argument("--profile", choices=PROFILES,
                     help="preset selection; detected if omitted")
@@ -200,8 +261,18 @@ def main(argv=None) -> int:
                     help="run exactly these steps")
     ap.add_argument("--rerun", nargs="+", metavar="STEP",
                     help="forget these steps' state, then run them")
+    ap.add_argument("--all", action="store_true",
+                    help="select every step, not just the profile's")
+    ap.add_argument("--skip", nargs="+", metavar="STEP", default=[],
+                    help="subtract these steps from the selection")
     ap.add_argument("--force", action="store_true",
                     help="run selected steps even if already done")
+    ap.add_argument("--keep-going", action="store_true",
+                    help="do not stop at the first failure")
+    ap.add_argument("--run", action="store_true",
+                    help="run the resolved selection without opening the menu")
+    ap.add_argument("--json", action="store_true",
+                    help="machine-readable output for --list, --status, --dry-run")
     ap.add_argument("--yes", "-y", action="store_true", help="no prompts")
     ap.add_argument("--dry-run", action="store_true",
                     help="resolve and print, install nothing")
@@ -218,8 +289,15 @@ def main(argv=None) -> int:
     if args.rerun:
         args.steps = args.rerun
         return cmd_rerun(args)
-    if args.only or args.profile or args.yes or args.dry_run:
+    if (args.run or args.all or args.only or args.profile
+            or args.skip or args.yes or args.dry_run or args.force):
         return cmd_run(args)
+    if not sys.stdin.isatty():
+        # No terminal to draw a menu on. Say which flag was wanted rather than
+        # letting Textual fail somewhere less obvious.
+        print("No terminal: use --run (optionally with --profile/--only) "
+              "for an unattended install.", file=sys.stderr)
+        return 2
     return cmd_tui(args)
 
 

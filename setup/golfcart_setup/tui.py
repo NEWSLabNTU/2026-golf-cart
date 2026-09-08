@@ -15,8 +15,11 @@ from __future__ import annotations
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import VerticalScroll
-from textual.widgets import Checkbox, Footer, Header, Label, RadioButton, RadioSet, Static
+from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.screen import ModalScreen
+from textual.widgets import (
+    Button, Checkbox, Header, Label, RadioButton, RadioSet, Static,
+)
 
 from .model import PROFILE_HELP, PROFILES, Machine
 from .registry import STEPS, ordered
@@ -83,6 +86,79 @@ BADGE = {
 }
 
 
+class ConfirmScreen(ModalScreen[bool]):
+    """Review what enter is about to install.
+
+    Enter is one keypress away from apt, sudo and kernel modules, and it sits on
+    the same key that toggles a step in most list widgets, so it gets pressed by
+    accident. This is the stop: it names every step, flags the ones this machine
+    does not look like it needs, and goes back to the menu with the selection
+    intact.
+    """
+
+    CSS = """
+    ConfirmScreen { align: center middle; }
+    #dialog {
+        width: 78; max-width: 90%; height: auto; max-height: 80%;
+        border: thick $accent; background: $surface; padding: 1 2;
+    }
+    #dialog .heading { text-style: bold; margin-bottom: 1; }
+    #steps { height: auto; max-height: 16; margin-bottom: 1; }
+    #steps .na { color: $warning; }
+    #notes { color: $text-muted; margin-bottom: 1; }
+    #buttons { height: auto; align: right middle; }
+    #keys { width: 1fr; color: $text-muted; }
+    #buttons Button { margin-left: 2; }
+    """
+
+    BINDINGS = [
+        Binding("escape", "back", "Back to menu"),
+        Binding("b", "back", "Back to menu"),
+        Binding("q", "back", "Back to menu", show=False),
+    ]
+
+    def __init__(self, steps: list, machine: Machine) -> None:
+        super().__init__()
+        self.steps = steps
+        self.machine = machine
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="dialog"):
+            yield Label(f"Install {len(self.steps)} step(s)?", classes="heading")
+            with VerticalScroll(id="steps"):
+                for step in self.steps:
+                    ok, reason = self.machine.applicable(step)
+                    if ok:
+                        yield Static(f"  · {step.label}")
+                    else:
+                        yield Static(f"  · {step.label}  ({reason} -- selected anyway)",
+                                     classes="na")
+            yield Static(self._notes(), id="notes")
+            with Horizontal(id="buttons"):
+                yield Static("enter installs   escape goes back", id="keys")
+                yield Button("Back", id="back")
+                yield Button("Install", variant="primary", id="go")
+
+    def _notes(self) -> str:
+        notes = []
+        if any(s.requires.sudo for s in self.steps):
+            notes.append("Root is needed; sudo is asked for once, up front.")
+        if any(s.requires.reboot for s in self.steps):
+            notes.append("At least one step wants a reboot afterwards.")
+        notes.append("The menu closes first, so each step prompts and prints "
+                     "on the plain terminal.")
+        return "\n".join(notes)
+
+    def on_mount(self) -> None:
+        self.query_one("#go", Button).focus()
+
+    def action_back(self) -> None:
+        self.dismiss(False)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        self.dismiss(event.button.id == "go")
+
+
 class SetupApp(App):
     CSS = """
     Screen { layout: horizontal; }
@@ -94,6 +170,10 @@ class SetupApp(App):
     .na { color: $warning; margin-left: 4; }
     Checkbox { border: none; padding: 0; height: 1; }
     Checkbox:focus { background: $accent 20%; text-style: bold; }
+    /* height auto so a narrow terminal wraps the hints instead of cutting
+       the last ones off, which are the ones that end the session. */
+    #hints { dock: bottom; height: auto; padding: 0 1; color: $text-muted;
+             background: $panel; }
     """
 
     BINDINGS = [
@@ -138,7 +218,13 @@ class SetupApp(App):
                 yield Static(step.why, classes="why")
                 if not applicable:
                     yield Static(f"not applicable here: {reason}", classes="na")
-        yield Footer()
+        # This replaces Textual's Footer, which docks to the same row and
+        # renders only the bindings marked show=True -- the arrows and space,
+        # the two keys a first-time user actually needs, are not among them.
+        yield Static(
+            "↑↓ move   space tick/untick   tab profile   "
+            "a all   n none   r reset   enter review   q quit",
+            id="hints")
 
     def on_mount(self) -> None:
         self.title = "Golf cart setup"
@@ -236,8 +322,18 @@ class SetupApp(App):
             s.id for s in STEPS
             if self.query_one(f"#s-{s.id}", Checkbox).value
         }
-        self.result = ordered(chosen)
-        self.exit(self.result)
+        if not chosen:
+            self.notify("Nothing ticked. Space ticks the focused step.",
+                        severity="warning")
+            return
+        steps = ordered(chosen)
+
+        def decided(go: bool | None) -> None:
+            if go:
+                self.result = steps
+                self.exit(steps)
+
+        self.push_screen(ConfirmScreen(steps, self.machine), decided)
 
 
 def run_tui(args) -> int:

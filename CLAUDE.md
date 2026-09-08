@@ -323,13 +323,19 @@ Standard ROS 2 conventions: setup.py/setup.cfg, test files for copyright/flake8/
 hands off to `setup/main.py`. Everything with logic in it is Python.
 
 ```bash
-./setup.sh                       # menu (textual)
-./setup.sh --status              # what is installed; works without the venv
+./setup.sh                       # menu (textual); the only form needing the venv
+./setup.sh --status              # what is installed
 ./setup.sh --list                # every step, and whether it applies here
-./setup.sh --profile vehicle -y  # no prompts
+./setup.sh --run --profile vehicle -y   # unattended
+./setup.sh --run --all --skip tensorrt-engines
+./setup.sh --dry-run --json      # the resolved selection, machine-readable
 ./setup.sh --rerun opencv        # forget one step's state, run it again
 ./setup.sh --reset-env           # rebuild the venv
 ```
+
+In the menu: arrows move, space ticks, tab reaches the profile picker, and enter
+opens a review dialog before anything is installed. Every flagged form runs on
+the system `python3`, so an unattended install never builds the venv.
 
 **Every step is declared in `setup/golfcart_setup/registry.py` and nowhere else.**
 Adding one means adding a `Step(...)` there; there is no wrapper recipe to write
