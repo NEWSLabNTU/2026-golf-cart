@@ -4,7 +4,7 @@
 #     scripts/rmw/ensure.sh          # fix what can be fixed, explain what cannot
 #     scripts/rmw/ensure.sh --status # report only, change nothing, always exit 0
 #
-# It replaces the direct call to scripts/iceoryx/ensure_roudi.sh in the launch
+# It replaces the direct call to the old Iceoryx RouDi check in the launch
 # recipes, and dispatches on GOLFCART_RMW. It also does the one thing neither
 # middleware's own check can: deal with a ros2 daemon left behind by the OTHER
 # middleware.
@@ -180,9 +180,19 @@ case "${GOLFCART_RMW:-cyclonedds}" in
         fi
         ;;
     *)
-        # No-op unless the resolved CycloneDDS profile enables <SharedMemory>,
-        # which it does not today.
-        "${REPO_ROOT}/scripts/iceoryx/ensure_roudi.sh" || exit 1
+        # CycloneDDS needs nothing started. This used to call
+        # scripts/iceoryx/ensure_roudi.sh, guarding a <SharedMemory> block that
+        # was never enabled; Iceoryx was then removed from the project entirely
+        # and that script went with it.
+        #
+        # The call survived because the two changes never touched a common file:
+        # Iceoryx was deleted on one branch while this script was written on
+        # another, so nothing conflicted and nothing complained. Left in, it
+        # would have run `|| exit 1` against a path that does not exist, on the
+        # DEFAULT middleware — every `just launch` and every systemd start,
+        # failing at the one gate whose whole job is to fail loudly for a good
+        # reason.
+        :
         ;;
 esac
 
