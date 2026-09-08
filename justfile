@@ -222,11 +222,12 @@ launch ARGS="":
     #!/usr/bin/env bash
     set -euo pipefail
     # Middleware preconditions, whichever middleware this host is on. Two jobs:
-    # stop a ros2 daemon left behind by the OTHER RMW (its XML-RPC port does not
-    # depend on the RMW, so a stale one answers every graph query from an empty
-    # world), then check that transport's own prerequisite -- iox-roudi under
-    # CycloneDDS, the Zenoh router under zenoh. Every one of those failures is
-    # SILENT, which is why this is a gate and not a hint. See scripts/rmw/ensure.sh.
+    # stop a ros2 daemon left behind by the OTHER RMW (its XML-RPC port is
+    # 11511 + ROS_DOMAIN_ID with no RMW in it, so a stale one answers every graph
+    # query from an empty world), and under zenoh confirm the interface this host
+    # advertises exists and carries MULTICAST, since with no router that is the
+    # only discovery path. Both failures are SILENT, which is why this is a gate
+    # and not a hint. See scripts/rmw/ensure.sh.
     {{justfile_directory()}}/scripts/rmw/ensure.sh || exit 2
     # tx= is not a launch argument and cannot be: the installed
     # tier4_vehicle_launch/vehicle.launch.xml forwards a fixed set of arguments
@@ -296,11 +297,12 @@ launch-up ARGS="":
     #!/usr/bin/env bash
     set -uo pipefail
     # Middleware preconditions, whichever middleware this host is on. Two jobs:
-    # stop a ros2 daemon left behind by the OTHER RMW (its XML-RPC port does not
-    # depend on the RMW, so a stale one answers every graph query from an empty
-    # world), then check that transport's own prerequisite -- iox-roudi under
-    # CycloneDDS, the Zenoh router under zenoh. Every one of those failures is
-    # SILENT, which is why this is a gate and not a hint. See scripts/rmw/ensure.sh.
+    # stop a ros2 daemon left behind by the OTHER RMW (its XML-RPC port is
+    # 11511 + ROS_DOMAIN_ID with no RMW in it, so a stale one answers every graph
+    # query from an empty world), and under zenoh confirm the interface this host
+    # advertises exists and carries MULTICAST, since with no router that is the
+    # only discovery path. Both failures are SILENT, which is why this is a gate
+    # and not a hint. See scripts/rmw/ensure.sh.
     {{justfile_directory()}}/scripts/rmw/ensure.sh || exit 2
     # tx= is pulled out first: it is not a launch argument (the installed
     # tier4_vehicle_launch/vehicle.launch.xml drops unknown ones) but an
@@ -351,11 +353,12 @@ launch-all ARGS="":
     #!/usr/bin/env bash
     set -uo pipefail
     # Middleware preconditions, whichever middleware this host is on. Two jobs:
-    # stop a ros2 daemon left behind by the OTHER RMW (its XML-RPC port does not
-    # depend on the RMW, so a stale one answers every graph query from an empty
-    # world), then check that transport's own prerequisite -- iox-roudi under
-    # CycloneDDS, the Zenoh router under zenoh. Every one of those failures is
-    # SILENT, which is why this is a gate and not a hint. See scripts/rmw/ensure.sh.
+    # stop a ros2 daemon left behind by the OTHER RMW (its XML-RPC port is
+    # 11511 + ROS_DOMAIN_ID with no RMW in it, so a stale one answers every graph
+    # query from an empty world), and under zenoh confirm the interface this host
+    # advertises exists and carries MULTICAST, since with no router that is the
+    # only discovery path. Both failures are SILENT, which is why this is a gate
+    # and not a hint. See scripts/rmw/ensure.sh.
     {{justfile_directory()}}/scripts/rmw/ensure.sh || exit 2
     # NOTE: ARGS is positional. `just launch-all ARGS="..."` does NOT work:
     # just has no NAME=value syntax for recipe parameters.

@@ -364,12 +364,11 @@ netdev_backlog=$(sysctl -n net.core.netdev_max_backlog 2>/dev/null || echo "0")
 golfcart_dds_problems() {
     local problems="" rmem
     # Every check below is about CycloneDDS: the 16MB floor comes from the
-    # <SocketReceiveBufferSize min=> in config/cyclonedds/*.xml, RouDi is
-    # Cyclone's shared-memory transport, and the lo MULTICAST flag matters
-    # only because the loopback profile pins that interface. Zenoh needs
-    # none of it -- it carries data over TCP and discovers through a router
-    # -- so under zenoh this function has nothing to say and saying it
-    # anyway would send an operator to tune sysctls that cannot help.
+    # <SocketReceiveBufferSize min=> in config/cyclonedds/*.xml, and the lo
+    # MULTICAST flag matters only because the loopback profile pins that
+    # interface. Zenoh needs neither -- it carries data over TCP -- so under
+    # zenoh this function has nothing to say, and saying it anyway would send
+    # an operator to tune sysctls that cannot affect anything.
     # Zenoh's own precondition is that the interface carrying this host's LAN
     # address has the MULTICAST flag, and that is checked where it can be acted
     # on: scripts/rmw/ensure.sh.
