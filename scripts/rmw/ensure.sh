@@ -77,7 +77,9 @@ if [ "${STATUS_ONLY}" = "1" ]; then
                     printf 'discovery          multicast, but %s lacks MULTICAST - nodes will not find each other\n' "${iface:-?}"
                 fi
             else
-                printf 'discovery          rmw_zenoh defaults (router on localhost:7447)\n'
+                printf 'discovery          NO PROFILE for role %s - would fall back to\n' "${GOLFCART_HOST:-?}"
+                printf '                   rmw_zenoh defaults (router on localhost:7447, never started\n'
+                printf '                   here). Fix: echo master > config/host   # or: orin\n'
             fi
             ;;
         *)
@@ -120,6 +122,33 @@ case "${GOLFCART_RMW:-cyclonedds}" in
         # interface: the session profile advertises a fixed LAN address, and if
         # nothing owns it, or the interface carrying it has no MULTICAST flag,
         # every node comes up and discovers nobody with no error anywhere.
+        # No session profile at all means the role resolved to loopback, which
+        # under zenoh is ALWAYS wrong in this deployment. config/host is
+        # gitignored, so a fresh checkout on a new machine has none and lands
+        # here -- and the fallback is rmw_zenoh's stock config, which expects a
+        # router on localhost:7447 that this repo never starts. The stack then
+        # comes up perfectly and no node discovers any other, on either host.
+        # This is the single most likely way a deployment goes wrong, so it is
+        # an error and not a warning.
+        if [ -z "${ZENOH_SESSION_CONFIG_URI:-}" ]; then
+            {
+                echo ""
+                echo "ERROR: GOLFCART_RMW=zenoh, but this host resolved to the"
+                echo "       '${GOLFCART_HOST:-?}' role, which has no Zenoh profile."
+                echo ""
+                echo "  Nodes would fall back to rmw_zenoh's shipped config, which"
+                echo "  expects a Zenoh router on localhost:7447. This deployment"
+                echo "  runs no router, so nothing would discover anything -- with"
+                echo "  no error, on either machine."
+                echo ""
+                echo "  config/host is gitignored, so a fresh checkout has none."
+                echo "  On this machine run ONE of:"
+                echo "      echo master > config/host"
+                echo "      echo orin   > config/host"
+                echo ""
+            } >&2
+            exit 1
+        fi
         addr="$(zenoh_listen_addr || true)"
         if [ -n "$addr" ]; then
             iface="$(zenoh_iface_for "$addr")"

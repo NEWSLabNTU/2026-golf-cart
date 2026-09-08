@@ -141,6 +141,58 @@ just rmw regen / check  # profiles vs the installed rmw_zenoh defaults
 just service doctor     # full diagnostic; middleware-aware
 ```
 
+## Deploying it on both machines
+
+The branch is `rmw-zenoh` on the NEWSLabNTU fork. Three things do not come with
+it, and each is silent if missed.
+
+**1. `config/host` on every machine.** It is gitignored — a property of the
+machine, not the branch — so a fresh checkout has none and resolves to the
+`loopback` role. Under zenoh that role has no profile, so nodes fall back to
+rmw_zenoh's stock config, which expects a router on `localhost:7447` that this
+deployment never starts. `scripts/rmw/ensure.sh` refuses to launch in that state
+rather than letting it through, but it is still the first thing to set:
+
+```bash
+# on the master                    # on the orin
+echo master > config/host          echo orin > config/host
+```
+
+**2. A build on each machine.** `just build`. On the orin
+`golfcart_vehicle_interface` is skipped automatically — it needs the proprietary
+`CAX_ADS_CAN.dbc`, and the orin has no CAN bus. That skip is intentional; do not
+"fix" it.
+
+**3. `ros-humble-rmw-zenoh-cpp`, on both.** `sudo apt install
+ros-humble-rmw-zenoh-cpp`. Without it `scripts/env.sh` falls back to cyclonedds
+*loudly* rather than pointing `RMW_IMPLEMENTATION` at a library that cannot load.
+
+`GOLFCART_RMW=zenoh` itself needs no action — it is the default in
+`config/runtime.conf` on this branch.
+
+### If the orin uses a separate checkout
+
+`just launch-all` reaches the orin at `ORIN_WORKSPACE`, which defaults to
+`~/2026-golf-cart` — the orin's existing checkout. Putting the branch in a
+different directory there means telling the master where:
+
+```bash
+export GOLFCART_ORIN_WORKSPACE=~/2026-golf-cart-zenoh
+```
+
+### Then, in order
+
+```bash
+just service install master       # and: just service install-orin
+just rmw status                   # on each host: role, profile, multicast, daemon
+just service host-status          # confirms BOTH hosts report middleware: zenoh
+just service doctor               # full diagnostic, middleware-aware
+just launch-all
+```
+
+Give the graph a few seconds before believing `ros2 topic list`, and read the
+`--no-daemon` note under *Known rough edges* first.
+
 ## Both hosts must agree
 
 The two middlewares share no wire protocol. A master on zenoh and an orin on
