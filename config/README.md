@@ -10,10 +10,11 @@ changing a value here changes it for every consumer on both hosts.
 | `multi_machine.conf` | shell assignments | the other host's `user@addr`, its repo path, the ssh key, the master's IP |
 | `sensors.conf` | shell assignments | which IMU and camera driver the sensor kit uses (`IMU_SOURCE`, `CAMERA_MODEL`) |
 | `vehicle.conf` | shell assignments | whether the vehicle interface may transmit on CAN (`GOLFCART_TX_ENABLED`) |
-| `runtime.conf` | shell assignments | how play_launch runs composable nodes (`GOLFCART_CONTAINER_MODE`) |
+| `runtime.conf` | shell assignments | how play_launch runs composable nodes (`GOLFCART_CONTAINER_MODE`), and which middleware this host uses (`GOLFCART_RMW`) |
 | `recording/master_topics.txt`<br>`recording/orin_topics.txt` | one topic per line, `#` comments | what each host records |
 | `cyclonedds/{master,orin,loopback}.xml` | CycloneDDS XML | DDS network profiles, one per role |
 | `iceoryx/roudi.toml` | TOML | RouDi shared-memory pool sizes for the CycloneDDS zero-copy transport |
+| `zenoh/{master,orin}-{router,session}.json5` | Zenoh JSON5 | Zenoh profiles, used only when `GOLFCART_RMW=zenoh`. **Generated** — see [`zenoh/README.md`](zenoh/README.md) |
 
 Formats are deliberately unlike each other: the topic lists are edited by hand and
 diffed per line, so a flat list beats YAML; `multi_machine.conf` is sourced by
@@ -171,6 +172,27 @@ is global, and the `-c/--config` RuntimeConfig schema (`monitoring`,
 `startup`, `processes`) has no equivalent key, so isolating one suspect
 container while the rest stay composed is not expressible today. It needs an
 upstream change to play_launch.
+
+## Choosing the middleware
+
+`GOLFCART_RMW` in `runtime.conf` selects `cyclonedds` (the deployed default) or
+`zenoh`. It is a per-host setting and **both machines must agree**: the two share
+no wire protocol, so a mismatched pair does not fail — each host comes up cleanly
+and never sees the other's topics.
+
+Switching it is not sufficient on its own. The ros2 daemon binds its middleware
+when it starts and its port does not depend on the RMW, so a leftover daemon
+answers every graph query from an empty world. `scripts/rmw/ensure.sh` handles
+that on every launch; by hand it is `just rmw daemon-stop`.
+
+Under `zenoh` each host also needs an `rmw_zenohd` router running, without which
+nodes publish and are discovered by nobody, silently. Full reasoning, the
+topology, and what is not yet measured: [`zenoh/README.md`](zenoh/README.md).
+
+```bash
+just rmw status         # what this host is actually on
+just service host-status   # and whether the other host agrees
+```
 
 ## Shared memory (Iceoryx) — installed, disabled
 

@@ -94,26 +94,69 @@ if [ "${GOLFCART_HOST:-}" = "loopback" ] && [ "${GOLFCART_DDS_PROFILE_SOURCE:-}"
     info "loopback is single-machine only; cross-machine topics will not appear"
 fi
 
-# CYCLONEDDS_URI
-uri="${CYCLONEDDS_URI:-}"
-if [ -z "$uri" ]; then
-    fail "CYCLONEDDS_URI is not set"
-else
-    uri_path="${uri#file://}"
-    if [ -f "$uri_path" ]; then
-        ok "CYCLONEDDS_URI -> ${uri_path}"
+# Which middleware, and then that middleware's own config. Reported before the
+# transport details because it decides which of them even apply: under
+# GOLFCART_RMW=zenoh an unset CYCLONEDDS_URI is correct, not a fault, and the
+# reverse holds for the ZENOH_* variables.
+ok "middleware: ${GOLFCART_RMW:-cyclonedds}  (config/runtime.conf)"
+
+if [ "${GOLFCART_RMW:-cyclonedds}" = "zenoh" ]; then
+    if [ "${RMW_IMPLEMENTATION:-}" != "rmw_zenoh_cpp" ]; then
+        fail "GOLFCART_RMW=zenoh but RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-<unset>}"
     else
-        fail "CYCLONEDDS_URI points at a missing file: ${uri_path}"
+        ok "RMW_IMPLEMENTATION -> rmw_zenoh_cpp"
     fi
-fi
 
-if [ -n "$inherited_uri" ] && [ "$inherited_uri" != "${CYCLONEDDS_URI:-}" ]; then
-    warn "this shell had a different CYCLONEDDS_URI: ${inherited_uri}"
-    info "processes started from it use that one, not the profile above"
-fi
+    # Unset is a legitimate, deliberate answer here: it means the shipped
+    # rmw_zenoh defaults, which is exactly right for the loopback role.
+    for v in ZENOH_SESSION_CONFIG_URI ZENOH_ROUTER_CONFIG_URI; do
+        path="${!v:-}"   # bash indirect expansion; doctor.sh is #!/usr/bin/env bash
+        if [ -z "$path" ]; then
+            info "${v} unset — using rmw_zenoh's shipped defaults"
+        elif [ -f "$path" ]; then
+            ok "${v} -> ${path}"
+        else
+            fail "${v} points at a missing file: ${path}"
+            info "regenerate it:  scripts/zenoh/generate_profiles.sh"
+        fi
+    done
 
-if [ -n "${RMW_IMPLEMENTATION:-}" ] && [ "${RMW_IMPLEMENTATION}" != "rmw_cyclonedds_cpp" ]; then
-    warn "RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION} — the profiles above only apply to CycloneDDS"
+    # The router is zenoh's single point of failure and its failure is silent:
+    # nodes start, publish, and discover nobody. Test the listener, not the
+    # process - a router wedged before it bound is as useless as an absent one.
+    if timeout 1 bash -c 'exec 3<>/dev/tcp/127.0.0.1/7447' 2>/dev/null; then
+        ok "zenoh router listening on 127.0.0.1:7447"
+    else
+        fail "no zenoh router on 127.0.0.1:7447 — nodes will discover nothing"
+        info "start it:  just rmw router     (or: just service install master)"
+    fi
+
+    if [ -n "$inherited_uri" ]; then
+        warn "this shell has CYCLONEDDS_URI set (${inherited_uri}) while on zenoh"
+        info "harmless to zenoh, but it will mislead anyone reading the environment"
+    fi
+else
+    # CYCLONEDDS_URI
+    uri="${CYCLONEDDS_URI:-}"
+    if [ -z "$uri" ]; then
+        fail "CYCLONEDDS_URI is not set"
+    else
+        uri_path="${uri#file://}"
+        if [ -f "$uri_path" ]; then
+            ok "CYCLONEDDS_URI -> ${uri_path}"
+        else
+            fail "CYCLONEDDS_URI points at a missing file: ${uri_path}"
+        fi
+    fi
+
+    if [ -n "$inherited_uri" ] && [ "$inherited_uri" != "${CYCLONEDDS_URI:-}" ]; then
+        warn "this shell had a different CYCLONEDDS_URI: ${inherited_uri}"
+        info "processes started from it use that one, not the profile above"
+    fi
+
+    if [ -n "${RMW_IMPLEMENTATION:-}" ] && [ "${RMW_IMPLEMENTATION}" != "rmw_cyclonedds_cpp" ]; then
+        warn "RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION} — the profiles above only apply to CycloneDDS"
+    fi
 fi
 
 # ── 2. ros2 daemon ───────────────────────────────────────────────────────────
@@ -135,11 +178,23 @@ fi
 
 case "$daemon_running" in
     yes)
-        warn "a ros2 daemon is running"
-        info "its DDS context was fixed when it started, so it may still be on a"
-        info "different profile than the one above. If the graph looks wrong"
-        info "(\`ros2 topic list\` empty while the stack runs), run:"
-        info "    ros2 daemon stop"
+        # The daemon's own argv carries the RMW it was started with, so this can
+        # be reported as fact rather than as a caution. Its XML-RPC port is
+        # 11511 + ROS_DOMAIN_ID with no RMW in it, which is why a daemon from the
+        # other middleware is reachable, used, and answers from an empty graph.
+        daemon_rmw="$(golfcart_daemon_rmw 2>/dev/null)"
+        if [ -n "$daemon_rmw" ] && [ "$daemon_rmw" != "${RMW_IMPLEMENTATION:-}" ]; then
+            fail "ros2 daemon is running under ${daemon_rmw}, this host is ${RMW_IMPLEMENTATION:-?}"
+            info "every graph query (topic list, node list, topic hz) will report an"
+            info "EMPTY graph while the stack runs perfectly. Fix it with:"
+            info "    just rmw daemon-stop"
+        else
+            warn "a ros2 daemon is running${daemon_rmw:+ (${daemon_rmw})}"
+            info "its transport context was fixed when it started, so it may still be"
+            info "on a different profile than the one above. If the graph looks wrong"
+            info "(\`ros2 topic list\` empty while the stack runs), run:"
+            info "    ros2 daemon stop"
+        fi
         ;;
     no)
         ok "no ros2 daemon running (the next ros2 command will start one with the profile above)"
@@ -151,6 +206,11 @@ case "$daemon_running" in
 esac
 
 # ── 3. Kernel buffers ────────────────────────────────────────────────────────
+# CycloneDDS only. The 10MB floor is the <SocketReceiveBufferSize min=> in
+# config/cyclonedds/*.xml, which Cyclone treats as a hard requirement; zenoh
+# carries data over TCP and has no equivalent, so under it this whole section
+# would send an operator to tune sysctls that cannot affect anything.
+if [ "${GOLFCART_RMW:-cyclonedds}" = "cyclonedds" ]; then
 section "Kernel network buffers"
 
 MIN_RMEM=10485760   # 10 MB; below this CycloneDDS refuses to create a domain
@@ -172,6 +232,8 @@ elif [ "$rmem" -lt "$MIN_RMEM" ]; then
 else
     ok "net.core.rmem_max = ${rmem} (>= ${MIN_RMEM})"
 fi
+
+fi  # GOLFCART_RMW = cyclonedds (kernel buffer section)
 
 # ── 4. golfcart-* user units ─────────────────────────────────────────────────
 section "systemd user units"

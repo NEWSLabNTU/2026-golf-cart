@@ -16,6 +16,15 @@ Wants=network-online.target
 # participant creation hangs forever with no message rather than failing.
 Wants=iox-roudi.service
 After=iox-roudi.service
+# The Zenoh router, for GOLFCART_RMW=zenoh. Wants= and not Requires= for a
+# reason specific to this unit: router_unit_exec.sh deliberately EXITS 1 when
+# GOLFCART_RMW is cyclonedds, because there is nothing for it to run. Under
+# Requires= that by-design refusal would fail the stack on every CycloneDDS
+# boot. The hard gate lives where it can be conditional instead --
+# launch_unit_exec.sh calls scripts/rmw/ensure.sh, which only insists on a
+# router when this host is actually on zenoh.
+Wants=golfcart-zenoh-router.service
+After=golfcart-zenoh-router.service
 
 [Service]
 Type=simple

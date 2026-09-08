@@ -41,15 +41,28 @@ export GOLFCART_ENV_QUIET=1
 # shellcheck source=/dev/null
 source "${WORKSPACE}/scripts/env.sh"
 
-# Fail loudly rather than start with the wrong DDS profile. env.sh falls back to
-# loopback on an unknown name, which for a unit means a stack that runs but
-# cannot see the other machine - the hardest failure here to diagnose from
+# Fail loudly rather than start with the wrong transport profile. env.sh falls
+# back to loopback on an unknown name, which for a unit means a stack that runs
+# but cannot see the other machine - the hardest failure here to diagnose from
 # outside. Catch it at start instead.
+#
+# The role is resolved once and shared by both middlewares, so this check is not
+# CycloneDDS-specific even though the profile variable is named for it: under
+# GOLFCART_RMW=zenoh the same name selects config/zenoh/<role>-session.json5.
 if [ "${GOLFCART_DDS_PROFILE}" != "${HOST}" ]; then
-    echo "launch_unit_exec: no CycloneDDS profile for GOLFCART_HOST='${HOST}'" >&2
+    echo "launch_unit_exec: no transport profile for GOLFCART_HOST='${HOST}'" >&2
     echo "                  resolved to '${GOLFCART_DDS_PROFILE}' instead" >&2
+    echo "                  (GOLFCART_RMW=${GOLFCART_RMW:-cyclonedds})" >&2
     exit 1
 fi
+
+# Middleware preconditions, the same gate the `just launch` recipes call. It is
+# here rather than expressed as a Requires= on the router unit because it has to
+# be CONDITIONAL: under CycloneDDS there is no router to want, and under zenoh a
+# missing one is fatal in total silence - every node starts, publishes, and is
+# discovered by nobody. It also clears a ros2 daemon left over from the other
+# middleware, which otherwise answers every graph query from an empty world.
+"${WORKSPACE}/scripts/rmw/ensure.sh" || exit 1
 
 # exec so systemd supervises play_launch itself; with a wrapper shell in between,
 # KillMode=control-group still cleans up, but the unit's MainPID would be the
