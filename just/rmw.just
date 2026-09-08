@@ -1,9 +1,13 @@
-# Middleware selection and the Zenoh router lifecycle.
+# Middleware selection.
 #
 # Which RMW this host runs is config/runtime.conf's GOLFCART_RMW, not a flag:
 # both machines have to agree, and the two middlewares share no wire protocol,
 # so a mismatched pair does not fail -- it comes up cleanly and never sees the
 # other side's topics. See config/zenoh/README.md.
+#
+# There is no router recipe. This deployment runs NO rmw_zenohd: peers discover
+# each other by multicast scouting and link directly, the same shape as the
+# CycloneDDS setup it replaces.
 
 # Show the effective middleware, its config, and the daemon state
 [no-cd]
@@ -14,15 +18,6 @@ status:
 [no-cd]
 ensure:
     @{{justfile_directory()}}/scripts/rmw/ensure.sh
-
-# Run this host's Zenoh router in the foreground. Ctrl-C stops it.
-#
-# The supervised path is the systemd unit (`just service install master`), which
-# is what `just launch` starts on its own. This is for a bench run, or for
-# watching what the router says while chasing a discovery problem.
-[no-cd]
-router:
-    @{{justfile_directory()}}/scripts/zenoh/router_unit_exec.sh
 
 # Stop the ros2 daemon. Needed after changing GOLFCART_RMW by hand.
 #
@@ -47,27 +42,23 @@ regen:
 check:
     @{{justfile_directory()}}/scripts/zenoh/generate_profiles.sh --check
 
-# What this host's Zenoh sessions are actually connected to.
+# What this host is actually linked to.
 #
-# The single most useful command when master and orin cannot see each other: it
-# lists the peers and routers this host has LINKS to, which is a different
-# question from what discovery told it exists. An orin that shows only its own
-# router has not federated; see config/zenoh/README.md.
+# The first thing to run when master and orin cannot see each other. Under zenoh
+# the peer links ARE the data path, so a host with no links to the other machine
+# has failed discovery, whatever the topic list says.
 [no-cd]
 peers:
     #!/usr/bin/env bash
     set -uo pipefail
-    if ! timeout 1 bash -c 'exec 3<>/dev/tcp/127.0.0.1/7447' 2>/dev/null; then
-        echo "No Zenoh router listening on 127.0.0.1:7447 on this host." >&2
-        echo "Start one:  just rmw router" >&2
-        exit 1
-    fi
-    # The router's REST plugin is not enabled in rmw_zenoh's shipped config, so
-    # there is no HTTP endpoint to ask. `ros2 node list` is the portable stand-in:
-    # under zenoh it is answered through the same gossip that peering depends on,
-    # so a node from the far host appearing here IS the federation working.
-    echo "Nodes visible from this host (empty across hosts => routers not federated):"
+    echo "Nodes visible from this host (nothing from the far host => discovery failed):"
     ros2 node list 2>/dev/null | sed 's/^/  /'
     echo
-    echo "TCP links on the Zenoh port:"
-    ss -tnp 2>/dev/null | awk 'NR==1 || /:7447/' | sed 's/^/  /'
+    echo "Established peer links (zenoh peers listen on an ephemeral port, so"
+    echo "these are matched by peer address rather than by a fixed port):"
+    ss -tn state established 2>/dev/null \
+      | awk 'NR==1 || /192\.168\.125\./' | sed 's/^/  /'
+    echo
+    echo "Multicast scouting group (224.0.0.224:7446) membership:"
+    ip maddr show 2>/dev/null | grep -B3 '224\.0\.0\.224' | sed 's/^/  /' \
+      || echo "  not joined - no zenoh peer is running on this host"

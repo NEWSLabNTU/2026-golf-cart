@@ -1,13 +1,14 @@
 // GENERATED FILE -- do not edit by hand.
 //
-// Zenoh session for every ROS process on the MASTER host. Stays mode:"peer" and keeps the stock connect to the local router on tcp/localhost:7447 for discovery.
+// Zenoh session for every ROS process on the MASTER host (cart AGX Orin, 192.168.125.100). Peer mode, multicast discovery, direct peer links. No Zenoh router runs anywhere in this deployment.
 //
 // Produced by scripts/zenoh/generate_profiles.sh from
 //   /opt/ros/humble/share/rmw_zenoh_cpp/config/DEFAULT_RMW_ZENOH_SESSION_CONFIG.json5
 // which is a full copy of the rmw_zenoh_cpp shipped default. Everything
 // below is stock EXCEPT the following edits:
 //
-//   * gossip multihop enabled (stock: false)
+//   * scouting.multicast.enabled -> true (stock: false)
+//   * connect.endpoints -> empty, no router (stock: tcp/localhost:7447)
 //   * listen.endpoints -> the LAN address (stock: tcp/localhost:0)
 //
 // Re-run the generator after upgrading ros-humble-rmw-zenoh-cpp;
@@ -54,9 +55,9 @@
     ///
     /// See https://docs.rs/zenoh/latest/zenoh/config/struct.EndPoint.html
     ///
-    /// ROS setting: By default connect to the Zenoh router on localhost on port 7447.
+    /// ROS setting: EMPTIED HERE. There is no Zenoh router to connect to;
+    /// peers find each other by multicast scouting and then link directly.
     endpoints: [
-      "tcp/localhost:7447"
     ],
 
     /// Global connect configuration,
@@ -153,8 +154,10 @@
     multicast: {
       /// Whether multicast scouting is enabled or not
       ///
-      /// ROS setting: disable multicast discovery by default
-      enabled: false,
+      /// ROS setting: ENABLED HERE. This deployment runs no Zenoh router, so
+      /// multicast scouting is the only discovery path. See
+      /// scripts/zenoh/generate_profiles.sh and config/zenoh/README.md.
+      enabled: true,
       /// The socket which should be used for multicast scouting
       address: "224.0.0.224:7446",
       /// The network interface which should be used for multicast scouting
@@ -193,7 +196,7 @@
       /// Activating multihop gossip implies more scouting traffic and a lower scalability.
       /// It mostly makes sense when using "linkstate" routing mode where all nodes in the subsystem don't have
       /// direct connectivity with each other.
-      multihop: true,
+      multihop: false,
       /// Which type of Zenoh instances to send gossip messages to.
       /// Accepts a single value (e.g. target: ["router", "peer"]) which applies whatever the configured "mode" is,
       /// or different values for router or peer mode (e.g. target: { router: ["router", "peer"], peer: ["router"] }).

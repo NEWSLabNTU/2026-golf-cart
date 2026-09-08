@@ -109,7 +109,7 @@ if [ "${GOLFCART_RMW:-cyclonedds}" = "zenoh" ]; then
 
     # Unset is a legitimate, deliberate answer here: it means the shipped
     # rmw_zenoh defaults, which is exactly right for the loopback role.
-    for v in ZENOH_SESSION_CONFIG_URI ZENOH_ROUTER_CONFIG_URI; do
+    for v in ZENOH_SESSION_CONFIG_URI; do
         path="${!v:-}"   # bash indirect expansion; doctor.sh is #!/usr/bin/env bash
         if [ -z "$path" ]; then
             info "${v} unset — using rmw_zenoh's shipped defaults"
@@ -121,14 +121,24 @@ if [ "${GOLFCART_RMW:-cyclonedds}" = "zenoh" ]; then
         fi
     done
 
-    # The router is zenoh's single point of failure and its failure is silent:
-    # nodes start, publish, and discover nobody. Test the listener, not the
-    # process - a router wedged before it bound is as useless as an absent one.
-    if timeout 1 bash -c 'exec 3<>/dev/tcp/127.0.0.1/7447' 2>/dev/null; then
-        ok "zenoh router listening on 127.0.0.1:7447"
+    # No router runs in this deployment: discovery is multicast, the way
+    # CycloneDDS does it with SPDP. What can break is the interface the profile
+    # binds — if nothing owns that address, or it carries no MULTICAST flag,
+    # every node starts, publishes and discovers nobody, with no error anywhere.
+    zaddr=$(sed -n 's|^ *"tcp/\([0-9.]*\):0".*|\1|p' "${ZENOH_SESSION_CONFIG_URI:-/dev/null}" 2>/dev/null | head -1)
+    if [ -z "$zaddr" ]; then
+        info "no listen address in the session profile (loopback role uses rmw_zenoh defaults)"
     else
-        fail "no zenoh router on 127.0.0.1:7447 — nodes will discover nothing"
-        info "start it:  just rmw router     (or: just service install master)"
+        ziface=$(ip -o addr show 2>/dev/null | awk -v a="$zaddr" '$4 ~ "^"a"/" {print $2; exit}')
+        if [ -z "$ziface" ]; then
+            fail "session profile binds ${zaddr}, but no interface has that address"
+            info "nodes would start, publish and discover nobody"
+        elif ip link show "$ziface" 2>/dev/null | grep -q MULTICAST; then
+            ok "discovery: multicast on ${ziface} (${zaddr})"
+        else
+            fail "${ziface} (${zaddr}) has no MULTICAST flag — discovery cannot work"
+            info "enable it:  sudo ip link set ${ziface} multicast on"
+        fi
     fi
 
     if [ -n "$inherited_uri" ]; then

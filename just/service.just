@@ -36,7 +36,7 @@ ssh-setup DEST="":
 # What this host's golfcart units are doing.
 host-status:
     #!/usr/bin/env bash
-    for u in golfcart-launch golfcart-record golfcart-watchdog golfcart-zenoh-router; do
+    for u in golfcart-launch golfcart-record golfcart-watchdog; do
         state=$(systemctl --user is-active "${u}.service" 2>/dev/null)
         [ "$state" = "inactive" ] && ! systemctl --user cat "${u}.service" >/dev/null 2>&1 && continue
         printf '%s: %-18s %s\n' "$(hostname)" "${u#golfcart-}" "$state"
