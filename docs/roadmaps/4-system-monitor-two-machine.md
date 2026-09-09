@@ -262,7 +262,7 @@ remains the one that works with no uplink at all.
 
 Two things found while rebuilding it, neither caused by this phase:
 
-- **`install/` there held a fully dangling `golfcart_board_initializer`** — the
+- **`install/` there held a fully dangling `reflective_pose_detector`** — the
   package was deleted upstream in `84b33f6` and colcon never prunes, so
   `find-pkg-share` could still resolve it to nothing. `golfcart_launch` was
   rebuilt from scratch to clear the same class of leftover in its own tree; the

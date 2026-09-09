@@ -2,7 +2,7 @@
 
 **Status**: **Superseded 2026-08-17.** Sub-phase B is deleted — the ArUco
 localizer needs no point cloud map — and the anchoring tool this describes went
-with the `golfcart_board_initializer` package in the commit after `486bf5b`.
+with the `reflective_pose_detector` package in the commit after `486bf5b`.
 Kept for the reasoning: if a point cloud map is ever wanted again, the
 anchored-origin argument and the GLIM findings still apply.
 **Date**: 2026-08-11
@@ -258,10 +258,10 @@ fields; Open3D silently drops intensity and must not be used for this step.
 
 ### 6.4 Anchor the cloud to the board
 
-Implemented as `anchor_map_to_board` in `golfcart_board_initializer`:
+Implemented as `anchor_map_to_board` in `reflective_pose_detector`:
 
 ```bash
-ros2 run golfcart_board_initializer anchor_map_to_board glim_export.ply -o data/huaxia-indoor
+ros2 run reflective_pose_detector anchor_map_to_board glim_export.ply -o data/huaxia-indoor
 ```
 
 It writes the anchored `pointcloud_map.pcd`, `board_anchor.yaml` (the transform,

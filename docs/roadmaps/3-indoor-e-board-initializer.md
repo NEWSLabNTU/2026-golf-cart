@@ -12,7 +12,7 @@ Map contract: [indoor_pcd_mapping_reflector_anchor.md](../design/indoor_pcd_mapp
 > to seed — initialization is a mode inside that localizer, publishing to
 > `/initialpose3d` once ≥2 markers and 5 agreeing solves pass its gates.
 >
-> `src/localization/golfcart_board_initializer/` is gone as of the commit after
+> `src/localization/reflective_pose_detector/` is gone as of the commit after
 > `486bf5b`, which is where to look for the detector, the VLP-32C simulator, the
 > map anchoring tool and the intensity-preserving PLY/PCD conversion. Nothing was
 > broken; the job went away. The option of repurposing it as an out-of-channel
@@ -54,7 +54,7 @@ proceeds in parallel.
 
 ### 1. Package scaffolding
 
-- [x] Create `src/localization/golfcart_board_initializer/` with the layout in
+- [x] Create `src/localization/reflective_pose_detector/` with the layout in
       design §3 — `detector.py`, `geometry.py`, `node.py`, `test/`, `config/`, `launch/`.
 - [x] `detector.py` must not import `rclpy`. It is shared with the offline
       map-anchoring step, and it is what makes the tests runnable without ROS.

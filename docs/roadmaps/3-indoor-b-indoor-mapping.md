@@ -119,7 +119,7 @@ Full method, board specification, detector retuning, and failure modes:
       defect — see below.**
 - [x] Indoor mapping bag recording script: `just bag record-indoor`
       (`scripts/rosbag/record_indoor_mapping.sh`).
-- [x] **Anchoring tool** — `ros2 run golfcart_board_initializer
+- [x] **Anchoring tool** — `ros2 run reflective_pose_detector
       anchor_map_to_board <cloud> -o <map dir>`. Finds the board in a finished
       SLAM cloud, transforms the cloud so the board defines the map frame, and
       writes the anchored PCD, the transform, the board's Lanelet2 polygon, and
@@ -247,7 +247,7 @@ and stay:
   recipe for a run that also wants LiDAR.
 
 `anchor_map_to_board` and the intensity-preserving PLY↔PCD conversion lived in
-`golfcart_board_initializer`, which was **deleted with sub-phase 3E on
+`reflective_pose_detector`, which was **deleted with sub-phase 3E on
 2026-08-17**. They were tested and self-contained, and are recoverable from
 `486bf5b` if a point cloud map is ever wanted again — for perception, for an NDT
 second opinion, or if the ArUco-only architecture is revisited.

@@ -70,8 +70,8 @@ does not yet have. It is a tracking corrector, not an initializer.
 ## 3. Package layout
 
 ```
-src/localization/golfcart_board_initializer/
-  golfcart_board_initializer/
+src/localization/reflective_pose_detector/
+  reflective_pose_detector/
     detector.py            # pure numpy — no ROS imports
     geometry.py            # pose composition, covariance model
     vlp32.py               # beam table, Nebula calibration with embedded fallback
