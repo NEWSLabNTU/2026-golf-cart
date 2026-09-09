@@ -167,16 +167,90 @@ tilted.
 **Done when:** the measured floor tilt is recorded next to the map, so a rebuild
 can be compared against it.
 
-## Track C — end to end
+## Track C — configs and wiring in this repository
 
-### C1 — bag replay
+The package ships a default `reflective_pose.yaml` so it runs standalone. This
+repository does not use it: the vehicle has its own gates, the map has different
+ones again, and neither should be an edit to a file inside a submodule.
+
+### C1 — two config files, deliberately separate
+
+They describe different sensors doing different jobs, and B3 is the reason they
+cannot be one file: the runtime gates are VLP-32C measurements, the map gates
+are properties of a merged Falcon survey with no rings, no scan rate and no
+sensor origin.
+
+| File | Read by | Installed |
+|---|---|---|
+| `src/launcher/golfcart_launch/config/localization/reflective_pose/vehicle.param.yaml` | the two nodes, via our launch | yes, to `share/` |
+| `config/reflective_pose/falcon_map.yaml` | `anchor-map-to-board`, offline | no |
+
+The split in location follows the split in use. The vehicle file is referenced by
+a launch file, so it must reach `share/` through the package's `data_files`. The
+map file is a command-line input to a tool a person runs by hand, never launched,
+so it belongs with the rest of `config/` and is read by path.
+
+Both keep the section structure the package defines, and the comments that carry
+measurements travel with their keys — the 101-255 band and the 3 m minimum stay
+in the vehicle file because they are VLP-32C facts, and must not be copied into
+the map file where they mean nothing.
+
+**Done when:** neither file is the submodule's packaged default, `just build`
+installs the vehicle one, and the map one is reachable without a build.
+
+### C2 — both nodes in our launch
+
+`golfcart.launch.yaml` brings up `board_detector_node` and
+`board_pose_initializer`, passing `config_file` pointed at C1's vehicle file.
+
+This is a `pose_source` value, not a new top-level switch. `pose_source` already
+selects the localization *method* — `ndt`, `cuda_ndt`, `aruco`, `yabloc`,
+`eagleye` — and board-based cold start is a sixth: it seeds NDT rather than
+replacing it, so it composes with `ndt` rather than excluding it.
+
+Two things the existing launch already teaches, and this must not relearn:
+
+- A preset that names `pose_source` only takes effect if its `<arg>` is the
+  first declaration of that name. The localization preset include sits above the
+  `pose_source` declaration for exactly this reason.
+- `camera_model`, `imu_source` and `tx_enabled` do not survive the trip through
+  `tier4_sensing_component.launch.xml`, which forwards a fixed argument set.
+  Check where these nodes are included from before assuming `config_file:=`
+  reaches them; if the include path drops it, the env-var route is the
+  established fallback here.
+
+**Done when:** `just launch` brings both nodes up with our config, and
+`ros2 param get /board_detector config_file` shows the installed path.
+
+### C3 — a script for the map processing
+
+Map anchoring is a rare, deliberate, destructive-if-wrong operation that takes
+minutes and produces artifacts a whole deployment depends on. It should not be a
+command someone reconstructs from a README each time.
+
+`scripts/map/anchor_reflective_map.sh` wraps `anchor-map-to-board` with
+`config/reflective_pose/falcon_map.yaml`, defaults to `--dry-run`, and requires
+an explicit flag to write. It records the resulting transform and floor tilt
+next to the output, which is what B5 asks for.
+
+Note the neighbour: `scripts/map/shift_map_coordinates.py` shifts Lanelet2 OSM
+local coordinates. It is a different job on a different file, but anchoring the
+PCD moves the origin that the vector map's coordinates are relative to — so a
+map rebuild very likely needs both, in that order.
+
+**Done when:** one command, from a clean checkout, takes the GLIM export to a
+loadable anchored map, and refuses to overwrite without being told.
+
+## Track D — end to end
+
+### D1 — bag replay
 
 Replay a bag recorded in that basement against the anchored map: detector
 publishes, Autoware node calls the service, NDT converges and tracks.
 
 **Done when:** NDT holds lock through a drive, from a cold start with no GNSS.
 
-### C2 — on the vehicle
+### D2 — on the vehicle
 
 The full sequence, with `tx` off first.
 
@@ -198,6 +272,10 @@ reflectors share a frame, and the failure looks like a hang.
 **Two sensors, one config.** The map comes from a Falcon and the runtime scan
 from a VLP-32C. The gates are named as VLP-32C measurements. B3 keeps them
 apart; a single shared gate set would silently mistune one path or the other.
+
+**One config for two sensors would silently mistune one of them.** C1 keeps them
+apart, and the failure it prevents is quiet: gates that are slightly wrong for a
+merged map produce a plausible detection at the wrong place, not an error.
 
 **The 0.5 m map is a trap.** It is smaller, loads faster, and is the natural
 thing to reach for. It cannot work, and the failure mode is a plausible-looking
