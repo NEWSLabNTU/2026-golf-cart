@@ -359,7 +359,7 @@ Do this stage first. It validates the map, the NDT configuration, and the
 no-GNSS launch path without simultaneously debugging a detector.
 
 **Stage 1 — board pose initializer node.** Designed in
-[board_pose_initializer.md](board_pose_initializer.md), tracked in
+[reflective_pose_detector.md](../../src/localization/reflective_pose_detector/docs/design/reflective_pose_detector.md), tracked in
 [3-indoor-e-board-initializer.md](../roadmaps/3-indoor-e-board-initializer.md).
 Detect the board in the current scan, compute the vehicle pose, call
 `/localization/initialize` with a `PoseWithCovarianceStamped`:

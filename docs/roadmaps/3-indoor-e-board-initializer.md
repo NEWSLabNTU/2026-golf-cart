@@ -1,7 +1,7 @@
 # Phase 3E — Reflective Board Pose Initializer
 
 Part of [Phase 3 indoor localization](3-indoor-localization.md).
-Design: [board_pose_initializer.md](../design/board_pose_initializer.md)
+Design: [reflective_pose_detector.md](../../src/localization/reflective_pose_detector/docs/design/reflective_pose_detector.md)
 Map contract: [indoor_pcd_mapping_reflector_anchor.md](../design/indoor_pcd_mapping_reflector_anchor.md)
 
 > **RETIRED 2026-08-17. The package is deleted; this doc is history.**
