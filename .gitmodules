@@ -55,4 +55,4 @@
 	url = https://github.com/stereolabs/zed-ros2-wrapper.git
 [submodule "src/localization/golfcart_board_initializer"]
 	path = src/localization/golfcart_board_initializer
-	url = https://github.com/NEWSLabNTU/reflective-pose-init.git
+	url = https://github.com/NEWSLabNTU/reflector-pose-init.git
