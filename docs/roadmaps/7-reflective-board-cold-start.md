@@ -70,10 +70,50 @@ and wrong here: step 2 of the sequence has the cart moving by definition.
 **Done when:** the vehicle config sets it to a real topic and a bag replay shows
 scans discarded while moving and accepted once stopped.
 
+### A4 — the runtime intensity threshold is wrong, and nothing will detect until it is fixed
+
+`detector.intensity_threshold` is 240.0, and the config comment calls it a sensor
+contract rather than a tuning: "the VLP-32C reports calibrated reflectivity,
+0-100 diffuse, 101-255 reserved for retroreflectors."
+
+The band is real. The threshold is not reachable. Measured over the whole
+replay bag (see D1), sampling every twelfth scan:
+
+| threshold | points per scan (median / p90 / max) | scans with >= 60 points |
+|---|---|---|
+| > 240 | 0 / 2 / **5** | **0 of 197** |
+| > 200 | 30 / 84 / 123 | 43 of 197 |
+| > 150 | 166 / 317 / 654 | 188 of 197 |
+
+`cluster_min_points` is 60. **No scan in the bag clears it at 240**, so the
+detector cannot produce a candidate at any point in that drive, and would report
+`NO_CANDIDATE` for the entire run without anything being wrong with the geometry
+gates, the TF or the board.
+
+The datasheet band being 101-255 does not mean this board at this range through
+this sensor's calibration returns 240. It returns something in the 150-255 range,
+and the threshold has to come from the data.
+
+**Do not simply lower it to 150.** At 150 the median scan has 166 qualifying
+points spread across whatever else in a basement is retroreflective, which is
+what the clustering and shape gates are then asked to sort out — the same problem
+Track B found in the map, one sensor over. Derive it from the separation between
+the board's returns and everything else in the same scan, and record which scan
+and which cluster the number came from.
+
+**Done when:** the runtime threshold is derived from bag data with the evidence
+recorded beside it, and a replay produces candidates.
+
 ## Track B — an anchored PCD map from the GLIM basement survey
 
-Source: `2026-08-20 GLIM pointcloud mapping bags/falcon_map/` on the NAS. Two
-exports of the same survey.
+Source:
+
+```
+~/nas/autoveh/dataset/2026-08-20 GLIM pointcloud mapping bags/falcon_map/
+```
+
+Two exports of the same survey. The `~/nas` mount path is the same on the other
+development machines, so these paths are quotable as written.
 
 `anchor-map-to-board` already does the shape of this job — detect the board,
 move the origin onto it, write `pointcloud_map.pcd`, `board_anchor.yaml`,
@@ -126,6 +166,11 @@ the survey, and neither can be derived from the cloud:
 - the board's true face dimensions, since the configured 0.6 x 0.97 may describe
   a different board than the one in this basement
 - roughly where it was, to tell it from eight other candidates
+
+The replay bag of D1 is from the same session and may settle both: the board is
+in view at some point during that drive, at a known-ish range, and the VLP-32C
+returns are far sparser than the map's. Reconciling one cluster in the map with
+one detection in the bag identifies the board without anyone measuring it.
 
 **Done when:** one cluster is identified as the board, with a stated reason.
 
@@ -245,10 +290,51 @@ loadable anchored map, and refuses to overwrite without being told.
 
 ### D1 — bag replay
 
-Replay a bag recorded in that basement against the anchored map: detector
-publishes, Autoware node calls the service, NDT converges and tracks.
+Input:
 
-**Done when:** NDT holds lock through a drive, from a cold start with no GNSS.
+```
+~/nas/autoveh/dataset/2026-08-20 GLIM pointcloud mapping bags/rosbags/vlp32_1
+```
+
+Same survey session as the map in Track B, so the two describe one basement. The
+map is the Falcon's; this is the VLP-32C's, which is the runtime sensor.
+
+What it contains, read from the bag rather than assumed:
+
+| | |
+|---|---|
+| topic | `/sensing/lidar/vlp32/velodyne_points` |
+| type | `sensor_msgs/PointCloud2`, `PointXYZIRCAEDT`, `point_step` 32 |
+| fields | x, y, z, intensity (**uint8**), return_type, channel, azimuth, elevation, distance, time_stamp |
+| `frame_id` | `velodyne` |
+| messages | 2354 over 235 s, ~10 Hz, ~48,700 points per scan |
+| size | 3.7 GB, one `.db3` |
+
+Two things line up already: `frame_id` matches `ros.sensor_frame` unchanged, and
+the cloud is already in Autoware's preprocessed layout rather than raw driver
+output, so no preprocessing chain is needed to feed the detector.
+
+**Two things the bag does not contain, and both block a naive replay:**
+
+- **No `/tf` or `/tf_static`.** The detector looks up `base_frame -> sensor_frame`
+  and will sit in `WAIT_TF` forever. `just fake-tf` already publishes exactly
+  this transform from the sensor kit calibration; the replay needs it running.
+- **No velocity or odometry of any kind.** The topic list is one entry long. That
+  has two consequences. A3's motion guard cannot be exercised from this bag at
+  all — there is nothing to gate on, so `ros.twist_topic` stays empty for replay
+  and the guard is verified separately on the vehicle. And NDT itself needs
+  velocity through `/vehicle/status/velocity_status` to `gyro_odometer` to
+  `ekf_localizer`, so full tracking cannot run from this bag alone. Cold-start
+  *initialization* can be tested from it; tracking needs a bag recorded with the
+  vehicle interface running.
+
+So D1 splits in two. **D1a**: replay this bag, publish the static TF, and show the
+detector producing a pose and the Autoware node calling the service. **D1b**:
+NDT convergence and tracking, which needs a bag with velocity in it.
+
+**Done when:** D1a shows a cold-start pose from replay with no GNSS; D1b is
+recorded as blocked until a suitable bag exists, rather than attempted against
+this one.
 
 ### D2 — on the vehicle
 
@@ -276,6 +362,18 @@ apart; a single shared gate set would silently mistune one path or the other.
 **One config for two sensors would silently mistune one of them.** C1 keeps them
 apart, and the failure it prevents is quiet: gates that are slightly wrong for a
 merged map produce a plausible detection at the wrong place, not an error.
+
+**The configured intensity threshold detects nothing on the replay bag.** A4 is
+not a tuning task to be done when convenient; until it is done, every other item
+in Track A and Track D reads as broken. The failure is silent in the worst way —
+`NO_CANDIDATE` forever, with correct geometry, correct TF and a board in plain
+view.
+
+**The bag has no velocity, so it cannot prove the thing it looks like it proves.**
+It is a 3.7 GB recording of a drive past the board, and the obvious reading is
+that a successful replay demonstrates cold start to tracking. It cannot: NDT
+needs velocity through gyro_odometer and ekf_localizer, and the bag has one topic
+in it. D1 is split so that limit is stated rather than discovered.
 
 **The 0.5 m map is a trap.** It is smaller, loads faster, and is the natural
 thing to reach for. It cannot work, and the failure mode is a plausible-looking
