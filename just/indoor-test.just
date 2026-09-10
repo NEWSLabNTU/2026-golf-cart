@@ -48,9 +48,11 @@ bag ARGS="":
     ./scripts/rosbag/indoor_sim_bag.sh {{ARGS}}
 
 # play_launch with its Python parser, as the rest of the repo runs. Two things
-# to know before changing either half. The parser: the Rust one refuses the
-# repo's `$(eval '\'$(var pose_source)\' == \'aruco\'')` conditions outright,
-# so Python it is. The version: play_launch 0.8.2 rendered the pose
+# to know before changing either half. The parser: at 0.10.0 the Rust one dies
+# on this stack with `KeyError: 'rear_overhang'` from an Autoware .launch.py
+# (play_launch issue #0028; the older refusal of the repo's escaped-quote
+# `$(eval ...)` conditions was #0027, fixed in 0.10.0), so Python it is. The
+# version: play_launch 0.8.2 rendered the pose
 # initializer's array parameters (output_pose_covariance and friends, loaded
 # with allow_substs) as STRINGS, autoware_pose_initializer_node died at
 # startup with InvalidParameterTypeException, and /localization/initialize,

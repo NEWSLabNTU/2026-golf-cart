@@ -504,7 +504,10 @@ the detector, and each would have read as "the board initializer does not work":
   play_launch 0.10.0 (`f78745da`) and only the installed 0.8.2 had it; the
   machine now runs 0.10.0 and `just indoor-test up` is back on play_launch
   with the Python parser, verified on this launch. The Rust parser's refusal
-  stands, so `--parser python` stays.
+  of the escaped-quote `$(eval ...)` was also only 0.8.2 (play_launch #0027,
+  fixed 2026-08-17); at 0.10.0 the Rust parser fails on this stack for a
+  different reason, `KeyError: 'rear_overhang'` from an Autoware `.launch.py`
+  (play_launch #0028, open), so `--parser python` stays for that.
 - **Loopback multicast is off on this workstation** (`multicast-lo.service`
   inactive, `lo` without the MULTICAST flag), so the repo's loopback DDS profile
   cannot discover and a stock launch of ~30 processes dies with "Failed to find
