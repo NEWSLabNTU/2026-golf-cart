@@ -15,7 +15,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from golfcart_setup.model import PROFILE_HELP, PROFILES, Machine  # noqa: E402
+from golfcart_setup.model import (  # noqa: E402
+    OS_ERROR, OS_WARN, PROFILE_HELP, PROFILES, RETIRED_PROFILES, Machine,
+)
 from golfcart_setup.registry import BY_ID, STEPS, ordered  # noqa: E402
 from golfcart_setup.runner import Runner  # noqa: E402
 from golfcart_setup.state import State  # noqa: E402
@@ -133,9 +135,30 @@ def _select(args, machine: Machine, state: State) -> list:
     return ordered(chosen - skip)
 
 
+def check_os(machine: Machine, args) -> int | None:
+    """None to continue, or an exit code.
+
+    Every install script here writes Ubuntu 22.04 apt package names, so this is
+    not a style preference. A neighbouring Ubuntu or a Debian warns and
+    proceeds -- someone doing that is doing it deliberately. Anything else
+    stops, and says which flag reopens the door.
+    """
+    status, message = machine.os_check()
+    if status == OS_ERROR and not args.ignore_os_check:
+        print(f"error: {message}", file=sys.stderr)
+        print("Pass --ignore-os-check to proceed anyway.", file=sys.stderr)
+        return 2
+    if status == OS_WARN or (status == OS_ERROR and args.ignore_os_check):
+        print(f"warning: {message}\n")
+    return None
+
+
 def cmd_run(args) -> int:
     machine = Machine()
     state = State()
+    refused = check_os(machine, args)
+    if refused is not None:
+        return refused
     imported = state.import_markers({s.id: s.digest() for s in STEPS})
     if imported:
         print(f"Imported {imported} completed steps from the old .markers/ "
@@ -205,15 +228,9 @@ def cmd_rerun(args) -> int:
     return cmd_run(args)
 
 
-def cmd_tui(args) -> int:
-    try:
-        from golfcart_setup.tui import run_tui
-    except ImportError as exc:
-        print(f"The TUI needs its dependencies: {exc}", file=sys.stderr)
-        print("Run ./setup.sh (which installs them), or use --profile/--only.",
-              file=sys.stderr)
-        return 3
-    return run_tui(args)
+def cmd_menu(args) -> int:
+    from golfcart_setup.menu import run_menu
+    return run_menu(args)
 
 
 def _accept_old_forms(argv: list[str]) -> list[str]:
@@ -238,6 +255,22 @@ def _accept_old_forms(argv: list[str]) -> list[str]:
     return argv
 
 
+def _rename_profile(argv: list[str]) -> list[str]:
+    """`--profile laptop` and `--profile orin` predate the current names."""
+    out = list(argv)
+    for i, token in enumerate(out):
+        name = None
+        if token == "--profile" and i + 1 < len(out):
+            name, at = out[i + 1], i + 1
+        elif token.startswith("--profile="):
+            name, at = token.split("=", 1)[1], i
+        if name in RETIRED_PROFILES:
+            replacement = RETIRED_PROFILES[name]
+            print(f"note: profile '{name}' is now '{replacement}'.", file=sys.stderr)
+            out[at] = replacement if out[at] == name else f"--profile={replacement}"
+    return out
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         prog="setup.sh",
@@ -252,11 +285,11 @@ Unattended:
   setup.sh --run --all --skip tensorrt-engines opencv
   setup.sh --only ros2 ros2-dev-tools --yes  exactly these
   setup.sh --dry-run --json --profile ci     what would run, as a JSON list
-  setup.sh --run --profile orin -y --keep-going
+  setup.sh --run --profile ci -y --keep-going
 """,
     )
     ap.add_argument("--profile", choices=PROFILES,
-                    help="preset selection; detected if omitted")
+                    help="preset selection; asked for, or detected, if omitted")
     ap.add_argument("--only", nargs="+", metavar="STEP",
                     help="run exactly these steps")
     ap.add_argument("--rerun", nargs="+", metavar="STEP",
@@ -273,14 +306,18 @@ Unattended:
                     help="run the resolved selection without opening the menu")
     ap.add_argument("--json", action="store_true",
                     help="machine-readable output for --list, --status, --dry-run")
+    ap.add_argument("--ignore-os-check", action="store_true",
+                    help="run on a distribution ROS 2 Humble does not target")
+    ap.add_argument("--plain", action="store_true",
+                    help="numbered menu instead of the full-screen one")
     ap.add_argument("--yes", "-y", action="store_true", help="no prompts")
     ap.add_argument("--dry-run", action="store_true",
                     help="resolve and print, install nothing")
     ap.add_argument("--list", action="store_true",
                     help="every step, its status and whether it applies here")
     ap.add_argument("--status", action="store_true", help="what is installed")
-    args = ap.parse_args(_accept_old_forms(
-        list(argv) if argv is not None else sys.argv[1:]))
+    args = ap.parse_args(_rename_profile(_accept_old_forms(
+        list(argv) if argv is not None else sys.argv[1:])))
 
     if args.list:
         return cmd_list(args)
@@ -289,16 +326,22 @@ Unattended:
     if args.rerun:
         args.steps = args.rerun
         return cmd_rerun(args)
-    if (args.run or args.all or args.only or args.profile
+    if (args.run or args.all or args.only
             or args.skip or args.yes or args.dry_run or args.force):
         return cmd_run(args)
+    if args.plain:
+        # The numbered menu reads lines, so it works on a pipe or a serial
+        # console -- the two places the full-screen one cannot go.
+        return cmd_menu(args)
     if not sys.stdin.isatty():
         # No terminal to draw a menu on. Say which flag was wanted rather than
-        # letting Textual fail somewhere less obvious.
+        # failing somewhere less obvious.
         print("No terminal: use --run (optionally with --profile/--only) "
               "for an unattended install.", file=sys.stderr)
         return 2
-    return cmd_tui(args)
+    # A bare --profile still opens the menu: it answers the preset screen and
+    # leaves the list editable, which is what picking a preset means here.
+    return cmd_menu(args)
 
 
 if __name__ == "__main__":

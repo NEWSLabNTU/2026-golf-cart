@@ -26,16 +26,27 @@ the rest of the repo does, so it becomes an ordinary step.
 
 from __future__ import annotations
 
-from .model import FILES_DIR, HARDWARE_DIR, REPO_ROOT, SCRIPTS_DIR, Requires, Step
+from .model import (
+    DECLARED, FILES_DIR, HARDWARE_DIR, REPO_ROOT, SCRIPTS_DIR, Requires, Step,
+)
 
 _S = lambda name: str(SCRIPTS_DIR / name)          # noqa: E731
 _BASH = lambda body: ["bash", "-euc", body]        # noqa: E731
 
-ALL = "laptop orin vehicle ci".split()
+# Only the three declared profiles appear here. `all` and `none` are answered
+# by Step.default_for, so nothing has to remember to add a new step to them.
+#
+# The ladder is dev < vehicle: the vehicle is a development machine that also
+# has the sensors and the bus wired to it, so every dev step is a vehicle step
+# and the difference is exactly the "System config" group.
+DEV = ("dev", "vehicle")
+EVERY = ("dev", "vehicle", "ci")
+VEHICLE = ("vehicle",)
+OPT_IN: tuple[str, ...] = ()
 
 
 def _on(*profiles: str) -> dict[str, bool]:
-    return {p: (p in profiles) for p in ALL}
+    return {p: (p in profiles) for p in DECLARED}
 
 
 STEPS: list[Step] = [
@@ -51,7 +62,7 @@ STEPS: list[Step] = [
             "curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh "
             "| bash -s -- --to \"$HOME/.local/bin\""
         ),
-        profiles=_on(*ALL),
+        profiles=_on(*EVERY),
     ),
     Step(
         id="ros2",
@@ -60,7 +71,7 @@ STEPS: list[Step] = [
         group="Toolchain",
         run=[_S("install-ros2.sh")],
         requires=Requires(sudo=True),
-        profiles=_on(*ALL),
+        profiles=_on(*EVERY),
     ),
     Step(
         id="ros2-dev-tools",
@@ -70,7 +81,7 @@ STEPS: list[Step] = [
         run=[_S("install-ros2-dev-tools.sh")],
         requires=Requires(sudo=True),
         after=("ros2",),
-        profiles=_on(*ALL),
+        profiles=_on(*EVERY),
     ),
     Step(
         id="colcon-cargo-ros2",
@@ -82,7 +93,7 @@ STEPS: list[Step] = [
         run=[_S("install-colcon-cargo-ros2.sh")],
         requires=Requires(sudo=True),
         after=("ros2-dev-tools",),
-        profiles=_on(*ALL),
+        profiles=_on(*EVERY),
     ),
     Step(
         id="dev-tools",
@@ -97,7 +108,7 @@ STEPS: list[Step] = [
         ),
         requires=Requires(sudo=True),
         after=("ros2",),
-        profiles=_on("laptop", "orin", "vehicle"),
+        profiles=_on(*DEV),
     ),
     Step(
         id="python-deps",
@@ -105,7 +116,7 @@ STEPS: list[Step] = [
         why="play_launch is how the stack is launched and how its logs are kept.",
         group="Toolchain",
         run=["pip3", "install", "--user", "play_launch>=0.5.0,<0.6.0"],
-        profiles=_on(*ALL),
+        profiles=_on(*EVERY),
     ),
     Step(
         id="geographiclib",
@@ -119,7 +130,7 @@ STEPS: list[Step] = [
             "sudo geographiclib-get-geoids egm2008-1"
         ),
         requires=Requires(sudo=True),
-        profiles=_on(*ALL),
+        profiles=_on(*EVERY),
     ),
 
     # ---- Autoware --------------------------------------------------------
@@ -131,7 +142,7 @@ STEPS: list[Step] = [
         run=[_S("install-autoware-debian.sh")],
         requires=Requires(sudo=True),
         after=("ros2",),
-        profiles=_on("laptop", "orin", "vehicle"),
+        profiles=_on(*DEV),
     ),
     Step(
         id="autoware-data",
@@ -142,7 +153,7 @@ STEPS: list[Step] = [
         group="Autoware",
         run=[str(REPO_ROOT / "scripts" / "setup_autoware_data.sh")],
         after=("autoware-debian",),
-        profiles=_on("laptop", "orin", "vehicle"),
+        profiles=_on(*DEV),
     ),
     Step(
         id="tensorrt-engines",
@@ -154,7 +165,7 @@ STEPS: list[Step] = [
         run=_BASH(f"cd {REPO_ROOT} && just build-engines"),
         requires=Requires(hardware="cuda"),
         after=("autoware-data", "just"),
-        profiles=_on(),                  # off everywhere by default: it is slow
+        profiles=_on(*OPT_IN),                  # off everywhere by default: it is slow
     ),
     Step(
         id="opencv",
@@ -166,7 +177,7 @@ STEPS: list[Step] = [
         run=[_S("install-opencv.sh")],
         requires=Requires(sudo=True),
         after=("autoware-debian",),      # let apt settle first, then correct it
-        profiles=_on("orin", "vehicle"),
+        profiles=_on(*DEV),
     ),
     Step(
         id="ros-deps",
@@ -179,7 +190,7 @@ STEPS: list[Step] = [
             "rosdep install -y --from-paths src --ignore-src -r"
         ),
         after=("ros2-dev-tools",),
-        profiles=_on(*ALL),
+        profiles=_on(*EVERY),
     ),
 
     # ---- Networking, required to run ROS at all --------------------------
@@ -188,29 +199,29 @@ STEPS: list[Step] = [
         label="Kernel socket buffers for CycloneDDS",
         why="net.core.rmem_max=2GB plus ipfrag limits, written to "
             "/etc/sysctl.d. Below 10 MB no ros2 node can start at all.",
-        group="Networking",
+        group="Kernel and network",
         run=[_S("configure-cyclonedds-sysctl.sh")],
         requires=Requires(sudo=True),
-        profiles=_on("laptop", "orin", "vehicle"),
+        profiles=_on(*DEV),
     ),
     Step(
         id="multicast-lo",
         label="Multicast on loopback (persistent)",
         why="Installs multicast-lo.service. Without it lo loses MULTICAST across "
             "a reboot and the loopback DDS profile stops working.",
-        group="Networking",
+        group="Kernel and network",
         run=[_S("configure-multicast-lo.sh")],
         requires=Requires(sudo=True),
-        profiles=_on("laptop", "orin", "vehicle"),
+        profiles=_on(*DEV),
     ),
 
-    # ---- Sensor drivers: packages, no hardware needed to install ---------
+    # ---- Sensor packages: apt only, no device touched, so `dev` gets them --
     Step(
         id="nebula-driver",
         label="Nebula LiDAR driver",
         why="Velodyne VLP-32C support. Also inside autoware-debian; installed "
             "separately so the driver is available without it.",
-        group="Sensors",
+        group="Sensor packages",
         run=_BASH(
             "sudo apt-get update && sudo apt-get install -y "
             "ros-humble-nebula-ros-1-5-0 ros-humble-nebula-decoders-1-5-0 "
@@ -219,39 +230,41 @@ STEPS: list[Step] = [
         ),
         requires=Requires(sudo=True),
         after=("ros2",),
-        profiles=_on("orin", "vehicle"),
+        profiles=_on(*DEV),
     ),
     Step(
         id="ublox-driver",
         label="u-blox GNSS driver",
         why="Also inside autoware-debian; installed separately for the same reason.",
-        group="Sensors",
+        group="Sensor packages",
         run=_BASH(
             "sudo apt-get update && sudo apt-get install -y "
             "ros-humble-ublox-gps ros-humble-ublox-msgs ros-humble-ublox-serialization"
         ),
         requires=Requires(sudo=True),
         after=("ros2",),
-        profiles=_on("orin", "vehicle"),
+        profiles=_on(*DEV),
     ),
     Step(
         id="gscam",
         label="gscam (GStreamer camera bridge)",
         why="Drives the GMSL cameras through GStreamer.",
-        group="Sensors",
+        group="Sensor packages",
         run=[_S("install-gscam.sh")],
         requires=Requires(sudo=True),
         after=("ros2",),
-        profiles=_on("vehicle"),
+        # A package build, not a device: `dev` gets it like the other two.
+        profiles=_on(*DEV),
     ),
 
-    # ---- Hardware: touches devices or device naming ----------------------
+    # ---- System config: touches devices, device naming or the bus. This is
+    #      the whole of what `vehicle` adds to `dev`. -----------------------
     Step(
         id="ublox-udev",
         label="u-blox udev rules",
         why="Gives the receiver a stable device name and adds you to dialout. "
             "Without it the driver opens whichever ttyACM enumerated first.",
-        group="Hardware",
+        group="System config",
         run=_BASH(
             f"sudo cp {FILES_DIR / '99-ublox-gps.rules'} /etc/udev/rules.d/ && "
             "sudo chmod 644 /etc/udev/rules.d/99-ublox-gps.rules && "
@@ -259,51 +272,51 @@ STEPS: list[Step] = [
             'sudo usermod -aG dialout "$USER" || true'
         ),
         requires=Requires(sudo=True, hardware="ublox-gnss"),
-        profiles=_on("vehicle"),
+        profiles=_on(*VEHICLE),
         note="Log out and back in for the dialout group to take effect.",
     ),
     Step(
         id="tier4-camera",
         label="TIER IV camera udev rules + usb_cam",
         why="Stable naming for the C1 cameras over GMSL2-USB.",
-        group="Hardware",
+        group="System config",
         run=[_S("install-tier4-camera.sh")],
         requires=Requires(sudo=True, hardware="tier4-camera"),
         after=("ros2",),
-        profiles=_on("vehicle"),
+        profiles=_on(*VEHICLE),
     ),
     Step(
         id="hardware-config",
         label="CAN interfaces + LiDAR network profiles",
         why="Matches specific MAC addresses on this vehicle. Meaningless on any "
             "other machine.",
-        group="Hardware",
+        group="System config",
         run=_BASH(
             f"sudo bash {HARDWARE_DIR / 'can' / 'setup-can.sh'} && "
             f"sudo bash {HARDWARE_DIR / 'lidar-network' / 'setup-lidar-network.sh'}"
         ),
         requires=Requires(sudo=True, hardware="can"),
-        profiles=_on("vehicle"),
+        profiles=_on(*VEHICLE),
     ),
     Step(
         id="otocam",
         label="OTOCAM GMSL kernel modules",
         why="IMX390 + MAX9296 kmods and a DTB overlay. Needs the vendor blob and "
             "kernel 5.15.148-tegra.",
-        group="Hardware",
+        group="System config",
         run=_BASH(f"sudo bash {HARDWARE_DIR / 'otocam' / 'setup-otocam.sh'}"),
         requires=Requires(sudo=True, arch=("aarch64",), reboot=True),
-        profiles=_on(),                  # opt-in: needs a blob and a reboot
+        profiles=_on(*OPT_IN),                  # opt-in: needs a blob and a reboot
         note="Reboot required for the DTB overlay to take effect.",
     ),
     Step(
         id="linuxptp",
         label="linuxptp (ptp4l + phc2sys)",
         why="Hardware time sync between the two machines.",
-        group="Hardware",
+        group="System config",
         run=[_S("install-linuxptp.sh")],
         requires=Requires(sudo=True, hardware="ptp-nic"),
-        profiles=_on(),                  # opt-in until the interface is a parameter
+        profiles=_on(*OPT_IN),                  # opt-in until the interface is a parameter
         note="ptp4l.conf is currently hardcoded to interface enP5p5s0.",
     ),
 
@@ -316,7 +329,9 @@ STEPS: list[Step] = [
         group="Optional",
         run=[_S("install-turbovnc-virtualgl.sh")],
         requires=Requires(sudo=True),
-        profiles=_on("orin", "vehicle"),
+        # Not in `dev`: a workstation has its own display. This is for the
+        # machines that are only reachable over the network.
+        profiles=_on(*VEHICLE),
     ),
     Step(
         id="chrony-master",
@@ -325,7 +340,7 @@ STEPS: list[Step] = [
         group="Optional",
         run=["sudo", _S("install-chrony-timesync.sh"), "master"],
         requires=Requires(sudo=True),
-        profiles=_on(),
+        profiles=_on(*OPT_IN),
     ),
     Step(
         id="chrony-orin",
@@ -334,7 +349,7 @@ STEPS: list[Step] = [
         group="Optional",
         run=["sudo", _S("install-chrony-timesync.sh"), "orin"],
         requires=Requires(sudo=True),
-        profiles=_on(),
+        profiles=_on(*OPT_IN),
     ),
 ]
 

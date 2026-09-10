@@ -314,3 +314,64 @@ from. Proposed order:
 
 Old command forms (`./setup.sh status`, `./setup.sh <step>`) still work.
 `clean-markers` reports where state moved to rather than failing.
+
+---
+
+## Revised 2026-09-10: the menu, and the presets
+
+Two things came back after a week of use.
+
+### Textual was too heavy for what it drew
+
+| | disk | import, warm | first run, cold | dependencies |
+|---|---|---|---|---|
+| Textual | 5.8 MB in a 15 MB venv | 250-300 ms | **~54 s** while uv fetched a Python and resolved | rich, pygments, markdown-it, linkify-it, mdurl, platformdirs, typing_extensions |
+| stdlib `curses` | 0 | 3 ms | 0 | none |
+
+Fifty-four seconds before the first pixel, to draw a list of 25 checkboxes. The
+menu is now `curses`, and dropping the dependency took the venv, `uv`,
+`requirements.txt` and the whole bootstrap with it: `setup.sh` is a launcher
+that execs `main.py`, and `--list` answers in about 45 ms.
+
+Considered and not chosen: `simple-term-menu` (60 KB, no deps, but still a venv
+for something the stdlib does), `prompt_toolkit` (~1.5 MB, ready-made
+checkbox dialogs, still a widget framework), and a plain numbered menu with no
+full-screen drawing. The last one ships anyway as `--plain`, and as the
+automatic fallback when curses cannot drive the terminal.
+
+### The preset is a question, not a side pane
+
+It used to sit in a left pane, competing with the step list for focus, which is
+what made the arrow keys ambiguous in the first place. It is now the **first
+screen**: pick a preset, then the list opens seeded from it. `p` re-asks
+without leaving the list.
+
+### Five presets, and the boundary is one group
+
+| was | now | |
+|---|---|---|
+| `laptop`, `orin` | `dev` | laptop, workstation, PC: dev tools, libraries, sysctl, loopback multicast |
+| `vehicle` | `vehicle` | `dev` plus the **System config** group |
+| -- | `all` | every step, opt-in ones included |
+| -- | `none` | nothing preselected |
+| `ci` | `ci` | headless, build dependencies only |
+
+The `orin` profile is gone. A Jetson with no sensors attached is a development
+machine and a Jetson in the cart is the vehicle; a per-board profile meant
+maintaining a third column that only differed by what happened to be plugged
+in. `suggested_profile` now looks at the hardware, not the SoC.
+
+`vehicle` is exactly `dev` plus one group, and the groups were renamed so that
+boundary is visible: **Sensor packages** (apt, no device touched, in `dev`)
+against **System config** (udev, CAN, PTP, kernel modules, `vehicle` only).
+`all` and `none` are computed in `Step.default_for` rather than declared per
+step, so a new step joins them without anyone remembering to.
+
+### The OS check
+
+Every install script writes Ubuntu 22.04 apt package names, so `/etc/os-release`
+is read before anything runs: 22.04 proceeds, another Ubuntu or a Debian warns
+and proceeds, anything else stops and names `--ignore-os-check`. Three outcomes
+rather than two, because a neighbouring Ubuntu can be made to work and someone
+doing that is doing it deliberately, while a distribution with no Humble
+packages at all is not a near miss.

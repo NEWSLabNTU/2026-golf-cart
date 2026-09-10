@@ -26,14 +26,30 @@ SCRIPTS_DIR = SETUP_DIR / "scripts"
 FILES_DIR = SETUP_DIR / "files"
 HARDWARE_DIR = REPO_ROOT / "scripts" / "hardware"
 
-PROFILES = ("laptop", "orin", "vehicle", "ci")
+# `all` and `none` are computed rather than declared per step, so a new step
+# joins them without being listed anywhere -- see Step.default_for.
+PROFILES = ("dev", "vehicle", "all", "none", "ci")
+DECLARED = ("dev", "vehicle", "ci")
 
 PROFILE_HELP = {
-    "laptop": "Offline development, replay and simulation. No sensors attached.",
-    "orin": "Jetson without sensors. Adds CUDA and TensorRT work.",
-    "vehicle": "The cart itself: udev rules, CAN, PTP, camera kernel modules.",
+    "dev": "Laptop, workstation, PC. Dev tools, libraries, kernel socket "
+           "buffers and loopback multicast. No sensor or CAN system config.",
+    "vehicle": "The cart itself: everything in dev, plus sensor udev rules, "
+               "CAN, PTP and camera kernel modules.",
+    "all": "Every step, including the slow and opt-in ones.",
+    "none": "Nothing preselected. Tick what you want.",
     "ci": "Headless and minimal. Build dependencies only, no prompts.",
 }
+
+# There was no `orin` profile in the end: a Jetson with no sensors attached is a
+# development machine, and one with sensors is the vehicle. Keeping a
+# per-board profile meant maintaining a third column that only ever differed
+# from `dev` by whether hardware happened to be plugged in.
+RETIRED_PROFILES = {"laptop": "dev", "orin": "dev"}
+
+# ROS 2 Humble's supported platform. Anything else is somebody's afternoon.
+SUPPORTED_OS = ("ubuntu", "22.04")
+OS_OK, OS_WARN, OS_ERROR = "ok", "warn", "error"
 
 
 @dataclass(frozen=True)
@@ -66,6 +82,10 @@ class Step:
     note: str = ""                       # printed after a successful run
 
     def default_for(self, profile: str) -> bool:
+        if profile == "all":
+            return True
+        if profile == "none":
+            return False
         return self.profiles.get(profile, False)
 
     def digest(self) -> str:
@@ -93,7 +113,55 @@ class Machine:
         self.arch = platform.machine()
         self.is_jetson = Path("/etc/nv_tegra_release").exists()
         self.host_role = self._host_role()
+        self.os_release = self._os_release()
         self._caps: dict[str, bool] = {}
+
+    @staticmethod
+    def _os_release() -> dict[str, str]:
+        values: dict[str, str] = {}
+        path = Path("/etc/os-release")
+        if not path.is_file():
+            return values
+        for line in path.read_text().splitlines():
+            key, _, value = line.partition("=")
+            if key:
+                values[key.strip()] = value.strip().strip('"\'')
+        return values
+
+    @property
+    def os_name(self) -> str:
+        rel = self.os_release
+        return rel.get("PRETTY_NAME") or " ".join(
+            filter(None, (rel.get("NAME", ""), rel.get("VERSION_ID", "")))
+        )
+
+    def os_check(self) -> tuple[str, str]:
+        """Is this a machine ROS 2 Humble runs on?
+
+        Three outcomes, not two. Humble targets exactly Ubuntu 22.04, and every
+        install script here assumes its apt package names -- but a Debian or a
+        neighbouring Ubuntu can be made to work, and someone doing that on
+        purpose should get a warning rather than a wall. Anything else is not a
+        near miss, so it stops by default and `--ignore-os-check` is the way
+        past it.
+        """
+        rel = self.os_release
+        distro = rel.get("ID", "").lower()
+        version = rel.get("VERSION_ID", "")
+        if (distro, version) == SUPPORTED_OS:
+            return OS_OK, ""
+        family = f"{distro} {rel.get('ID_LIKE', '')}".lower()
+        if "ubuntu" in family or "debian" in family:
+            return OS_WARN, (
+                f"{self.os_name} is not Ubuntu 22.04. ROS 2 Humble is built "
+                f"for 22.04; these steps use its apt package names, so some "
+                f"will need adjusting."
+            )
+        return OS_ERROR, (
+            f"{self.os_name or 'this system'} is not Ubuntu or Debian. "
+            f"ROS 2 Humble is not packaged for it and these steps will not "
+            f"work as written."
+        )
 
     @staticmethod
     def _host_role() -> str | None:
@@ -138,12 +206,17 @@ class Machine:
         return f" {vendor}:" in out.replace("ID ", " ")
 
     def suggested_profile(self) -> str:
-        """A starting point, never a verdict. The user can pick any profile."""
-        if self.host_role == "orin" or self.is_jetson:
-            return "vehicle" if self.has("can") else "orin"
-        if self.has("can"):
+        """A starting point, never a verdict. The user can pick any profile.
+
+        Hardware decides, not the board: a Jetson on a desk is a development
+        machine and a Jetson in the cart is the vehicle, and the difference
+        visible from here is whether the sensors and the bus are attached.
+        """
+        if self.has("can") or self.has("ublox-gnss") or self.has("tier4-camera"):
             return "vehicle"
-        return "laptop"
+        if self.host_role in {"master", "orin"}:
+            return "vehicle"
+        return "dev"
 
     def applicable(self, step: Step) -> tuple[bool, str]:
         req = step.requires

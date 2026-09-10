@@ -319,43 +319,61 @@ Standard ROS 2 conventions: setup.py/setup.cfg, test files for copyright/flake8/
 
 ### Setup Script Architecture
 
-`./setup.sh` is a **bootstrap only**: it installs uv, builds `setup/.venv`, and
-hands off to `setup/main.py`. Everything with logic in it is Python.
+`./setup.sh` is a launcher: it execs `setup/main.py`. Everything with logic in
+it is Python, and all of it is standard library.
 
 ```bash
-./setup.sh                       # menu (textual); the only form needing the venv
+./setup.sh                       # pick a preset, then the steps
 ./setup.sh --status              # what is installed
 ./setup.sh --list                # every step, and whether it applies here
 ./setup.sh --run --profile vehicle -y   # unattended
 ./setup.sh --run --all --skip tensorrt-engines
 ./setup.sh --dry-run --json      # the resolved selection, machine-readable
 ./setup.sh --rerun opencv        # forget one step's state, run it again
-./setup.sh --reset-env           # rebuild the venv
+./setup.sh --plain               # numbered menu, for a dumb terminal
 ```
 
-In the menu: arrows move, space ticks, tab reaches the profile picker, and enter
-opens a review dialog before anything is installed. Every flagged form runs on
-the system `python3`, so an unattended install never builds the venv.
+**Every step is declared in `setup/golfcart_setup/registry.py` and nowhere
+else.** Adding one means adding a `Step(...)` there; there is no wrapper recipe
+to write and no menu array to update. This replaced a system in which the menu
+offered 16 entries while `just setup` ran 25 steps -- the thirteen invisible
+ones included two that wrote udev rules and three that installed sensor drivers.
 
-**Every step is declared in `setup/golfcart_setup/registry.py` and nowhere else.**
-Adding one means adding a `Step(...)` there; there is no wrapper recipe to write
-and no menu array to update. This replaced a system in which the menu offered 16
-entries while `just setup` ran 25 steps -- the thirteen invisible ones included
-two that wrote udev rules and three that installed sensor drivers.
-
-`setup/justfile` is **gone**. Setup no longer uses `just`; `just` is instead an
-ordinary setup step, since the rest of the repo needs it. Every other justfile in
-the repo is unaffected.
+`setup/justfile` is **gone**. Setup does not use `just`; `just` is instead an
+ordinary setup step, since the rest of the repo needs it.
 
 **State is `setup/.state.json`, not marker files.** It records status, timestamp
-and a digest of what each step would run, so a step whose install script has been
-edited shows as *stale* rather than done -- the case marker files could not
+and a digest of what each step would run, so a step whose install script has
+been edited shows as *stale* rather than done -- the case marker files could not
 express. An existing `.markers/` directory is imported on first run.
 
-Profiles (`laptop`, `orin`, `vehicle`, `ci`) are presets over the same step list;
-every step stays individually selectable. The suggested profile comes from
-detection and is never a restriction, because machines get provisioned before
-their hardware arrives.
+**The menu is stdlib `curses`, and there is no venv.** It was Textual, which
+cost 5.8 MB of widgets in a 15 MB venv and ~54 s on a cold first run while `uv`
+fetched a Python, to draw 25 checkboxes; `curses` imports in 3 ms. The preset is
+asked first, on its own screen, then the step list opens seeded from it (`p`
+re-asks without leaving). Arrows move, space ticks, and enter opens a review
+screen before anything installs. `--plain` is the numbered fallback, used
+automatically when curses cannot drive the terminal.
+
+**Five presets, and `vehicle` is `dev` plus one group.**
+
+| profile | |
+|---|---|
+| `dev` | laptop, workstation, PC: dev tools, libraries, sysctl, loopback multicast |
+| `vehicle` | `dev` plus the **System config** group: sensor udev, CAN, PTP, camera modules |
+| `all` | every step, including the slow and opt-in ones |
+| `none` | nothing preselected |
+| `ci` | headless, build dependencies only |
+
+`all` and `none` are computed in `Step.default_for`, so a new step joins them
+without being listed. There is no per-board profile: a Jetson on a desk is a
+development machine and a Jetson in the cart is the vehicle. `--profile laptop`
+and `--profile orin` still work and print the new name.
+
+**The OS is checked before anything runs.** Ubuntu 22.04 proceeds; another
+Ubuntu or a Debian warns and proceeds; anything else stops and names
+`--ignore-os-check`. Every install script writes 22.04 apt package names, so
+this is not a style preference.
 
 Dropped 2026-09-02, with reasons in the registry docstring: `pacmod`
 (unreferenced, and added an apt source with `trusted=yes`), `gdown` (unused),
