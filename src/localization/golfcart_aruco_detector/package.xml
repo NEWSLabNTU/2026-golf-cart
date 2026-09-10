@@ -15,11 +15,20 @@
   <maintainer email="dev@golfcart.org">Golf Cart Team</maintainer>
   <license>Apache-2.0</license>
 
-  <depend>rclrs</depend>
   <depend>std_msgs</depend>
   <depend>sensor_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>aruco_detection_msgs</depend>
+  <!--
+    rclrs is deliberately absent, like rclrs_image_transport below. It is a
+    crates.io crate (Cargo.toml pins `rclrs = "*"`), not a ROS package: nothing
+    named rclrs is installed under /opt/ros or /opt/autoware, and rosdep has no
+    rule for it. Declaring it asked rosdep for a package that cannot exist, and
+    it was reported as unresolvable on every run. colcon-cargo-ros2 does not
+    need it either; its Cargo/package.xml cross-check only looks at interface
+    packages.
+  -->
+
   <!--
     rclrs_image_transport is deliberately absent. It is not a package in this
     workspace any more: it lives at github.com/jerry73204/rclrs_image_transport
