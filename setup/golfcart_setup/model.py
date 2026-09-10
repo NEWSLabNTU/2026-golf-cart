@@ -47,6 +47,18 @@ PROFILE_HELP = {
 # from `dev` by whether hardware happened to be plugged in.
 RETIRED_PROFILES = {"laptop": "dev", "orin": "dev"}
 
+# How a step's recorded state is spelled, everywhere it is shown. The menu also
+# offers a tick box, and the two answer different questions -- "run this now?"
+# against "does the machine already have it?" -- so neither is a symbol that
+# could be mistaken for the other.
+STATE_WORDS = {
+    "ok": "installed",
+    "stale": "script changed",
+    "failed": "failed",
+    "skipped": "skipped",
+    "pending": "",
+}
+
 # ROS 2 Humble's supported platform. Anything else is somebody's afternoon.
 SUPPORTED_OS = ("ubuntu", "22.04")
 OS_OK, OS_WARN, OS_ERROR = "ok", "warn", "error"

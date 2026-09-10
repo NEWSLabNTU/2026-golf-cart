@@ -42,7 +42,7 @@ _BASH = lambda body: ["bash", "-euc", body]        # noqa: E731
 DEV = ("dev", "vehicle")
 EVERY = ("dev", "vehicle", "ci")
 VEHICLE = ("vehicle",)
-OPT_IN: tuple[str, ...] = ()
+OPT_IN: tuple[str, ...] = ()            # in no preset; tick it yourself
 
 
 def _on(*profiles: str) -> dict[str, bool]:
@@ -158,14 +158,18 @@ STEPS: list[Step] = [
     Step(
         id="tensorrt-engines",
         label="Pre-compile TensorRT engines",
-        why="~11 min on an Orin, mostly the YOLOX traffic-light detector. "
-            "Skipping is fine: the first launch builds them instead, but it does "
-            "so inside each node's constructor, so perception is down until then.",
+        why="~11 min on an Orin, mostly the YOLOX traffic-light detector, and "
+            "paid once here instead of inside each node's constructor on the "
+            "first launch, where perception is down until it finishes.",
         group="Autoware",
         run=_BASH(f"cd {REPO_ROOT} && just build-engines"),
         requires=Requires(hardware="cuda"),
         after=("autoware-data", "just"),
-        profiles=_on(*OPT_IN),                  # off everywhere by default: it is slow
+        # On by default despite being the slowest step here: the alternative is
+        # not "no compile", it is the same compile during the first launch,
+        # with perception down while it runs. `ci` skips it, and a machine with
+        # no CUDA device shows it as not applicable.
+        profiles=_on(*DEV),
     ),
     Step(
         id="opencv",

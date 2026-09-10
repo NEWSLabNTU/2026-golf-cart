@@ -375,3 +375,18 @@ and proceeds, anything else stops and names `--ignore-os-check`. Three outcomes
 rather than two, because a neighbouring Ubuntu can be made to work and someone
 doing that is doing it deliberately, while a distribution with no Humble
 packages at all is not a near miss.
+
+### Two columns, and the TensorRT default (2026-09-10)
+
+The step list showed a tick box and a status glyph side by side, so a finished
+step read as `[ ] ✓` -- an unticked box next to a tick, which looks like a
+contradiction and is not one. They answer different questions: the box is what
+this run will install, the glyph was what the machine already has. The state is
+now spelled out in a right-hand column (*installed*, *script changed*,
+*failed*), with a heading over it, in the menu, `--list` and `--status` alike.
+
+`tensorrt-engines` is now on by default in `dev` and `vehicle`. It is the
+slowest step here (~11 min on an Orin), but the alternative is not skipping the
+compile -- it is paying the same compile inside each node's constructor on the
+first launch, with perception down until it finishes. `ci` still leaves it off,
+and a machine with no CUDA device shows it as not applicable.

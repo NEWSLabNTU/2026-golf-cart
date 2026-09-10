@@ -24,7 +24,9 @@ import locale
 import sys
 from typing import Union
 
-from .model import OS_ERROR, OS_WARN, PROFILE_HELP, PROFILES, Machine, Step
+from .model import (
+    OS_ERROR, OS_WARN, PROFILE_HELP, PROFILES, STATE_WORDS, Machine, Step,
+)
 from .registry import STEPS, ordered
 from .state import State
 
@@ -32,11 +34,12 @@ locale.setlocale(locale.LC_ALL, "")
 
 _UTF8 = "utf" in (locale.getpreferredencoding(False) or "").lower()
 
-# ok, stale, failed, skipped, pending -- and an ASCII set for terminals that
-# cannot render the first one, because a mojibake column is worse than a dot.
-MARKS = ({"ok": "✓", "stale": "~", "failed": "✗", "skipped": "-", "pending": "○"}
-         if _UTF8 else
-         {"ok": "+", "stale": "~", "failed": "!", "skipped": "-", "pending": "."})
+# Two columns, two questions, and they are not the same question: the box says
+# what this run will do, the state says what the machine already has. Showing
+# both as symbols side by side read as a contradiction -- an unticked box next
+# to a tick -- so the state is spelled out in words.
+STATE = STATE_WORDS
+STATE_WIDTH = max(len(word) for word in STATE.values())
 TICK, UNTICK = ("[x]", "[ ]")
 
 C_DIM, C_OK, C_WARN, C_BAD, C_HEAD = 1, 2, 3, 4, 5
@@ -189,7 +192,7 @@ def choose_steps(stdscr, machine: Machine, sel: Selection) -> list[Step] | None:
     cursor, top = first, 0
     while True:
         height, width = stdscr.getmaxyx()
-        body = max(1, height - 6)
+        body = max(1, height - 7)
         cursor = max(0, min(cursor, len(rows) - 1))
         top = max(min(top, cursor), cursor - body + 1, 0)
 
@@ -198,11 +201,17 @@ def choose_steps(stdscr, machine: Machine, sel: Selection) -> list[Step] | None:
         _put(stdscr, 0, 1, "Golf cart setup", _colour(C_HEAD, bold=True))
         _put(stdscr, 0, 20, f"preset: {sel.preset}   {ticked} of {len(STEPS)} ticked",
              _colour(C_DIM))
-        _put(stdscr, 1, 1, "-" * (width - 2), _colour(C_DIM))
+        heading = "already installed?"
+        _put(stdscr, 1, 3, "run?  step", _colour(C_DIM))
+        # Right-aligned against the widest state word, and placed by its own
+        # length: _put truncates at the window edge rather than wrapping.
+        _put(stdscr, 1, max(0, width - 2 - max(len(heading), STATE_WIDTH)),
+             heading, _colour(C_DIM))
+        _put(stdscr, 2, 1, "-" * (width - 2), _colour(C_DIM))
 
         for line, index in enumerate(range(top, min(top + body, len(rows)))):
             kind, value = rows[index]
-            y = 2 + line
+            y = 3 + line
             if kind == "group":
                 _put(stdscr, y, 1, str(value), _colour(C_HEAD, bold=True))
                 continue
@@ -212,19 +221,21 @@ def choose_steps(stdscr, machine: Machine, sel: Selection) -> list[Step] | None:
             _put(stdscr, y, 1, ">" if here else " ", _colour(C_HEAD, bold=True))
             _put(stdscr, y, 3, TICK if sel.ticked[step.id] else UNTICK,
                  curses.A_BOLD if sel.ticked[step.id] else _colour(C_DIM))
-            status = sel.status[step.id]
-            _put(stdscr, y, 7, MARKS[status], _colour(
-                {"ok": C_OK, "stale": C_WARN, "failed": C_BAD}.get(status, C_DIM)))
             _put(stdscr, y, 9, step.label,
                  curses.A_REVERSE if here else curses.A_NORMAL)
             fits, reason = machine.applicable(step)
             if not fits:
                 _put(stdscr, y, 9 + len(step.label) + 2, f"({reason})", _colour(C_WARN))
+            status = sel.status[step.id]
+            word = STATE[status]
+            if word:
+                _put(stdscr, y, max(0, width - 2 - len(word)), word, _colour(
+                    {"ok": C_OK, "stale": C_WARN, "failed": C_BAD}[status]))
 
         if top > 0:
-            _put(stdscr, 2, width - 3, "^", _colour(C_DIM))
+            _put(stdscr, 3, width - 1, "^", _colour(C_DIM))
         if top + body < len(rows):
-            _put(stdscr, 1 + body, width - 3, "v", _colour(C_DIM))
+            _put(stdscr, 2 + body, width - 1, "v", _colour(C_DIM))
 
         focused = rows[cursor][1]
         if isinstance(focused, Step):
@@ -396,9 +407,12 @@ def plain_flow(machine: Machine, sel: Selection) -> list[Step] | None:
             mark = TICK if sel.ticked[step.id] else UNTICK
             fits, reason = machine.applicable(step)
             note = "" if fits else f"   ({reason})"
-            print(f"   {i:2d} {mark} {MARKS[sel.status[step.id]]} "
-                  f"{step.label}{note}")
-        print("\nToggle by number or range (3 7-9)   p preset   a all   n none   "
+            state = STATE[sel.status[step.id]]
+            state = f"   [{state}]" if state else ""
+            print(f"   {i:2d} {mark} {step.label}{note}{state}")
+        print("\n[x] runs now; the bracket at the right is what the machine "
+              "already has.")
+        print("Toggle by number or range (3 7-9)   p preset   a all   n none   "
               "i install   q quit")
         line = input("> ").strip().lower()
         if line in {"q", "quit"}:

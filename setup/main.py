@@ -10,26 +10,36 @@ those are what you need when the venv is the thing that is broken.
 from __future__ import annotations
 
 import argparse
+import shutil
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from golfcart_setup.model import (  # noqa: E402
-    OS_ERROR, OS_WARN, PROFILE_HELP, PROFILES, RETIRED_PROFILES, Machine,
+    OS_ERROR, OS_WARN, PROFILE_HELP, PROFILES, RETIRED_PROFILES, STATE_WORDS,
+    Machine,
 )
 from golfcart_setup.registry import BY_ID, STEPS, ordered  # noqa: E402
 from golfcart_setup.runner import Runner  # noqa: E402
 from golfcart_setup.state import State  # noqa: E402
 
-MARK = {
-    "ok": "\033[32m✓\033[0m",
-    "stale": "\033[33m~\033[0m",
-    "failed": "\033[31m✗\033[0m",
-    "skipped": "\033[90m-\033[0m",
-    "pending": "\033[90m○\033[0m",
-}
-LEGEND = "✓ done   ~ stale (script changed since)   ✗ failed   ○ not run   - skipped"
+COLOUR = {"ok": "32", "stale": "33", "failed": "31", "skipped": "90", "pending": "90"}
+
+
+def _paint(status: str, text: str) -> str:
+    return f"\033[{COLOUR[status]}m{text}\033[0m"
+
+
+def _state(status: str) -> str:
+    """The machine's current state for a step, in words.
+
+    Not a symbol: the listing already has a column for whether the profile
+    selects the step, and two symbol columns side by side read as one
+    contradictory statement -- an unticked box beside a tick. Colour is added
+    after any padding, because escape sequences are not width.
+    """
+    return STATE_WORDS[status]
 
 
 def _statuses(state: State) -> dict[str, str]:
@@ -63,15 +73,23 @@ def cmd_list(args) -> int:
     group = None
     print(f"Profile: {profile}   host: {machine.arch}"
           f"{'  (jetson)' if machine.is_jetson else ''}\n")
+    width = shutil.get_terminal_size((100, 24)).columns
+    right = max(len(w) for w in STATE_WORDS.values())
+    print("  run?  step".ljust(width - right - 2) + "already installed?\n")
     for step in STEPS:
         if step.group != group:
             group = step.group
             print(f"  {group}")
         ok, reason = machine.applicable(step)
-        default = "on " if step.default_for(profile) else "   "
+        default = "[x]" if step.default_for(profile) else "[ ]"
         note = "" if ok else f"   ({reason})"
-        print(f"    {MARK[status[step.id]]} {default} {step.id:<20} {step.label}{note}")
-    print(f"\n  {LEGEND}")
+        left = f"   {default}  {step.id:<20} {step.label}{note}"
+        word = _state(status[step.id])
+        pad = max(1, width - right - 2 - len(left))
+        print(left + " " * pad + _paint(status[step.id], word.rjust(right))
+              if word else left)
+    print(f"\n  [x] is what profile '{profile}' selects; the right-hand column "
+          f"is what is already installed.")
     return 0
 
 
@@ -97,8 +115,11 @@ def cmd_status(args) -> int:
             extra = f"  exit {rec.get('exit', '?')}"
         elif status[step.id] == "stale":
             extra = "  re-run to pick up changes"
-        print(f"  {MARK[status[step.id]]} {step.id:<20} {when}{extra}")
-    print("\n  " + "   ".join(f"{k}: {v}" for k, v in sorted(counts.items())))
+        word = _state(status[step.id]) or "not run"
+        painted = _paint(status[step.id], word.ljust(16))
+        print(f"  {step.id:<20} {painted} {when}{extra}")
+    print("\n  " + "   ".join(
+        f"{STATE_WORDS[k] or 'not run'}: {v}" for k, v in sorted(counts.items())))
     print(f"  state file: {state.path}")
     return 0
 

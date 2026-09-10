@@ -19,6 +19,11 @@ about 45 ms.
 The preset is asked **first**, on its own screen, and then the step list opens
 seeded from it. `p` re-asks without leaving the list.
 
+Two columns, two questions. `[x]` is what this run will install; the words on
+the right are what the machine already has, so an unticked box beside
+*installed* is the normal case -- a preset leaves finished steps alone. Tick one
+anyway to run it again.
+
 | key | |
 |---|---|
 | `↑` `↓`, `j` `k` | move |

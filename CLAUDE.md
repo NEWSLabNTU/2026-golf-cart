@@ -356,6 +356,11 @@ re-asks without leaving). Arrows move, space ticks, and enter opens a review
 screen before anything installs. `--plain` is the numbered fallback, used
 automatically when curses cannot drive the terminal.
 
+In the list, `[x]` is what the run will install and the right-hand column is
+what the machine already has (*installed*, *script changed*, *failed*) -- an
+unticked box beside *installed* is the normal case, because a preset leaves
+finished steps alone.
+
 **Five presets, and `vehicle` is `dev` plus one group.**
 
 | profile | |
