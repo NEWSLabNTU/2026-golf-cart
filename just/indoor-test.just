@@ -47,22 +47,26 @@ run RVIZ="on" ARGS="":
 bag ARGS="":
     ./scripts/rosbag/indoor_sim_bag.sh {{ARGS}}
 
-# Stock `ros2 launch`, not play_launch, and not by preference. Measured
-# 2026-09-10 on this stack: play_launch's Python parser renders the
-# pose_initializer's array parameters (output_pose_covariance,
-# gnss_particle_covariance, loaded with allow_substs) as STRINGS, and
-# autoware_pose_initializer_node dies at startup with
-# InvalidParameterTypeException, taking /localization/initialize with it,
-# which is the one service this replay exists to call. Its Rust parser
-# refuses the repo's `$(eval '\'$(var pose_source)\' == \'aruco\'')`
-# conditions outright. Until one of those is fixed there is no play_launch
-# path to a live pose initializer; ntu-test's `up` has the same problem.
+# play_launch with its Python parser, as the rest of the repo runs. Two things
+# to know before changing either half. The parser: the Rust one refuses the
+# repo's `$(eval '\'$(var pose_source)\' == \'aruco\'')` conditions outright,
+# so Python it is. The version: play_launch 0.8.2 rendered the pose
+# initializer's array parameters (output_pose_covariance and friends, loaded
+# with allow_substs) as STRINGS, autoware_pose_initializer_node died at
+# startup with InvalidParameterTypeException, and /localization/initialize,
+# the one service this replay exists to call, never appeared. Fixed in
+# play_launch 0.10.0 (f78745da, pinned by tests in cdffdc43); measured on
+# this launch 2026-09-11. Below that version, use stock ros2 launch:
+#
+#   ros2 launch golfcart_launch indoor_logging_sim.launch.xml rviz:=false
 #
 # Pass launch arguments through ARGS, e.g. "pose_initializer:=gnss" to check
 # that the default starts neither board node.
 # 2. Bring up the indoor logging simulation (sensor drivers off, no RViz).
 up ARGS="":
-    ros2 launch golfcart_launch indoor_logging_sim.launch.xml rviz:=false {{ARGS}}
+    play_launch launch --parser python --web-addr 0.0.0.0:8081 \
+        --container-mode "${GOLFCART_CONTAINER_MODE:-observable}" \
+        golfcart_launch indoor_logging_sim.launch.xml rviz:=false {{ARGS}}
 
 # 3. RViz with the point cloud map rendered visibly, on bag time.
 rviz:

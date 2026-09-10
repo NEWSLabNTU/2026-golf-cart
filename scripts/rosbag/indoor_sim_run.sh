@@ -89,11 +89,12 @@ wait_for 60 "/clock" has_topic /clock \
 
 # ── 2. stack, now born on bag time ──────────────────────────────────────────
 say "2/4  bringing up the indoor logging simulation (sensor drivers off)"
-# Stock ros2 launch rather than play_launch: see the `up` recipe in
-# just/indoor-test.just for the two parser failures that force it.
+# play_launch 0.10.0 or newer, Python parser: see the `up` recipe in
+# just/indoor-test.just for why each half is what it is.
 # shellcheck disable=SC2086
-( cd "${REPO_ROOT}" && ros2 launch golfcart_launch indoor_logging_sim.launch.xml \
-      rviz:=false ${LAUNCH_ARGS} ) > "${STACK_LOG}" 2>&1 &
+( cd "${REPO_ROOT}" && play_launch launch --parser python --web-addr 0.0.0.0:8081 \
+      --container-mode "${GOLFCART_CONTAINER_MODE:-observable}" \
+      golfcart_launch indoor_logging_sim.launch.xml rviz:=false ${LAUNCH_ARGS} ) > "${STACK_LOG}" 2>&1 &
 wait_for 240 "/localization/initialize" has_service /localization/initialize \
     || die "stack never came up. See ${STACK_LOG}"
 # Only with pose_initializer:=board, which is the default; a run asked for

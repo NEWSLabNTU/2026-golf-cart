@@ -500,9 +500,11 @@ the detector, and each would have read as "the board initializer does not work":
   dies at startup with `InvalidParameterTypeException` on
   `output_pose_covariance`, taking the service with it. Its Rust parser refuses
   the repo's `$(eval '\'$(var pose_source)\' == \'aruco\'')` conditions
-  outright. `just indoor-test up` therefore runs stock `ros2 launch`, and the
-  comment on the recipe says why. `just ntu-test up` has the same problem and
-  has not been changed here.
+  outright. Resolved 2026-09-11: the string rendering was already fixed in
+  play_launch 0.10.0 (`f78745da`) and only the installed 0.8.2 had it; the
+  machine now runs 0.10.0 and `just indoor-test up` is back on play_launch
+  with the Python parser, verified on this launch. The Rust parser's refusal
+  stands, so `--parser python` stays.
 - **Loopback multicast is off on this workstation** (`multicast-lo.service`
   inactive, `lo` without the MULTICAST flag), so the repo's loopback DDS profile
   cannot discover and a stock launch of ~30 processes dies with "Failed to find
@@ -615,7 +617,7 @@ Two things the build turned up, neither in this campaign's packages:
 
 **Lane 4 — after D1a**
 
-- [ ] play_launch: fix or report the Python parser's string rendering of array parameters under `allow_substs`, then put `just indoor-test up` and `just ntu-test up` back on it
+- [x] play_launch: already fixed upstream in 0.10.0 (`f78745da`, 2026-08-08); the machine ran 0.8.2. Regression tests with the recorded values pushed as `cdffdc43`, 0.10.0 installed, `just indoor-test up` back on play_launch and verified: node up, service served, covariance a real sequence (2026-09-11). `just ntu-test up` never left it.
 - [ ] C3: rebuild script, dry-run by default
 - [ ] A3: motion guard wired on the vehicle
 - [ ] D2: on-vehicle sequence, `tx` off
