@@ -48,11 +48,16 @@ bag ARGS="":
     ./scripts/rosbag/indoor_sim_bag.sh {{ARGS}}
 
 # play_launch with its Python parser, as the rest of the repo runs. Two things
-# to know before changing either half. The parser: at 0.10.0 the Rust one dies
-# on this stack with `KeyError: 'rear_overhang'` from an Autoware .launch.py
-# (play_launch issue #0028; the older refusal of the repo's escaped-quote
-# `$(eval ...)` conditions was #0027, fixed in 0.10.0), so Python it is. The
-# version: play_launch 0.8.2 rendered the pose
+# to know before changing either half. The parser: Python because that is
+# what every other recipe here uses, not because Rust cannot. It could not
+# until play_launch 8adc52ad (2026-09-11): a 0.10.0 release build died on
+# this stack with `KeyError: 'rear_overhang'`, global parameters never
+# reaching a .launch.py (play_launch issue #0028), and before that refused
+# the repo's escaped-quote `$(eval ...)` conditions (#0027, fixed 0.10.0).
+# With 8adc52ad the Rust parser resolves this launch to the same 84 nodes
+# and brings the stack up with the initialize service served. Switching the
+# repo's recipes to it is a separate decision. The version: play_launch
+# 0.8.2 rendered the pose
 # initializer's array parameters (output_pose_covariance and friends, loaded
 # with allow_substs) as STRINGS, autoware_pose_initializer_node died at
 # startup with InvalidParameterTypeException, and /localization/initialize,

@@ -505,9 +505,14 @@ the detector, and each would have read as "the board initializer does not work":
   machine now runs 0.10.0 and `just indoor-test up` is back on play_launch
   with the Python parser, verified on this launch. The Rust parser's refusal
   of the escaped-quote `$(eval ...)` was also only 0.8.2 (play_launch #0027,
-  fixed 2026-08-17); at 0.10.0 the Rust parser fails on this stack for a
-  different reason, `KeyError: 'rear_overhang'` from an Autoware `.launch.py`
-  (play_launch #0028, open), so `--parser python` stays for that.
+  fixed 2026-08-17). At 0.10.0 the Rust parser failed on this stack for a
+  different reason, `KeyError: 'rear_overhang'`: since play_launch's Python
+  half became a separately loaded object, global parameters (Autoware's
+  vehicle-info loader) never reached the next `.launch.py` (play_launch
+  #0028). Fixed 2026-09-11 in play_launch `8adc52ad`, ABI 3 to 4, verified
+  here: the Rust parser resolves this launch to the same 84 nodes and brings
+  the stack up with the service served. The recipes stay on `--parser
+  python` only for consistency with the rest of the repo.
 - **Loopback multicast is off on this workstation** (`multicast-lo.service`
   inactive, `lo` without the MULTICAST flag), so the repo's loopback DDS profile
   cannot discover and a stock launch of ~30 processes dies with "Failed to find
