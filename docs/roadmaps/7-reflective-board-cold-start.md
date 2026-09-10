@@ -193,6 +193,30 @@ gate on the VLP-32C sees the same object, and if the 0.87 is real then a 0.6
 nominal with the same tolerance still passes it. Resolve by looking at the
 cluster in the debug viewer, or by measuring the board. Not blocking.
 
+**What the cloud says about the floor.** Nothing, nearly. The z histogram has
+one peak, the ceiling at 2.4 to 2.8 m, and below it a thin tail rising from
+z = 0 with no floor plane in it anywhere: within 8 m of the origin there are
+about 2,500 points in the 0.2 m slab at z = 0.2 against 130,000 at z = 2.6.
+So the tool's floor fit (the lowest 2 % of a floor band) had almost nothing to
+hold onto, and `pose_in_map[2] = 1.3` is the config default carried through,
+not a measured mounting height: the origin sits 1.3 m under the board centre
+because the file said so. The tilt it reports, 0.145 deg, is the tilt of that
+sparse tail. Two consequences, neither blocking:
+
+- The board's real height above the floor comes from the VLP-32C bag, which
+  does see the floor, in Lane 2a. If it is not 1.3 m, `pose_in_map[2]` and
+  `centre_height` both move, and the map's z origin is simply off by the
+  difference — harmless to NDT, which matches the ceiling and walls, but the
+  runtime `height_min`/`height_max` band would reject the board.
+- NDT here matches ceiling and walls, as the design note wanted. Do not
+  strip the ceiling from this map.
+
+The retroreflective content at the origin, from the PCD directly:
+1,973 returns above 240 within |x| < 0.3, |y| < 0.6, z 0.7 to 1.9; the board
+band z 1.0 to 1.6 and y -0.45 to +0.25, and a second band z 1.7 to 1.9 of the
+same width directly above it, which is what stretched the tool's extent to
+0.87 m.
+
 Status of the items below, against that delivery: B1 done (0.15 m used), B2
 done (the cluster the lead pointed at, identified by the tool rather than by a
 person), B3 needs the config the survey team ran with, copied into
@@ -482,8 +506,21 @@ before the parent pointer moves.
 
 **Lane 0 — build**
 
-- [ ] `just build` on this checkout; the five `reflective_pose_*` packages install
-- [ ] `anchor-map-to-board` on PATH after `source install/setup.bash`
+- [x] `just build` on this checkout; the five `reflective_pose_*` packages install (2026-09-10, 29 packages)
+- [x] `anchor-map-to-board` reachable: not on PATH — ament puts the console
+      script in `install/reflective_pose_cli/lib/reflective_pose_cli/`, so it
+      is `ros2 run reflective_pose_cli anchor-map-to-board` (2026-09-10)
+
+Two things the build turned up, neither in this campaign's packages:
+
+- `golfcart_aruco_detector` fails in `turbojpeg-sys`, which builds libjpeg-turbo
+  from source and needs `nasm`. Setup's `ros2-dev-tools` step installs it and
+  had not been run on this machine. `cuda_ndt_matcher` was aborted by that
+  failure and rebuilt alone. D1a uses `pose_source:=ndt`, so neither blocks it.
+- An untracked `src/autoware_rosbag_replay/` inside the `cuda_ndt_matcher`
+  checkout duplicated `individual_params` and stopped colcon at discovery.
+  Not in the pinned commit; a `COLCON_IGNORE` was dropped in beside it. A
+  fresh clone does not have it.
 
 **Lane 1 — config split (submodule), C1**
 
@@ -500,6 +537,9 @@ before the parent pointer moves.
 - [ ] A1: `AMBIGUOUS` suppresses the frame, shows on `/diagnostics`, next frame still processed
 - [ ] A2: one confidence scalar, on the diagnostic, gated by one key
 - [ ] standalone replay of `vlp32_1` with `fake-tf` produces candidates
+- [ ] measure the board centre's height above the floor from the bag (the
+      VLP-32C sees the floor; the Falcon map does not — see Track B), and
+      reconcile with `pose_in_map[2]`
 - [ ] pushed to the fork's `main`
 
 **Lane 2b — wiring (this repo), C1 + C2**
@@ -517,9 +557,23 @@ before the parent pointer moves.
 - [x] B5: floor tilt recorded, 0.145 deg in `board_anchor.yaml` (2026-09-10)
 - [x] anchor and convert: `pointcloud_map.pcd`, `board_anchor.yaml`, `board_polygon.osm`, `map_projector_info.yaml` delivered (2026-09-10)
 - [ ] B3: the survey team's anchoring config copied to `scenarios/basement/falcon_map.yaml`
-- [ ] the 0.87 x 0.61 m extents question looked at once
-- [ ] copy to `data/basement-indoor/`
-- [ ] B4 verify: loads in `pointcloud_map_loader`; minimal `lanelet2_map.osm` with the board polygon; RViz shows the board at the origin
+- [x] the 0.87 x 0.61 m extents question looked at once (2026-09-10): a second
+      retroreflective band sits directly above the board, z 1.7 to 1.9, same
+      width; the tool's cluster merged the two. The board itself is z 1.0 to
+      1.6, y -0.45 to +0.25 — 0.6 x 0.6 plus voxel smear, centred where the
+      polygon says. See *What the cloud says about the floor* under Track B.
+- [x] copy to `data/basement-indoor/` (2026-09-10). PCD gitignored like every
+      other map; `board_anchor.yaml`, `board_polygon.osm`,
+      `map_projector_info.yaml` and `lanelet2_map.osm` tracked.
+- [x] B4 verify, loads: `tier4_map_launch` alone against the directory
+      publishes `/map/pointcloud_map` with 3,995,308 points in `map`, extents
+      x -59..43, y -39..51, z -2.4..19.8, and `/map/vector_map` from a
+      `lanelet2_map.osm` that is the board polygon and nothing else. The
+      lanelet loader warns about a missing `format_version`; harmless.
+      Board at the origin verified numerically, not visually (2026-09-10).
+- [ ] B4 verify, RViz look at the board and the ceiling
+- [ ] `lanelet2_map.osm` with the drivable route, when planning is wanted;
+      the polygon-only file is enough for D1a
 
 **Lane 3 — D1a**
 
