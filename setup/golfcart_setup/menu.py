@@ -22,6 +22,7 @@ from __future__ import annotations
 import curses
 import locale
 import sys
+from typing import Union
 
 from .model import OS_ERROR, OS_WARN, PROFILE_HELP, PROFILES, Machine, Step
 from .registry import STEPS, ordered
@@ -40,7 +41,9 @@ TICK, UNTICK = ("[x]", "[ ]")
 
 C_DIM, C_OK, C_WARN, C_BAD, C_HEAD = 1, 2, 3, 4, 5
 
-QUIT = object()          # the user asked to leave, at any depth
+# `None` is "the user left", at every depth. A sentinel object read a little
+# better and typed a lot worse.
+Row = tuple[str, Union[str, Step]]
 
 
 class Selection:
@@ -119,8 +122,9 @@ def _init_colours() -> None:
 # --------------------------------------------------------------------------
 # screen 1: the preset
 # --------------------------------------------------------------------------
-def choose_preset(stdscr, machine: Machine, suggested: str, current: str | None = None):
-    """Pick a preset. Returns the name, or QUIT.
+def choose_preset(stdscr, machine: Machine, suggested: str,
+                  current: str | None = None) -> str | None:
+    """Pick a preset. Returns the name, or None if the user quit.
 
     Asked before the list rather than beside it: a preset decides most of the
     answer, and the previous layout made the user tab between two panes to find
@@ -165,15 +169,15 @@ def choose_preset(stdscr, machine: Machine, suggested: str, current: str | None 
         elif key in (curses.KEY_ENTER, 10, 13):
             return PROFILES[index]
         elif key in (ord("q"), 27):
-            return QUIT
+            return None
 
 
 # --------------------------------------------------------------------------
 # screen 2: the steps
 # --------------------------------------------------------------------------
-def choose_steps(stdscr, machine: Machine, sel: Selection):
-    """Tick steps. Returns the chosen list, or QUIT."""
-    rows: list[tuple[str, object]] = []
+def choose_steps(stdscr, machine: Machine, sel: Selection) -> list[Step] | None:
+    """Tick steps. Returns the chosen list, or None if the user quit."""
+    rows: list[Row] = []
     group = None
     for step in STEPS:
         if step.group != group:
@@ -202,7 +206,8 @@ def choose_steps(stdscr, machine: Machine, sel: Selection):
             if kind == "group":
                 _put(stdscr, y, 1, str(value), _colour(C_HEAD, bold=True))
                 continue
-            step: Step = value                                   # type: ignore[assignment]
+            assert isinstance(value, Step)
+            step = value
             here = index == cursor
             _put(stdscr, y, 1, ">" if here else " ", _colour(C_HEAD, bold=True))
             _put(stdscr, y, 3, TICK if sel.ticked[step.id] else UNTICK,
@@ -221,9 +226,9 @@ def choose_steps(stdscr, machine: Machine, sel: Selection):
         if top + body < len(rows):
             _put(stdscr, 1 + body, width - 3, "v", _colour(C_DIM))
 
-        kind, value = rows[cursor]
-        if kind == "step":
-            _put(stdscr, height - 3, 3, _wrap(value.why, width - 6)[0], _colour(C_DIM))
+        focused = rows[cursor][1]
+        if isinstance(focused, Step):
+            _put(stdscr, height - 3, 3, _wrap(focused.why, width - 6)[0], _colour(C_DIM))
         _put(stdscr, height - 2, 1, "-" * (width - 2), _colour(C_DIM))
         _put(stdscr, height - 1, 1, _hints(), _colour(C_DIM))
         stdscr.refresh()
@@ -244,7 +249,9 @@ def choose_steps(stdscr, machine: Machine, sel: Selection):
         elif key == curses.KEY_END:
             cursor = _step_row(rows, len(rows) - 1, 0)
         elif key == ord(" "):
-            sel.toggle(rows[cursor][1])                          # type: ignore[arg-type]
+            focused = rows[cursor][1]
+            if isinstance(focused, Step):
+                sel.toggle(focused)
         elif key == ord("a"):
             sel.set_all(True)
         elif key == ord("n"):
@@ -253,8 +260,8 @@ def choose_steps(stdscr, machine: Machine, sel: Selection):
             sel.apply(sel.preset)
         elif key == ord("p"):
             picked = choose_preset(stdscr, machine, sel.preset, sel.preset)
-            if picked is not QUIT:
-                sel.apply(picked)                                # type: ignore[arg-type]
+            if picked is not None:
+                sel.apply(picked)
         elif key in (curses.KEY_ENTER, 10, 13):
             chosen = sel.chosen()
             if not chosen:
@@ -263,10 +270,10 @@ def choose_steps(stdscr, machine: Machine, sel: Selection):
             if review(stdscr, machine, chosen):
                 return chosen
         elif key in (ord("q"), 27):
-            return QUIT
+            return None
 
 
-def _step_row(rows, index: int, delta: int) -> int:
+def _step_row(rows: list[Row], index: int, delta: int) -> int:
     """Move to the next selectable row, skipping group headings."""
     index = max(0, min(index + delta, len(rows) - 1))
     while rows[index][0] != "step":
@@ -364,7 +371,7 @@ def _wrap(text: str, width: int) -> list[str]:
 # --------------------------------------------------------------------------
 # the plain fallback, for a terminal curses cannot drive
 # --------------------------------------------------------------------------
-def plain_flow(machine: Machine, sel: Selection):
+def plain_flow(machine: Machine, sel: Selection) -> list[Step] | None:
     """Numbered list, one line of input at a time. No cursor, no redraw."""
     print(f"\n{_machine_line(machine)}\n")
     print("Presets: " + "  ".join(
@@ -377,7 +384,7 @@ def plain_flow(machine: Machine, sel: Selection):
             sel.apply(answer)
         else:
             print(f"Unknown preset: {answer}")
-            return QUIT
+            return None
 
     while True:
         print()
@@ -395,7 +402,7 @@ def plain_flow(machine: Machine, sel: Selection):
               "i install   q quit")
         line = input("> ").strip().lower()
         if line in {"q", "quit"}:
-            return QUIT
+            return None
         if line == "a":
             sel.set_all(True)
         elif line == "n":
@@ -459,7 +466,7 @@ def run_menu(args) -> int:
     else:
         chosen = _curses_flow(machine, sel, args.profile)
 
-    if chosen is QUIT or not chosen:
+    if not chosen:
         print("Nothing selected.")
         return 0
 
@@ -477,17 +484,18 @@ def run_menu(args) -> int:
     return 0
 
 
-def _curses_flow(machine: Machine, sel: Selection, explicit_profile: str | None):
-    def body(stdscr):
+def _curses_flow(machine: Machine, sel: Selection,
+                 explicit_profile: str | None) -> list[Step] | None:
+    def body(stdscr) -> list[Step] | None:
         curses.curs_set(0)
         _init_colours()
         stdscr.keypad(True)
         # An explicit --profile has already answered the first screen.
         if explicit_profile is None:
             picked = choose_preset(stdscr, machine, sel.preset)
-            if picked is QUIT:
-                return QUIT
-            sel.apply(picked)                                    # type: ignore[arg-type]
+            if picked is None:
+                return None
+            sel.apply(picked)
         return choose_steps(stdscr, machine, sel)
 
     try:
