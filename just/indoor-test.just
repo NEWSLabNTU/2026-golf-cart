@@ -47,23 +47,17 @@ run RVIZ="on" ARGS="":
 bag ARGS="":
     ./scripts/rosbag/indoor_sim_bag.sh {{ARGS}}
 
-# play_launch with its Python parser, as the rest of the repo runs. Two things
-# to know before changing either half. The parser: Python because that is
-# what every other recipe here uses, not because Rust cannot. It could not
-# until play_launch 8adc52ad (2026-09-11): a 0.10.0 release build died on
-# this stack with `KeyError: 'rear_overhang'`, global parameters never
-# reaching a .launch.py (play_launch issue #0028), and before that refused
-# the repo's escaped-quote `$(eval ...)` conditions (#0027, fixed 0.10.0).
-# With 8adc52ad the Rust parser resolves this launch to the same 84 nodes
-# and brings the stack up with the initialize service served. Switching the
-# repo's recipes to it is a separate decision. The version: play_launch
-# 0.8.2 rendered the pose
-# initializer's array parameters (output_pose_covariance and friends, loaded
-# with allow_substs) as STRINGS, autoware_pose_initializer_node died at
-# startup with InvalidParameterTypeException, and /localization/initialize,
-# the one service this replay exists to call, never appeared. Fixed in
-# play_launch 0.10.0 (f78745da, pinned by tests in cdffdc43); measured on
-# this launch 2026-09-11. Below that version, use stock ros2 launch:
+# play_launch, default parser, like every other recipe in the repo. The
+# version matters more than usual here. play_launch 0.8.2 rendered the pose
+# initializer's array parameters as strings and autoware_pose_initializer_node
+# died at startup, taking /localization/initialize with it (fixed in 0.10.0,
+# f78745da). A 0.10.0 release build's Rust parser then died on this stack
+# with `KeyError: 'rear_overhang'`, global parameters never reaching a
+# .launch.py across the loader boundary (play_launch issue #0028, fixed in
+# 8adc52ad, 2026-09-11, ABI 4). With that build the Rust parser resolves this
+# launch to the same nodes as the Python one and brings the stack up with the
+# service served. Below 8adc52ad, `--parser python`; below 0.10.0, stock
+# ros2 launch:
 #
 #   ros2 launch golfcart_launch indoor_logging_sim.launch.xml rviz:=false
 #
@@ -71,7 +65,7 @@ bag ARGS="":
 # that the default starts neither board node.
 # 2. Bring up the indoor logging simulation (sensor drivers off, no RViz).
 up ARGS="":
-    play_launch launch --parser python --web-addr 0.0.0.0:8081 \
+    play_launch launch --web-addr 0.0.0.0:8081 \
         --container-mode "${GOLFCART_CONTAINER_MODE:-observable}" \
         golfcart_launch indoor_logging_sim.launch.xml rviz:=false {{ARGS}}
 

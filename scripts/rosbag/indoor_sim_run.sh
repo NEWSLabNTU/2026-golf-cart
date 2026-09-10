@@ -89,10 +89,10 @@ wait_for 60 "/clock" has_topic /clock \
 
 # ── 2. stack, now born on bag time ──────────────────────────────────────────
 say "2/4  bringing up the indoor logging simulation (sensor drivers off)"
-# play_launch 0.10.0 or newer, Python parser: see the `up` recipe in
-# just/indoor-test.just for why each half is what it is.
+# play_launch at 8adc52ad or newer, default (Rust) parser: see the `up`
+# recipe in just/indoor-test.just for the version story.
 # shellcheck disable=SC2086
-( cd "${REPO_ROOT}" && play_launch launch --parser python --web-addr 0.0.0.0:8081 \
+( cd "${REPO_ROOT}" && play_launch launch --web-addr 0.0.0.0:8081 \
       --container-mode "${GOLFCART_CONTAINER_MODE:-observable}" \
       golfcart_launch indoor_logging_sim.launch.xml rviz:=false ${LAUNCH_ARGS} ) > "${STACK_LOG}" 2>&1 &
 wait_for 240 "/localization/initialize" has_service /localization/initialize \

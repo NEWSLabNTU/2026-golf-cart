@@ -207,6 +207,26 @@ the distinction decides whether the config could be revived.
 
 ---
 
+## 9. `aruco_planning_sim.launch.xml` never passed the simulator component's required arguments — FIXED 2026-09-11
+
+`tier4_simulator_component.launch.xml` declares thirteen arguments WITHOUT
+defaults and forwards them to the simulator; Autoware's own
+`planning_simulator.launch.xml` supplies every one on its include. The aruco
+sim stands in for that file and passed five, so the include failed on the
+first missing one it reached:
+
+```
+Included launch description missing required argument 'perception/enable_detection_failure'
+```
+
+Present since `c8920fb`. Found running the launch through play_launch's two
+parsers side by side (2026-09-11): the Python parser and stock `ros2 launch`
+refuse it, and the Rust parser accepted it once the names existed in the
+parent scope, which is a leniency it should not have, and a separate note for
+play_launch. Fixed by declaring the nine missing names with
+`planning_simulator`'s defaults and passing all of them explicitly; both
+parsers now resolve it to the same 124 nodes.
+
 ## Not defects
 
 Recorded so nobody re-investigates them:

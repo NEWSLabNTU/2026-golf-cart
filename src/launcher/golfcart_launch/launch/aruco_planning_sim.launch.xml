@@ -63,6 +63,32 @@
     </include>
   </group>
 
+  <!-- tier4_simulator_component.launch.xml declares these WITHOUT defaults
+       and forwards them to the simulator, so an include of it has to pass
+       every one explicitly: a value merely present in this file's scope does
+       not satisfy a required argument of an included description. Autoware's
+       planning_simulator.launch.xml is where they normally live, and this
+       file stands in for it. Without them the include failed on the first
+       one it reached, `perception/enable_detection_failure`. Defaults are
+       planning_simulator's; the converter path is the one golfcart_autoware
+       passes on its own include, which a sibling include cannot see. -->
+  <arg name="perception/enable_detection_failure" default="true"
+       description="simulate detection failure with the dummy perception"/>
+  <arg name="perception/enable_object_recognition" default="true"
+       description="object recognition with the dummy perception"/>
+  <arg name="perception/enable_traffic_light" default="false"
+       description="traffic light recognition with the dummy perception"/>
+  <arg name="perception/use_base_link_z" default="true"
+       description="dummy objects at base_link height"/>
+  <arg name="sensing/visible_range" default="300.0"
+       description="dummy perception visible range, metres"/>
+  <arg name="scenario_simulation" default="false"/>
+  <arg name="initial_engage_state" default="true"/>
+  <arg name="raw_vehicle_cmd_converter_param_path"
+       default="$(find-pkg-share golfcart_launch)/config/vehicle/raw_vehicle_cmd_converter/raw_vehicle_cmd_converter.param.yaml"/>
+  <arg name="vehicle_info_param_file"
+       default="$(find-pkg-share $(var vehicle_model)_description)/config/vehicle_info.param.yaml"/>
+
   <!-- The simulator, minus its vehicle. localization_sim_mode is none because
        nothing here wants the simulator pretending to be a pose estimator. -->
   <group>
@@ -74,6 +100,14 @@
       <arg name="launch_scenario_simulator_v2_adapter" value="false"/>
       <arg name="vehicle_model" value="$(var vehicle_model)"/>
       <arg name="sensor_model" value="$(var sensor_model)"/>
+      <arg name="perception/enable_detection_failure" value="$(var perception/enable_detection_failure)"/>
+      <arg name="perception/enable_object_recognition" value="$(var perception/enable_object_recognition)"/>
+      <arg name="perception/enable_traffic_light" value="$(var perception/enable_traffic_light)"/>
+      <arg name="perception/use_base_link_z" value="$(var perception/use_base_link_z)"/>
+      <arg name="sensing/visible_range" value="$(var sensing/visible_range)"/>
+      <arg name="initial_engage_state" value="$(var initial_engage_state)"/>
+      <arg name="raw_vehicle_cmd_converter_param_path" value="$(var raw_vehicle_cmd_converter_param_path)"/>
+      <arg name="vehicle_info_param_file" value="$(var vehicle_info_param_file)"/>
     </include>
   </group>
 

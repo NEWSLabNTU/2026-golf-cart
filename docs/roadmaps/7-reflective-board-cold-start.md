@@ -511,8 +511,13 @@ the detector, and each would have read as "the board initializer does not work":
   vehicle-info loader) never reached the next `.launch.py` (play_launch
   #0028). Fixed 2026-09-11 in play_launch `8adc52ad`, ABI 3 to 4, verified
   here: the Rust parser resolves this launch to the same 84 nodes and brings
-  the stack up with the service served. The recipes stay on `--parser
-  python` only for consistency with the rest of the repo.
+  the stack up with the service served. The four recipes that pinned
+  `--parser python` (`ntu-test up`, `indoor-test up` and their run scripts)
+  now use the default, like `just launch` always did. Parity survey of
+  every entry point, both parsers: indoor sim 83/83, NTU sim 81/81, logging
+  sim 130/130, planning sim 118/118, aruco sim 124/124 after its own fix
+  (docs/known-config-defects.md #9); `golfcart.launch.yaml` cannot resolve on
+  this workstation under either parser, for want of the ZED packages.
 - **Loopback multicast is off on this workstation** (`multicast-lo.service`
   inactive, `lo` without the MULTICAST flag), so the repo's loopback DDS profile
   cannot discover and a stock launch of ~30 processes dies with "Failed to find
