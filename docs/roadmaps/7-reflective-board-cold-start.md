@@ -524,12 +524,12 @@ Two things the build turned up, neither in this campaign's packages:
 
 **Lane 1 — config split (submodule), C1**
 
-- [ ] loader reads the three-section detector file and rejects `ros:`, `autoware:`, `anchor:` by name
-- [ ] `board_detector_node` takes wiring as ROS parameters; `accumulate_scans` injected into `scan_count`
-- [ ] `board_pose_initializer` takes policy as ROS parameters; no `config_file`
-- [ ] `anchor-map-to-board --config` takes the detector file; floor-fit knobs are flags
-- [ ] packaged defaults renamed and split; `docs/configuration.md` and README follow
-- [ ] pushed to the fork's `main`
+- [x] loader reads the three-section detector file and rejects `ros:`, `autoware:`, `anchor:` by name (2026-09-10)
+- [x] `board_detector_node` takes wiring as ROS parameters; `accumulate_scans` injected into `scan_count`; input cloud is a remap of `~/input/pointcloud` (2026-09-10)
+- [x] `board_pose_initializer` takes policy as ROS parameters; no `config_file` (2026-09-10)
+- [x] `anchor-map-to-board --config` takes the detector file; floor-fit knobs are flags (2026-09-10)
+- [x] packaged defaults renamed and split; `docs/configuration.md`, README, design doc and guides follow (2026-09-10)
+- [x] pushed to the fork's `main`: `354c440`, 104 tests green, both launch files smoke-tested (2026-09-10)
 
 **Lane 2a — detector (submodule), Track A**
 
