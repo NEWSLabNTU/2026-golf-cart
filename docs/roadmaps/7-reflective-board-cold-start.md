@@ -487,7 +487,7 @@ succeed; a failure there is a finding, not a blocker on D1a.
 the numbers. Three things had to be found and fixed on the way, none of them in
 the detector, and each would have read as "the board initializer does not work":
 
-- **The client spoke the wrong service type.** Autoware 2025.02 serves
+- **The client spoke the wrong service type.** The installed Autoware 1.5.0 (apt, `autoware_pose_initializer` 1.5.0) serves
   `/localization/initialize` as `autoware_localization_msgs/srv/InitializeLocalization`
   (`component_interface_specs/localization.hpp`); the initializer node was built
   on `tier4_localization_msgs`, identical field for field, different type name,

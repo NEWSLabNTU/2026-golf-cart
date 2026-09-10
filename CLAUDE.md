@@ -3,7 +3,7 @@
 Guidance for Claude Code when working with this repository.
 
 ## Project Overview
-This is a golf cart autonomous driving system for 華夏科大 campus deployment, based on the Golf Cart platform. The system uses Autoware 2025.02 on AGX Orin (JetPack 6.2) with ROS 2 Humble.
+This is a golf cart autonomous driving system for 華夏科大 campus deployment, based on the Golf Cart platform. The system uses the Autoware 1.5.0 apt distribution (`autoware-full-1-5-0`, universe 0.48.0) on AGX Orin (JetPack 6.2) with ROS 2 Humble.
 
 **Key System Configuration:**
 - **LiDAR**: Velodyne VLP-32C only
@@ -795,7 +795,7 @@ All dependencies must be ready before localization can work.
 
 ## Important Notes
 - **Target Platform**: Advantech Orin computer with JetPack 6.2
-- **Autoware Version**: 2025.02 at `/home/aeon/repos/autoware/2025.02-ws`
+- **Autoware Version**: 1.5.0, installed from apt under `/opt/autoware/1.5.0` (source workspace `/home/aeon/repos/autoware/1.5.0-ws`). Earlier revisions of this file said 2025.02; nothing by that name is installed.
 - Always source ROS environment: `source /opt/ros/humble/setup.bash`
 - Requires ROS 2 Humble distribution
 - Built for Ubuntu 22.04 with NVIDIA GPU support
