@@ -189,6 +189,26 @@ launch:
     default: "[]"
     description: "x, y, z, qx, qy, qz, qw. A 7-element list seeds the pose."
 
+# What seeds /localization/initialize; same argument as golfcart.launch.yaml,
+# see the comment there. `board` is the indoor cold start from the reflective
+# board and forces gnss_enabled off; indoor_logging_sim.launch.xml defaults to
+# it. A bag replayed with `board` must carry the raw VLP-32C cloud on
+# board_input_pointcloud, since that is what the detector reads.
+- arg:
+    name: pose_initializer
+    default: "gnss"
+    description: "What seeds /localization/initialize: gnss | board | none"
+
+- arg:
+    name: reflective_pose_scenario
+    default: "basement"
+    description: "Board scenario: basement | sim (a scenarios/<name>/ directory)"
+
+- arg:
+    name: board_input_pointcloud
+    default: "/sensing/lidar/vlp32/velodyne_points"
+    description: "Cloud the board detector reads: intensity field, frame velodyne"
+
 - include:
     file: "$(find-pkg-share golfcart_launch)/launch/golfcart_autoware.launch.xml"
     arg:
@@ -279,6 +299,15 @@ launch:
     -
       name: pose_source
       value: $(var pose_source)
+    -
+      name: pose_initializer
+      value: $(var pose_initializer)
+    -
+      name: reflective_pose_scenario
+      value: $(var reflective_pose_scenario)
+    -
+      name: board_input_pointcloud
+      value: $(var board_input_pointcloud)
     -
       name: twist_source
       value: $(var twist_source)

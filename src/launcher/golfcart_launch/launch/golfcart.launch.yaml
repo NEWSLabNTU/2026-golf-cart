@@ -274,6 +274,29 @@ launch:
       Example: just launch "pose_source:=aruco aruco_tag_map_path:=./data/<site>/aruco_tag_map.yaml"
       There is no such file in this repository yet; survey a site and write one.
 
+# What seeds /localization/initialize, orthogonal to pose_source (what tracks
+# afterwards). `gnss` is Autoware's own initializer and leaves every existing
+# invocation unchanged. `board` brings up reflective_pose_detector's two nodes
+# and forces the pose initializer's gnss_enabled off; it needs a map anchored to
+# the board (data/basement-indoor):
+#
+#   just launch "pose_initializer:=board map_path:=./data/basement-indoor use_gnss:=false"
+#
+# Composes with ndt and cuda_ndt alike, which is why it is not a pose_source
+# value. See golfcart_autoware.launch.xml and docs/roadmaps/7-reflective-board-cold-start.md.
+- arg:
+    name: pose_initializer
+    default: "gnss"
+    description: "What seeds /localization/initialize: gnss | board | none"
+
+# Directory under config/localization/reflective_pose/scenarios/; its
+# detector.yaml is what the board detector looks for. Same shape as
+# perception_preset. Ignored unless pose_initializer:=board.
+- arg:
+    name: reflective_pose_scenario
+    default: "basement"
+    description: "Board scenario: basement | sim (a scenarios/<name>/ directory)"
+
 - arg:
     name: localization_stop_check
     default: "false"
@@ -390,6 +413,12 @@ launch:
     -
       name: initialization_stop_check
       value: $(var localization_stop_check)
+    -
+      name: pose_initializer
+      value: $(var pose_initializer)
+    -
+      name: reflective_pose_scenario
+      value: $(var reflective_pose_scenario)
     -
       name: twist_source
       value: $(var twist_source)

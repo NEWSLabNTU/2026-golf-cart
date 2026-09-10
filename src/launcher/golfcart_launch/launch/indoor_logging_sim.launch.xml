@@ -1,0 +1,136 @@
+<?xml version="1.0"?>
+<!--
+  Indoor cold start from the reflective board, driven by a replayed bag: the
+  D1a replay of docs/roadmaps/7-reflective-board-cold-start.md.
+
+  Bring the bag up PAUSED first, then this, then resume; `just indoor-test`
+  runs the sequence in order and says why the order matters:
+
+    just indoor-test bag       # paused, /clock only
+    just indoor-test up        # this file, sensor drivers off, no RViz
+    just indoor-test rviz
+    just indoor-test resume
+
+  The bag is vlp32_1 from the 2026-08-20 basement survey, and it has ONE topic
+  in it: /sensing/lidar/vlp32/velodyne_points, the VLP-32C's raw driver output
+  (PointXYZIRCAEDT, intensity as uint8, frame velodyne, about 10 Hz for 235 s).
+  The map is data/basement-indoor, the Falcon survey of the same basement
+  anchored to the same board. What the bag lacks, and what this file does
+  about each:
+
+  - No /tf or /tf_static. The detector looks up base_link to velodyne and would
+    sit in WAIT_TF forever. launch_vehicle is true, so the vehicle description
+    publishes that transform from sensor_kit_calibration.yaml; the bag's
+    frame_id is velodyne and so is the sensor kit's, so nothing is renamed.
+    `just indoor-test fake-tf` publishes the same transform for the standalone
+    detector check and must NOT run beside this file, which would put two
+    authorities on one parent/child pair.
+
+  - No velocity, IMU or odometry of any kind. NDT needs velocity through
+    vehicle_velocity_converter, gyro_odometer and ekf_localizer, so this replay
+    cannot show tracking, and does not try to. It is INIT ONLY: the pass mark is
+    the detector publishing board_pose while the cart is stopped near the board,
+    board_pose_initializer calling /localization/initialize with it, and the
+    align result logged. With no VelocityReport the initializer's speed gate
+    stays open, which is what lets it act from this bag at all. Tracking (D1b)
+    waits for a bag recorded with the vehicle interface running.
+
+  - No GNSS. use_gnss is false and pose_initializer is board, which forces the
+    pose initializer's gnss_enabled off so it waits on the service rather than
+    on a fix that never comes. imu_source is zed as in ntu_logging_sim: no
+    driver is launched for it, it only points imu_corrector at a topic the bag
+    does not carry, which is harmless for an init-only run.
+
+  The board detector reads the bag topic directly (board_input_pointcloud), and
+  NDT is fed the same topic (input_pointcloud), bypassing the concatenator for
+  the reason ntu_logging_sim.launch.xml gives: that component refuses a single
+  input and takes the whole preprocessing chain down with it. The cloud is the
+  driver's raw output, not the distortion-corrected one, and for an init-only
+  run from a stationary cart that costs nothing.
+-->
+<launch>
+  <arg name="map_path" default="./data/basement-indoor"
+       description="Falcon survey anchored to the board; board_anchor.yaml beside the PCD"/>
+  <arg name="vehicle_id" default="default"/>
+  <arg name="rviz" default="true"/>
+  <arg name="launch_perception" default="false"/>
+  <arg name="launch_planning" default="false"/>
+  <arg name="launch_control" default="false"/>
+
+  <!-- Same coarse/fine pair as golfcart.launch.yaml. use_cuda:=false puts
+       preprocessing and concatenation back on CPU; pose_source is separate. -->
+  <arg name="use_cuda" default="true" description="coarse GPU switch for pointcloud_backend"/>
+  <!-- ndt, not cuda_ndt: the cuda matcher's align service has been measured
+       past the caller's deadline (CLAUDE.md), and the align IS this replay's
+       result. Ask for cuda_ndt by name once that is re-measured. -->
+  <arg name="pose_source" default="ndt" description="ndt or cuda_ndt"/>
+  <arg name="pointcloud_backend"
+       default="$(eval &quot;'cuda' if '$(var use_cuda)'.lower() in ('true','1','yes') else 'cpu'&quot;)"
+       description="cpu or cuda. Defaults from use_cuda."/>
+  <set_env name="POINTCLOUD_BACKEND" value="$(var pointcloud_backend)"/>
+
+  <!-- board is the point of this file; gnss would wait forever on this bag and
+       none leaves it to RViz. Kept as an argument so the same replay can check
+       that the default starts neither board node. -->
+  <arg name="pose_initializer" default="board" description="board | none | gnss"/>
+  <arg name="reflective_pose_scenario" default="basement"/>
+
+  <!-- The one topic the bag has. Both consumers read it: see the header. -->
+  <arg name="input_pointcloud" default="/sensing/lidar/vlp32/velodyne_points"
+       description="what NDT matches"/>
+  <arg name="board_input_pointcloud" default="$(var input_pointcloud)"
+       description="what the board detector reads"/>
+
+  <!-- Writable model directory, for the same reason ntu_logging_sim gives:
+       launch_perception is off here but the argument exists to be flipped. -->
+  <arg name="data_path" default="./data/autoware_data"
+       description="Autoware model/artifact directory. Must be WRITABLE."/>
+
+  <include file="$(find-pkg-share golfcart_launch)/launch/golfcart_autoware.launch.xml">
+    <arg name="vehicle_model" value="golfcart_vehicle"/>
+    <arg name="sensor_model" value="golfcart_sensor_kit"/>
+    <arg name="vehicle_id" value="$(var vehicle_id)"/>
+    <arg name="map_path" value="$(var map_path)"/>
+    <arg name="data_path" value="$(var data_path)"/>
+
+    <!-- Replay drives the one sensor topic; no driver may open hardware. The
+         vehicle description runs for base_link to velodyne, the interface
+         does not (no CAN, and nothing to report). -->
+    <arg name="launch_sensing" value="true"/>
+    <arg name="launch_sensing_driver" value="false"/>
+    <arg name="launch_vehicle" value="true"/>
+    <arg name="launch_vehicle_interface" value="false"/>
+
+    <arg name="launch_map" value="true"/>
+    <arg name="launch_localization" value="true"/>
+    <arg name="launch_perception" value="$(var launch_perception)"/>
+    <arg name="launch_planning" value="$(var launch_planning)"/>
+    <arg name="launch_control" value="$(var launch_control)"/>
+    <arg name="launch_system" value="true"/>
+    <arg name="system_run_mode" value="logging_simulation"/>
+    <arg name="launch_system_monitor" value="false"/>
+    <arg name="launch_dummy_diag_publisher" value="false"/>
+
+    <arg name="pose_source" value="$(var pose_source)"/>
+    <arg name="twist_source" value="gyro_odom"/>
+    <arg name="imu_source" value="zed"/>
+
+    <arg name="pose_initializer" value="$(var pose_initializer)"/>
+    <arg name="reflective_pose_scenario" value="$(var reflective_pose_scenario)"/>
+    <arg name="board_input_pointcloud" value="$(var board_input_pointcloud)"/>
+
+    <!-- No GNSS indoors. gnss_receiver still needs a REAL value: the sensor
+         kit resolves its topic with a dict lookup that raises KeyError on an
+         empty string and takes the whole launch down, driver or no driver.
+         See ntu_logging_sim.launch.xml and golfcart.launch.yaml. -->
+    <arg name="use_gnss" value="false"/>
+    <arg name="gnss_receiver" value="ublox"/>
+
+    <arg name="camera_model" value="none"/>
+
+    <arg name="input_pointcloud" value="$(var input_pointcloud)"/>
+
+    <arg name="rviz" value="$(var rviz)"/>
+    <arg name="use_sim_time" value="true"/>
+  </include>
+</launch>

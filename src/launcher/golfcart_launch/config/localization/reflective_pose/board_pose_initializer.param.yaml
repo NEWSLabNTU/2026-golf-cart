@@ -1,0 +1,34 @@
+# Handoff policy for board_pose_initializer on this stack: how a detected board
+# pose becomes one call to Autoware's /localization/initialize. Properties of
+# the vehicle stack, not of the board or the site, so this is neither per
+# scenario nor part of the detector file.
+#
+# Every key is a field of Policy in the submodule's initializer_node.py; the
+# packaged copy (reflective_pose_autoware/config/board_pose_initializer.param.yaml)
+# is the reference for what the node accepts. `/**` because the node runs as
+# /localization/board_pose_initializer.
+/**:
+  ros__parameters:
+    # Autoware's pose_initializer service. With gnss_enabled false (which
+    # pose_initializer:=board forces in golfcart_autoware.launch.xml) it waits
+    # on this call; the align result comes back in the response and is logged.
+    initialize_service: /localization/initialize
+
+    # Speed gate on /vehicle/status/velocity_status (VelocityReport). No
+    # report at all leaves the gate open, which is what lets the D1a replay
+    # (a bag with no velocity in it) exercise the call.
+    max_speed_for_init: 0.05          # [m/s]
+
+    # Poses acted on before the fallback policy runs. An attempt is one pose
+    # acted on, so a detector that never detects spends none.
+    max_attempts: 5
+
+    # Off, and keep it off without a reviewed fallback policy: a silent fallback
+    # to a fixed pose turns a detector failure into a mislocalization report
+    # three weeks later.
+    fallback_to_user_defined_pose: false
+
+    # Seconds to wait for a pose before counting an attempt as spent. Zero
+    # disables it. Left disabled because the fallback above is off, so there
+    # is nothing for a spent budget to trigger.
+    pose_wait_timeout: 0.0

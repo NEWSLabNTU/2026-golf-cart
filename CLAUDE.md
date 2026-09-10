@@ -41,6 +41,7 @@ Grouped families live in `just/*.just` and are reached as `just <module> <recipe
 | module | covers |
 |---|---|
 | `ntu-test` | NTU campus NDT replay — run `just ntu-test` for the ordered sequence |
+| `indoor-test` | indoor cold start from the reflective board, init-only replay of the basement bag — `just indoor-test` for the sequence |
 | `bag` | rosbag record, play, merge, fetch |
 | `record` | recording lifecycle, independent of the launch |
 | `service` | multi-machine systemd units, `doctor`, `host-status` |
@@ -628,6 +629,37 @@ The comment at that parameter in
 `cuda_ndt_matcher_launch/config/cuda_scan_matcher.param.yaml` carries the
 history; re-derive the gate from a healthy run's score distribution, never
 inherit it.
+
+#### Pose initializer (what seeds `/localization/initialize`)
+```bash
+pose_initializer:=gnss             # Default: Autoware's GNSS-seeded initializer; unchanged behaviour
+pose_initializer:=board            # reflective_pose_detector finds the retroreflective board and calls the service
+pose_initializer:=none             # nothing seeds it: RViz 2D Pose Estimate or /initialpose3d
+reflective_pose_scenario:=basement # scenarios/<name>/detector.yaml for board; basement | sim
+```
+
+Orthogonal to `pose_source`: it names what *seeds* localization, `pose_source`
+names what *tracks* afterwards, so `board` composes with `ndt` and `cuda_ndt`
+alike. Anything but `gnss` forces the pose initializer's `gnss_enabled` off
+regardless of `use_gnss`, so Autoware's `pose_initializer` waits on the service
+instead of on a fix; the default starts neither board node. The two nodes come
+up as `/localization/board_detector` and `/localization/board_pose_initializer`,
+included from `golfcart_autoware.launch.xml` directly so their config reaches
+them as arguments. Config lives in
+`golfcart_launch/config/localization/reflective_pose/`: `board_detector.param.yaml`
+(vehicle wiring: frames, `accumulate_scans`, the motion-guard twist topic) and
+`board_pose_initializer.param.yaml` (handoff policy) are per vehicle;
+`scenarios/<name>/detector.yaml` (board, gates, covariance) is per site, and
+`scenarios/basement/falcon_map.yaml` is the offline anchoring counterpart.
+`board_input_pointcloud` is the cloud the detector reads, defaulting to the
+VLP-32C's raw driver topic `/sensing/lidar/vlp32/velodyne_points` because that
+is the one still in frame `velodyne` with intensity intact.
+
+`just indoor-test` replays the basement bag against `data/basement-indoor/`
+through `indoor_logging_sim.launch.xml` (`bag` paused, `up`, `rviz`, `resume`,
+`down`; `fake-tf` only for the standalone detector). The bag has one topic and
+no velocity, so the replay proves initialization only. Design and status:
+[docs/roadmaps/7-reflective-board-cold-start.md](docs/roadmaps/7-reflective-board-cold-start.md).
 
 #### System Features
 ```bash

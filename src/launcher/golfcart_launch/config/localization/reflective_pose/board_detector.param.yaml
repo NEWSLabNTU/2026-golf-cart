@@ -1,0 +1,43 @@
+# Wiring for board_detector_node on THIS vehicle: where the node is plugged in,
+# not what it looks for. What it looks for is the scenario's detector file
+# (scenarios/<scenario>/detector.yaml), given as the `config_file` parameter;
+# the input cloud is the ~/input/pointcloud subscription, remapped in
+# golfcart_autoware.launch.xml from `board_input_pointcloud`.
+#
+# Per vehicle, not per scenario: frames and stacking describe the golf cart
+# and its sensor kit, and a second site does not change them. Every key is a
+# field of NodeParams in the submodule's detector_node.py; the packaged copy
+# (reflective_pose_ros/config/board_detector.param.yaml) is the reference for
+# what the node accepts. The top-level key is `/**` because the node runs as
+# /localization/board_detector and a bare node-name key would not match it
+# (see the Xsens note in CLAUDE.md for the same trap).
+/**:
+  ros__parameters:
+    # The VLP-32C's raw driver output carries header.frame_id `velodyne`
+    # (golfcart_sensor_kit_launch/config/VLP32.param.yaml), and so does the
+    # replay bag vlp32_1. The static base_link -> velodyne transform comes
+    # from the vehicle description (sensor_kit_calibration.yaml).
+    sensor_frame: velodyne
+    base_frame: base_link
+
+    # Scans stacked per detection attempt. Feeds the detector's scan_count, so
+    # the expected return count scales with it: a node stacking 10 against a
+    # detector assuming 1 rejects every real board as ten times too dense.
+    # Set once, here, never in the scenario file.
+    accumulate_scans: 10
+
+    # Motion guard. Stacking assumes a stationary sensor; nothing deskews the
+    # stack, so a batch taken while the cart rolls is smeared and the board's
+    # extents measure wrong.
+    #
+    # EMPTY FOR NOW, which disables the guard. Roadmap phase 7, A3, sets it
+    # to the vehicle's twist topic once the guard can be verified on a bag
+    # that carries velocity; the D1a replay bag (vlp32_1) has one topic and
+    # nothing to gate on. On the vehicle the candidates are
+    # /sensing/vehicle_velocity_converter/twist_with_covariance
+    # (geometry_msgs/TwistWithCovarianceStamped is NOT accepted; the node
+    # takes nav_msgs/Odometry or geometry_msgs/TwistStamped) or
+    # /localization/kinematic_state (nav_msgs/Odometry, but downstream of the
+    # pose this node is meant to seed). A3 decides which.
+    twist_topic: ""
+    max_speed_for_accumulation: 0.05

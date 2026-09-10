@@ -150,11 +150,83 @@
   <arg name="initial_pose" default="[]"
        description="x, y, z, qx, qy, qz, qw. A 7-element list seeds the pose; anything else is ignored"/>
 
+  <!--
+    Which node seeds /localization/initialize. Orthogonal to pose_source, which
+    names what TRACKS afterwards: `board` composes with ndt and cuda_ndt alike,
+    which is why this is not a sixth pose_source value (roadmap phase 7, C2).
+
+      gnss   Autoware's own GNSS-seeded initializer. The default; every
+             existing invocation is unchanged and neither board node starts.
+      board  reflective_pose_detector: the VLP-32C finds the retroreflective
+             board, board_pose_initializer calls the service with the pose.
+             Needs a map anchored to that board (data/basement-indoor).
+      none   nothing seeds it. Manual init: RViz 2D Pose Estimate, or an
+             /initialpose3d publish.
+
+    Anything but gnss forces the pose initializer's gnss_enabled off, whatever
+    use_gnss says. That is the whole of "replacing the GNSS initializer": with
+    gnss_enabled false Autoware's pose_initializer waits on the service instead
+    of on a GNSS fix that never comes, and the board node is what calls it.
+  -->
+  <arg name="pose_initializer" default="gnss"
+       description="what seeds /localization/initialize: gnss | board | none"/>
+  <!-- A directory under config/localization/reflective_pose/scenarios/, the
+       same shape as perception_preset. detector.yaml in it is what the
+       detector looks for; the wiring and policy files beside scenarios/ are
+       per vehicle, not per site. -->
+  <arg name="reflective_pose_scenario" default="basement"
+       description="scenarios/NAME/detector.yaml for pose_initializer:=board"/>
+  <!--
+    The cloud the board detector reads. The VLP-32C's RAW driver output, on
+    purpose, and it is the same topic name the D1a replay bag carries:
+
+      /sensing/lidar/vlp32/velodyne_points   frame `velodyne`, PointXYZIRCAEDT
+                                             with the intensity field intact
+
+    Not the preprocessed per-LiDAR output (vlp32/pointcloud_before_sync) and
+    not the concatenated cloud: both leave the sensor kit's crop box already
+    transformed into base_link, and the detector's sensor_frame is `velodyne`,
+    which must equal the cloud's header.frame_id. The detector stacks scans
+    only while the cart is stationary, so the distortion correction it forgoes
+    by taking the raw topic is worth nothing to it.
+  -->
+  <arg name="board_input_pointcloud" default="/sensing/lidar/vlp32/velodyne_points"
+       description="PointCloud2 with intensity, in the detector's sensor_frame"/>
+  <arg name="use_gnss" default="true" description="GNSS present on this run"/>
+  <!-- gnss_enabled for the pose initializer. tier4_localization_component
+       declares it with default $(var use_gnss); setting it here first means
+       that default is never consulted, so the derived value wins in every
+       branch (ndt, cuda_ndt, and the stock tier4 path). Lower-case strings,
+       not Python booleans: it ends up both as a node parameter and in `if`
+       conditions downstream. -->
+  <let name="gnss_enabled"
+       value="$(eval &quot;'true' if ('$(var pose_initializer)' == 'gnss' and '$(var use_gnss)'.lower() in ('true', '1', 'yes')) else 'false'&quot;)"/>
+
   <!-- Golf Cart: Use golfcart_launch's localization component with custom config -->
   <group if="$(var launch_localization)">
     <include file="$(find-pkg-share golfcart_launch)/launch/components/tier4_localization_component.launch.xml">
       <arg name="initial_pose" value="$(var initial_pose)"/>
+      <arg name="gnss_enabled" value="$(var gnss_enabled)"/>
     </include>
+
+    <!-- Board cold start, beside the localization component rather than
+         under it. Included from THIS file so config_file and the two param
+         files reach the nodes as arguments; an installed Autoware include
+         between here and the nodes would drop them (CLAUDE.md, the
+         camera_model / imu_source story), and the env-var route is the
+         fallback if this ever has to move. Nodes come up as
+         /localization/board_detector and /localization/board_pose_initializer. -->
+    <group if="$(eval '\'$(var pose_initializer)\' == \'board\'')">
+      <let name="reflective_pose_config_path"
+           value="$(find-pkg-share golfcart_launch)/config/localization/reflective_pose"/>
+      <include file="$(find-pkg-share reflective_pose_autoware)/launch/board_pose_initializer.launch.xml">
+        <arg name="config_file" value="$(var reflective_pose_config_path)/scenarios/$(var reflective_pose_scenario)/detector.yaml"/>
+        <arg name="detector_params_file" value="$(var reflective_pose_config_path)/board_detector.param.yaml"/>
+        <arg name="initializer_params_file" value="$(var reflective_pose_config_path)/board_pose_initializer.param.yaml"/>
+        <arg name="input_topic" value="$(var board_input_pointcloud)"/>
+        <arg name="namespace" value="/localization"/>
+      </include>
+    </group>
   </group>
 
   <!-- Perception -->

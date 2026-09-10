@@ -1,0 +1,68 @@
+# Basement scenario, OFFLINE anchoring: the detector file for
+# `anchor-map-to-board --config` against the Seyond Falcon survey cloud
+# (GLIM, basement_voxel_resol_0.15.ply), not for the vehicle.
+#
+# PLACEHOLDER. The map in data/basement-indoor/ was anchored 2026-09-10 by the
+# survey team with their own copy of this file, and that copy has not been
+# handed over yet (roadmap phase 7, B3). This file MUST be replaced by the
+# exact file the map was anchored with: a rebuild from any other gate set is
+# not reproducible, and a different `board:` block would anchor a different
+# map. Until then it records the best reconstruction from board_anchor.yaml
+# and the survey statistics.
+#
+# The `board:` block is duplicated from detector.yaml beside this file and
+# must agree with it, since the runtime guess and the map it is checked
+# against describe the same object.
+
+board:
+  # Same four numbers as detector.yaml. The tool moves the map origin onto
+  # the board, so this is what the map frame is DEFINED by.
+  pose_in_map: [0.0, 0.0, 1.3, 0.0, 0.0, 0.0]
+  width: 0.6
+  height: 0.6
+  centre_height: 1.3
+
+detector:
+  # The Falcon's intensity scale, not the VLP-32C's. Measured on the survey
+  # cloud: strongly bimodal, median 16, p90 44, p99 254, with a usable
+  # retroreflector band at the top; 240 cuts it cleanly (142,109 returns
+  # above 240 in the 0.15 m export). The VLP-32C runtime value of 100 in
+  # detector.yaml does not transfer here and vice versa.
+  intensity_threshold: 240.0
+
+  # Range and density gates are switched OFF by anchor-map-to-board itself: a
+  # merged map has no sensor origin, no rings and no scan rate, so neither
+  # is meaningful. The values are still required by the loader and are the
+  # packaged defaults.
+  range_min: 3.0
+  range_max: 18.0
+  density_max_ratio: 1.4
+  density_check_enabled: true
+  azimuth_step_rad: 0.0035
+
+  # Height band above the fitted floor. Restricting the survey cloud to
+  # 0.5..1.9 m dropped 308 retro clusters to 136 and the board's own cluster
+  # sits centred at ~0.7 m in the source frame with the floor at ~-0.06.
+  height_min: 0.5
+  height_max: 1.9
+
+  # A merged map is denser and smoother than a live scan. The delivered
+  # anchor found the board with 1380 points, extents 0.866 x 0.611 m and a
+  # plane residual of 0.058 m, so the tolerances below have to admit that:
+  # 0.866 / 0.6 = 1.44 against the upper extent bound.
+  cluster_tolerance: 0.15
+  cluster_min_points: 200
+  extent_tolerance: [0.8, 1.5]
+  planarity_max_thickness: 0.10
+  verticality_max_dot: 0.25
+  centre_height_tolerance: 0.60
+
+covariance:
+  # Unused by the anchoring tool, required by the loader. Packaged defaults.
+  sigma_xy_base: 0.15
+  sigma_xy_per_metre: 0.03
+  sigma_z: 0.10
+  sigma_yaw_base: 0.05
+  sigma_roll_pitch: 0.02
+  safety_factor: 2.0
+  unconstrained_axis_sigma: 1.0

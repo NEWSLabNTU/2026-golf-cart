@@ -23,6 +23,8 @@ default:
 
 # NTU campus NDT replay test — see `just ntu-test` for the ordered sequence
 mod ntu-test 'just/ntu-test.just'
+# Indoor cold start from the reflective board, no GNSS — `just indoor-test` for the sequence
+mod indoor-test 'just/indoor-test.just'
 # Rosbag recording and playback
 mod bag 'just/bag.just'
 # Recording lifecycle, independent of the launch

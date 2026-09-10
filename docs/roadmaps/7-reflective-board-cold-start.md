@@ -483,6 +483,40 @@ board, `board_pose_initializer` calls `/localization/initialize` with it, and
 the align result is logged. With the anchored map the align is expected to
 succeed; a failure there is a finding, not a blocker on D1a.
 
+**D1a passed, 2026-09-10.** See Lane 3 in the checklist for the sequence and
+the numbers. Three things had to be found and fixed on the way, none of them in
+the detector, and each would have read as "the board initializer does not work":
+
+- **The client spoke the wrong service type.** Autoware 2025.02 serves
+  `/localization/initialize` as `autoware_localization_msgs/srv/InitializeLocalization`
+  (`component_interface_specs/localization.hpp`); the initializer node was built
+  on `tier4_localization_msgs`, identical field for field, different type name,
+  so rclpy's `service_is_ready()` never became true and the node reported
+  "pose initializer service unavailable" while `ros2 service list` showed it.
+  Fixed in the submodule (`ff08ccb`), with a test pinning the type.
+- **play_launch cannot bring this stack's pose initializer up today.** Its
+  Python parser renders the array parameters of `pose_initializer.param.yaml`
+  (loaded with `allow_substs`) as strings, and `autoware_pose_initializer_node`
+  dies at startup with `InvalidParameterTypeException` on
+  `output_pose_covariance`, taking the service with it. Its Rust parser refuses
+  the repo's `$(eval '\'$(var pose_source)\' == \'aruco\'')` conditions
+  outright. `just indoor-test up` therefore runs stock `ros2 launch`, and the
+  comment on the recipe says why. `just ntu-test up` has the same problem and
+  has not been changed here.
+- **Loopback multicast is off on this workstation** (`multicast-lo.service`
+  inactive, `lo` without the MULTICAST flag), so the repo's loopback DDS profile
+  cannot discover and a stock launch of ~30 processes dies with "Failed to find
+  a free participant index for domain 0". The proper fix is
+  `sudo systemctl start multicast-lo`, which `scripts/env.sh` already asks
+  for; the run used a unicast profile with `MaxAutoParticipantIndex` 250
+  through `CYCLONEDDS_URI` instead.
+
+One number to carry into D1b rather than explain away here: 34 s after
+initialization, with the cart moving and no twist in the bag,
+`/localization/kinematic_state` read (2.1, 2.7, 0.4) against the board-derived
+guess of (11.5, -4.6, 0.5). Whether that is NDT following the cart on scans
+alone or a walk-off is exactly the question D1b's bag exists to answer.
+
 D1a runs through a replay harness of its own, `just indoor-test`, mirroring
 `just ntu-test`: bag paused for `/clock`, stack up with drivers off, RViz on
 bag time, resume, then watch the service call. The stack supplies
@@ -533,22 +567,21 @@ Two things the build turned up, neither in this campaign's packages:
 
 **Lane 2a — detector (submodule), Track A**
 
-- [ ] A4: `intensity_threshold` 100 with the evidence table beside it; board default 0.6 x 0.6
-- [ ] A1: `AMBIGUOUS` suppresses the frame, shows on `/diagnostics`, next frame still processed
-- [ ] A2: one confidence scalar, on the diagnostic, gated by one key
-- [ ] standalone replay of `vlp32_1` with `fake-tf` produces candidates
-- [ ] measure the board centre's height above the floor from the bag (the
-      VLP-32C sees the floor; the Falcon map does not — see Track B), and
-      reconcile with `pose_in_map[2]`
-- [ ] pushed to the fork's `main`
+- [x] A4: `intensity_threshold` 100 with the evidence table beside it; board default 0.6 x 0.6, centre 1.3 (`5c8184d`, 2026-09-10). The >100 row: 361 / 559 / 996 points per scan, 197 of 197 scans clear 60.
+- [x] A1: `AMBIGUOUS` suppresses the frame, shows on `/diagnostics`, next frame still processed. The per-batch verdict is `reflective_pose_ros.decision.judge()`, tested on real simulator results (`0baf6a2`).
+- [x] A2: one confidence scalar in [0, 1] from five terms (planarity, extent, density, edges at double weight, range at half), on every detection and every diagnostic; `detector.min_confidence`, default 0.6, is the one key (`c9d9c02`). Clean simulated boards score 0.86 to 0.93, one hidden edge 0.55.
+- [x] two more gates measured on the bag and moved (`e944e04`): `cluster_tolerance` 0.05 to 0.15 (at 0.05 the board split into ring stripes and nothing detected in 235 batches) and `height_max` 1.5 to 1.65 (1.5 clipped the board's top 0.1 m; 1.7 merged the reflective band above it).
+- [x] standalone replay of `vlp32_1` with `fake-tf` produces candidates (2026-09-10): 24 of 235 ten-scan batches detect, all while the cart stands still 12 m from the board (bag start and end, confidence 0.85 to 0.90) or passes 3 m from it at t = 74 s (0.69 to 0.80); every other batch is `no candidate`, never `AMBIGUOUS`; the one partial view scores 0.52 and is kept out. Poses: (11.5 to 11.9, -4.6, yaw -178 deg) from 12 m, (1.3 to 1.4, 3.3 to 3.4, yaw -86 deg) from 3 m.
+- [x] board centre height measured from the bag (2026-09-10): with the cart 3 m from the board on level floor the cluster spans z 1.0 to 1.65 above `base_link` and the centre reads 1.30 to 1.40 m above the fitted floor; from the 12 m spots it reads 1.15 to 1.20, but there `base_link` sits 0.30 m above the local floor and pitched 1.8 deg, a ramp. **1.3 holds to about 0.1 m**; `pose_in_map[2]` stays. The published z from the 12 m spots is 0.5 m for the same reason, and NDT align absorbs it.
+- [x] pushed to the fork's `main`: `5c8184d`, `c9d9c02`, `0baf6a2`, `e944e04`, `d25444b`, and `ff08ccb` from D1a below (2026-09-10)
 
 **Lane 2b — wiring (this repo), C1 + C2**
 
-- [ ] `config/localization/reflective_pose/` tree, basement scenario filled from `board_anchor.yaml`
-- [ ] `pose_initializer` and `reflective_pose_scenario` through `golfcart_autoware.launch.xml`
-- [ ] `indoor_logging_sim.launch.xml`: GNSS off, camera none, bag topic remapped
-- [ ] `just indoor-test` module: bag, up, rviz, resume, down, fake-tf
-- [ ] `ros2 param get /board_detector config_file` shows the installed scenario path
+- [x] `config/localization/reflective_pose/` tree, basement scenario filled from `board_anchor.yaml` and Lane 2a's measured gates; `falcon_map.yaml` is a placeholder until B3 (2026-09-10)
+- [x] `pose_initializer` (`gnss | board | none`, default `gnss`) and `reflective_pose_scenario` through `golfcart.launch.yaml`, `logging_simulation.launch.yaml` and `golfcart_autoware.launch.xml`; anything but `gnss` forces the pose initializer's `gnss_enabled` off; `board_input_pointcloud` names the cloud the detector reads (2026-09-10)
+- [x] `indoor_logging_sim.launch.xml`: GNSS off, camera none, bag topic to NDT and to the detector (2026-09-10)
+- [x] `just indoor-test` module: bag, up, rviz, resume, pause, down, fake-tf, run (2026-09-10)
+- [x] `ros2 param get /localization/board_detector config_file` shows `install/.../scenarios/basement/detector.yaml` on the live stack (2026-09-10)
 
 **Lane 2c — map (this repo), Track B**
 
@@ -577,11 +610,12 @@ Two things the build turned up, neither in this campaign's packages:
 
 **Lane 3 — D1a**
 
-- [ ] `just indoor-test` end to end on the merged lanes
-- [ ] outcome and align result recorded under D1
+- [x] end to end on the merged lanes, 2026-09-10: bag paused, stock `ros2 launch golfcart_launch indoor_logging_sim.launch.xml rviz:=false`, resume. Board detected at 12.0 m (1013 points, confidence 0.86) 72 s after the stack came up; `board_pose_initializer` attempt 1/5 with (11.53, -4.62, 0.51); Autoware's `pose_initializer` deactivated EKF and NDT, called the align server, **align server succeeded 2.7 s later**, reactivated both; `/localization/initialization_state` read 3 (INITIALIZED); "localization initialized from the board". Two more detections followed (12 m at 0.85, then 3.3 m at 0.71), ignored as designed once initialized.
+- [x] outcome and align result recorded under D1 (below)
 
 **Lane 4 — after D1a**
 
+- [ ] play_launch: fix or report the Python parser's string rendering of array parameters under `allow_substs`, then put `just indoor-test up` and `just ntu-test up` back on it
 - [ ] C3: rebuild script, dry-run by default
 - [ ] A3: motion guard wired on the vehicle
 - [ ] D2: on-vehicle sequence, `tx` off
