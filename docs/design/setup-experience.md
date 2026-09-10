@@ -390,3 +390,31 @@ slowest step here (~11 min on an Orin), but the alternative is not skipping the
 compile -- it is paying the same compile inside each node's constructor on the
 first launch, with perception down until it finishes. `ci` still leaves it off,
 and a machine with no CUDA device shows it as not applicable.
+
+### Three steps rosdep already answers (2026-09-11)
+
+`nebula-driver`, `ublox-driver` and `gscam` were apt one-liners sitting beside
+a `ros-deps` step whose whole job is `rosdep install --from-paths src`. Two of
+them were duplicating it and the third did not need to exist.
+
+| step | what replaced it |
+|---|---|
+| `ublox-driver` | `ublox_gps`, declared by the sensor kit, resolves to `ros-humble-ublox-gps`, which depends on `ublox-msgs` and `ublox-serialization`. Three packages, one key. |
+| `gscam` | `gscam` resolves the same way. The GStreamer *plugin* packages it does not depend on are now declared in the sensor kit's package.xml, where a runtime dependency belongs; all five have rosdep keys. |
+| `nebula-driver` | Nothing: `autoware-full-1-5-0` pulls Nebula through `autoware-ros-packages-1-5-0`, which is why all eight nebula packages are already marked auto-installed. |
+
+Nebula is also the one that *could not* have been done with rosdep. There is no
+rosdep rule for `nebula_ros`, and apt carries only the versioned
+`ros-humble-nebula-ros-1-5-0` from the Autoware localrepo, so the standard
+`ros-humble-<key>` mapping resolves to a package that does not exist. Making it
+work would mean shipping a custom rosdep rule file and registering it in
+`/etc/ros/rosdep/sources.list.d` -- machinery for a package that arrives on its
+own.
+
+Two stale keys turned up in the same file and are fixed: `innovusion`, which is
+not a package (the vendored Seyond driver is `<name>seyond</name>`), and
+`pointcloud_preprocessor`, renamed upstream to
+`autoware_pointcloud_preprocessor`. The `ros-deps` step passes `-r`, so both
+had been reported and skipped on every run without failing anything.
+
+Setup is 22 steps now, from 25.

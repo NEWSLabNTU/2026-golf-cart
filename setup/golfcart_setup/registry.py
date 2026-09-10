@@ -16,6 +16,18 @@ Dropped from the previous system, by decision on 2026-09-02:
   signatures are not checked. Nothing under `src/` references pacmod; the
   vehicle interface is Turing Drive.
 * `gdown` -- installed and never used by anything in the repo.
+* `nebula-driver`, `ublox-driver`, `gscam` (2026-09-11) -- three apt steps that
+  `rosdep install --from-paths src` already answers, or that another step
+  already installs. `ublox_gps` is declared by the sensor kit and resolves to
+  `ros-humble-ublox-gps`, which depends on `ublox-msgs` and
+  `ublox-serialization`, so all three packages arrive from one key. `gscam`
+  resolves the same way; the GStreamer *plugin* packages it does not depend on
+  are now declared in the sensor kit's package.xml, which is where a runtime
+  dependency belongs. Nebula is the one that cannot work this way -- there is
+  no rosdep rule for `nebula_ros`, and apt carries only the versioned
+  `ros-humble-nebula-ros-1-5-0` from the Autoware localrepo -- but it needs
+  none: `autoware-full-1-5-0` pulls it through `autoware-ros-packages-1-5-0`,
+  which is why all eight nebula packages are already marked auto-installed.
 * `isaac-ros` -- cuVSLAM/cuVGL are out of the plan, and `pose_source` has
   already lost its `isaac` and `visual` options.
 
@@ -186,7 +198,9 @@ STEPS: list[Step] = [
     Step(
         id="ros-deps",
         label="Workspace ROS dependencies (rosdep)",
-        why="Resolves the declared dependencies of everything under src/.",
+        why="Resolves the declared dependencies of everything under src/, which "
+            "is where the sensor drivers come from: gscam and its GStreamer "
+            "plugins, ublox_gps, nmea_navsat_driver.",
         group="Autoware",
         run=_BASH(
             f"cd {REPO_ROOT} && source /opt/ros/humble/setup.sh && "
@@ -216,48 +230,6 @@ STEPS: list[Step] = [
         group="Kernel and network",
         run=[_S("configure-multicast-lo.sh")],
         requires=Requires(sudo=True),
-        profiles=_on(*DEV),
-    ),
-
-    # ---- Sensor packages: apt only, no device touched, so `dev` gets them --
-    Step(
-        id="nebula-driver",
-        label="Nebula LiDAR driver",
-        why="Velodyne VLP-32C support. Also inside autoware-debian; installed "
-            "separately so the driver is available without it.",
-        group="Sensor packages",
-        run=_BASH(
-            "sudo apt-get update && sudo apt-get install -y "
-            "ros-humble-nebula-ros-1-5-0 ros-humble-nebula-decoders-1-5-0 "
-            "ros-humble-nebula-common-1-5-0 ros-humble-nebula-hw-interfaces-1-5-0 "
-            "ros-humble-nebula-msgs-1-5-0"
-        ),
-        requires=Requires(sudo=True),
-        after=("ros2",),
-        profiles=_on(*DEV),
-    ),
-    Step(
-        id="ublox-driver",
-        label="u-blox GNSS driver",
-        why="Also inside autoware-debian; installed separately for the same reason.",
-        group="Sensor packages",
-        run=_BASH(
-            "sudo apt-get update && sudo apt-get install -y "
-            "ros-humble-ublox-gps ros-humble-ublox-msgs ros-humble-ublox-serialization"
-        ),
-        requires=Requires(sudo=True),
-        after=("ros2",),
-        profiles=_on(*DEV),
-    ),
-    Step(
-        id="gscam",
-        label="gscam (GStreamer camera bridge)",
-        why="Drives the GMSL cameras through GStreamer.",
-        group="Sensor packages",
-        run=[_S("install-gscam.sh")],
-        requires=Requires(sudo=True),
-        after=("ros2",),
-        # A package build, not a device: `dev` gets it like the other two.
         profiles=_on(*DEV),
     ),
 
