@@ -43,13 +43,17 @@ download_deb() {
 
     if command -v aria2c &> /dev/null; then
         echo "  Downloading with aria2c (parallel)..."
-        local args=(--dir="$dir" --out="$out" -x 10 -s 10 -k 1M)
+        # --continue: pick up an interrupted run from its .aria2 control file
+        # rather than starting 2 GB over.
+        local args=(--dir="$dir" --out="$out" -x 10 -s 10 -k 1M --continue=true)
         [[ -n "$sha" ]] && args+=(--checksum=sha-256="$sha")
         if aria2c "$url" "${args[@]}"; then
             return 0  # aria2c verified the checksum inline
         fi
         echo "  aria2c download failed; falling back to wget/curl..."
-        rm -f "$dest"
+        # The control file goes too: left behind without its data file, it
+        # would make the next run think a resumable download is in progress.
+        rm -f "$dest" "${dest}.aria2"
     fi
 
     if command -v wget &> /dev/null; then
@@ -82,7 +86,23 @@ download_deb() {
 echo "  Downloading ${DOWNLOAD_URL} to ${DEB_DOWNLOAD_DIR}..."
 
 DOWNLOAD_REQUIRED=false
-if [[ -f "$TEMP_DEB" ]]; then
+if [[ -f "${TEMP_DEB}.aria2" ]]; then
+    # aria2c deletes its control file when a download completes, so its presence
+    # means the last run was interrupted. aria2c preallocates the full size and
+    # fills segments in parallel, so such a file has the right length and a
+    # valid .deb header while holes remain mid-file: it fails the checksum and
+    # used to be refused below as a "possibly custom" build. It is neither.
+    echo "  ${DEB_FILE} is an interrupted download (found ${DEB_FILE}.aria2)."
+    if command -v aria2c &> /dev/null; then
+        echo "  Resuming it..."
+    else
+        # Only aria2c can read its control file; wget or curl would append to a
+        # preallocated file and corrupt it. Start over.
+        echo "  aria2c is not installed to resume it, so starting over..."
+        rm -f "$TEMP_DEB" "${TEMP_DEB}.aria2"
+    fi
+    DOWNLOAD_REQUIRED=true
+elif [[ -f "$TEMP_DEB" ]]; then
     echo "  File ${DEB_FILE} already exists. Verifying checksum..."
     if [[ -n "$SHA256SUM" ]]; then
         ACTUAL_SHA256SUM=$(sha256sum "$TEMP_DEB" | awk '{print $1}')
@@ -93,10 +113,13 @@ if [[ -f "$TEMP_DEB" ]]; then
             echo "  ERROR: Checksum mismatch for existing file: ${TEMP_DEB}"
             echo "  Expected SHA256: ${SHA256SUM}"
             echo "  Actual SHA256:   ${ACTUAL_SHA256SUM}"
-            echo "  This likely means the downloaded file is corrupted or has been modified."
-            echo "  Please manually remove or rename the file, or update the script with the"
-            echo "  correct checksum if you are using a custom build."
-            echo "  Exiting to prevent accidental deletion of a potentially custom file."
+            echo "  The expected value is the one GitHub publishes for the release asset:"
+            echo "    gh api repos/NEWSLabNTU/autoware-localrepo/releases/tags/1.5.0-1 \\"
+            echo "      --jq '.assets[] | {name, digest}'"
+            echo "  If it matches, this file is damaged. Delete it and re-run:"
+            echo "    rm '${TEMP_DEB}'"
+            echo "  Do not edit the checksum to match the file; that disables the check."
+            echo "  Not deleted automatically, in case it is a deliberate local build."
             echo "--------------------------------------------------------------------------------"
             exit 1 # Exit with an error
         fi
