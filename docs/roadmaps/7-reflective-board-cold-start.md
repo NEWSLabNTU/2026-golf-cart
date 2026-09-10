@@ -19,7 +19,22 @@ Design: [reflective_pose_detector.md](../../src/localization/reflective_pose_det
    `/localization/initialize` with `method=AUTO`.
 5. NDT align refines the guess and tracks against the anchored PCD map.
 
-Steps 3 and 4 largely exist. Step 5's map does not. What follows is the gap.
+Steps 3 and 4 largely exist. Step 5's map was delivered 2026-09-10 (see
+[Track B, delivered](#track-b--delivered)). What follows is the gap.
+
+## Decisions, 2026-09-10
+
+Made at the campaign kickoff. Each one changes an item below, and the item says
+so where it applies.
+
+| Decision | Consequence |
+|---|---|
+| The board is **0.6 x 0.6 m**, centre **1.3 m** above the floor | `board.height: 0.97` was wrong. B2's lead was chosen for its 0.97 m vertical extent, so it was picked for the wrong reason; the delivered anchor shows it was the right cluster anyway. |
+| Runtime `intensity_threshold` is **100** on the VLP-32C | Bottom of the datasheet retroreflector band, so a sensor contract rather than a tuning. Replaces A4's derivation. A1 and A2 stop being refinements: the shape gates now sort everything retroreflective in the basement. |
+| A teammate anchors the map, not this repository | Track B is consumed, not run, here. `anchor-map-to-board` stays the tool; C3's wrapper becomes a rebuild aid, not a prerequisite. |
+| D1 is **init-only** from `vlp32_1` | D1b stays blocked on a bag with velocity and IMU. No synthetic-twist experiment. |
+| One config file per reader, scenario directories | Replaces C1's two-file split. Layout under C1. |
+| Board init is `pose_initializer:=board`, orthogonal to `pose_source` | Replaces C2's "sixth `pose_source` value": one value cannot compose with both `ndt` and `cuda_ndt`. |
 
 ## Track A — a detector that survives being driven around
 
@@ -104,6 +119,14 @@ and which cluster the number came from.
 **Done when:** the runtime threshold is derived from bag data with the evidence
 recorded beside it, and a replay produces candidates.
 
+**Decided 2026-09-10: 100.** Not derived from the separation study above but
+from the datasheet band edge, which makes it a sensor contract like the old
+value claimed to be, only reachable. The table above still describes what the
+clustering and shape gates are then asked to sort, which is why A1 and A2 are
+prerequisites of this number rather than follow-ups. The comment beside the key
+in the scenario file carries this paragraph. Still done when a replay produces
+candidates.
+
 ## Track B — an anchored PCD map from the GLIM basement survey
 
 Source:
@@ -134,6 +157,47 @@ Measured, not assumed:
 Extent is roughly 105 x 81 m, floor at z ≈ -0.06, and the intensity histogram is
 strongly bimodal — median 16, p90 44, p99 254 — so **the Falcon does produce a
 usable retroreflector band**, which was the first open question.
+
+### Track B — delivered
+
+Anchored 2026-09-10 by the survey team with `anchor-map-to-board`, on the
+0.15 m export:
+
+```
+~/nas/autoveh/dataset/2026-08-20 GLIM pointcloud mapping bags/autoware_falcon_map/basement_voxel_resol_0.15/
+  pointcloud_map.pcd        3,995,308 points, x y z intensity, binary, 64 MB
+  board_anchor.yaml         the transform and the detection it came from
+  board_polygon.osm         0.6 x 0.6 m at y = ±0.3, z = 1.0 to 1.6
+  map_projector_info.yaml   projector_type: Local
+```
+
+From `board_anchor.yaml`, so the rest of this track can be read against it:
+
+| | |
+|---|---|
+| board in source frame | centre (-10.21, 3.91, 0.70), normal (0.992, 0.108, 0.062) |
+| floor tilt | 0.145 deg (B5: recorded) |
+| detection | 1380 points, extents **0.866 x 0.611 m**, plane residual 0.058 m |
+| map frame | origin on the floor below the board centre, +x along the board normal |
+
+So `board.pose_in_map` is `[0, 0, 1.3, 0, 0, 0]` and `board.centre_height` is
+`1.3`, and the runtime scenario file must say exactly that.
+
+**One number to look at before trusting the map:** the detected extents are
+0.87 x 0.61, against a board declared 0.6 x 0.6. The short axis matches; the
+long one is 44% over nominal, inside `extent_tolerance`'s upper bound of 1.5
+but not explained. Either the mounting frame is retroreflective too, or the
+board is not square, or the merged Falcon cloud smears one edge. It does not
+move the anchor much — the centre is the centroid either way — but the runtime
+gate on the VLP-32C sees the same object, and if the 0.87 is real then a 0.6
+nominal with the same tolerance still passes it. Resolve by looking at the
+cluster in the debug viewer, or by measuring the board. Not blocking.
+
+Status of the items below, against that delivery: B1 done (0.15 m used), B2
+done (the cluster the lead pointed at, identified by the tool rather than by a
+person), B3 needs the config the survey team ran with, copied into
+`scenarios/basement/falcon_map.yaml` so a rebuild is reproducible, B4 is the
+part still owed here, B5 done.
 
 ### B1 — use the 0.15 m map; the 0.5 m one cannot work
 
@@ -218,40 +282,86 @@ The package ships a default `reflective_pose.yaml` so it runs standalone. This
 repository does not use it: the vehicle has its own gates, the map has different
 ones again, and neither should be an edit to a file inside a submodule.
 
-### C1 — two config files, deliberately separate
+### C1 — one file per reader, scenario directories
 
-They describe different sensors doing different jobs, and B3 is the reason they
-cannot be one file: the runtime gates are VLP-32C measurements, the map gates
-are properties of a merged Falcon survey with no rings, no scan rate and no
-sensor origin.
+Decided 2026-09-10, replacing the two-file split this item first proposed.
+The package's single six-section file made three consumers read one document
+and share a `board:` block by fan-out. That coupling is what the split undoes:
+a file is read by exactly one kind of consumer, and a scenario is a directory.
 
-| File | Read by | Installed |
-|---|---|---|
-| `src/launcher/golfcart_launch/config/localization/reflective_pose/vehicle.param.yaml` | the two nodes, via our launch | yes, to `share/` |
-| `config/reflective_pose/falcon_map.yaml` | `anchor-map-to-board`, offline | no |
+```
+src/launcher/golfcart_launch/config/localization/reflective_pose/
+  board_detector.param.yaml          ROS wiring, per vehicle: frames, accumulate_scans,
+                                     twist topic, max speed. Not per scenario.
+  board_pose_initializer.param.yaml  handoff policy: service, speed gate, attempts, fallback
+  scenarios/
+    basement/
+      detector.yaml                  VLP-32C runtime. board 0.6 x 0.6, centre 1.3,
+                                     pose_in_map [0,0,1.3,0,0,0], threshold 100, covariance
+      falcon_map.yaml                offline. Same board block, Falcon-survey gates;
+                                     the file the survey team anchored with
+    sim/
+      detector.yaml                  synthetic scenes and the desk test; package defaults
+```
 
-The split in location follows the split in use. The vehicle file is referenced by
-a launch file, so it must reach `share/` through the package's `data_files`. The
-map file is a command-line input to a tool a person runs by hand, never launched,
-so it belongs with the rest of `config/` and is read by path.
+The detector file has three sections, `board`, `detector`, `covariance`, and
+is what both `board_detector_node` (`config_file`) and `anchor-map-to-board`
+(`--config`) load. The loader rejects `ros:`, `autoware:` and `anchor:` with a
+message saying where each moved, so a file from the old layout fails loudly.
 
-Both keep the section structure the package defines, and the comments that carry
-measurements travel with their keys — the 101-255 band and the 3 m minimum stay
-in the vehicle file because they are VLP-32C facts, and must not be copied into
-the map file where they mean nothing.
+What moved where:
 
-**Done when:** neither file is the submodule's packaged default, `just build`
-installs the vehicle one, and the map one is reachable without a build.
+- `ros:` became ordinary ROS parameters of `board_detector_node`, from
+  `board_detector.param.yaml`. `accumulate_scans` still feeds `scan_count`; the
+  node injects it when it loads the detector file, since the node is the one
+  thing that knows how many scans it stacks.
+- `autoware:` became ROS parameters of `board_pose_initializer`.
+- `anchor:` became CLI flags of `anchor-map-to-board` with `AnchorParams` as
+  defaults. Floor-fit tuning is a property of one run of one tool.
+- The input topic is a **remap** in whichever launch starts the node. The bag
+  replay remaps to `/sensing/lidar/vlp32/velodyne_points`; the vehicle to the
+  live topic. No file edit per bag.
 
-### C2 — both nodes in our launch
+The board block is duplicated between `detector.yaml` and `falcon_map.yaml`:
+four numbers, same directory. `board_anchor.yaml` records the dimensions the
+map was anchored with and the node logs its own at startup, so disagreement is
+visible in two logs side by side. A third `board.yaml` passed to both tools was
+considered and rejected as an extra argument for four numbers.
 
-`golfcart.launch.yaml` brings up `board_detector_node` and
-`board_pose_initializer`, passing `config_file` pointed at C1's vehicle file.
+Everything lives under `golfcart_launch/config` and reaches `share/` through
+the package's `data_files`, so launch resolves it with `find-pkg-share` and the
+CLI reads it by path; colcon's symlink install keeps edits live without a
+rebuild. Wiring and policy are deliberately not per scenario: they describe the
+vehicle and the stack, not the site. A second site adds one directory with two
+files.
 
-This is a `pose_source` value, not a new top-level switch. `pose_source` already
-selects the localization *method* — `ndt`, `cuda_ndt`, `aruco`, `yabloc`,
-`eagleye` — and board-based cold start is a sixth: it seeds NDT rather than
-replacing it, so it composes with `ndt` rather than excluding it.
+**Done when:** the submodule's loader accepts the three-section file and
+rejects the old one; `just build` installs the tree above; and neither node
+reads the submodule's packaged default when launched from this repository.
+
+### C2 — both nodes in our launch, behind `pose_initializer`
+
+`golfcart.launch.yaml` and the replay launches bring up `board_detector_node`
+and `board_pose_initializer` when asked:
+
+```
+just launch pose_initializer:=board reflective_pose_scenario:=basement
+```
+
+`pose_initializer` is a new argument, `gnss | board | none`, default `gnss`,
+which leaves every existing invocation unchanged. It names which node seeds
+`/localization/initialize`, and is orthogonal to `pose_source`, which names
+what tracks afterwards: `board` composes with `ndt` and with `cuda_ndt` alike.
+The 2026-09-08 text of this item made it a sixth `pose_source` value; that
+would have needed a seventh for the CUDA matcher, so it was dropped on
+2026-09-10.
+
+`reflective_pose_scenario` resolves to
+`scenarios/$(var reflective_pose_scenario)/detector.yaml`, the same shape as
+`perception_preset`. `board` implies `use_gnss:=false` for the pose
+initializer's `gnss_enabled`, which is the whole of "replacing the GNSS
+initializer": with GNSS disabled Autoware's `pose_initializer` waits on the
+service, and the board node is what calls it.
 
 Two things the existing launch already teaches, and this must not relearn:
 
@@ -260,12 +370,14 @@ Two things the existing launch already teaches, and this must not relearn:
   `pose_source` declaration for exactly this reason.
 - `camera_model`, `imu_source` and `tx_enabled` do not survive the trip through
   `tier4_sensing_component.launch.xml`, which forwards a fixed argument set.
-  Check where these nodes are included from before assuming `config_file:=`
-  reaches them; if the include path drops it, the env-var route is the
-  established fallback here.
+  These two nodes are included from `golfcart_autoware.launch.xml` directly,
+  beside the localization component, so `config_file` and the param files reach
+  them as arguments; if that ever moves under an installed Autoware include, the
+  env-var route is the established fallback here.
 
-**Done when:** `just launch` brings both nodes up with our config, and
-`ros2 param get /board_detector config_file` shows the installed path.
+**Done when:** `just launch pose_initializer:=board` brings both nodes up with
+our config, `ros2 param get /board_detector config_file` shows the installed
+scenario path, and `pose_initializer:=gnss` (the default) starts neither.
 
 ### C3 — a script for the map processing
 
@@ -273,8 +385,11 @@ Map anchoring is a rare, deliberate, destructive-if-wrong operation that takes
 minutes and produces artifacts a whole deployment depends on. It should not be a
 command someone reconstructs from a README each time.
 
+Since 2026-09-10 the survey team runs the anchoring, so this is a rebuild aid
+rather than a prerequisite, and it sits after D1a in the order of work.
+
 `scripts/map/anchor_reflective_map.sh` wraps `anchor-map-to-board` with
-`config/reflective_pose/falcon_map.yaml`, defaults to `--dry-run`, and requires
+`scenarios/<scenario>/falcon_map.yaml`, defaults to `--dry-run`, and requires
 an explicit flag to write. It records the resulting transform and floor tilt
 next to the output, which is what B5 asks for.
 
@@ -336,12 +451,87 @@ NDT convergence and tracking, which needs a bag with velocity in it.
 recorded as blocked until a suitable bag exists, rather than attempted against
 this one.
 
+**Decided 2026-09-10: D1a only.** A synthetic zero-twist replay to coax NDT
+into tracking was considered and dropped; it would prove something about a
+stationary cart, and the bag is a drive. D1a's pass mark, against the delivered
+map: the detector publishes `~/board_pose` while the cart is stopped near the
+board, `board_pose_initializer` calls `/localization/initialize` with it, and
+the align result is logged. With the anchored map the align is expected to
+succeed; a failure there is a finding, not a blocker on D1a.
+
+D1a runs through a replay harness of its own, `just indoor-test`, mirroring
+`just ntu-test`: bag paused for `/clock`, stack up with drivers off, RViz on
+bag time, resume, then watch the service call. The stack supplies
+`base_link -> velodyne` from the vehicle description, so `fake-tf` is only
+for the standalone detector check; the bag's `frame_id` is `velodyne` and the
+sensor kit's is `velodyne`, so nothing is renamed.
+
 ### D2 — on the vehicle
 
 The full sequence, with `tx` off first.
 
 **Done when:** the driver can bring the cart up indoors without touching a
 terminal beyond the launch.
+
+## Steps
+
+Checked as they land; the date beside a box says when. Lane 0 first, then the
+config split, then 2a, 2b and 2c in parallel: their files do not overlap. The
+submodule is one of those lanes, and its commits go to the fork's `main`
+before the parent pointer moves.
+
+**Lane 0 — build**
+
+- [ ] `just build` on this checkout; the five `reflective_pose_*` packages install
+- [ ] `anchor-map-to-board` on PATH after `source install/setup.bash`
+
+**Lane 1 — config split (submodule), C1**
+
+- [ ] loader reads the three-section detector file and rejects `ros:`, `autoware:`, `anchor:` by name
+- [ ] `board_detector_node` takes wiring as ROS parameters; `accumulate_scans` injected into `scan_count`
+- [ ] `board_pose_initializer` takes policy as ROS parameters; no `config_file`
+- [ ] `anchor-map-to-board --config` takes the detector file; floor-fit knobs are flags
+- [ ] packaged defaults renamed and split; `docs/configuration.md` and README follow
+- [ ] pushed to the fork's `main`
+
+**Lane 2a — detector (submodule), Track A**
+
+- [ ] A4: `intensity_threshold` 100 with the evidence table beside it; board default 0.6 x 0.6
+- [ ] A1: `AMBIGUOUS` suppresses the frame, shows on `/diagnostics`, next frame still processed
+- [ ] A2: one confidence scalar, on the diagnostic, gated by one key
+- [ ] standalone replay of `vlp32_1` with `fake-tf` produces candidates
+- [ ] pushed to the fork's `main`
+
+**Lane 2b — wiring (this repo), C1 + C2**
+
+- [ ] `config/localization/reflective_pose/` tree, basement scenario filled from `board_anchor.yaml`
+- [ ] `pose_initializer` and `reflective_pose_scenario` through `golfcart_autoware.launch.xml`
+- [ ] `indoor_logging_sim.launch.xml`: GNSS off, camera none, bag topic remapped
+- [ ] `just indoor-test` module: bag, up, rviz, resume, down, fake-tf
+- [ ] `ros2 param get /board_detector config_file` shows the installed scenario path
+
+**Lane 2c — map (this repo), Track B**
+
+- [x] B1: 0.15 m export used (2026-09-10, survey team)
+- [x] B2: board cluster identified, by `anchor-map-to-board` rather than by hand (2026-09-10)
+- [x] B5: floor tilt recorded, 0.145 deg in `board_anchor.yaml` (2026-09-10)
+- [x] anchor and convert: `pointcloud_map.pcd`, `board_anchor.yaml`, `board_polygon.osm`, `map_projector_info.yaml` delivered (2026-09-10)
+- [ ] B3: the survey team's anchoring config copied to `scenarios/basement/falcon_map.yaml`
+- [ ] the 0.87 x 0.61 m extents question looked at once
+- [ ] copy to `data/basement-indoor/`
+- [ ] B4 verify: loads in `pointcloud_map_loader`; minimal `lanelet2_map.osm` with the board polygon; RViz shows the board at the origin
+
+**Lane 3 — D1a**
+
+- [ ] `just indoor-test` end to end on the merged lanes
+- [ ] outcome and align result recorded under D1
+
+**Lane 4 — after D1a**
+
+- [ ] C3: rebuild script, dry-run by default
+- [ ] A3: motion guard wired on the vehicle
+- [ ] D2: on-vehicle sequence, `tx` off
+- [ ] D1b: basement bag with velocity and IMU recorded; first job of the next vehicle session
 
 ## Risks
 
@@ -350,6 +540,8 @@ on ground truth from the survey, and the whole of Track B is blocked on B2.
 Guessing which of nine candidates is the board and anchoring to the wrong one
 shifts the entire map with no later symptom — the detector would then confirm
 its own error at startup, because the same code produced both.
+Resolved 2026-09-10: the delivered anchor identified the cluster by tool, not
+by guess. What remains is the 0.87 x 0.61 m extents question in Track B.
 
 **`AMBIGUOUS` is terminal today.** On a map with 308 retro clusters, A1 is not a
 refinement; without it the detector stops permanently the first time two
@@ -368,6 +560,8 @@ not a tuning task to be done when convenient; until it is done, every other item
 in Track A and Track D reads as broken. The failure is silent in the worst way —
 `NO_CANDIDATE` forever, with correct geometry, correct TF and a board in plain
 view.
+Decided 2026-09-10: 100. The risk moves, it does not vanish; at 100 the gates
+carry the load, which is why A1 and A2 precede any replay.
 
 **The bag has no velocity, so it cannot prove the thing it looks like it proves.**
 It is a 3.7 GB recording of a drive past the board, and the obvious reading is
