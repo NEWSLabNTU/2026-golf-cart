@@ -78,7 +78,7 @@ This document outlines the migration plan from the Golf Cart platform to a golf 
   - Installs ROS 2 Humble
   - Installs Autoware dependencies
   - Configures system settings
-- [ ] Verify Autoware 2025.02 at `/home/aeon/repos/autoware/2025.02-ws`
+- [ ] Verify Autoware 1.5.0 at `/opt/autoware/1.5.0` (`apt list --installed | grep autoware-full`)
 - [ ] Clone golf cart project and build: `make prepare && make build`
 
 **Key Files:**
@@ -92,7 +92,7 @@ This document outlines the migration plan from the Golf Cart platform to a golf 
 - Clean build with no errors
 - All system dependencies installed
 
-**Note:** JetPack version is critical - Autoware 2025.02 compatibility must be verified with JP6.0.
+**Note:** JetPack version is critical - Autoware 1.5.0 ships a separate `jetpack62` build of the localrepo package, so the JetPack version must match what the installer expects.
 
 ---
 
