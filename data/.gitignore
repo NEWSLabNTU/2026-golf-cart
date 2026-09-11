@@ -24,6 +24,7 @@
 *.blob
 *.pb
 *.pcd
+*.ply
 
 # Temporary files
 *.tmp

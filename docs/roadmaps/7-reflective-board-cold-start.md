@@ -85,6 +85,33 @@ and wrong here: step 2 of the sequence has the cart moving by definition.
 **Done when:** the vehicle config sets it to a real topic and a bag replay shows
 scans discarded while moving and accepted once stopped.
 
+### A5 — the detected board visible in RViz
+
+The detector publishes the board's points and a normal arrow, but not its shape,
+so "is this detection the board, and all of it" is answered by reading numbers
+off the log. Publish the outline as `~/debug/board_outline`, a latched
+`MarkerArray` in the sensor frame, cleared on every batch that detects nothing:
+
+- `nominal`: the configured 0.6 x 0.6 m around the detected centre, one closed
+  cyan loop. This is the rectangle the published pose is composed from.
+- `measured`: the observed extents, one marker per edge, green if the detector
+  saw that edge and red if not. A red edge is the one defect that biases the
+  centre; an outline larger than the nominal one is a neighbour clustered in.
+
+With the stack initialized and RViz's fixed frame `map`, TF carries the outline
+onto the anchored map, beside `board_polygon.osm`: the detected board against
+the mapped one, in one view.
+
+Nodes and files: `board_detector_node` only. In the submodule,
+`reflective_pose_ros/debug_viz.py` (the builder), `detector_node.py` (the
+publisher), `test/test_debug_viz.py`, `rviz/board_detector.rviz`, and the design
+doc, README and debugging guide. Here, the pointer and a display in
+`golfcart.rviz` and `golfcart_ntu.rviz`.
+
+**Done when:** the outline draws in RViz from the replay bag, the edge colours
+are pinned by a test on a partially hidden board, and a batch without a
+detection leaves no outline on screen.
+
 ### A4 — the runtime intensity threshold is wrong, and nothing will detect until it is fixed
 
 `detector.intensity_threshold` is 240.0, and the config comment calls it a sensor
@@ -435,6 +462,12 @@ Input:
 ~/nas/autoveh/dataset/2026-08-20 GLIM pointcloud mapping bags/rosbags/vlp32_1
 ```
 
+Replayed from a repo-local copy, never from the NAS mount in place: copy it
+once into the gitignored `rosbags/basement/vlp32_1`, which is
+`indoor_sim_bag.sh`'s default. The source PLY likewise lives at
+`data/basement-indoor/source/basement_voxel_resol_0.15.ply`, gitignored, which
+is `anchor_reflective_map.sh`'s default.
+
 Same survey session as the map in Track B, so the two describe one basement. The
 map is the Falcon's; this is the VLP-32C's, which is the runtime sensor.
 
@@ -657,6 +690,16 @@ Two things the build turned up, neither in this campaign's packages:
       run matches the delivered anchor, and a write reproduces the delivered
       `pointcloud_map.pcd` byte for byte. `lanelet2_map.osm` is seeded from
       the polygon only when absent.
+- [x] A5: detected board outline on `~/debug/board_outline`, in the detector's
+      and the stack's RViz layouts (2026-09-11, reflective_pose_detector
+      `a8078a5`). Drawn for any batch with a detection, including one the
+      confidence gate suppresses; cleared on no candidate and on ambiguous
+      batches. 155 tests green. Verified on the local `vlp32_1` copy: one
+      stepped batch publishes the clear-all, the cyan nominal loop and four
+      green measured edges, and RViz draws them around the board at 12 m.
+      Displays added to `golfcart.rviz` (Localization group) and
+      `golfcart_ntu.rviz` (Map group, the one `just indoor-test rviz` opens)
+      on `/localization/board_detector/debug/board_outline`.
 - [ ] A3: motion guard wired on the vehicle. Desk half done 2026-09-11: the
       detector reads `geometry_msgs/TwistWithCovarianceStamped` (what
       `vehicle_velocity_converter` publishes; before, such a topic fell through

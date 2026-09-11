@@ -57,7 +57,9 @@ CONFIG="${REPO_ROOT}/src/launcher/golfcart_launch/config/localization/reflective
 
 if [ -z "$CLOUD" ]; then
     case "$SCENARIO" in
-        basement) CLOUD="${GOLFCART_BASEMENT_CLOUD:-/home/aeon/nas/autoveh/dataset/2026-08-20 GLIM pointcloud mapping bags/glim_falcon_map/basement_voxel_resol_0.15.ply}" ;;
+        # The repo-local copy, never the NAS mount itself: copy once with
+        #   cp ~/nas/"autoveh/dataset/2026-08-20 GLIM pointcloud mapping bags/glim_falcon_map/basement_voxel_resol_0.15.ply" data/basement-indoor/source/
+        basement) CLOUD="${GOLFCART_BASEMENT_CLOUD:-${REPO_ROOT}/data/basement-indoor/source/basement_voxel_resol_0.15.ply}" ;;
         *) echo "scenario '${SCENARIO}' has no default cloud; pass --cloud" >&2; exit 2 ;;
     esac
 fi

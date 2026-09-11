@@ -363,6 +363,19 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /map/vector_map_marker
       Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: BoardOutline
+      Namespaces:
+        measured: true
+        nominal: true
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /localization/board_detector/debug/board_outline
+      Value: true
     Enabled: true
     Name: Map
   - Class: rviz_common/Group
