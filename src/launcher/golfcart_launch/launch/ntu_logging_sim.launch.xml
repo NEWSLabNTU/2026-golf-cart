@@ -44,8 +44,10 @@
        concatenation back on CPU; pose_source is separate and is not touched. -->
   <arg name="use_cuda" default="true" description="coarse GPU switch for pointcloud_backend"/>
   <!-- Not derived from use_cuda: a GPU switch must not change which localizer
-       runs. Same reasoning as golfcart.launch.yaml. Ask for cuda_ndt by name. -->
-  <arg name="pose_source" default="ndt" description="ndt or cuda_ndt"/>
+       runs. Same reasoning as golfcart.launch.yaml, and the same default as it
+       has, so this replay measures the stack the vehicle runs. Ask for ndt by
+       name to get the CPU matcher. -->
+  <arg name="pose_source" default="cuda_ndt" description="cuda_ndt or ndt"/>
   <arg name="pointcloud_backend"
        default="$(eval &quot;'cuda' if '$(var use_cuda)'.lower() in ('true','1','yes') else 'cpu'&quot;)"
        description="cpu or cuda. Defaults from use_cuda."/>

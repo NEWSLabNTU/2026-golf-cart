@@ -180,10 +180,11 @@ STEPS: list[Step] = [
     Step(
         id="dev-tools",
         label="Developer tools",
-        why="git-lfs, Go, pre-commit, clang-format, PlotJuggler.",
+        why="git-lfs, Go, pre-commit, clang-format, PlotJuggler, GNU parallel "
+            "(which supervises the replay scripts).",
         group="Toolchain",
         run=_BASH(
-            "sudo apt-get update && sudo apt-get install -y git-lfs golang && "
+            "sudo apt-get update && sudo apt-get install -y git-lfs golang parallel && "
             "pip3 install --user pre-commit 'clang-format==17.0.5' && "
             "if ! apt-mark showhold | grep -q ros-humble-plotjuggler-ros; then "
             "sudo apt-get install -y ros-humble-plotjuggler-ros || true; fi"

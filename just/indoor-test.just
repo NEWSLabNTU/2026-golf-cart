@@ -3,11 +3,20 @@
 # D1a of docs/roadmaps/7-reflective-board-cold-start.md. Run these in order,
 # each in its own terminal (bag, up and rviz stay running):
 #
+#   just indoor-test run         # all four, supervised by GNU parallel
+#
+# or one stage per terminal, in this order:
+#
 #   just indoor-test bag         # 1. bag PAUSED -- publishes /clock only
 #   just indoor-test up          # 2. stack, sensor drivers off, no RViz
 #   just indoor-test rviz        # 3. RViz on bag time, map visible
 #   just indoor-test resume      # 4. let the scans flow, watch the service call
 #   just indoor-test down        # stop everything
+#
+# `run` is supervised: GNU parallel owns the bag, the stack, RViz and the
+# conductor, the first job to finish tears down the rest, and `down` stops that
+# supervisor by pid. The staged path has no supervisor, so `down` falls back to
+# matching processes by argv, which cannot tell this run from anyone else's.
 #
 # There is no `init` step, unlike ntu-test: the board detector IS the init.
 # Success is /localization/board_detector/board_pose being published while the
@@ -61,13 +70,18 @@ bag ARGS="":
 #
 #   ros2 launch golfcart_launch indoor_logging_sim.launch.xml rviz:=false
 #
-# Pass launch arguments through ARGS, e.g. "pose_initializer:=gnss" to check
-# that the default starts neither board node.
+# The script waits for /clock before launching, so it can be started here in
+# its own terminal after `just indoor-test bag`, in either order.
+#
+# It asks for pose_initializer:=board, which is what this replay is for. The
+# launch file itself defaults to gnss, matching golfcart.launch.yaml and the
+# cart: a launch file that lies about the vehicle is worse than one that needs
+# a flag. pose_source needs no flag, cuda_ndt being the default in both.
+# Anything passed through ARGS wins, so "pose_initializer:=gnss" still checks
+# that the vehicle default starts neither board node.
 # 2. Bring up the indoor logging simulation (sensor drivers off, no RViz).
 up ARGS="":
-    play_launch launch --web-addr 0.0.0.0:8081 \
-        --container-mode "${GOLFCART_CONTAINER_MODE:-observable}" \
-        golfcart_launch indoor_logging_sim.launch.xml rviz:=false {{ARGS}}
+    ./scripts/rosbag/indoor_sim_up.sh {{ARGS}}
 
 # 3. RViz with the point cloud map rendered visibly, on bag time.
 rviz:

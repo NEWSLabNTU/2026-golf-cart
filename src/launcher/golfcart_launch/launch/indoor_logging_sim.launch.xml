@@ -60,19 +60,26 @@
   <!-- Same coarse/fine pair as golfcart.launch.yaml. use_cuda:=false puts
        preprocessing and concatenation back on CPU; pose_source is separate. -->
   <arg name="use_cuda" default="true" description="coarse GPU switch for pointcloud_backend"/>
-  <!-- ndt, not cuda_ndt: the cuda matcher's align service has been measured
-       past the caller's deadline (CLAUDE.md), and the align IS this replay's
-       result. Ask for cuda_ndt by name once that is re-measured. -->
-  <arg name="pose_source" default="ndt" description="ndt or cuda_ndt"/>
+  <!-- cuda_ndt, matching golfcart.launch.yaml: a replay defaults to the stack
+       the vehicle runs, or it is not measuring the vehicle. Know one thing
+       before reading a failed init here: the cuda matcher's align service was
+       measured past the caller's deadline (CLAUDE.md), and the align IS this
+       replay's result, so a timeout on /localization/initialize is the known
+       failure and pose_source:=ndt is the control run that isolates it. -->
+  <arg name="pose_source" default="cuda_ndt" description="cuda_ndt or ndt"/>
   <arg name="pointcloud_backend"
        default="$(eval &quot;'cuda' if '$(var use_cuda)'.lower() in ('true','1','yes') else 'cpu'&quot;)"
        description="cpu or cuda. Defaults from use_cuda."/>
   <set_env name="POINTCLOUD_BACKEND" value="$(var pointcloud_backend)"/>
 
-  <!-- board is the point of this file; gnss would wait forever on this bag and
-       none leaves it to RViz. Kept as an argument so the same replay can check
-       that the default starts neither board node. -->
-  <arg name="pose_initializer" default="board" description="board | none | gnss"/>
+  <!-- gnss, matching golfcart.launch.yaml and golfcart_autoware.launch.xml:
+       the cart is an outdoor vehicle and the default has to say so, here as
+       everywhere else. The board initializer is what THIS replay exists to
+       exercise, so the indoor-test recipes ask for it by name
+       (pose_initializer:=board); on this bag gnss simply waits forever, which
+       is the correct behaviour for a default that is about the vehicle rather
+       than about the test. -->
+  <arg name="pose_initializer" default="gnss" description="gnss | board | none"/>
   <arg name="reflective_pose_scenario" default="basement"/>
 
   <!-- The one topic the bag has. Both consumers read it: see the header. -->

@@ -520,11 +520,18 @@ over ~600 m, so it does not regress localization.
 the faster of the two: 40.5 ms mean on the Orin against Autoware's own 47.0 ms
 on the same bag, at 3.0 cm RMSE, holding 10 Hz in real time.
 
-**Its align service has been measured at ~23 s against the caller's deadline**,
-so `/localization/initialize` times out and the scan matcher stays latched off.
-If the stack comes up and never localizes, that is this, and the fallback is
-`pose_source:=ndt`. Re-measure on the Orin before assuming the number holds: the
-per-frame path improved 10x there and the align path may have moved with it. See
+**Its align service used to miss the caller's deadline at ~23 s**, so
+`/localization/initialize` timed out and the scan matcher stayed latched off.
+**That no longer reproduces on the workstation.** 2026-09-11, indoor replay,
+board initializer seeding cuda_ndt against the basement Falcon map: the align
+returned, and the matcher tracked the whole bag at 9.84 Hz with `exe_time_ms`
+of 2.06. Both logging sims now default to `pose_source:=cuda_ndt` on the
+strength of it.
+
+It has NOT been re-measured on the Orin, which is the machine that matters, and
+the old number came from there. If a stack comes up and never localizes, this
+is still the first thing to suspect and `pose_source:=ndt` is still the control
+run that isolates it. See
 [docs/handover/2026-08-30-cuda-pipeline-to-orin.md](docs/handover/2026-08-30-cuda-pipeline-to-orin.md).
 
 **`camera_model`, `imu_source` and `tx_enabled` do NOT work as launch arguments.** They reach

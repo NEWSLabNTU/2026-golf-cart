@@ -23,6 +23,18 @@ set -eo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CONFIG="${REPO_ROOT}/src/launcher/golfcart_launch/rviz/golfcart_ntu.rviz"
 
+# 3. Waiting. Started against an empty graph, RViz comes up with every display
+# in error and stays that way, so it waits for the stack rather than trusting
+# the operator's typing order. Already-up is the common case and costs one
+# service listing.
+# shellcheck source=/dev/null
+source "${REPO_ROOT}/scripts/rosbag/indoor_sim_lib.sh"
+sim_source_env "${REPO_ROOT}"
+if ! has_service /localization/initialize; then
+    wait_for 120 "the stack (just indoor-test up)" has_service /localization/initialize \
+        || die "no stack to draw; start it first"
+fi
+
 [ -f "${CONFIG}" ] || { echo "missing rviz config: ${CONFIG}" >&2; exit 1; }
 
 exec rviz2 -d "${CONFIG}" --ros-args \
