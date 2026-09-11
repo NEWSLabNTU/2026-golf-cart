@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Record the indoor replay's localization events, with both clocks.
 
-    scripts/performance/record_indoor_events.py --out events.jsonl --seconds 400
+    scripts/rosbag/indoor_sim_record_events.py --out events.jsonl --seconds 400
 
 Every event carries wall time and simulation time. Both are needed and they
 answer different questions: sim time says where in the recording something

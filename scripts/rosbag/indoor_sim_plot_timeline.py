@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Draw the indoor replay's localization timeline from recorded events.
 
-    PYTHONNOUSERSITE=1 scripts/performance/plot_indoor_timeline.py \
+    PYTHONNOUSERSITE=1 scripts/rosbag/indoor_sim_plot_timeline.py \
         --events events.jsonl --out docs/research/performance/indoor-replay-timeline.png
 
 PYTHONNOUSERSITE matters: the apt matplotlib is built against NumPy 1.x and

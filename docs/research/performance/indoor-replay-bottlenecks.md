@@ -189,7 +189,7 @@ read-ahead competes with the stack.
 
 ```bash
 just indoor-test run rviz=off          # bag paused, stack, resume, hold
-python3 scripts/performance/profile_replay.py --seconds 60
+just indoor-test profile        # or scripts/rosbag/indoor_sim_profile.py
 ```
 
 ---
@@ -198,8 +198,8 @@ python3 scripts/performance/profile_replay.py --seconds 60
 
 ![Indoor replay timeline](indoor-replay-timeline.png)
 
-Recorded 2026-09-12 with `scripts/performance/record_indoor_events.py` and drawn
-by `plot_indoor_timeline.py`, from a full `just indoor-test run` on the
+Recorded 2026-09-12 with `scripts/rosbag/indoor_sim_record_events.py` and
+drawn by `indoor_sim_plot_timeline.py` beside it, from a full `just indoor-test run` on the
 defaults: basement Falcon map, vlp32 bag, board initializer, cuda_ndt. 235 s of
 bag in 242 s wall, so the workstation replays this at 1.03x real time.
 

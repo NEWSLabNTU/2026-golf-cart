@@ -110,3 +110,22 @@ fake-tf:
 # Stop the replay stack, the player, RViz and a fake-tf if one is running.
 down:
     ./scripts/rosbag/indoor_sim_down.sh
+
+# Per-process CPU, RSS and block I/O, topic rates and the scan matcher's
+# exe_time, sampled while a replay is up. Run it in a second terminal.
+# Where the time and the bytes go, while the replay runs
+profile SECONDS="60":
+    ./scripts/rosbag/indoor_sim_profile.py --seconds {{SECONDS}}
+
+# Record board detections, the initialization state, NDT poses, iteration
+# counts and NVTL for a whole replay. Start it before `run`: it subscribes as
+# topics appear.
+# Record localization events to a JSONL file
+record OUT="log/indoor-test/events.jsonl" SECONDS="320":
+    ./scripts/rosbag/indoor_sim_record_events.py --out {{OUT}} --seconds {{SECONDS}}
+
+# PYTHONNOUSERSITE, because the apt matplotlib is built against NumPy 1.x and
+# the NumPy 2.x in ~/.local breaks its import.
+# Draw the timeline from a recorded events file
+timeline EVENTS="log/indoor-test/events.jsonl" OUT="docs/research/performance/indoor-replay-timeline.png":
+    PYTHONNOUSERSITE=1 ./scripts/rosbag/indoor_sim_plot_timeline.py --events {{EVENTS}} --out {{OUT}}
