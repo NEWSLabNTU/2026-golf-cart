@@ -128,6 +128,23 @@ Remaining:
 4. After merge: bump this repo's Autoware, drop the `cuda_pointcloud_filters` submodule,
    keep only the launch integration.
 
+**The submodule can go before upstream merges.** The three commits are
+cherry-picked onto `NEWSLabNTU/autoware_universe:1.5.0-patches`
+(`1f77afc1a`, `b09faefea`, `d0d0f927b`), which is what
+`NEWSLabNTU/autoware-localrepo` builds our Autoware 1.5.0 Debians from. So the
+retirement is gated on a Debian rebuild, not on review:
+
+1. build and install a 1.5.0 Debian from the updated `1.5.0-patches`;
+2. confirm `ros2 component types | grep -i cudacropbox` names
+   `autoware::cuda_pointcloud_preprocessor::CudaCropBoxFilterNode`;
+3. repoint the launch files at the upstream package and namespace;
+4. drop the submodule here and in AutoSDV, and archive
+   `NEWSLabNTU/cuda_pointcloud_filters`.
+
+The installed `/opt/autoware/1.5.0` ships neither filter today, so until step 1
+lands on a board the submodule is still the only provider. AutoSDV records the
+same sequence in `docs/design/cuda-pipeline-data-flow.md`.
+
 **Lead with capability, not performance.** The honest argument is that a
 preprocessing chain cannot stay GPU-resident without these two nodes, which is
 demonstrable from upstream's own package. The measured saving — about 19% of one
