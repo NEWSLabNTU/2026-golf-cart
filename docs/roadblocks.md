@@ -5,6 +5,46 @@
 
 ---
 
+## A partial Autoware download looked like a tampered one (found and fixed 2026-09-11)
+
+`./setup.sh` refused the `autoware-debian` step with a checksum mismatch on the
+1.9 GB localrepo `.deb`, and advised "update the script with the correct
+checksum if you are using a custom build" — advice that would have installed a
+damaged package by switching off the check that caught it. The expected hash was
+right: GitHub publishes the asset digest as `sha256:9f433f7a…`, the same value.
+
+**What a partial aria2c download looks like, and why nothing else notices.**
+aria2c preallocates the whole file and fills ten segments in parallel, so an
+unfinished download has the *exact* published byte count and a valid `.deb`
+header — `ls -l` and `dpkg-deb --info` both pass. The holes are mid-file. Only
+the hash sees them, and the leftover `.aria2` control file (aria2c deletes it on
+success) is the one unambiguous marker that a download is unfinished.
+
+**Exit 7 is not a failure.** aria2c returns 7 when it was signalled — SIGINT,
+SIGTERM, SIGHUP — with the download unfinished, and that is exactly when the
+bytes on disk are worth keeping. Reproduced: both SIGINT and SIGHUP give exit 7,
+a full-size preallocated file, and a kept control file. Treating 7 like any
+other error deletes 1.9 GB of good bytes and starts over.
+
+The installer now resumes a partial (`--continue=true`), stops rather than
+wiping on exit 7, removes the control file alongside the data file when it does
+fall back to wget or curl, and, on a genuine mismatch with no control file,
+points at the published digest instead of suggesting an edit to the checksum.
+
+**How the original one was interrupted was never determined.** Worth recording
+what the forensics ruled out, since the same question will come up again: the
+file and its control file both stopped changing at 20:46 on 2026-09-08, about
+six minutes in. Not OOM, no reboot, no disk pressure; not the network (the
+tailscale control-plane errors in the journal that evening run 88–92 per hour
+on the previous day too, and stopped entirely once fixed on the 9th); not an
+expired signed URL (GitHub's SAS token is valid ~52 minutes); not the SSH drop
+at 20:47:42, which only detached screen — that window still existed on reattach
+at 23:27; not the Textual menu leaving the terminal wedged (replaying that
+commit shows it restores alt screen, mouse, cursor, paste mode and tty flags,
+and Ctrl-C propagates normally afterwards). What remains is a terminal-side
+signal to setup's process group, and the evidence to name it is gone: no screen
+logging configured, process accounting off, and that window has since closed.
+
 ## cuda_ndt GPU scorer read the wrong rotation (found and fixed 2026-08-30)
 
 **Fixed.** Recorded because the same defect has now appeared three times in this

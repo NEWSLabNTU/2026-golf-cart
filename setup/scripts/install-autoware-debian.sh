@@ -47,10 +47,24 @@ download_deb() {
         # rather than starting 2 GB over.
         local args=(--dir="$dir" --out="$out" -x 10 -s 10 -k 1M --continue=true)
         [[ -n "$sha" ]] && args+=(--checksum=sha-256="$sha")
-        if aria2c "$url" "${args[@]}"; then
+        local rc=0
+        aria2c "$url" "${args[@]}" || rc=$?
+        if [[ $rc -eq 0 ]]; then
             return 0  # aria2c verified the checksum inline
         fi
-        echo "  aria2c download failed; falling back to wget/curl..."
+        # Exit 7 means aria2c was signalled (SIGINT, SIGTERM or SIGHUP) with
+        # the download unfinished: a Ctrl-C, a closed terminal. The bytes on
+        # disk are sound and the control file can resume them, so deleting
+        # them is the one thing not to do -- that is how 1.9 GB got thrown
+        # away and re-fetched before. Stop instead, and let the next run
+        # resume.
+        if [[ $rc -eq 7 ]]; then
+            echo "  aria2c was interrupted before it finished (exit 7)."
+            echo "  What it downloaded is kept, with its progress in ${out}.aria2."
+            echo "  Re-run this step to resume from where it stopped."
+            return 1
+        fi
+        echo "  aria2c failed (exit ${rc}); falling back to wget/curl..."
         # The control file goes too: left behind without its data file, it
         # would make the next run think a resumable download is in progress.
         rm -f "$dest" "${dest}.aria2"
