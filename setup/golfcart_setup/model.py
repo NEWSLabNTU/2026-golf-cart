@@ -113,7 +113,15 @@ class Step:
             h.update(part.encode())
             h.update(b"\0")
             candidate = Path(part)
-            if candidate.is_file() and candidate.is_relative_to(REPO_ROOT):
+            # Most argv items are commands, flags, or (for `bash -euc`) an
+            # entire shell program.  Check containment before asking the OS
+            # about the path: an arbitrary shell program can exceed the
+            # filesystem's maximum filename length when passed to stat().
+            try:
+                in_repo = candidate.is_relative_to(REPO_ROOT)
+            except ValueError:
+                in_repo = False
+            if in_repo and candidate.is_file():
                 h.update(candidate.read_bytes())
         return h.hexdigest()[:12]
 
