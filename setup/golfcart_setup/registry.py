@@ -162,7 +162,12 @@ STEPS: list[Step] = [
         label="Python dependencies (play_launch)",
         why="play_launch is how the stack is launched and how its logs are kept.",
         group="Toolchain",
-        run=["pip3", "install", "--user", "play_launch>=0.5.0,<0.6.0"],
+        # 0.10.0 is the floor, not a preference: 0.8.2 rendered the pose
+        # initializer's array parameters as strings and killed
+        # autoware_pose_initializer_node at startup, taking
+        # /localization/initialize with it. No upper bound, so a fix released
+        # tomorrow installs without editing this line.
+        run=["pip3", "install", "--user", "play_launch>=0.10.0"],
         profiles=_on(*EVERY),
     ),
     Step(
