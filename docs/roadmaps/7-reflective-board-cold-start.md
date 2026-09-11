@@ -628,7 +628,15 @@ Two things the build turned up, neither in this campaign's packages:
       `lanelet2_map.osm` that is the board polygon and nothing else. The
       lanelet loader warns about a missing `format_version`; harmless.
       Board at the origin verified numerically, not visually (2026-09-10).
-- [ ] B4 verify, RViz look at the board and the ceiling
+- [x] B4 verify, RViz look at the board and the ceiling (2026-09-11, on a VNC
+      display, fixed frame `map`, cloud coloured by intensity from 100 to 255).
+      Looking at the board's face from +x, the retroreflective returns fill the
+      delivered `board_polygon.osm` outline (y ±0.3, z 1.0 to 1.6), centred on
+      axes placed at `pose_in_map`, with a thin fringe below the bottom edge.
+      The ceiling is present as a dense band at about 2.4 to 2.8 m and must
+      stay; there are almost no floor returns near the origin, as measured,
+      while nearby cars' undersides reach z = 0. A top view is useless: the
+      ceiling occludes everything below it.
 - [ ] `lanelet2_map.osm` with the drivable route, when planning is wanted;
       the polygon-only file is enough for D1a
 
