@@ -63,14 +63,26 @@ sim_reset_ros2_daemon
     printf 'exec %q %s > %q 2>&1\n' \
         "${REPO_ROOT}/scripts/rosbag/indoor_sim_up.sh" "${LAUNCH_ARGS}" "${LOG_DIR}/stack.log"
     printf 'exec %q\n' "${REPO_ROOT}/scripts/rosbag/indoor_sim_conduct.sh"
-    if [ "${RVIZ}" = "on" ]; then
+    if [ "${RVIZ}" = "on" ] && [ -n "${DISPLAY:-}" ]; then
         # The wait lives in the script, so this stays one plain exec like the
         # rest. Job lines that need shell features are a portability trap: see
         # PARALLEL_SHELL below.
+        #
+        # RViz is a supervised job like the others, so if it exits the replay
+        # ends. That is the right behaviour for a window you asked for and
+        # watched die, and the wrong one for a machine with no X server at
+        # all, which is why the DISPLAY check is here rather than inside the
+        # script: a headless host skips the job instead of tearing the run
+        # down two seconds after it starts.
         printf 'exec %q > %q 2>&1\n' \
             "${REPO_ROOT}/scripts/rosbag/indoor_sim_rviz.sh" "${LOG_DIR}/rviz.log"
     fi
 } > "${JOBS}"
+
+if [ "${RVIZ}" = "on" ] && [ -z "${DISPLAY:-}" ]; then
+    RVIZ="off (no DISPLAY)"
+    warn "rviz=on but DISPLAY is unset; skipping RViz rather than failing the run"
+fi
 
 say "starting the indoor replay (rviz=${RVIZ}) under GNU parallel"
 printf '    jobs: %s\n    logs: %s/{bag,stack,rviz}.log\n' "${JOBS}" "${LOG_DIR}"
