@@ -162,8 +162,22 @@ decision, not a silent default; this replay is not affected either way,
 because `indoor_logging_sim.launch.xml` feeds NDT and the board detector the
 raw topic directly and nothing consumes the concatenated cloud.
 
-The shipped config was restored after the experiment; nothing in this section
-is committed as a change.
+**What was changed, and what was not.** `timeout_sec` is now 0.05
+(golfcart_sensor_kit_launch dfd066b): a collector must not wait longer than
+one scan period, and the 0.2 s it replaces was introduced as a placeholder
+(217719a, "matching_strategy is placeholder"). `input_topics` is unchanged --
+this cart carries two LiDARs by design, and the single-input case is not
+something the node can be configured into: upstream's answer to
+[discussion #4700](https://github.com/orgs/autowarefoundation/discussions/4700)
+is that a single-LiDAR system should not run this node at all and should let a
+filter's `input_frame`/`output_frame` do the frame transform. Duplicating the
+one topic to satisfy the node would double the cloud for nothing.
+
+So a single-LiDAR replay still gets no concatenated cloud. That costs this
+replay nothing, because `indoor_logging_sim.launch.xml` feeds NDT and the
+board detector the raw topic and nothing consumes the concatenated output --
+but any future single-LiDAR bag that does need it wants the node skipped, not
+reconfigured.
 
 ## Open
 
