@@ -112,13 +112,60 @@ the partial-load service. At runtime `map_container` costs 0.9% CPU and 120 MB.
 `compare_map_segmentation` would read, and perception is off in this replay —
 worth turning off for headless replays, worth nothing for latency.
 
-## Open
+## The halved concatenator rate is a sync timeout, not compute
 
-**`/sensing/lidar/concatenated/pointcloud` runs at 4.73 Hz against a 10 Hz
-input.** Half the frames do not reach the concatenator's output while the
-downsample filter downstream still reports 10 Hz. Not chased yet; it is the
-next thing to look at, because it is the only place in the chain where the
-frame rate silently halves.
+Measured per stage, CUDA backend (the default), 30 s windows:
+
+| stage | rate | points |
+|---|---|---|
+| `vlp32/velodyne_points` (from the bag) | 10.03 Hz | 53,040 |
+| `vlp32/pointcloud_before_sync` (after CUDA preprocessing) | **10.00 Hz** | 47,399 |
+| `concatenated/pointcloud` | **4.47 Hz** | 47,399 |
+| `falcon/iv_points` | **silent** | -- |
+
+Preprocessing keeps the full rate, so nothing upstream is dropping frames, and
+the concatenated cloud carries exactly the Velodyne's own points. The evidence
+that decides it is lateness rather than rate: each concatenated cloud arrives
+**p50 190 ms, max 240 ms** after its own header stamp, against a 100 ms scan
+period. Compute-bound would be a fraction of a period; 190 ms is
+`timeout_sec: 0.2`.
+
+`input_topics` lists two LiDARs and this bag has one. Each cycle the
+concatenator waits the full timeout for `/sensing/lidar/falcon/iv_points`,
+publishes the Velodyne alone, and the scan that arrived during the wait is
+dropped (`publish_previous_but_late_pointcloud: false`). One output per
+timeout is ~5 Hz; 4.47 Hz measured.
+
+Two A/B runs, same bag, same stack:
+
+| `input_topics` | `timeout_sec` | concatenated | age p50 |
+|---|---|---|---|
+| falcon + vlp32 *(shipped)* | 0.2 | 4.47 Hz | 190 ms |
+| **vlp32 only** | 0.2 | **silent** | -- |
+| falcon + vlp32 | **0.05** | **10.00 Hz** | 139 ms |
+
+**Removing the absent LiDAR is not the fix.** With one input the CUDA
+concatenator publishes nothing at all, which is the "refuses a single input"
+behaviour CLAUDE.md already warns about; it stays silent rather than passing
+the cloud through. What restores the rate is a timeout shorter than the scan
+period: at 0.05 s the missing Falcon costs one 50 ms wait per scan instead of
+a dropped scan, and the output returns to 10.00 Hz. The residual 139 ms of age
+is the rest of the chain (preprocessing plus transport, ~89-112 ms measured as
+the floor in both runs).
+
+This matters beyond replay. On the vehicle, with both LiDARs present, the
+timeout only bites when the Falcon is late or drops out -- and then the
+concatenated rate halves and everything downstream of it inherits 200 ms of
+age, exactly as it does here. A timeout at 0.2 s on a 10 Hz sensor pair is a
+choice to drop a scan rather than publish one sensor's cloud on time. Worth a
+decision, not a silent default; this replay is not affected either way,
+because `indoor_logging_sim.launch.xml` feeds NDT and the board detector the
+raw topic directly and nothing consumes the concatenated cloud.
+
+The shipped config was restored after the experiment; nothing in this section
+is committed as a change.
+
+## Open
 
 Not yet measured: the same replay on the Orin, which is the machine that
 matters, where 185% of CPU lands on a much smaller budget and the 3.5 GB
