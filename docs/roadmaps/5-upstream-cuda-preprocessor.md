@@ -128,22 +128,29 @@ Remaining:
 4. After merge: bump this repo's Autoware, drop the `cuda_pointcloud_filters` submodule,
    keep only the launch integration.
 
-**The submodule can go before upstream merges.** The three commits are
-cherry-picked onto `NEWSLabNTU/autoware_universe:1.5.0-patches`
-(`1f77afc1a`, `b09faefea`, `d0d0f927b`), which is what
-`NEWSLabNTU/autoware-localrepo` builds our Autoware 1.5.0 Debians from. So the
-retirement is gated on a Debian rebuild, not on review:
+**The submodule cannot be short-circuited through the Debian.** The three
+commits were briefly cherry-picked onto
+`NEWSLabNTU/autoware_universe:1.5.0-patches` (`1f77afc1a`, `b09faefea`,
+`d0d0f927b`) and the pin bumped, on the theory that a Debian rebuild could
+retire the submodule before review finished. That was reverted.
+`NEWSLabNTU/autoware-localrepo` builds official Autoware source so that
+`/opt/autoware/<version>` stays a clean baseline; vehicle-side patches belong in
+this repository and its submodules. The commits remain reachable on the
+`1.5.0-cuda-filters` branch, and the pin is back where it was.
 
-1. build and install a 1.5.0 Debian from the updated `1.5.0-patches`;
-2. confirm `ros2 component types | grep -i cudacropbox` names
+So the retirement is gated on the merge after all:
+
+1. #13301 merges;
+2. we move to an Autoware release carrying it, and
+   `ros2 component types | grep -i cudacropbox` names
    `autoware::cuda_pointcloud_preprocessor::CudaCropBoxFilterNode`;
 3. repoint the launch files at the upstream package and namespace;
 4. drop the submodule here and in AutoSDV, and archive
    `NEWSLabNTU/cuda_pointcloud_filters`.
 
-The installed `/opt/autoware/1.5.0` ships neither filter today, so until step 1
-lands on a board the submodule is still the only provider. AutoSDV records the
-same sequence in `docs/design/cuda-pipeline-data-flow.md`.
+The installed `/opt/autoware/1.5.0` ships neither filter, so until then the
+submodule is the only provider. AutoSDV records the same sequence in
+`docs/design/cuda-pipeline-data-flow.md`.
 
 **Lead with capability, not performance.** The honest argument is that a
 preprocessing chain cannot stay GPU-resident without these two nodes, which is
