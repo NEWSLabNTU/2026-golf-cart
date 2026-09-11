@@ -191,3 +191,55 @@ read-ahead competes with the stack.
 just indoor-test run rviz=off          # bag paused, stack, resume, hold
 python3 scripts/performance/profile_replay.py --seconds 60
 ```
+
+---
+
+# The cold start, timed
+
+![Indoor replay timeline](indoor-replay-timeline.png)
+
+Recorded 2026-09-12 with `scripts/performance/record_indoor_events.py` and drawn
+by `plot_indoor_timeline.py`, from a full `just indoor-test run rviz=off` on the
+defaults: basement Falcon map, vlp32 bag, board initializer, cuda_ndt. 235 s of
+bag in 242 s wall, so the workstation replays this at 1.03x real time.
+
+| event | sim time | wall |
+|---|---|---|
+| state UNINITIALIZED | 0.00 s | 4.1 s |
+| **first board detection** | **1.19 s** | 8.4 s |
+| state INITIALIZING | 1.19 s | 8.4 s |
+| `/initialpose3d` published | 9.04 s | 16.2 s |
+| state INITIALIZED | 9.07 s | 16.2 s |
+| first cuda_ndt pose | 9.19 s | 16.4 s |
+| first EKF `kinematic_state` | 9.10 s | 16.3 s |
+
+**The cold start costs 7.9 s, and it is not the detector.** The detector had a
+pose 1.19 s in, on its first batch, and the state machine moved to INITIALIZING
+in the same instant. Everything after that is the initializer and the align:
+eight more detections went by, one per second, before `/initialpose3d` appeared
+at 9.04 s. One second of that is the detector's own accumulation window
+(`accumulate_scans: 10` at 10 Hz); the other ~7 s is the align call.
+
+That number is the one worth holding on to. CLAUDE.md recorded the cuda_ndt
+align as ~23 s against the caller's deadline, which is why both logging sims
+used to default to `ndt`. Here it returns inside 8 s and the initialization
+completes. It has still not been measured on the Orin.
+
+**Tracking, once started, is steady.** 2206 poses over 226 s is 9.76 Hz against
+a 10 Hz input, with per-scan `exe_time_ms` of mean 2.15, p50 1.86, p95 3.61,
+max 11.24. The rate panel shows the only interesting departures: single-second
+dropouts to 1-3 Hz at sim 53, 114, 128 and 216 s, each paired with a catch-up
+spike immediately after (26 Hz at 53 s). The largest gap between consecutive
+poses is 0.97 s. Those are the frames to look at next; nothing in this run
+explains them yet.
+
+**One detection is in the wrong place, and it matters for a colder start.** Nine
+of the twelve detections cluster at map position (11.5, -4.6) with 3 cm of
+spread, which is the board. The tenth, at sim 75.02 s, reports (1.40, 3.26) --
+ten metres away, while the vehicle is elsewhere in the basement. It cost
+nothing here because the state machine had been INITIALIZED for 66 s and the
+initializer ignores poses afterwards. Had the cart started from there, or had
+the first nine detections been missed, that pose was available to seed
+localization at a position that is not where the cart was. The detector's gates
+let one through; the confidence attached to it is worth a look before the board
+path is trusted on a route where the board is out of sight at start-up.

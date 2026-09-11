@@ -39,6 +39,15 @@ echo "  next: just indoor-test up      # stack, now born on bag time"
 echo "        just indoor-test resume  # let the scans flow"
 echo
 
-# One 3.7 GB topic at 10 Hz; the raised read-ahead keeps the scan rate steady
-# rather than letting the default queue starve and jitter it.
-exec ros2 bag play "${BAG}" --clock --start-paused --read-ahead-queue-size 5000 "$@"
+# Read-ahead is in MESSAGES, and these are 1.56 MB each: the 5000 this used to
+# pass is 7.8 GB of buffer for a 3.5 GB bag, so the player tried to hold the
+# whole recording twice over. Measured on a workstation with 43 GB available
+# and 17 GB in use, resuming such a player produced NO scan within 40 s, while
+# 200 produced the first scan in 5.0 s. It is load-dependent, which is worse
+# than simply broken: the same command works on an idle machine and stalls on
+# a busy one, and the symptom is "no scans arriving" long after the player has
+# logged "Resuming play.".
+#
+# 200 messages is 20 s of lead at 10 Hz and about 310 MB, which is what the
+# raised value was reaching for in the first place.
+exec ros2 bag play "${BAG}" --clock --start-paused --read-ahead-queue-size 200 "$@"
