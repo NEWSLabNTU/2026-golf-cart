@@ -46,6 +46,49 @@ _S = lambda name: str(SCRIPTS_DIR / name)          # noqa: E731
 _BASH = lambda body: ["bash", "-euc", body]        # noqa: E731
 
 
+# Preflight fragments. A step that needs something an EARLIER step installs
+# must say so itself, because `after` is ordering only -- it never pulls the
+# dependency into the selection. `--only tensorrt-engines` on a bare machine,
+# or a run whose autoware-debian was unticked, both arrive here with nothing
+# installed, and the failure then happens inside a third-party file:
+#
+#     /opt/ros/humble/setup.bash: No such file or directory
+#
+# which names neither the step nor the step that would fix it.
+_REQUIRE_ROS = """
+if [[ ! -f /opt/ros/humble/setup.sh ]]; then
+    echo "ROS 2 Humble is not installed: /opt/ros/humble/setup.sh is missing." >&2
+    echo "Run the ros2 step first, or let a full setup run reach it:" >&2
+    echo "    ./setup.sh --only ros2" >&2
+    exit 1
+fi
+"""
+
+_REQUIRE_AUTOWARE = """
+if [[ ! -f /opt/autoware/1.5.0/setup.bash ]]; then
+    echo "Autoware 1.5.0 is not installed: /opt/autoware/1.5.0/setup.bash is missing." >&2
+    echo "Run the autoware-debian step first, or let a full setup run reach it:" >&2
+    echo "    ./setup.sh --only autoware-debian autoware-data" >&2
+    exit 1
+fi
+"""
+
+# The `just` step installs into ~/.local/bin, which Ubuntu's ~/.profile adds to
+# PATH only at login and only when the directory already existed. On a first
+# run the directory is created mid-pass, so a later step in the same pass
+# inherits a PATH without it and `just` is not found. Prepend it rather than
+# asking the user to log out and back in between two steps of one run.
+_LOCAL_BIN_ON_PATH = """
+export PATH="$HOME/.local/bin:$PATH"
+if ! command -v just >/dev/null; then
+    echo "just is not installed, and this step runs a just recipe." >&2
+    echo "Run the just step first, or let a full setup run reach it:" >&2
+    echo "    ./setup.sh --only just" >&2
+    exit 1
+fi
+"""
+
+
 def _ros_bash(body: str) -> list[str]:
     """Run `body` with ROS 2 Humble sourced.
 
@@ -62,18 +105,10 @@ def _ros_bash(body: str) -> list[str]:
     `rosdep` looking like the thing that failed. It is restored immediately
     afterwards so the body itself still runs under nounset.
 
-    And ROS may legitimately not be there yet. On a first run it is installed
-    by an earlier step in the same pass, but a `--only ros-deps` on a bare
-    machine reaches this with no /opt/ros at all; saying so beats failing
-    inside a file that does not exist.
+    And ROS may legitimately not be there yet -- see `_REQUIRE_ROS`.
     """
     return ["bash", "-euc", f"""
-if [[ ! -f /opt/ros/humble/setup.sh ]]; then
-    echo "ROS 2 Humble is not installed: /opt/ros/humble/setup.sh is missing." >&2
-    echo "Run the ros2 step first, or let a full setup run reach it:" >&2
-    echo "    ./setup.sh --only ros2" >&2
-    exit 1
-fi
+{_REQUIRE_ROS}
 set +u
 source /opt/ros/humble/setup.sh
 set -u
@@ -214,7 +249,10 @@ STEPS: list[Step] = [
             "paid once here instead of inside each node's constructor on the "
             "first launch, where perception is down until it finishes.",
         group="Autoware",
-        run=_BASH(f"cd {REPO_ROOT} && just build-engines"),
+        run=_BASH(
+            f"{_REQUIRE_ROS}{_REQUIRE_AUTOWARE}{_LOCAL_BIN_ON_PATH}"
+            f"cd {REPO_ROOT} && just build-engines"
+        ),
         requires=Requires(hardware="cuda"),
         after=("autoware-data", "just"),
         # On by default despite being the slowest step here: the alternative is

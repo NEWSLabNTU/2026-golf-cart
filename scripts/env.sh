@@ -320,10 +320,25 @@ else
         unset ROS_LOCALHOST_ONLY
     fi
 
-    # Source ROS 2 Humble
-    _golfcart_relax_shell_opts
-    source /opt/ros/humble/setup.bash
-    _golfcart_restore_shell_opts
+    # Source ROS 2 Humble -- if it is there. On a machine where setup has not
+    # run yet neither /opt/autoware nor /opt/ros exists, and sourcing blind
+    # reports `/opt/ros/humble/setup.bash: No such file or directory` from
+    # inside whatever sourced this file: direnv on cd, `just build`'s env
+    # guard, a systemd unit exec script. Say what is missing instead, and
+    # return without an environment rather than aborting -- .envrc must not
+    # make the directory unenterable, and the callers that do need ROS check
+    # for it themselves.
+    if [ -f /opt/ros/humble/setup.bash ]; then
+        _golfcart_relax_shell_opts
+        source /opt/ros/humble/setup.bash
+        _golfcart_restore_shell_opts
+    elif [ "${GOLFCART_ENV_QUIET:-0}" != "1" ]; then
+        echo "=========================================="
+        echo "INFO: ROS 2 Humble not found at /opt/ros/humble either."
+        echo "INFO: Nothing in this repo will build or run until it is installed:"
+        echo "      ./setup.sh          # or: ./setup.sh --only ros2"
+        echo "=========================================="
+    fi
 fi
 
 # ── CycloneDDS host requirements ─────────────────────────────────────────────

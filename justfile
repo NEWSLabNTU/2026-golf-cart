@@ -142,6 +142,19 @@ build-engines:
     # not hide the rest, and the summary at the end reports what actually
     # landed.
     set -o pipefail
+    # Say which install is missing, before sourcing a file that is not there.
+    # Reached on a first run whenever this recipe is asked for ahead of the
+    # steps that provide it -- `./setup.sh --only tensorrt-engines`, or a run
+    # with ros2 or autoware-debian unticked. Without these two checks the
+    # failure is `source: /opt/ros/humble/setup.bash: No such file or
+    # directory`, which names neither this recipe nor the fix.
+    for req in /opt/ros/humble/setup.bash:ros2 /opt/autoware/1.5.0/setup.bash:autoware-debian; do
+        if [[ ! -f "${req%%:*}" ]]; then
+            echo "Not installed: ${req%%:*}" >&2
+            echo "Install it first:  ./setup.sh --only ${req##*:}" >&2
+            exit 1
+        fi
+    done
     just setup-autoware-data
     source /opt/ros/humble/setup.bash
     source /opt/autoware/1.5.0/setup.bash

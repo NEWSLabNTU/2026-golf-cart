@@ -6,6 +6,19 @@ set -e
 
 echo "Installing ROS 2 development tools..."
 
+# ros-dev-tools lives in the ROS apt source, which the ros2 step adds. Without
+# it apt says "Unable to locate package ros-dev-tools" -- true, and no help at
+# all about which earlier step was skipped. `after` in the registry orders this
+# behind ros2 but never selects it, so a partial run can still land here first.
+# One compgen per pattern, not one `ls` over both: `ls a b` exits non-zero when
+# EITHER argument is missing, and only one of the two spellings ever exists.
+if ! compgen -G '/etc/apt/sources.list.d/ros2*.sources' >/dev/null \
+   && ! compgen -G '/etc/apt/sources.list.d/ros2*.list' >/dev/null; then
+    echo "The ROS 2 apt source is not configured; ros-dev-tools cannot be found." >&2
+    echo "Run the ros2 step first:  ./setup.sh --only ros2" >&2
+    exit 1
+fi
+
 sudo apt-get update
 sudo apt-get install -y \
     python3-colcon-mixin \
