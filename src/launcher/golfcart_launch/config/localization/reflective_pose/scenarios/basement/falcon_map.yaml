@@ -2,60 +2,76 @@
 # `anchor-map-to-board --config` against the Seyond Falcon survey cloud
 # (GLIM, basement_voxel_resol_0.15.ply), not for the vehicle.
 #
-# PLACEHOLDER. The map in data/basement-indoor/ was anchored 2026-09-10 by the
-# survey team with their own copy of this file, and that copy has not been
-# handed over yet (roadmap phase 7, B3). This file MUST be replaced by the
-# exact file the map was anchored with: a rebuild from any other gate set is
-# not reproducible, and a different `board:` block would anchor a different
-# map. Until then it records the best reconstruction from board_anchor.yaml
-# and the survey statistics.
+# This is the file data/basement-indoor/ was anchored with, verified rather
+# than assumed. The survey team ran the tool from the detector repository's
+# six-section config as it stood at commit 5b25426 (2026-09-10, "tune max
+# height filter for the map built from seyond LiDAR"); the `detector.map`
+# subsection of that file is translated here into the three-section layout.
+# Reproduced 2026-09-11 with a dry run on the same cloud:
 #
-# The `board:` block is duplicated from detector.yaml beside this file and
-# must agree with it, since the runtime guess and the map it is checked
-# against describe the same object.
+#   board found: 1380 points, extents 0.87 x 0.61 m, plane residual 5.8 cm
+#   transform (map <- cloud), identical to board_anchor.yaml to 5 decimals:
+#     0.99415  0.10794  0.00244  9.72698
+#    -0.10794  0.99416 -0.00066 -4.99322
+#    -0.00250  0.00040  1.00000  0.57069
+#
+# The previous commit, 5d313f1 (ceiling 1.5 m), does NOT reproduce it: the
+# reflective band above the board merges into the cluster, which then reads
+# 1.01 m tall and is rejected. The NAS copy's 17:37 timestamp is when it was
+# copied, not when the tool ran.
+#
+# Rebuild with scripts/map/anchor_reflective_map.sh, which passes this file.
+#
+# Caveat, recorded rather than tuned away: with the ceiling at 1.1 m the
+# 0.61 m "height" is the 0.5 to 1.1 m slab, not the board's own edges, so the
+# map's z origin can carry up to about 0.2 m of bias. The VLP-32C bag puts the
+# board centre 1.30 to 1.40 m above level floor, consistent to 0.1 m, and NDT
+# matches the ceiling, so z is not what localization rests on. The offline
+# confidence is 0.58, below the runtime gate of 0.6; the tool reports it and
+# anchors anyway, which is the offline contract.
 
 board:
-  # Same four numbers as detector.yaml. The tool moves the map origin onto
-  # the board, so this is what the map frame is DEFINED by.
+  # Shared with detector.yaml beside this file: the map frame is DEFINED by
+  # this pose, and the runtime guess is composed against the same one.
   pose_in_map: [0.0, 0.0, 1.3, 0.0, 0.0, 0.0]
   width: 0.6
   height: 0.6
-  centre_height: 1.3
+  # The survey config's `map.board_centre_height`: the expected centre in the
+  # levelled, floor-zero frame the tool detects in. Differs from the runtime
+  # 1.3 because the Falcon map has almost no floor for the fit to find.
+  centre_height: 1.0
 
 detector:
-  # The Falcon's intensity scale, not the VLP-32C's. Measured on the survey
-  # cloud: strongly bimodal, median 16, p90 44, p99 254, with a usable
-  # retroreflector band at the top; 240 cuts it cleanly (142,109 returns
-  # above 240 in the 0.15 m export). The VLP-32C runtime value of 100 in
-  # detector.yaml does not transfer here and vice versa.
-  intensity_threshold: 240.0
+  # The Falcon's intensity scale, not the VLP-32C's (median 16, p99 254 on
+  # this cloud). 150 is what the survey ran with; the runtime 100 does not
+  # transfer here and vice versa.
+  intensity_threshold: 150.0
 
-  # Range and density gates are switched OFF by anchor-map-to-board itself: a
-  # merged map has no sensor origin, no rings and no scan rate, so neither
-  # is meaningful. The values are still required by the loader and are the
-  # packaged defaults.
-  range_min: 3.0
-  range_max: 18.0
+  # Range and density are meaningless on a merged map; the tool turns both
+  # off itself. Written out so the file reads as what was run.
+  range_min: 0.0
+  range_max: .inf
   density_max_ratio: 1.4
-  density_check_enabled: true
+  density_check_enabled: false
   azimuth_step_rad: 0.0035
 
-  # Height band above the fitted floor. Restricting the survey cloud to
-  # 0.5..1.9 m dropped 308 retro clusters to 136 and the board's own cluster
-  # sits centred at ~0.7 m in the source frame with the floor at ~-0.06.
+  # The 1.1 m ceiling is the survey team's measured fix: it keeps the
+  # reflective band above the board (z 1.7 to 1.9 in the anchored map) out of
+  # the cluster. height_min/height_max match the AABB's z so the two gates
+  # cannot disagree.
   height_min: 0.5
-  height_max: 1.9
+  height_max: 1.1
+  map_aabb:
+    min: [-20, -20, 0.5]
+    max: [20, 20, 1.1]
 
-  # A merged map is denser and smoother than a live scan. The delivered
-  # anchor found the board with 1380 points, extents 0.866 x 0.611 m and a
-  # plane residual of 0.058 m, so the tolerances below have to admit that:
-  # 0.866 / 0.6 = 1.44 against the upper extent bound.
-  cluster_tolerance: 0.15
-  cluster_min_points: 200
+  # A merged map at 0.15 m voxels is dense and regular; 0.05 is what ran.
+  cluster_tolerance: 0.05
+  cluster_min_points: 60
   extent_tolerance: [0.8, 1.5]
-  planarity_max_thickness: 0.10
+  planarity_max_thickness: 0.08
   verticality_max_dot: 0.25
-  centre_height_tolerance: 0.60
+  centre_height_tolerance: 0.30
 
 covariance:
   # Unused by the anchoring tool, required by the loader. Packaged defaults.

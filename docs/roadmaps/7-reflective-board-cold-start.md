@@ -604,7 +604,16 @@ Two things the build turned up, neither in this campaign's packages:
 - [x] B2: board cluster identified, by `anchor-map-to-board` rather than by hand (2026-09-10)
 - [x] B5: floor tilt recorded, 0.145 deg in `board_anchor.yaml` (2026-09-10)
 - [x] anchor and convert: `pointcloud_map.pcd`, `board_anchor.yaml`, `board_polygon.osm`, `map_projector_info.yaml` delivered (2026-09-10)
-- [ ] B3: the survey team's anchoring config copied to `scenarios/basement/falcon_map.yaml`
+- [x] B3: the survey team's anchoring config, verified by reproduction (2026-09-11).
+      It is the detector repo's config at `5b25426` (map ceiling 1.1 m), not
+      `5d313f1` (1.5 m, which merges the reflective band above the board and
+      rejects it as 1.01 m tall). Translated into
+      `scenarios/basement/falcon_map.yaml`; a dry run on the same cloud finds
+      the board from 1380 points, 0.87 x 0.61 m, 5.8 cm residual, and gives
+      `board_anchor.yaml`'s transform to five decimals. Caveat in the file:
+      the 0.61 m is the 0.5 to 1.1 m slab, not the board's edges, so the map's
+      z origin may carry up to ~0.2 m of bias; the bag's 1.30 to 1.40 m agrees
+      to 0.1 m, and NDT matches the ceiling.
 - [x] the 0.87 x 0.61 m extents question looked at once (2026-09-10): a second
       retroreflective band sits directly above the board, z 1.7 to 1.9, same
       width; the tool's cluster merged the two. The board itself is z 1.0 to
