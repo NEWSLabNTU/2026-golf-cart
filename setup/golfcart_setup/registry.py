@@ -185,10 +185,11 @@ STEPS: list[Step] = [
     ),
     Step(
         id="opencv",
-        label="OpenCV consistency (4.5.4)",
-        why="JetPack ships NVIDIA's 4.8.0 headers over Ubuntu's 4.5.4 runtime, so "
-            "local builds compile against one and link the other. Also what makes "
-            "aruco and the contrib modules available.",
+        label="OpenCV consistency (headers, runtime, contrib)",
+        why="Checks that the headers a build compiles against match the library "
+            "it links, and that contrib is there for aruco. JetPack 6.2 breaks "
+            "the first (NVIDIA's 4.8.0 headers over Ubuntu's 4.5.4 runtime); on "
+            "a machine where they already agree it does nothing.",
         group="Autoware",
         run=[_S("install-opencv.sh")],
         requires=Requires(sudo=True),
