@@ -41,7 +41,7 @@
 [submodule "src/sensor_component/external/seyond_ros_driver"]
 	path = src/sensor_component/external/seyond_ros_driver
 	url = https://github.com/NEWSLabNTU/seyond_ros_driver.git
-	branch = golfcart
+	branch = 1.5.0
 [submodule "src/sensor_component/external/xsens_mti_can_ros2_driver"]
 	path = src/sensor_component/external/xsens_mti_can_ros2_driver
 	url = https://github.com/NEWSLabNTU/xsens_mti_can_ros2_driver.git
