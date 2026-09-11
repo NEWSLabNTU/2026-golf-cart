@@ -45,6 +45,41 @@ from .model import (
 _S = lambda name: str(SCRIPTS_DIR / name)          # noqa: E731
 _BASH = lambda body: ["bash", "-euc", body]        # noqa: E731
 
+
+def _ros_bash(body: str) -> list[str]:
+    """Run `body` with ROS 2 Humble sourced.
+
+    Two things this exists for, both learned the hard way.
+
+    `set -u` has to come off around the sourcing. ROS's setup.sh and the ament
+    shell hooks read variables that are deliberately unset, so under nounset
+    the source aborts with
+
+        /opt/ros/humble/setup.sh: line 124: AMENT_TRACE_SETUP_FILES: unbound
+        variable
+
+    which names a variable nobody set, says nothing about the step, and leaves
+    `rosdep` looking like the thing that failed. It is restored immediately
+    afterwards so the body itself still runs under nounset.
+
+    And ROS may legitimately not be there yet. On a first run it is installed
+    by an earlier step in the same pass, but a `--only ros-deps` on a bare
+    machine reaches this with no /opt/ros at all; saying so beats failing
+    inside a file that does not exist.
+    """
+    return ["bash", "-euc", f"""
+if [[ ! -f /opt/ros/humble/setup.sh ]]; then
+    echo "ROS 2 Humble is not installed: /opt/ros/humble/setup.sh is missing." >&2
+    echo "Run the ros2 step first, or let a full setup run reach it:" >&2
+    echo "    ./setup.sh --only ros2" >&2
+    exit 1
+fi
+set +u
+source /opt/ros/humble/setup.sh
+set -u
+{body}
+"""]
+
 # Only the three declared profiles appear here. `all` and `none` are answered
 # by Step.default_for, so nothing has to remember to add a new step to them.
 #
@@ -203,11 +238,14 @@ STEPS: list[Step] = [
             "is where the sensor drivers come from: gscam and its GStreamer "
             "plugins, ublox_gps, nmea_navsat_driver.",
         group="Autoware",
-        run=_BASH(
-            f"cd {REPO_ROOT} && source /opt/ros/humble/setup.sh && "
+        run=_ros_bash(
+            f"cd {REPO_ROOT} && "
             "rosdep update --rosdistro=humble && "
             "rosdep install -y --from-paths src --ignore-src -r"
         ),
+        # rosdep shells out to `sudo apt-get install` for what it resolves, so
+        # this belongs in the up-front sudo rather than prompting mid-run.
+        requires=Requires(sudo=True),
         after=("ros2-dev-tools",),
         profiles=_on(*EVERY),
     ),
