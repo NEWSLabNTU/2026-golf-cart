@@ -30,14 +30,18 @@
     # stack, so a batch taken while the cart rolls is smeared and the board's
     # extents measure wrong.
     #
-    # EMPTY FOR NOW, which disables the guard. Roadmap phase 7, A3, sets it
-    # to the vehicle's twist topic once the guard can be verified on a bag
-    # that carries velocity; the D1a replay bag (vlp32_1) has one topic and
-    # nothing to gate on. On the vehicle the candidates are
-    # /sensing/vehicle_velocity_converter/twist_with_covariance
-    # (geometry_msgs/TwistWithCovarianceStamped is NOT accepted; the node
-    # takes nav_msgs/Odometry or geometry_msgs/TwistStamped) or
-    # /localization/kinematic_state (nav_msgs/Odometry, but downstream of the
-    # pose this node is meant to seed). A3 decides which.
+    # EMPTY FOR NOW, which disables the guard. Roadmap phase 7, A3, turns it on
+    # once the guard can be verified on a bag that carries velocity; the D1a
+    # replay bag (vlp32_1) has one topic and nothing to gate on. The topic it
+    # will name is vehicle_velocity_converter's output,
+    #   /sensing/vehicle_velocity_converter/twist_with_covariance
+    # a geometry_msgs/TwistWithCovarianceStamped. The detector could not read
+    # that type until reflective_pose_detector gained it with `twist_type`
+    # (2026-09-11); /localization/kinematic_state was the only alternative and
+    # is downstream of the pose this node seeds.
     twist_topic: ""
+    # Named rather than detected: detection happens once at startup, and on
+    # the vehicle the velocity converter may not be advertising yet, which
+    # would subscribe the guard as Odometry for the life of the node.
+    twist_type: geometry_msgs/msg/TwistWithCovarianceStamped
     max_speed_for_accumulation: 0.05

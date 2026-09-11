@@ -640,8 +640,22 @@ Two things the build turned up, neither in this campaign's packages:
 **Lane 4 — after D1a**
 
 - [x] play_launch: already fixed upstream in 0.10.0 (`f78745da`, 2026-08-08); the machine ran 0.8.2. Regression tests with the recorded values pushed as `cdffdc43`, 0.10.0 installed, `just indoor-test up` back on play_launch and verified: node up, service served, covariance a real sequence (2026-09-11). `just ntu-test up` never left it.
-- [ ] C3: rebuild script, dry-run by default
-- [ ] A3: motion guard wired on the vehicle
+- [x] C3: `scripts/map/anchor_reflective_map.sh` (2026-09-11). Dry run by
+      default, reading the scenario's `falcon_map.yaml` from the source tree;
+      `--write` builds in a scratch directory, compares the new transform with
+      the existing `board_anchor.yaml` to 1e-4, and refuses a moved anchor
+      (exit 3) unless `--force`. Writes `anchor_run.txt` beside the map: cloud
+      and config sha256, both repo revisions, extra flags. Verified: the dry
+      run matches the delivered anchor, and a write reproduces the delivered
+      `pointcloud_map.pcd` byte for byte. `lanelet2_map.osm` is seeded from
+      the polygon only when absent.
+- [ ] A3: motion guard wired on the vehicle. Desk half done 2026-09-11: the
+      detector reads `geometry_msgs/TwistWithCovarianceStamped` (what
+      `vehicle_velocity_converter` publishes; before, such a topic fell through
+      to `Odometry` and never matched), and `twist_type` names the type so the
+      subscription does not race the publisher at startup. The golf-cart param
+      file names the type; `twist_topic` stays empty until D1b's bag verifies
+      the guard.
 - [ ] D2: on-vehicle sequence, `tx` off
 - [ ] D1b: basement bag with velocity and IMU recorded; first job of the next vehicle session
 
