@@ -73,8 +73,8 @@ CUDA one carries a comment worth copying: blackboard I/O is declared as
 
 The nodes work, are tested, and are none of them upstream-shaped yet:
 
-1. **Namespace and package.** `golfcart::cuda_preprocessor::` →
-   `autoware::cuda_pointcloud_preprocessor::`; `golfcart_cuda_preprocessor` →
+1. **Namespace and package.** `cuda_pointcloud_filters::` →
+   `autoware::cuda_pointcloud_preprocessor::`; `cuda_pointcloud_filters` →
    the existing package. Include guards follow the path, so they change too, and
    `ros-include-guard` in pre-commit enforces it.
 2. **CMake.** Ours calls `enable_language(CUDA)` with `CMAKE_CUDA_ARCHITECTURES`.
@@ -164,7 +164,7 @@ more of it than it looks:
    *at most* `sample_num`.
 4. **Issue: `is_dense`**, once U0 has settled which side is wrong.
 5. **After both merge**: bump this repo to an Autoware carrying them, delete
-   `golfcart_cuda_preprocessor`, and keep only the launch integration. Leaving a
+   `cuda_pointcloud_filters`, and keep only the launch integration. Leaving a
    local fork of code that exists upstream is how the two drift.
 
 **Lead with capability, not performance.** The honest argument is that a
@@ -175,7 +175,7 @@ reviewer to conclude the work is not worth taking.
 
 ## What stays downstream
 
-`golfcart_cuda_preprocessor` becomes redundant once both nodes land upstream and
+`cuda_pointcloud_filters` becomes redundant once both nodes land upstream and
 this repo moves to an Autoware version carrying them. Until then it is the
 implementation; after, it should be deleted rather than left as a fork of code
 that exists upstream.

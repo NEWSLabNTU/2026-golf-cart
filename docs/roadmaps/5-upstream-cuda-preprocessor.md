@@ -45,7 +45,7 @@ Branch `feat/cuda-crop-box-filter` off upstream `main`, carrying both nodes.
 What the port involved, beyond copying files:
 
 - **Namespace, package and include guards** renamed together —
-  `golfcart::cuda_preprocessor` → `autoware::cuda_pointcloud_preprocessor`, with
+  `cuda_pointcloud_filters` → `autoware::cuda_pointcloud_preprocessor`, with
   guards following the new path because `ros-include-guard` enforces it.
 - **Their directory convention, not ours.** Upstream groups by *category*, not
   by node: the random downsample belongs in `src/cuda_downsample_filter/`
@@ -87,7 +87,7 @@ against a pristine `git stash` of the upstream tree: it fails identically. This
 is the binary install, not the port.
 
 So the four sources were compiled directly, with the include set harvested from
-this repository's own working build of `golfcart_cuda_preprocessor`, and the
+this repository's own working build of `cuda_pointcloud_filters`, and the
 tests linked against those objects plus `libcuda_blackboard`. All four compile
 clean, `nm` confirms both components register under
 `autoware::cuda_pointcloud_preprocessor`, and **all 12 tests pass on the Orin's
@@ -125,7 +125,7 @@ Remaining:
    requested automatically. Expect questions about the new test directory and
    about `input_frame` dropping rather than transforming.
 3. **`is_dense` issue**, once U0 settles which side is wrong.
-4. After merge: bump this repo's Autoware, delete `golfcart_cuda_preprocessor`,
+4. After merge: bump this repo's Autoware, drop the `cuda_pointcloud_filters` submodule,
    keep only the launch integration.
 
 **Lead with capability, not performance.** The honest argument is that a

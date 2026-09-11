@@ -56,3 +56,7 @@
 [submodule "src/localization/reflective_pose_detector"]
 	path = src/localization/reflective_pose_detector
 	url = https://github.com/NEWSLabNTU/reflector-pose-init.git
+[submodule "src/sensing/cuda_pointcloud_filters"]
+	path = src/sensing/cuda_pointcloud_filters
+	url = https://github.com/NEWSLabNTU/cuda_pointcloud_filters.git
+	branch = main

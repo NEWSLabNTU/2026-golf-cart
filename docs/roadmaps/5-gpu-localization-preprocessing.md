@@ -13,7 +13,7 @@ number cannot be checked on the cart's own sensors from here, and the switch is
 what makes that check possible. Everything below is implemented, tested and
 defaulted to `cpu`, so the CUDA path costs nothing until someone asks for it.
 
-**Status: L1–L4 done.** `golfcart_cuda_preprocessor` provides the two filters
+**Status: L1–L4 done.** `cuda_pointcloud_filters` provides the two filters
 Autoware does not ship; `localization_pointcloud_backend:=cuda` selects the GPU
 chain. 37 tests pass. What has *not* happened is the measurement that justifies
 using it — see *What is still open* at the end.
@@ -194,7 +194,7 @@ regression must be revertible from the command line.
 
 ## What was built
 
-`src/sensing/golfcart_cuda_preprocessor`, following the conventions of
+`src/sensing/cuda_pointcloud_filters`, following the conventions of
 `autoware_cuda_pointcloud_preprocessor` (which was fetched to
 `~/repos/autoware_universe_ref` as the reference the earlier draft asked for):
 
