@@ -5,11 +5,16 @@
 #
 # Same reasoning as ntu_sim_rviz.sh, which this mirrors:
 #
-# 1. Config. golfcart_ntu.rviz draws /map/pointcloud_map at a size and alpha
-#    that survive being looked at from a distance; the stock autoware.rviz
-#    renders a 4M-point basement as nearly nothing and reads as "map failed
-#    to load". The board polygon arrives on /map/vector_map from the
-#    lanelet2_map.osm that is the polygon and nothing else.
+# 1. Config. golfcart_indoor.rviz, not golfcart_ntu.rviz: the outdoor config
+#    draws the map as flat white 3 px points seen from straight above, and in
+#    a basement that is a solid white sheet. 85% of this map's points lie
+#    between 1.3 m and 3.1 m, which is the CEILING, so a top-down view shows
+#    the ceiling and nothing else. The indoor config colours by height over a
+#    fixed 0 to 3.2 m range, drops the points to 1 px at alpha 0.3, and puts
+#    the camera behind and below the ceiling (ThirdPersonFollower, pitch 0.35)
+#    so walls and columns read as structure. The board polygon arrives on
+#    /map/vector_map from the lanelet2_map.osm that is the polygon and nothing
+#    else.
 #
 # 2. Timing. RViz must be born on bag time, so `just indoor-test bag` runs
 #    the player paused first and this starts with a correct clock.
@@ -21,7 +26,7 @@
 set -eo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-CONFIG="${REPO_ROOT}/src/launcher/golfcart_launch/rviz/golfcart_ntu.rviz"
+CONFIG="${REPO_ROOT}/src/launcher/golfcart_launch/rviz/golfcart_indoor.rviz"
 
 # 3. Waiting. Started against an empty graph, RViz comes up with every display
 # in error and stays that way, so it waits for the stack rather than trusting

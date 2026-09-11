@@ -199,7 +199,7 @@ python3 scripts/performance/profile_replay.py --seconds 60
 ![Indoor replay timeline](indoor-replay-timeline.png)
 
 Recorded 2026-09-12 with `scripts/performance/record_indoor_events.py` and drawn
-by `plot_indoor_timeline.py`, from a full `just indoor-test run rviz=off` on the
+by `plot_indoor_timeline.py`, from a full `just indoor-test run` on the
 defaults: basement Falcon map, vlp32 bag, board initializer, cuda_ndt. 235 s of
 bag in 242 s wall, so the workstation replays this at 1.03x real time.
 
@@ -224,6 +224,31 @@ That number is the one worth holding on to. CLAUDE.md recorded the cuda_ndt
 align as ~23 s against the caller's deadline, which is why both logging sims
 used to default to `ndt`. Here it returns inside 8 s and the initialization
 completes. It has still not been measured on the Orin.
+
+**Convergence, now recorded.** `iteration_num` and
+`nearest_voxel_transformation_likelihood` say whether a pose was solved or
+merely emitted, which the pose stream cannot. Over 2209 scans, against
+`max_iterations: 30` and `converged_param_nearest_voxel_transformation_likelihood: 2.0`:
+
+| | |
+|---|---|
+| iterations | mean 3.2, and 1650 of 2209 scans solved in **two** |
+| scans at the 30-iteration cap | **16 (0.7%)**, clustered at sim 60-73, 149, 175-182 |
+| NVTL | p50 2.54, min 1.78 |
+| scans under the NVTL gate | **1**, at sim 180.19 |
+
+The one rejected fit and the worst iteration cluster are the same moment: sim
+180.2 hits the cap *and* scores 1.78, the lowest NVTL in the run. That is the
+single hardest place in this recording, and it is the frame to look at first if
+this bag is ever used to tune the matcher.
+
+**The iteration caps do not explain the rate dropouts.** Of the 16 capped
+scans, 0 fall inside a second where the pose rate dipped to 6 Hz or below, and
+1 is within a second of one. The dips also move between runs (52, 53, 63, 71,
+114, 216, 235 here against 53, 114, 128, 216 in the previous run) while the
+capped scans stay put at the same places in the recording. So the dips belong
+to the replay and the caps belong to the map: two unrelated effects that a
+pose-rate plot alone would have conflated.
 
 **Tracking, once started, is steady.** 2206 poses over 226 s is 9.76 Hz against
 a 10 Hz input, with per-scan `exe_time_ms` of mean 2.15, p50 1.86, p95 3.61,

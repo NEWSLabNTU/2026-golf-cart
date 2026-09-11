@@ -32,6 +32,13 @@ TOPICS = {
     "/localization/board_detector/board_pose": "pose",
     "/localization/pose_estimator/pose_with_covariance": "pose",
     "/localization/pose_estimator/exe_time_ms": "data",
+    # How hard the matcher worked and how well it fitted. iteration_num
+    # pinned at max_iterations means the optimiser ran out of budget rather
+    # than converging, and NVTL below its gate means the fit was rejected;
+    # either one turns a plausible-looking pose stream into a suspect one.
+    "/localization/pose_estimator/iteration_num": "data",
+    "/localization/pose_estimator/nearest_voxel_transformation_likelihood": "data",
+    "/localization/pose_estimator/transform_probability": "data",
     "/localization/kinematic_state": "pose",
     "/api/localization/initialization_state": "state",
     "/localization/initialization_state": "state",

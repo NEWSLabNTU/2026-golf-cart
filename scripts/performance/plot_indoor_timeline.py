@@ -27,6 +27,13 @@ BOARD = "/localization/board_detector/board_pose"
 NDT = "/localization/pose_estimator/pose_with_covariance"
 EXE = "/localization/pose_estimator/exe_time_ms"
 EKF = "/localization/kinematic_state"
+ITER = "/localization/pose_estimator/iteration_num"
+NVTL = "/localization/pose_estimator/nearest_voxel_transformation_likelihood"
+# From cuda_scan_matcher.param.yaml. Both are thresholds the matcher itself
+# acts on, so a plot that does not draw them cannot say whether a scan
+# converged or was merely allowed through.
+MAX_ITERATIONS = 30
+NVTL_GATE = 2.0
 INIT3D = "/initialpose3d"
 STATE = ("/api/localization/initialization_state",
          "/localization/initialization_state")
@@ -73,17 +80,21 @@ def main() -> int:
     exe = ev.get(EXE, [])
     ekf = ev.get(EKF, [])
     init3d = ev.get(INIT3D, [])
+    iters = ev.get(ITER, [])
+    nvtl = ev.get(NVTL, [])
     states = next((ev[t] for t in STATE if ev.get(t)), [])
 
     span = max((e["sim"] - t_zero for es in ev.values() for e in es), default=1)
     wall = max((e["wall"] for es in ev.values() for e in es), default=0)
 
-    fig = plt.figure(figsize=(13, 9.4))
-    grid = fig.add_gridspec(4, 1, height_ratios=[2.6, 2.6, 1.4, 1.4], hspace=0.45)
+    fig = plt.figure(figsize=(13, 11.6))
+    grid = fig.add_gridspec(5, 1, height_ratios=[2.4, 2.4, 1.3, 1.3, 1.6],
+                            hspace=0.5)
     ax_zoom = fig.add_subplot(grid[0])
     ax = fig.add_subplot(grid[1])
     ax_rate = fig.add_subplot(grid[2], sharex=ax)
     ax_exe = fig.add_subplot(grid[3], sharex=ax)
+    ax_fit = fig.add_subplot(grid[4], sharex=ax)
 
     lanes = [("bag playback", "#8899aa"), ("board detections", "#d1495b"),
              ("initialization state", "#3f8f5b"), ("cuda_ndt pose", "#2a6f97"),
@@ -198,8 +209,50 @@ def main() -> int:
                          fontsize=8.5, loc="left", color="#44505c")
         ax_exe.grid(alpha=0.25)
 
-    ax_exe.set_xlabel("simulation time (s from the first recorded message)", fontsize=9)
-    for a in (ax, ax_rate):
+    # Did it converge, and how well did it fit? The two questions the pose
+    # stream cannot answer on its own: a matcher that hits max_iterations every
+    # scan is not converging, it is being cut off, and NVTL under its gate is a
+    # fit the matcher itself would reject.
+    if iters or nvtl:
+        if iters:
+            xs, ys = rel(iters), [e["value"] for e in iters]
+            ax_fit.plot(xs, ys, color="#b5651d", lw=0.9, alpha=0.9,
+                        label="iterations")
+            ax_fit.axhline(MAX_ITERATIONS, color="#b5651d", ls="--", lw=1)
+            ax_fit.text(span, MAX_ITERATIONS, f" max {MAX_ITERATIONS}",
+                        fontsize=7.5, va="bottom", ha="right", color="#b5651d")
+            capped = sum(1 for v in ys if v >= MAX_ITERATIONS)
+            ax_fit.set_ylabel("NDT iterations", fontsize=8.5, color="#b5651d")
+            ax_fit.set_ylim(0, max(MAX_ITERATIONS * 1.15, max(ys) * 1.1))
+            ax_fit.tick_params(axis="y", colors="#b5651d")
+            iter_note = (f"iterations: mean {sum(ys)/len(ys):.1f}, max {max(ys)}, "
+                         f"{capped} of {len(ys)} scans at the cap "
+                         f"({100*capped/len(ys):.1f}%)")
+        else:
+            iter_note = "no iteration_num"
+
+        if nvtl:
+            xn, yn = rel(nvtl), [e["value"] for e in nvtl]
+            ax_nvtl = ax_fit.twinx()
+            ax_nvtl.plot(xn, yn, color="#2a6f97", lw=0.9, alpha=0.75)
+            ax_nvtl.axhline(NVTL_GATE, color="#d1495b", ls="--", lw=1)
+            ax_nvtl.text(0, NVTL_GATE, f" gate {NVTL_GATE}", fontsize=7.5,
+                         va="bottom", color="#d1495b")
+            ax_nvtl.set_ylabel("NVTL", fontsize=8.5, color="#2a6f97")
+            ax_nvtl.tick_params(axis="y", colors="#2a6f97")
+            below = sum(1 for v in yn if v < NVTL_GATE)
+            ordered = sorted(yn)
+            nvtl_note = (f"NVTL: p50 {ordered[len(ordered)//2]:.2f}, "
+                         f"min {ordered[0]:.2f}, {below} scan(s) under the gate")
+        else:
+            nvtl_note = "no NVTL"
+
+        ax_fit.set_title(f"{iter_note}   |   {nvtl_note}", fontsize=8.5,
+                         loc="left", color="#44505c")
+        ax_fit.grid(alpha=0.25)
+
+    ax_fit.set_xlabel("simulation time (s from the first recorded message)", fontsize=9)
+    for a in (ax, ax_rate, ax_exe):
         plt.setp(a.get_xticklabels(), visible=False)
 
     fig.savefig(args.out, dpi=150, bbox_inches="tight", facecolor="white")
