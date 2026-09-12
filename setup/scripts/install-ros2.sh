@@ -12,8 +12,22 @@ echo "Installing ROS 2 ${ROSDISTRO} (${ROS2_INSTALLATION_TYPE})..."
 # Install locales
 sudo apt-get update
 sudo apt-get install -y locales
-sudo locale-gen en_US.UTF-8
-sudo update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
+
+# Some managed hosts allow apt commands but do not allow users to run
+# locale-gen through sudo. Do not request root for work that is already done.
+if locale -a | grep -Eiq '^en_US\.(utf8|utf-8)$'; then
+    echo "Locale en_US.UTF-8 is already generated; skipping locale-gen."
+else
+    sudo locale-gen en_US.UTF-8
+fi
+
+if [[ -r /etc/default/locale ]] \
+   && grep -Eiq '^LANG="?en_US\.UTF-8"?$' /etc/default/locale \
+   && grep -Eiq '^LC_ALL="?en_US\.UTF-8"?$' /etc/default/locale; then
+    echo "System locale defaults already use en_US.UTF-8; skipping update-locale."
+else
+    sudo update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
+fi
 
 # Install dependencies for setting up apt sources
 sudo apt-get install -y software-properties-common curl
