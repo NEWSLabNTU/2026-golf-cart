@@ -153,7 +153,20 @@ fi
 
 echo "  Installing Autoware localrepo..."
 sudo apt update
-sudo apt install -y "$TEMP_DEB"
+LOCALREPO_PACKAGE="autoware-localrepo-1-5-0"
+LOCALREPO_VERSION=$(dpkg-deb -f "$TEMP_DEB" Version)
+INSTALLED_LOCALREPO_VERSION=$(dpkg-query -W -f='${Version}' \
+    "$LOCALREPO_PACKAGE" 2>/dev/null || true)
+
+# A newer localrepo can already be installed on a machine provisioned from a
+# newer release. Apt refuses to downgrade it when -y is used, and there is no
+# reason to replace a newer repository package with this older asset.
+if [[ -n "$INSTALLED_LOCALREPO_VERSION" ]] \
+   && dpkg --compare-versions "$INSTALLED_LOCALREPO_VERSION" ge "$LOCALREPO_VERSION"; then
+    echo "  Localrepo ${INSTALLED_LOCALREPO_VERSION} is already installed; skipping ${LOCALREPO_VERSION}."
+else
+    sudo apt install -y "$TEMP_DEB"
+fi
 
 # Run setup-prerequisites.sh
 #
@@ -249,4 +262,3 @@ echo "  Installing autoware-full-1-5-0..."
 sudo apt install -y autoware-full-1-5-0
 
 echo "✓ Autoware Localrepo 1.5.0-1 and Autoware Full 1.5.0 installed successfully."
-
