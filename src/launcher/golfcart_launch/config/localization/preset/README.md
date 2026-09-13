@@ -37,7 +37,7 @@ Uses Eagleye for twist estimation. Eagleye provides GNSS-based odometry.
 - Research on GNSS-IMU fusion
 
 **Requirements**:
-- GNSS receiver (u-blox, Septentrio, or Garmin)
+- GNSS receiver (u-blox or Septentrio)
 - IMU sensor
 - Good GNSS satellite visibility
 - `use_gnss:=true` must be set

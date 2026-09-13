@@ -128,7 +128,7 @@ colcon build --base-paths src --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=
 
 ### Key Submodules
 **Golf Cart Migration Notes:**
-- **Retained**: autoware_manual_control, gnss_locator, ros-nmea-reader
+- **Retained**: autoware_manual_control, gnss_locator
 - **To Replace**: ros2_mpu9250_driver → Tamagawa IMU driver (pending)
 - **Camera**: USB cameras (no ZED submodule needed initially)
 - **Vehicle Interface**: Will use Turing Drive packages (to be added)
@@ -138,7 +138,6 @@ Submodules:
 - golfcart_sensor_kit_launch - Sensor kit configurations
 - gnss_locator - GNSS positioning
 - ros2_mpu9250_driver - IMU driver (to be replaced with Tamagawa)
-- ros-nmea-reader - NMEA GPS data parser
 
 ### config/ is the single source of truth
 
@@ -478,7 +477,7 @@ sensor_suite:=vlp32c             # Velodyne VLP-32C
 lidar_model:=vlp32c
 camera_model:=gscam|zedx|none   # env ONLY - see below
 imu_source:=xsens|zed           # env ONLY - see below
-gnss_receiver:=ublox|septentrio|garmin|none
+gnss_receiver:=ublox|septentrio|none
 ```
 
 #### GPU acceleration: one coarse switch, two fine ones

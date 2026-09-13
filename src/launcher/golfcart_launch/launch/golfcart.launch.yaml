@@ -100,7 +100,7 @@ launch:
 # accident. `""` is forwarded unconditionally and reaches the sensor kit, whose
 # gnss.launch.xml resolves the topic with a dict lookup:
 #
-#   $(eval "{'ublox': ..., 'septentrio': ..., 'garmin': ...}['$(var gnss_receiver)']")
+#   $(eval "{'ublox': ..., 'septentrio': ..., 'none': ...}['$(var gnss_receiver)']")
 #
 # An empty key is a KeyError, and it aborts the WHOLE launch — measured with
 # stock `ros2 launch`, which got 27 nodes up and then died with
@@ -110,7 +110,7 @@ launch:
 - arg:
     name: gnss_receiver
     default: "$(env GNSS_RECEIVER ublox)"
-    description: "GNSS receiver: ublox | septentrio | garmin. Defaults to $GNSS_RECEIVER."
+    description: "GNSS receiver: ublox | septentrio | none. Defaults to $GNSS_RECEIVER."
 
 - arg:
     name: use_gnss

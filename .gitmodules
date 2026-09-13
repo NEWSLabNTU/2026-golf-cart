@@ -6,10 +6,6 @@
 	path = src/sensor_component/external/gnss_locator
 	url = https://github.com/NEWSLabNTU/gnss_locator.git
 	branch = main
-[submodule "src/sensor_component/external/ros-nmea-reader"]
-	path = src/sensor_component/external/ros-nmea-reader
-	url = https://github.com/NEWSLabNTU/ros-nmea-reader.git
-	branch = main
 [submodule "src/param/autoware_individual_params"]
 	path = src/param/autoware_individual_params
 	url = https://github.com/NEWSLabNTU/autoware_individual_params.git
