@@ -3,9 +3,8 @@
 #
 # Read by board_detector_node (parameter `config_file`) and by nothing else at
 # runtime. The offline anchoring counterpart is falcon_map.yaml beside this
-# file; the `board:` block is duplicated between the two on purpose (four
-# numbers, same directory) and MUST agree, since the map was anchored to the
-# same board this file describes.
+# file; the `board:` block is duplicated between the two on purpose and MUST
+# agree, since the map was anchored to the same board this file describes.
 #
 # Every key is written out, including the ones that match the submodule's
 # packaged default, so this file does not change meaning when that default
@@ -24,19 +23,6 @@ board:
   # draws the same square, y = -0.3..0.3, z = 1.0..1.6.
   width: 0.6
   height: 0.6
-
-  # 1.3 m was the anchor's CONFIG value carried through (the Falcon survey
-  # cloud has almost no floor in it, so the tool's floor fit had nothing to
-  # hold onto; roadmap phase 7, "What the cloud says about the floor"). It
-  # was then measured from the VLP-32C bag vlp32_1 on 2026-09-10, which does
-  # see the floor: with the cart 3 m from the board on level floor the board
-  # cluster spans z 1.0 to 1.65 above base_link and its centre reads 1.30 to
-  # 1.40 m above the fitted floor; from the 12 m start and end spots it reads
-  # 1.15 to 1.20, but base_link sits 0.30 m above the local floor there and
-  # pitched 1.8 deg, so that spot is a ramp, not the board moving. 1.3 holds
-  # to about 0.1 m. If a tape measure says otherwise, this key AND
-  # pose_in_map[2] move together.
-  centre_height: 1.3
 
 detector:
   # Decided 2026-09-10: 100. The VLP-32C reports calibrated reflectivity,
@@ -60,62 +46,65 @@ detector:
   # back towards 240 to quieten them: it silences the board too.
   intensity_threshold: 100.0
 
-  # VLP-32C geometry. Below 3 m the board falls into the sparse lower
-  # elevation band, where the 9.4 deg gap between the -25.0 and -15.6 deg
-  # beams disconnects its bottom third from the rest of the cluster.
-  range_min: 3.0
-  range_max: 18.0
-
-  # Point heights above base_link kept before clustering. The board spans
-  # 1.0 to 1.6 m; a limit of 1.5 clipped its top 0.1 m in every detection on
-  # the replay bag (cluster z topped out at 1.499, height read 0.50). 1.65
-  # rather than anything looser because a second retroreflective band sits
-  # directly above the board, 1.7 to 1.9 m with a 0.1 m gap, and
-  # cluster_tolerance bridges 0.1 m: with 1.7 the band merged into the board
-  # in 2 of 9 stationary batches and lifted the centre 6 to 9 cm. Measured
-  # on vlp32_1, 2026-09-10 (Lane 2a).
-  height_min: 0.5
-  height_max: 1.65
-
-  # Clustering is governed by across-ring spacing, not within-ring spacing.
-  # The board centre is 0.66 m below the cart's sensor, so at 5 m it sits at
-  # -7.5 deg elevation where the VLP-32C's rings are 1.1 to 1.6 deg apart,
-  # 0.1 to 0.14 m; below 4 m it reaches the 2.5 to 4.3 deg gaps. Measured on
-  # vlp32_1 (235 batches of 10 stacked scans): at 0.05 the board split into
-  # ring stripes and nothing was detected in the whole bag; at 0.10 the
-  # stationary 12 m batches all detected but the 3 m pass lost a ring; at
-  # 0.15 both detect. The cost of 0.15 is the band above the board, handled
-  # by height_max. Lane 2a, 2026-09-10.
-  cluster_tolerance: 0.15
-  cluster_min_points: 60
-
-  # Fraction of the nominal 0.6 x 0.6 face. The anchored map measured the
-  # board cluster at 0.87 x 0.61 because a second reflective band sits
-  # directly above the board (z 1.7 to 1.9); if the VLP-32C merges the two
-  # as well, 0.87 / 0.6 = 1.45 still passes the upper bound. Not a reason to
-  # widen it further.
-  extent_tolerance: [0.8, 1.5]
-  planarity_max_thickness: 0.08
-  verticality_max_dot: 0.25
-  centre_height_tolerance: 0.30
-
-  # Upper bound only: yaw, occlusion and dropout legitimately reduce the
-  # return count, but nothing legitimately inflates it.
-  density_max_ratio: 1.4
-  density_check_enabled: true
   azimuth_step_rad: 0.0035          # 0.2 deg at 600 rpm / 10 Hz
-
-  # The gate on what gets published (phase 7, A2). Every surviving cluster
-  # carries one confidence in [0, 1], a weighted mean of five terms the gates
-  # above already measured: plane residual, extent error, return density,
-  # the bounding edges actually seen (double weight) and range (half weight).
-  # Below this the node publishes no pose and says which terms dragged it
-  # down on /diagnostics; nothing is terminal. 0.6 sits between the two
-  # populations the simulator produces (clean board 0.86 to 0.93, one edge
-  # hidden 0.55). On vlp32_1 the stationary 12 m detections score 0.85 to
-  # 0.89, the 3 m pass 0.69 to 0.80, and the one partial view of the board
-  # (one edge hidden, 251 points) scores 0.52 and is kept out.
   min_confidence: 0.6
+
+  runtime:
+    # VLP-32C geometry. Below 3 m the board falls into the sparse lower
+    # elevation band, where the 9.4 deg gap between the -25.0 and -15.6 deg
+    # beams disconnects its bottom third from the rest of the cluster.
+    range_min: 3.0
+    range_max: 18.0
+
+    # Point heights above base_link kept before clustering. The board spans
+    # 1.0 to 1.6 m; a limit of 1.5 clipped its top 0.1 m in every detection on
+    # the replay bag (cluster z topped out at 1.499, height read 0.50). 1.65
+    # rather than anything looser because a second retroreflective band sits
+    # directly above the board, 1.7 to 1.9 m with a 0.1 m gap, and
+    # cluster_tolerance bridges 0.1 m: with 1.7 the band merged into the board
+    # in 2 of 9 stationary batches and lifted the centre 6 to 9 cm. Measured
+    # on vlp32_1, 2026-09-10 (Lane 2a).
+    height_min: 0.5
+    height_max: 1.65
+
+    # The runtime board centre is measured above physical ground. It is
+    # independent of board.pose_in_map[2], which is the target map coordinate.
+    board_centre_height: 1.3
+
+    # Clustering is governed by across-ring spacing, not within-ring spacing.
+    # The board centre is 0.66 m below the cart's sensor, so at 5 m it sits at
+    # -7.5 deg elevation where the VLP-32C's rings are 1.1 to 1.6 deg apart,
+    # 0.1 to 0.14 m; below 4 m it reaches the 2.5 to 4.3 deg gaps. Measured on
+    # vlp32_1 (235 batches of 10 stacked scans): at 0.05 the board split into
+    # ring stripes and nothing was detected in the whole bag; at 0.10 the
+    # stationary 12 m batches all detected but the 3 m pass lost a ring; at
+    # 0.15 both detect. The cost of 0.15 is the band above the board, handled
+    # by height_max. Lane 2a, 2026-09-10.
+    cluster_tolerance: 0.15
+    cluster_min_points: 60
+
+    # Fraction of the nominal 0.6 x 0.6 face. The anchored map measured the
+    # board cluster at 0.87 x 0.61 because a second reflective band sits
+    # directly above the board (z 1.7 to 1.9); if the VLP-32C merges the two
+    # as well, 0.87 / 0.6 = 1.45 still passes the upper bound. Not a reason to
+    # widen it further.
+    extent_tolerance: [0.8, 1.5]
+    planarity_max_thickness: 0.08
+    verticality_max_dot: 0.25
+    centre_height_tolerance: 0.30
+
+    # Upper bound only: yaw, occlusion and dropout legitimately reduce the
+    # return count, but nothing legitimately inflates it.
+    density_max_ratio: 1.4
+    density_check_enabled: true
+
+  # Required by the shared detector schema, but this runtime scenario is not
+  # the source used by the offline anchoring script. Keep its map search open;
+  # the site-specific falcon_map.yaml carries the anchored map policy.
+  map:
+    aabb:
+      min: [-.inf, -.inf, -.inf]
+      max: [.inf, .inf, .inf]
 
 covariance:
   # Loose on purpose. The pose is handed on as a guess for NDT to refine

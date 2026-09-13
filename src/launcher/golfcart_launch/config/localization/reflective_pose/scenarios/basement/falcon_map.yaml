@@ -36,42 +36,41 @@ board:
   pose_in_map: [0.0, 0.0, 1.3, 0.0, 0.0, 0.0]
   width: 0.6
   height: 0.6
-  # The survey config's `map.board_centre_height`: the expected centre in the
-  # levelled, floor-zero frame the tool detects in. Differs from the runtime
-  # 1.3 because the Falcon map has almost no floor for the fit to find.
-  centre_height: 1.0
 
 detector:
   # The Falcon's intensity scale, not the VLP-32C's (median 16, p99 254 on
   # this cloud). 150 is what the survey ran with; the runtime 100 does not
   # transfer here and vice versa.
   intensity_threshold: 150.0
-
-  # Range and density are meaningless on a merged map; the tool turns both
-  # off itself. Written out so the file reads as what was run.
-  range_min: 0.0
-  range_max: .inf
-  density_max_ratio: 1.4
-  density_check_enabled: false
   azimuth_step_rad: 0.0035
 
-  # The 1.1 m ceiling is the survey team's measured fix: it keeps the
-  # reflective band above the board (z 1.7 to 1.9 in the anchored map) out of
-  # the cluster. height_min/height_max match the AABB's z so the two gates
-  # cannot disagree.
-  height_min: 0.5
-  height_max: 1.1
-  map_aabb:
-    min: [-20, -20, 0.5]
-    max: [20, 20, 1.1]
+  map:
+    # The survey config's expected centre in the levelled, floor-zero frame.
+    # It differs from the runtime 1.3 because the Falcon map has almost no
+    # floor for the fit to find.
+    board_centre_height: 1.0
 
-  # A merged map at 0.15 m voxels is dense and regular; 0.05 is what ran.
-  cluster_tolerance: 0.05
-  cluster_min_points: 60
-  extent_tolerance: [0.8, 1.5]
-  planarity_max_thickness: 0.08
-  verticality_max_dot: 0.25
-  centre_height_tolerance: 0.30
+    # Range and density are meaningless on a merged map; the tool turns both
+    # off itself. Written out so the file reads as what was run.
+    range_min: 0.0
+    range_max: .inf
+    density_max_ratio: 1.4
+    density_check_enabled: false
+
+    # The 1.1 m ceiling is the survey team's measured fix: it keeps the
+    # reflective band above the board (z 1.7 to 1.9 in the anchored map) out of
+    # the cluster. The AABB is the map point-height filter.
+    aabb:
+      min: [-20, -20, 0.5]
+      max: [20, 20, 1.1]
+
+    # A merged map at 0.15 m voxels is dense and regular; 0.05 is what ran.
+    cluster_tolerance: 0.05
+    cluster_min_points: 60
+    extent_tolerance: [0.8, 1.5]
+    planarity_max_thickness: 0.08
+    verticality_max_dot: 0.25
+    centre_height_tolerance: 0.30
 
 covariance:
   # Unused by the anchoring tool, required by the loader. Packaged defaults.
