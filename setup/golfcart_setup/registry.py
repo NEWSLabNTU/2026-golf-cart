@@ -18,9 +18,19 @@ Dropped from the previous system, by decision on 2026-09-02:
 * `gdown` -- installed and never used by anything in the repo.
 * `nebula-driver`, `ublox-driver`, `gscam` (2026-09-11) -- three apt steps that
   `rosdep install --from-paths src` already answers, or that another step
-  already installs. `ublox_gps` is declared by the sensor kit and resolves to
-  `ros-humble-ublox-gps`, which depends on `ublox-msgs` and
-  `ublox-serialization`, so all three packages arrive from one key. `gscam`
+  already installs. `ublox_gps` at the time resolved to `ros-humble-ublox-gps`.
+  **Since 2026-09-19 it must not**: the driver is built from source, from the
+  `ublox_f9p_ws` submodule under `src/sensor_component/external`, whose fork
+  of KumarRobotics/ublox takes RTCM as `mavros_msgs/RTCM` (what its vendored
+  `ntrip_client` publishes) where the apt build takes `rtcm_msgs/Message`.
+  `rosdep --ignore-src` sees the package in the tree and installs its
+  *dependencies* instead -- `ros-humble-mavros-msgs`, `ros-humble-rtcm-msgs`,
+  `ros-humble-nmea-msgs`, `ros-humble-diagnostic-updater`, `libasio-dev` --
+  so there is still no step for it. A machine set up before that date has the
+  apt driver installed; the workspace overlay takes precedence, but
+  `sudo apt remove ros-humble-ublox-gps ros-humble-ublox-msgs
+  ros-humble-ublox-serialization` removes the ambiguity, and
+  `scripts/check/run.sh` warns while it is there. `gscam`
   resolves the same way; the GStreamer *plugin* packages it does not depend on
   are now declared in the sensor kit's package.xml, which is where a runtime
   dependency belongs. Nebula is the one that cannot work this way -- there is
@@ -280,7 +290,8 @@ STEPS: list[Step] = [
         label="Workspace ROS dependencies (rosdep)",
         why="Resolves the declared dependencies of everything under src/, which "
             "is where the sensor drivers come from: gscam and its GStreamer "
-            "plugins, ublox_gps, nmea_navsat_driver.",
+            "plugins, nmea_navsat_driver, and what the source-built ublox_gps "
+            "and ntrip_client need (mavros_msgs, rtcm_msgs, nmea_msgs, asio).",
         group="Autoware",
         run=_ros_bash(
             f"cd {REPO_ROOT} && "

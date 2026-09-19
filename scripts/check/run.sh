@@ -262,11 +262,23 @@ else
     gnss_ok=false
 fi
 
-if dpkg -l ros-humble-ublox-gps &>/dev/null; then
-    ok "u-blox ROS driver installed"
+# The driver is built from the ublox_f9p_ws submodule, not installed from apt,
+# so look for the package in the workspace the way the launch does. An apt
+# ros-humble-ublox-gps left over from before 2026-09-19 would shadow nothing
+# (the overlay wins) but is worth removing, and is called out.
+if ros2 pkg list 2>/dev/null | grep -q "^ublox_gps$"; then
+    ok "u-blox ROS driver found (ublox_gps, from src/sensor_component/external/ublox_f9p_ws)"
 else
-    fail "u-blox ROS driver not installed (ros-humble-ublox-gps)"
+    fail "u-blox ROS driver not found: ublox_gps is not built. Run: just checkout && just build"
     gnss_ok=false
+fi
+if ros2 pkg list 2>/dev/null | grep -q "^ntrip_client$"; then
+    ok "NTRIP client found (ntrip_client, same workspace)"
+else
+    warn "ntrip_client not built; use_ntrip:=true will fail"
+fi
+if dpkg -l ros-humble-ublox-gps 2>/dev/null | grep -q '^ii'; then
+    warn "apt ros-humble-ublox-gps is still installed; the workspace build takes precedence, but remove it: sudo apt remove ros-humble-ublox-gps ros-humble-ublox-msgs ros-humble-ublox-serialization"
 fi
 
 # ── 3. Tamagawa IMU ─────────────────────────────────────────────────────────
