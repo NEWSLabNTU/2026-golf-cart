@@ -60,6 +60,7 @@ they are the daily verbs, and a module may not share a name with a recipe
 ### Tools
 ```bash
 just tool rviz          # Launch RViz
+just tool rviz-relay    # Standalone RViz-only throttle relays (only needed when RViz runs outside `just launch`'s own gate, e.g. `just tool rviz` or the indoor/ntu-test `rviz` step)
 just tool plotjuggler   # PlotJuggler visualization
 just tool controller    # Keyboard manual control
 just tool tui           # Drive monitor TUI (pose, speed, states)

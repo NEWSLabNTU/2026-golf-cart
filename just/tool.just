@@ -17,6 +17,16 @@ default:
 rviz:
     rviz2 -d ./src/launcher/golfcart_launch/rviz/golfcart.rviz
 
+# Start the RViz-only throttle relays standalone (cameras 30->15 Hz, LiDARs
+# 10->5 Hz; source topics untouched). `just launch` already brings these up
+# alongside its own rviz2, so this is only for a bare rviz2 that comes up
+# outside that gate: `just tool rviz` above, or the indoor-test / ntu-test
+# `rviz` step, which starts RViz as its own process so it can come up on bag
+# time instead of racing the stack. Pass use_sim_time:=true alongside either
+# bag replay. See docs/guides/rviz_relay.md.
+rviz-relay ARGS="":
+    ros2 launch golfcart_launch rviz_relay.launch.xml {{ARGS}}
+
 # Check sensor transforms: cameras and LiDARs on one sphere at base_link
 sphere:
     # Read-only. LCTK computes the extrinsics; this shows what the running
