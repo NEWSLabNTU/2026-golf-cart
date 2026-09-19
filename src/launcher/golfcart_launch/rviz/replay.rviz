@@ -79,7 +79,7 @@ Visualization Manager:
         Depth: 5
         Durability Policy: Volatile
         Reliability Policy: Best Effort
-        Value: /sensing/lidar/vlp32/velodyne_points
+        Value: /rviz/sensing/lidar/vlp32/velodyne_points
       Use Fixed Frame: true
       Value: false
 
@@ -99,7 +99,7 @@ Visualization Manager:
         Depth: 5
         Durability Policy: Volatile
         Reliability Policy: Best Effort
-        Value: /sensing/lidar/falcon/iv_points
+        Value: /rviz/sensing/lidar/falcon/iv_points
       Use Fixed Frame: true
       Value: false
 
