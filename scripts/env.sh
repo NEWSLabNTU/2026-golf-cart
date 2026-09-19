@@ -480,6 +480,18 @@ if [ -f "${GOLFCART_REPO_ROOT}/config/sensors.conf" ]; then
     export IMU_SOURCE CAMERA_MODEL GNSS_RECEIVER
 fi
 
+# ── NTRIP account ────────────────────────────────────────────────────────────
+# gnss.launch.xml loads the NTRIP client's parameters from
+# $(env NTRIP_PARAM_FILE <the sensor kit's credential-less default>). The
+# account is a secret, so it lives in the gitignored config/ntrip.param.yaml
+# (copy config/ntrip.param.yaml.example) and is exported only when that file
+# exists; otherwise the variable stays unset and the launch default applies.
+# An already-exported NTRIP_PARAM_FILE wins, like every other key here. Only
+# read when `just launch use_ntrip:=true` starts the client.
+if [ -f "${GOLFCART_REPO_ROOT}/config/ntrip.param.yaml" ]; then
+    export NTRIP_PARAM_FILE="${NTRIP_PARAM_FILE:-${GOLFCART_REPO_ROOT}/config/ntrip.param.yaml}"
+fi
+
 # ── Multi-machine addresses ──────────────────────────────────────────────────
 # config/multi_machine.conf is the only place either machine's address is
 # written down. It was already the single source for the ssh-based scripts in

@@ -57,10 +57,15 @@ launch:
     default: "true"
     description: "Enable GNSS for outdoor operation. Set false indoors."
 
+# false, not true, although the receiver benefits from it: this argument did
+# nothing until 2026-09-19 (it reached golfcart_autoware.launch.xml and stopped
+# there, see the set_env below), so "true" was never exercised. Live, it starts
+# the NTRIP client, which needs an account (config/ntrip.param.yaml, gitignored)
+# and otherwise exits on start and respawns every 5 s. Opt in per run.
 - arg:
     name: use_ntrip
-    default: "true"
-    description: "Enable NTRIP client for RTK corrections (ublox only)"
+    default: "false"
+    description: "Launch the NTRIP client and feed RTCM corrections to the u-blox (ublox only; needs config/ntrip.param.yaml)"
 
 - arg:
     name: use_mapless_mode
@@ -104,6 +109,16 @@ launch:
 # Include localization preset (defines twist_source)
 - include:
     file: "$(find-pkg-share golfcart_launch)/config/localization/preset/$(var localization_preset)_preset.yaml"
+
+# use_ntrip reaches the sensor kit only through the environment: the installed
+# Autoware sensing chain forwards a fixed argument list and drops the rest.
+# gnss.launch.xml reads $(env USE_NTRIP false); this is what makes
+# `use_ntrip:=true` on the command line reach it. The caster and credentials file are resolved by the sensor
+# kit from NTRIP_PARAM_FILE, which scripts/env.sh exports when
+# config/ntrip.param.yaml exists.
+- set_env:
+    name: USE_NTRIP
+    value: "$(var use_ntrip)"
 
 - include:
     file: "$(find-pkg-share golfcart_launch)/launch/golfcart_autoware.launch.xml"

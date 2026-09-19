@@ -92,6 +92,15 @@ launch:
     name: POINTCLOUD_BACKEND
     value: "$(var pointcloud_backend)"
 
+# use_ntrip crosses the same gap the same way. gnss.launch.xml reads
+# $(env USE_NTRIP false); this is what makes `use_ntrip:=true` on the command
+# line reach it. The caster and credentials file are resolved by the sensor
+# kit from NTRIP_PARAM_FILE, which scripts/env.sh exports when
+# config/ntrip.param.yaml exists.
+- set_env:
+    name: USE_NTRIP
+    value: "$(var use_ntrip)"
+
 # Not derived from use_cuda: pose_source picks a localization METHOD, and only
 # two of its values are the same algorithm on different hardware. Same reasoning
 # as golfcart.launch.yaml, which spells it out. cuda_ndt is asked for by name.

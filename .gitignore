@@ -39,6 +39,11 @@ data/autoware_data/
 config/host
 .golfcart-host
 
+# NTRIP caster account (username, password). Start from
+# config/ntrip.param.yaml.example; scripts/env.sh exports the real file as
+# NTRIP_PARAM_FILE when it exists.
+config/ntrip.param.yaml
+
 # once-only warning stamps dropped by scripts/env.sh
 .envrc.sysctl-warned
 .envrc.host-warned

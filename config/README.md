@@ -10,6 +10,7 @@ changing a value here changes it for every consumer on both hosts.
 | `multi_machine.conf` | shell assignments | the other host's `user@addr`, its repo path, the ssh key, the master's IP |
 | `sensors.conf` | shell assignments | which IMU and camera driver the sensor kit uses (`IMU_SOURCE`, `CAMERA_MODEL`) |
 | `vehicle.conf` | shell assignments | whether the vehicle interface may transmit on CAN (`GOLFCART_TX_ENABLED`) |
+| `ntrip.param.yaml` | ROS 2 parameter YAML | the NTRIP caster account for RTK corrections. **Gitignored**, it is a secret; start from `ntrip.param.yaml.example`. Exported as `NTRIP_PARAM_FILE`, read only with `use_ntrip:=true` |
 | `runtime.conf` | shell assignments | how play_launch runs composable nodes (`GOLFCART_CONTAINER_MODE`), and which middleware this host uses (`GOLFCART_RMW`) |
 | `recording/master_topics.txt`<br>`recording/orin_topics.txt` | one topic per line, `#` comments | what each host records |
 | `cyclonedds/{master,orin,loopback}.xml` | CycloneDDS XML | DDS network profiles, one per role |

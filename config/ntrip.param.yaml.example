@@ -1,0 +1,18 @@
+# NTRIP account for RTK corrections. Copy to config/ntrip.param.yaml (which is
+# gitignored) and fill in username and password; scripts/env.sh then exports it
+# as NTRIP_PARAM_FILE and gnss.launch.xml loads it instead of the sensor kit's
+# credential-less config/ntrip_client.param.yaml. It takes effect only with
+# `just launch use_ntrip:=true`.
+#
+# It is the WHOLE parameter file for the ntrip_client node, not an overlay, so
+# the caster fields are repeated here. Keep them in step with the sensor kit's
+# copy, which carries the reasoning for the mountpoint choice.
+/**:
+  ros__parameters:
+    host: "210.241.63.193"        # e-GNSS Taiwan (NLSC)
+    port: 81
+    mountpoint: "GNSS_Taiwan"     # RTCM 3.2 MSM; all five constellations
+    authenticate: true
+    username: "CHANGE_ME"
+    password: "CHANGE_ME"
+    rtcm_frame_id: "gps"
