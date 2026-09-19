@@ -1,7 +1,8 @@
 launch:
 # Multi-machine Host Profile
-# master -> everything except the ZED camera (includes the Falcon LiDAR)
-# orin   -> ZED camera only
+# master -> everything except the ZED camera. Includes both LiDAR drivers too,
+#           unless config/sensors.conf's LIDAR_HOST names the orin instead.
+# orin   -> ZED camera only, plus the LiDAR drivers when LIDAR_HOST:=orin.
 # all    -> single-machine operation (default, unchanged behaviour)
 - arg:
     name: host
@@ -19,6 +20,14 @@ launch:
 - let:
     name: is_orin
     value: $(eval "'$(var host)' in ('orin', 'all')")
+
+# LIDAR_HOST (config/sensors.conf) names which host runs the LiDAR drivers,
+# default master, so this is False and unchanged behaviour unless a checkout
+# or a one-off invocation sets it. Combined with is_orin, not is_orin_host,
+# for the same reason golfcart.launch.yaml's copy of this <let> gives.
+- let:
+    name: is_orin_lidar
+    value: $(eval "'$(var is_orin)' == 'True' and '$(env LIDAR_HOST master)' == 'orin'")
 
 - arg:
     name: is_simulation
@@ -246,6 +255,22 @@ launch:
         -
           name: camera_model
           value: zedx
+
+# LiDAR drivers on the orin - only when config/sensors.conf's LIDAR_HOST says
+# so; see the is_orin_lidar <let> above. Off by default, so this group is
+# normally absent and the master's own copy in golfcart_autoware.launch.xml's
+# sensing chain runs them instead, exactly as before this existed.
+#
+# Included directly for the same reason as the ZED camera above: the sensing
+# subtree it would otherwise hang off is master-only.
+# lidar_driver.launch.xml is the single entry point for both LiDAR drivers on
+# whichever host runs them, the same shorter path camera.launch.xml's zedx
+# branch already takes.
+- group:
+    if: $(var is_orin_lidar)
+    children:
+    - include:
+        file: "$(find-pkg-share golfcart_sensor_kit_launch)/launch/lidar_driver.launch.xml"
 
 # # RQT Runtime Monitor
 # - node:
