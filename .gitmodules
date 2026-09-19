@@ -57,3 +57,11 @@
 	path = src/sensing/cuda_pointcloud_filters
 	url = https://github.com/NEWSLabNTU/cuda_pointcloud_filters.git
 	branch = main
+# ublox_f9p_ws is a colcon workspace, not a package: the u-blox driver itself
+# (ublox, ublox_gps, ublox_msgs, ublox_serialization) is ITS submodule at
+# src/ublox, so this one needs `--recursive`, which `just checkout` passes.
+# Without it the directory is empty and `ublox_gps` is provided by nothing.
+[submodule "src/sensor_component/external/ublox_f9p_ws"]
+	path = src/sensor_component/external/ublox_f9p_ws
+	url = https://github.com/NEWSLabNTU/ublox_f9p_ws.git
+	branch = main
