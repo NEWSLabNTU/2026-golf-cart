@@ -27,11 +27,15 @@
     </include>
   </group>
 
-  <!-- ── u-blox GNSS ─────────────────────────────────────────────────────── -->
+  <!-- ── u-blox ZED-F9P GNSS ─────────────────────────────────────────────── -->
+  <!-- Same driver, same rover configuration as gnss.launch.xml, minus
+       gnss_poser and the NTRIP client: this checks that the receiver talks,
+       not that it localizes. The file it used to load, c94_f9p_rover.yaml
+       under the ublox_gps share directory, never existed there. -->
   <group if="$(var launch_gnss)">
     <node pkg="ublox_gps" name="ublox" exec="ublox_gps_node" respawn="true" respawn_delay="1.0">
       <remap from="~/fix" to="~/nav_sat_fix"/>
-      <param from="$(find-pkg-share ublox_gps)/c94_f9p_rover.yaml"/>
+      <param from="$(find-pkg-share golfcart_sensor_kit_launch)/config/ublox_f9p.yaml"/>
     </node>
   </group>
 

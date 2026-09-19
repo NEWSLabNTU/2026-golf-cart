@@ -7,7 +7,7 @@ This is a golf cart autonomous driving system for 華夏科大 campus deployment
 
 **Key System Configuration:**
 - **LiDAR**: Velodyne VLP-32C only
-- **GNSS**: u-blox (F9R for practice, F9P for production)
+- **GNSS**: u-blox ZED-F9P, driver built from the `ublox_f9p_ws` submodule (not apt), RTK over NTRIP optional
 - **IMU**: Tamagawa IMU (replaces MPU9250)
 - **Cameras**: USB cameras (will upgrade to Tier IV cameras later)
 - **Vehicle Interface**: Turing Drive packages (replaces Golf Cart custom PWM interface)
@@ -137,6 +137,7 @@ Submodules:
 - autoware_manual_control - Keyboard control interface
 - golfcart_sensor_kit_launch - Sensor kit configurations
 - gnss_locator - GNSS positioning
+- ublox_f9p_ws - u-blox ZED-F9P driver and NTRIP client (a workspace with a nested `src/ublox` submodule; needs `--recursive`)
 - ros2_mpu9250_driver - IMU driver (to be replaced with Tamagawa)
 
 ### config/ is the single source of truth
@@ -232,7 +233,7 @@ to be pointed at. Full workflow in [CONTRIBUTING.md](CONTRIBUTING.md#submodule-w
 ### Sensor Configuration
 **Golf Cart Configuration:**
 - **LiDAR**: Velodyne VLP-32C only (no Robin-W or Cube1)
-- **GNSS**: u-blox F9R (practice) → F9P (production)
+- **GNSS**: u-blox ZED-F9P only. There is no F9R; anything that says F9R is from an older project
 - **IMU**: Tamagawa IMU (replaces MPU9250)
 - **Cameras**: USB cameras → Tier IV GMSL cameras (future upgrade)
 
@@ -777,8 +778,8 @@ twist_source:=gyro_odom|eagleye            # Override preset twist source
 The golf cart uses Autoware's built-in NDT (Normal Distributions Transform) scan matching for localization:
 - **Input Requirements**: LiDAR point cloud, IMU data, speedometer from vehicle interface, GNSS (initialization)
 - **Map**: Point cloud map (PCD format) + Lanelet2 vector map
-- **Practice**: F9R GNSS + COSS map
-- **Production**: F9P GNSS + 華夏科大 map
+- **Practice**: ZED-F9P GNSS + COSS map
+- **Production**: ZED-F9P GNSS + 華夏科大 map
 
 ### Configuration
 NDT parameters may need tuning for golf cart:
@@ -925,21 +926,69 @@ The original Golf Cart system used custom PWM control:
 
 ## u-blox GNSS Integration
 
-### Practice Setup (F9R RTK)
-Learn with F9R from seniors Allan & David:
-- **Device**: u-blox F9R RTK receiver
-- **Purpose**: Practice setup, learn configuration
-- **Map**: Use with COSS map for localization testing
-- **Launch parameter**: `gnss_receiver:=ublox`
+One receiver, a **u-blox ZED-F9P** (HPG 1.12, PROTVER 27.11 as read on
+2026-09-17). Earlier revisions of this file described an F9R "practice" unit
+inherited from an older project; there is none on this vehicle, and the
+`ublox_f9p_ws` bring-up log records the day spent launching an F9R
+sensor-fusion profile at an F9P before the receiver identified itself.
 
-### Production Setup (F9P)
-Target configuration for golf cart:
-- **Device**: u-blox F9P GNSS receiver (pending hardware)
-- **Map**: Use with 華夏科大 campus map
-- **Configuration files**:
-  - `golfcart_sensor_kit_launch/launch/gnss.launch.xml`
-  - `golfcart_sensor_kit_launch/config/ublox_gnss.param.yaml` (to be created)
-- **Calibration**: Antenna position from base_link in `sensor_kit_calibration.yaml`
+### Driver: the `ublox_f9p_ws` submodule, not apt
+`src/sensor_component/external/ublox_f9p_ws` (NEWSLabNTU/ublox_f9p_ws, `main`)
+is a colcon workspace with three parts:
+- `src/ublox` — a **nested submodule**, NEWSLabNTU/ublox, a fork of
+  KumarRobotics/ublox 2.3.0 (`ublox`, `ublox_gps`, `ublox_msgs`,
+  `ublox_serialization`). Three commits over upstream: the `/rtcm`
+  subscription takes `mavros_msgs/RTCM` instead of `rtcm_msgs/Message`, a
+  product-category fix for HPS devices, and a `zed_f9r.yaml` we do not use.
+  `just checkout` passes `--recursive`; without it the directory is empty and
+  nothing provides `ublox_gps`.
+- `src/ntrip_client` — LORD-MicroStrain's NTRIP client, vendored. Publishes
+  `mavros_msgs/RTCM` on `~/rtcm`, uplinks `nmea_msgs/Sentence` from `~/nmea`.
+- `src/gps_launch` — that workspace's own launch. **Not used here**; it carries
+  a caster account in plain text, which is why credentials are handled the way
+  they are below.
+
+The package names are the same as apt `ros-humble-ublox-*`, so the workspace
+build shadows an apt install; **do not install ros-humble-ublox-gps** (remove it
+if a pre-2026-09-19 setup left it: the apt driver and this NTRIP client
+disagree on the RTCM message type). `rosdep --ignore-src` installs the fork's
+dependencies instead: `ros-humble-mavros-msgs`, `ros-humble-rtcm-msgs`,
+`ros-humble-nmea-msgs`, `libasio-dev`.
+
+### Launch and configuration
+- `golfcart_sensor_kit_launch/launch/gnss.launch.xml`: `gnss_receiver`
+  (`ublox` | `septentrio` | `none`, env `GNSS_RECEIVER`), `use_ntrip`
+  (env `USE_NTRIP`), `ntrip_param_file` (env `NTRIP_PARAM_FILE`)
+- `golfcart_sensor_kit_launch/config/ublox_f9p.yaml`: the receiver, as a rover
+  (`tmode3: 0`, `/dev/ublox-gps`, `frame_id: gps`, 1 Hz). The driver's own
+  `zed_f9p.yaml` is a base-station survey-in profile; do not copy it.
+- `golfcart_sensor_kit_launch/config/ntrip_client.param.yaml`: the caster
+  (e-GNSS `GNSS_Taiwan`, RTCM 3.2 MSM) with **empty credentials**.
+- `config/ntrip.param.yaml` (gitignored, from `config/ntrip.param.yaml.example`):
+  the same file with the account filled in. `scripts/env.sh` exports it as
+  `NTRIP_PARAM_FILE` when it exists.
+- **Calibration**: antenna position from base_link in `sensor_kit_calibration.yaml`
+
+Topics under `/sensing/gnss`: `ublox/nav_sat_fix` (what `gnss_poser` reads),
+`ublox/nmea_sentence`, `ntrip/rtcm`, `ublox/rxmrtcm` (the receiver's account of
+which corrections it accepted; `flags: 0` is a CRC pass). These are the names
+`golfcart_system_monitor/config/monitor_topics.yaml` lists, though it still
+types the RTCM topic as `rtcm_msgs/Message`, which this driver does not use.
+
+### RTK over NTRIP
+```bash
+just launch use_ntrip:=true        # needs config/ntrip.param.yaml
+scripts/testing/ntrip/check_ntrip_setup.sh   # everything the line above needs
+```
+`use_ntrip` is a real launch argument that crosses the sensing-chain gap the
+same way `pointcloud_backend` does (a `set_env` of `USE_NTRIP` before the
+include). It defaults to **false**: it did nothing until 2026-09-19, and live
+without an account the client exits on start and respawns every 5 s.
+
+Known from the bring-up log, not yet fixed in the fork: the driver's NMEA
+reassembly drops sentences split across a serial read, and GGA leads each
+epoch so ~95% of GGAs are lost. The VRS still streams on the survivors, but a
+moving rover wants ~1 Hz GGA. See `ublox_f9p_ws/SETUP_LOG.md`, section 9.
 
 ### Integration with Localization
 - GNSS provides initial position for NDT localization
@@ -1040,7 +1089,7 @@ One ZED X stereo camera, driven as a composable node:
 ### Key Migration Tasks
 1. **Phase #1**: Advantech Orin computer setup (JP6.2, firmware, dependencies)
 2. **Phase #3**: Velodyne VLP-32C LiDAR integration
-3. **Phase #4**: u-blox GNSS (F9R practice → F9P production)
+3. **Phase #4**: u-blox ZED-F9P GNSS
 4. **Phase #5**: Tamagawa IMU integration
 5. **Phase #6**: USB cameras (upgrade to Tier IV later)
 6. **Phase #7**: Turing Drive vehicle interface integration
@@ -1053,20 +1102,19 @@ One ZED X stereo camera, driven as a composable node:
 - **Team A (Allan & Liao)**: Sensors (LiDAR, cameras, GNSS focus)
 - **Team B (Vincent & Darren)**: System setup, map preparation, vehicle interface
 - **Coordination**: Both teams work together on GNSS + Map for localization testing
-- **Practice Equipment**: F9R GNSS + COSS map (from seniors Allan & David)
-- **Production Equipment**: F9P GNSS + 華夏科大 map
+- **Practice Equipment**: ZED-F9P GNSS + COSS map
+- **Production Equipment**: ZED-F9P GNSS + 華夏科大 map
 
 ### Hardware Status
 **Available Now:**
 - Velodyne VLP-32C LiDAR
 - USB cameras
-- u-blox F9R (practice, from Allan & David)
+- u-blox ZED-F9P (on the vehicle; brought up 2026-09-17)
 - COSS map (practice)
 - Orin box (interim testing)
 
 **Pending:**
 - Advantech Orin computer
-- u-blox F9P GNSS (production)
 - Tamagawa IMU
 - 華夏科大 campus map
 - Turing Drive vehicle interface packages

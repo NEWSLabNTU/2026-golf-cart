@@ -3,7 +3,7 @@
 #
 # Topic list curated for Golf Cart sensor stack:
 #   * Velodyne VLP-32C
-#   * u-blox F9R/F9P GNSS
+#   * u-blox ZED-F9P GNSS
 #   * Tamagawa IMU (or interim ros2_mpu9250_driver)
 #   * USB camera (or future Tier IV GMSL)
 #   * golfcart_vehicle_interface status + diagnostics
