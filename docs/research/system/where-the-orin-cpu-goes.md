@@ -162,6 +162,19 @@ This is an operating decision rather than a defect, but it should be a deliberat
 one: run RViz on the other machine over the DDS link, or default it off on the
 master and opt in. Worth about 5 points of host CPU.
 
+**Partially addressed, 2026-09-19**: the 63.86% is ingest — JPEG decode on
+three cameras at 30 Hz, `PointCloud2` deserialize on two LiDARs at 10 Hz — not
+render, and none of it needs the source rate. `rviz_relay.launch.xml` now
+throttles each of those five streams to half rate behind a `/rviz/...` mirror
+that RViz's own displays subscribe to instead, leaving every other subscriber
+(recording, the concatenator, perception) on the untouched source topic. See
+[docs/guides/rviz_relay.md](../../guides/rviz_relay.md). It does not touch the
+render side of this finding — running the viewer on the other machine, or
+defaulting it off, is still open — and the ingest halving has not itself been
+re-measured against a capture the way Finding 1 and Finding 4 were; it follows
+from what `ThrottleNode` republishes (the same compressed bytes, at half the
+message count) rather than from a profiled run.
+
 ## Finding 4 — the Seyond driver throws away 60% of the LiDAR
 
 The stderr volume is what draws the eye:
@@ -345,7 +358,7 @@ it is complementary to Finding 1 rather than an alternative to it.
 | 5 | no GPU telemetry on Jetson | unblocks CUDA U0 | **done** — `just profile gpu` |
 | 4 | Seyond drops 60% of its packets | NDT sees a crippled cloud | one QoS line, if the WHC theory holds |
 | 1 | compose 34 standalone nodes | ~14 pp host CPU | upstream launch overlays |
-| 3 | rviz2 on the vehicle | ~5 pp host CPU | policy |
+| 3 | rviz2 on the vehicle | ~5 pp host CPU | policy — ingest half done, see rviz_relay.launch.xml |
 | 4b | log spam, ~200 lines/s | small | trivial |
 | 6 | `--sched` affinity / RT priority | latency, not throughput | a platform YAML |
 
