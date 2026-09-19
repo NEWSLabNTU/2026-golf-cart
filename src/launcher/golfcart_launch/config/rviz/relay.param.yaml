@@ -1,0 +1,34 @@
+# Rates for the RViz-only throttle relays started by rviz_relay.launch.xml.
+#
+# These are the ONLY thing that varies here, so they are the only thing in
+# config/: input_topic, output_topic and throttle_type are wiring, not tuning,
+# and stay in the launch file next to the container that owns them.
+#
+# Cameras 30 -> 15 Hz, LiDARs 10 -> 5 Hz. Halving both was the brief; nothing
+# below is measured per stream, so if one display turns out to need more
+# (or less), change only its own key. See docs/guides/rviz_relay.md.
+#
+# Top-level key is `/**/<node name>`, not a bare node name. Every relay runs
+# inside the `rviz_relay` namespace pushed by rviz_relay.launch.xml's
+# node_container, so a bare `left_cam_relay:` key would resolve to
+# `/left_cam_relay` and match nothing -- the exact trap CLAUDE.md documents for
+# the Xsens IMU param file, and nothing here warns when it happens either.
+/**/left_cam_relay:
+  ros__parameters:
+    msgs_per_sec: 15.0
+
+/**/right_cam_relay:
+  ros__parameters:
+    msgs_per_sec: 15.0
+
+/**/rear_cam_relay:
+  ros__parameters:
+    msgs_per_sec: 15.0
+
+/**/vlp32_relay:
+  ros__parameters:
+    msgs_per_sec: 5.0
+
+/**/falcon_relay:
+  ros__parameters:
+    msgs_per_sec: 5.0

@@ -51,6 +51,30 @@
   </node>
 
   <!--
+    Same throttle relays golfcart_autoware.launch.xml starts for a live or
+    logging-sim run, so replay.rviz reads the same /rviz/... topics either way
+    - see rviz_relay.launch.xml for what each one does. use_sim_time is passed
+    explicitly here because this file has no global parameters group to set it
+    for every node the way autoware_global_parameter_loader does downstream of
+    golfcart_autoware.launch.xml.
+
+    The three camera relays have no source in a bag replay: these recordings
+    carry only the two LiDARs and the compressed ZED stream (handled above by
+    zed_republish, out of scope for this change), and replay.rviz has no
+    LeftCam/RightCam/RearCam display to feed from /rviz/sensing/camera/*. They
+    stay in the bundle rather than forking a lidar-only variant of
+    rviz_relay.launch.xml: each one polls try_discover_source() on a 100 ms
+    timer and finds nothing, which costs a graph query with no match, not a
+    running subscription - see rviz_relay.launch.xml for why that check is
+    cheap even when it succeeds.
+  -->
+  <group if="$(var rviz)">
+    <include file="$(find-pkg-share golfcart_launch)/launch/rviz_relay.launch.xml">
+      <arg name="use_sim_time" value="true"/>
+    </include>
+  </group>
+
+  <!--
     Plain `ros2 launch` runs `executable` actions normally. Note this file must
     NOT be started through play_launch, which executes such actions during its
     dump phase and then drops them from the replay - see the Amendments section

@@ -287,4 +287,19 @@
       <env name="QT_QPA_PLATFORMTHEME" value="qt5ct"/>
     </node>
   </group>
+
+  <!--
+    RViz-only throttle relays, gated the same as rviz2 itself: they exist to
+    cut what RViz decodes and are wasted work with nothing subscribed to read
+    them. use_sim_time is forwarded explicitly, matching every other include
+    in this file, even though the global parameters group above already
+    applies it to every node created afterward in this launch tree through
+    launch_ros's SetParameter action inside autoware_global_parameter_loader.
+    See rviz_relay.launch.xml for what is throttled and why.
+  -->
+  <group if="$(var rviz)">
+    <include file="$(find-pkg-share golfcart_launch)/launch/rviz_relay.launch.xml">
+      <arg name="use_sim_time" value="$(var use_sim_time)"/>
+    </include>
+  </group>
 </launch>

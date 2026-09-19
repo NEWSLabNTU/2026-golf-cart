@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Five RViz-only throttle relays, mirroring the raw sensor topics into a
+  /rviz namespace at half rate: cameras 30 -> 15 Hz, LiDARs 10 -> 5 Hz. RViz's
+  displays subscribe to the /rviz copies; the source topics
+  (/sensing/camera/*/image_raw/compressed, /sensing/lidar/vlp32/velodyne_points,
+  /sensing/lidar/falcon/iv_points) are never touched, so `ros2 topic hz` on
+  them is unaffected and every other subscriber (recording, the concatenator,
+  perception) keeps the full stream.
+
+  Why this exists at all: RViz's own ingest cost is decode, not render. JPEG
+  decompression on three camera streams at 30 Hz and PointCloud2 deserialize on
+  two LiDARs at 10 Hz is what burns the more than half a core RViz costs on the
+  Orin (docs/research/system/where-the-orin-cpu-goes.md, Finding 3). A relay
+  that republishes the still-compressed image, or the still-serialized cloud,
+  at half the message rate halves that decode cost without dropping a display
+  or touching a source topic a recording or a downstream consumer depends on.
+
+  Why one container and not five processes: docs/research/system/where-the-
+  orin-cpu-goes.md Finding 1 measured a do-nothing standalone ROS 2 process at
+  about 4.9 percent of a core just for existing as its own participant, before
+  it does any work. Five standalone `topic_tools throttle` processes would
+  spend close to a quarter of a core on that alone; five composable nodes in
+  one container spend it once.
+
+  Why no QoS override: the source publishers (camera and LiDAR drivers) are
+  best-effort, and a relay that subscribed reliable would simply receive
+  nothing. topic_tools::ThrottleNode does not need one anyway, because
+  ToolBaseNode::try_discover_source() (topic_tools/tool_base_node.hpp, Humble
+  1.1.2, installed under /opt/ros/humble/include) queries
+  get_publishers_info_by_topic() on the input topic and subscribes with
+  whatever QoS the discovered publisher actually offers, polling until a
+  publisher appears. It is graph-driven, not configured, so it is correct for
+  every topic here without a qos_overrides parameter, and keeps working if a
+  driver restarts after the relay does.
+
+  Why this is cheap even when RViz is not looking: ThrottleNode is a "lazy"
+  tool node (topic_tools::ToolBaseNode::make_subscribe_unsubscribe_decisions(),
+  same header). It only opens the upstream subscription once its own output
+  publisher has at least one subscriber, and drops it again when the last one
+  goes away. A relay nobody is watching costs a periodic graph check, not a
+  running subscription.
+-->
+<launch>
+  <arg name="container_name" default="rviz_relay_container"
+       description="component_container_mt hosting the five throttle relays"/>
+  <arg name="use_sim_time" default="false"
+       description="propagated to each relay explicitly: golfcart_autoware.launch.xml's global SetParameter covers it when this file is included from there, but bag_replay.launch.xml has no such global action and needs it set directly"/>
+  <arg name="relay_param_file"
+       default="$(find-pkg-share golfcart_launch)/config/rviz/relay.param.yaml"
+       description="msgs_per_sec for each relay; input_topic/output_topic/throttle_type stay in this file as wiring, not tuning"/>
+
+  <group>
+    <node_container pkg="rclcpp_components" exec="component_container_mt" name="$(var container_name)" namespace="rviz_relay" output="screen">
+      <composable_node pkg="topic_tools" plugin="topic_tools::ThrottleNode" name="left_cam_relay">
+        <param from="$(var relay_param_file)"/>
+        <param name="use_sim_time" value="$(var use_sim_time)"/>
+        <param name="throttle_type" value="messages"/>
+        <param name="input_topic" value="/sensing/camera/left/image_raw/compressed"/>
+        <param name="output_topic" value="/rviz/sensing/camera/left/image_raw/compressed"/>
+      </composable_node>
+      <composable_node pkg="topic_tools" plugin="topic_tools::ThrottleNode" name="right_cam_relay">
+        <param from="$(var relay_param_file)"/>
+        <param name="use_sim_time" value="$(var use_sim_time)"/>
+        <param name="throttle_type" value="messages"/>
+        <param name="input_topic" value="/sensing/camera/right/image_raw/compressed"/>
+        <param name="output_topic" value="/rviz/sensing/camera/right/image_raw/compressed"/>
+      </composable_node>
+      <composable_node pkg="topic_tools" plugin="topic_tools::ThrottleNode" name="rear_cam_relay">
+        <param from="$(var relay_param_file)"/>
+        <param name="use_sim_time" value="$(var use_sim_time)"/>
+        <param name="throttle_type" value="messages"/>
+        <param name="input_topic" value="/sensing/camera/rear/image_raw/compressed"/>
+        <param name="output_topic" value="/rviz/sensing/camera/rear/image_raw/compressed"/>
+      </composable_node>
+      <composable_node pkg="topic_tools" plugin="topic_tools::ThrottleNode" name="vlp32_relay">
+        <param from="$(var relay_param_file)"/>
+        <param name="use_sim_time" value="$(var use_sim_time)"/>
+        <param name="throttle_type" value="messages"/>
+        <param name="input_topic" value="/sensing/lidar/vlp32/velodyne_points"/>
+        <param name="output_topic" value="/rviz/sensing/lidar/vlp32/velodyne_points"/>
+      </composable_node>
+      <composable_node pkg="topic_tools" plugin="topic_tools::ThrottleNode" name="falcon_relay">
+        <param from="$(var relay_param_file)"/>
+        <param name="use_sim_time" value="$(var use_sim_time)"/>
+        <param name="throttle_type" value="messages"/>
+        <param name="input_topic" value="/sensing/lidar/falcon/iv_points"/>
+        <param name="output_topic" value="/rviz/sensing/lidar/falcon/iv_points"/>
+      </composable_node>
+    </node_container>
+  </group>
+</launch>
