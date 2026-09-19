@@ -72,13 +72,19 @@ headers), discovers the source's actual QoS via
 polling every 100 ms until a publisher appears. It is graph-driven rather than
 configured, so it stays correct if a driver restarts after the relay does.
 
-`ThrottleNode` is also a *lazy* tool node: `ToolBaseNode`'s subscribe/
+`ThrottleNode` can also be a *lazy* tool node: `ToolBaseNode`'s subscribe/
 unsubscribe decision checks its own output publisher's subscriber count and
 only opens the upstream subscription once something is actually listening on
-the `/rviz/...` topic. A relay nobody has pointed RViz at costs a periodic
-graph check, not a running subscription — which is why the container is safe
-to include unconditionally wherever it is included, rather than needing its
-own enable flag.
+the `/rviz/...` topic. It is **not** lazy by default — the `lazy_` member
+(`tool_base_node.hpp`) is backed by a `lazy` parameter whose compiled-in
+default is `false`, which was confirmed on a running relay: `ros2 param get
+/falcon_relay lazy` read `False`, and the source subscription stayed open for
+over 8 seconds with zero subscribers on the relay's own output. Every
+composable node in `rviz_relay.launch.xml` sets `lazy:=true` explicitly, and
+with it set, a relay nobody has pointed RViz at costs a periodic graph check,
+not a running subscription — which is why the container is safe to include
+unconditionally wherever it is included, rather than needing its own enable
+flag.
 
 ## Where it is wired in, and where it is not
 
