@@ -266,6 +266,24 @@ golfcart_resolve_dds_profile() {
         touch "$warn_stamp" 2>/dev/null || true
     fi
 
+    # `loopback` names a TRANSPORT, never a machine, so selecting it explicitly
+    # must not rewrite which machine this is either. Without this,
+    # `GOLFCART_DDS_PROFILE=loopback just launch` - the natural way to keep a
+    # solo run off the shared LAN - set GOLFCART_HOST=loopback, which the
+    # justfile turns into `host:=all`, which pulls in the is_orin group and
+    # kills the launch on a missing zed_wrapper. That is the same trap the
+    # demotion above documents, reached by the other road, and it is the road
+    # an operator is most likely to take.
+    #
+    # Only when the marker actually names a machine. With no marker,
+    # GOLFCART_HOST=loopback is right and `host:=all` is the historical
+    # single-machine behaviour. A stated GOLFCART_ENV_ROLE still outranks this.
+    if [ "$dds_profile" = "loopback" ] && [ "$profile" = "loopback" ] &&
+       [ "${source_of}" = "env" ] &&
+       { [ "$from_marker" = "master" ] || [ "$from_marker" = "orin" ]; }; then
+        profile="$from_marker"
+    fi
+
     # GOLFCART_HOST is the MACHINE; GOLFCART_DDS_PROFILE is the TRANSPORT. They
     # are the same word except when a demotion has separated them, and callers
     # want different ones: the justfile's host:= and record_unit_exec.sh's
