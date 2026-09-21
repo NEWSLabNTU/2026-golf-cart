@@ -33,8 +33,9 @@ TOPICS=(
   # Cameras. Mapping does not use them; phase 3C replays this same bag to
   # bootstrap the tag map, so the tags must already be mounted for this drive.
   # Compressed only — the raw streams are far too large to sustain.
-  # No camera_info: gscam publishes none for these, so phase 3C must take
-  # intrinsics from the sub-phase A calibration files rather than from the bag.
+  # No camera_info recorded here: phase 3C takes intrinsics from the sub-phase
+  # A calibration files rather than from the bag. (gmslcam does publish it, at
+  # the frame rate; record_outdoor.sh records it.)
   /sensing/camera/left/image_raw/compressed
   /sensing/camera/right/image_raw/compressed
   /sensing/camera/rear/image_raw/compressed

@@ -16,7 +16,7 @@ The golf cart carries two independent camera sets on two different machines:
 
 | Machine | Cameras | Driver |
 |---------|---------|--------|
-| Advantech (`is_master`) | three GMSL cameras — left, right, rear | `gscam` |
+| Advantech (`is_master`) | three GMSL cameras — left, right, rear | `gmslcam` |
 | Orin (`is_orin`) | one ZED X stereo camera with built-in IMU | `zed_components::ZedCamera` |
 
 Both are reached through the same entry point,
@@ -34,7 +34,7 @@ placed relative to `base_link`.
 
 ```
 golfcart_sensor_kit_launch/
-  launch/camera.launch.xml     dispatch on camera_model: gscam | zedx | none
+  launch/camera.launch.xml     dispatch on camera_model: gmslcam | zedx | none
   launch/zed.launch.xml        component container + ZedCamera + robot_state_publisher
   config/zed.param.yaml        all ZED parameters
   launch/imu.launch.xml        dispatch on imu_source: xsens | zed
@@ -46,7 +46,7 @@ golfcart_sensor_kit_launch/
 Advantech (is_master)
   golfcart.launch.yaml -> golfcart_autoware.launch.xml -> tier4_sensing_component
     -> golfcart_sensor_kit_launch/launch/sensing.launch.xml
-         -> camera.launch.xml  camera_model:=gscam   -> 3x gscam
+         -> camera.launch.xml  camera_model:=gmslcam -> 3x gmslcam
          -> imu.launch.xml     imu_source:=xsens|zed -> imu_corrector + gyro_bias_estimator
          -> lidar.launch.xml, gnss.launch.xml
 
@@ -72,7 +72,7 @@ the same reason, when this file is included from a conditional group, the
 container's `load_node` service never completes.
 
 Both the container and the component therefore carry absolute namespaces
-(`/sensing/camera/...`), and the group has no push. The `gscam` branch keeps its
+(`/sensing/camera/...`), and the group has no push. The `gmslcam` branch keeps its
 `push-ros-namespace` because plain nodes are unaffected.
 
 ### Parameter layering

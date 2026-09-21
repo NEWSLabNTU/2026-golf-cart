@@ -15,7 +15,7 @@
 # What it does cover, by machine:
 #
 #   any host      topic plumbing, CompressedImage.format handling, the rclrs
-#                 crate, the detector, bag replay, gscam config shape, and the
+#                 crate, the detector, bag replay, gmslcam config shape, and the
 #                 appsink stall behaviour that killed cameras in the field
 #   Jetson        additionally the real nvvidconv/nvjpegenc caps, and NVJPG
 #                 encoder capacity with three streams at once -- which is the
@@ -25,7 +25,7 @@
 # Usage:
 #   scripts/sim/cameras.sh up        # create the loopback devices (needs sudo)
 #   scripts/sim/cameras.sh feed      # start the three UYVY sources
-#   scripts/sim/cameras.sh configs   # write gscam param files for them
+#   scripts/sim/cameras.sh configs   # write gmslcam param files for them
 #   scripts/sim/cameras.sh bench     # encoder throughput, 1 stream vs 3
 #   scripts/sim/cameras.sh status
 #   scripts/sim/cameras.sh down
@@ -95,7 +95,7 @@ cmd_up() {
         labels=$(printf 'sim_camera_%s,' "${CAMS[@]}"); labels=${labels%,}
         echo "  sudo modprobe v4l2loopback devices=${#CAMS[@]} video_nr=${nrs} ..."
         # exclusive_caps=1 makes each node advertise OUTPUT until a producer
-        # attaches and CAPTURE afterwards. gscam needs CAPTURE, which is why
+        # attaches and CAPTURE afterwards. gmslcam needs CAPTURE, which is why
         # 'feed' has to run before any consumer, not after.
         sudo modprobe v4l2loopback \
             devices="${#CAMS[@]}" \
@@ -130,9 +130,9 @@ cmd_feed() {
         # and is not: the loopback node then never flips from OUTPUT to CAPTURE
         # and never advertises its format, so `v4l2-ctl --list-formats` comes
         # back empty and every consumer dies with either "Device '/dev/videoN'
-        # is not a capture device" or "not-negotiated". Through gscam that
-        # surfaces as "Failed to PAUSE stream, check your gstreamer
-        # configuration", which sends you to look at the wrong file.
+        # is not a capture device" or "not-negotiated". Through gmslcam that
+        # surfaces as "failed to set pipeline to Playing", which sends you to
+        # look at the wrong file.
         # nohup: these are meant to outlive the script that starts them, and
         # `down` is what stops them.
         nohup gst-launch-1.0 -q -e \
@@ -164,6 +164,12 @@ cmd_configs() {
          measured from these configs says NOTHING about the hardware path." ;;
     esac
 
+    # One complete gmslcam parameter file per camera: what the sensor kit
+    # splits across camera_<cam>.yaml, the capture profile and the launch
+    # file's camera_info_url, folded into one so a single `ros2 run` works.
+    # The calibration URL is the source checkout's file, because gmslcam takes
+    # file:// or an absolute path and not package://.
+    local calib_dir="${repo_dir}/src/sensor_kit/golfcart_sensor_kit_launch/golfcart_sensor_kit_launch/config"
     for i in "${!CAMS[@]}"; do
         local c=${CAMS[$i]} d; d=$(dev_for "$i")
         cat > "${RUNDIR}/camera_${c}.yaml" <<EOF
@@ -171,35 +177,35 @@ cmd_configs() {
 # Synthetic camera on a v4l2loopback device. Encoder tier: ${tier}.
 /**:
   ros__parameters:
-    video_device: "${d}"
-    camera_name: "camera_${c}"
-    camera_info_url: "package://golfcart_sensor_kit_launch/config/camera_${c}_calibration.yaml"
-    frame_id: "camera_${c}"
-    image_width: ${WIDTH}
-    image_height: ${HEIGHT}
-    framerate: ${FPS}.0
-    gscam_config: "v4l2src device=${d} ! video/x-raw,format=UYVY,width=${WIDTH},height=${HEIGHT},framerate=${FPS}/1 ! queue leaky=downstream max-size-buffers=2 max-size-bytes=0 max-size-time=0 ! ${enc}"
-    image_encoding: "jpeg"
-    sync_sink: false
-    preroll: false
-    use_gst_timestamps: true
-    reopen_on_eof: false
-    camera_info_rescale: true
+    device: "${d}"
+    width: ${WIDTH}
+    height: ${HEIGHT}
+    fps: ${FPS}
+    codec: "jpeg"
+    frame_id: "camera_${c}_optical_link"
+    image_topic: "image_raw/compressed"
+    camera_info_topic: "camera_info"
+    camera_info_url: "file://${calib_dir}/camera_${c}_calibration.yaml"
+    pipeline: "v4l2src device=${d} ! video/x-raw,format=UYVY,width=${WIDTH},height=${HEIGHT},framerate=${FPS}/1 ! queue leaky=downstream max-size-buffers=2 max-size-bytes=0 max-size-time=0 ! ${enc} ! appsink name=ros_sink emit-signals=false sync=false max-buffers=2 drop=true"
 EOF
         ok "wrote ${RUNDIR}/camera_${c}.yaml"
     done
 
     hdr "Run one"
-    echo "  ros2 run gscam gscam_node --ros-args \\"
+    echo "  ros2 run gmslcam gmslcam --ros-args \\"
     echo "    -r __ns:=/sensing/camera/left -r __node:=camera_left \\"
-    echo "    -r camera/image_raw/compressed:=image_raw/compressed \\"
-    echo "    -r camera/camera_info:=camera_info \\"
     echo "    --params-file ${RUNDIR}/camera_left.yaml"
+    echo
+    echo "  Or all three through the real launch file, which is what these"
+    echo "  devices are for (the committed profile encodes in software; on a"
+    echo "  Jetson, capture_profile:=sim-nvjpeg uses NVJPG):"
+    echo "    ros2 launch golfcart_sensor_kit_launch camera.launch.xml \\"
+    echo "        camera_model:=gmslcam capture_profile:=sim"
     echo
     echo "  ros2 topic hz /sensing/camera/left/image_raw/compressed"
     echo "  ros2 topic echo --field format /sensing/camera/left/image_raw/compressed --once"
     echo
-    echo "  That last one is the point: it prints what gscam writes into"
+    echo "  That last one is the point: it prints what gmslcam writes into"
     echo "  CompressedImage.format, which is the contract the rclrs crate has to"
     echo "  parse. Expect the bare \"jpeg\", not the compound form."
 }

@@ -116,9 +116,9 @@
   #lbl(202mm, 0mm, "FUSION / SYSTEM", sz: 6.4pt)
 
   // ── sensing (existing)
-  #node(0mm, 5mm,  44mm, 12mm, "exist", "camera_left",  "gscam · jpeg · 1920×1280", warn: true)
-  #node(0mm, 20mm, 44mm, 12mm, "exist", "camera_right", "gscam · jpeg · 1920×1280", warn: true)
-  #node(0mm, 35mm, 44mm, 12mm, "exist", "camera_rear",  "gscam · jpeg · 1920×1280", warn: true)
+  #node(0mm, 5mm,  44mm, 12mm, "exist", "camera_left",  "gmslcam · jpeg · 1920×1280", warn: true)
+  #node(0mm, 20mm, 44mm, 12mm, "exist", "camera_right", "gmslcam · jpeg · 1920×1280", warn: true)
+  #node(0mm, 35mm, 44mm, 12mm, "exist", "camera_rear",  "gmslcam · jpeg · 1920×1280", warn: true)
   #lbl(0mm, 48.6mm, "one calibration file copied x3")
 
   #node(0mm, 66mm, 44mm, 12mm, "exist", "imu_corrector", "Tamagawa IMU")

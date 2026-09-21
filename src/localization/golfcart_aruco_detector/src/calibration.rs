@@ -21,7 +21,7 @@
 //! localizer fed them does not see bad data, it sees a vehicle somewhere else.
 //!
 //! The way it happens is ordinary. Someone changes the capture resolution in a
-//! camera profile and does not recalibrate. gscam publishes the calibration
+//! camera profile and does not recalibrate. gmslcam publishes the calibration
 //! file verbatim -- it replaces only the header -- so the stale size travels
 //! with the stale intrinsics, and that stale size is the evidence.
 //!

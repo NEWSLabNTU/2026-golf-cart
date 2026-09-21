@@ -73,7 +73,7 @@ work.
 - [ ] **Exposure comparison** — the same scene with `auto_exposure` true and
       false. Auto-exposure hunting plus motion blur is the leading cause of
       intermittent detection, and this recording is the evidence for fixing the
-      gscam profile.
+      camera capture profile.
 
 ### Site bags — after boards are mounted and surveyed
 
@@ -124,7 +124,7 @@ estimator is not.
 - Detection rate characterized against incidence angle and range, on real
   optics — enough to confirm or correct the 25–75° usable window the design
   takes from the literature.
-- A fixed-exposure gscam profile chosen on evidence.
+- A fixed-exposure camera capture profile chosen on evidence.
 - At least one multi-board bench bag that D5's detector and D4's localizer can
   run against end to end, with tape-measured ground truth.
 
@@ -216,7 +216,7 @@ same bag reports 99.4 % two-or-more.
 |---|---|
 | `corner_sigma_px` at three ranges and while moving | one camera, one board, a tripod, a tape measure |
 | detection rate against incidence and range | the same, plus a protractor or a measured layout |
-| fixed-exposure gscam profile chosen on evidence | the same scene recorded with auto-exposure on and off |
+| fixed-exposure camera capture profile chosen on evidence | the same scene recorded with auto-exposure on and off |
 | multi-board bench bag, end to end | four or five boards and tape-measured positions |
 | all site bags, coverage census, stop-point ground truth | mounted boards, a surveyed map, the vehicle |
 

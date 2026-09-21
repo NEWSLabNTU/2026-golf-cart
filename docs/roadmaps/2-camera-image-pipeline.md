@@ -13,12 +13,19 @@ Feeds Phase 3 Track C: sub-phase D below migrates the ArUco detector, and
 [3-indoor-d5](3-indoor-d5-detector.md) is where its current hand-rolled
 transport lives.
 
-Last updated: 2026-08-22. **Sub-phase A is done, on the vehicle.**
-`nvv4l2camerasrc` binds to the oToCam driver, and it is now the default profile.
-Blockers 1, 3 and 4 and the NVJPG capacity question are all answered. Sub-phase
-B is decided: **gscam stays, gmslcam is dropped**, and the capture path is a
-switchable profile. Sub-phase C is implemented and tested against the C++
-plugin's own bytes. Sub-phase D is written but not compiled; see the note there.
+Last updated: 2026-09-21. **Sub-phase B is reversed: gmslcam is the driver.**
+The 2026-08-21 decision below kept gscam; on 2026-09-21 gscam was removed from
+the tree and `NEWSLabNTU/gmslcam` brought in as a submodule and wired through
+the same topics, frame ids, calibration files and the bare `"jpeg"` format, so
+nothing downstream changes. The capture path is still a switchable profile,
+now one directory per profile (see *Capture profiles*). Verified against
+synthetic sources at 30 Hz on all six topics; not yet run on the vehicle.
+
+2026-08-22: **Sub-phase A is done, on the vehicle.** `nvv4l2camerasrc` binds to
+the oToCam driver, and it is now the default profile. Blockers 1, 3 and 4 and
+the NVJPG capacity question are all answered. Sub-phase C is implemented and
+tested against the C++ plugin's own bytes. Sub-phase D is written but not
+compiled; see the note there.
 
 Measured with three cameras running on the vehicle:
 
@@ -148,9 +155,10 @@ Three traps this encodes, all of which the crate must enforce:
   decide whether to swap channels. `"rgb8; jpeg compressed rgb8"` looks more
   honest and is silently wrong: no swap is applied, BGR pixels get labelled
   `rgb8`, and red and blue transpose with no warning.
-- **The bare form is legal and we already produce it.** gscam writes plain
-  `"jpeg"`. Every bag recorded so far contains it. The crate must implement the
-  channel-count fallback or it cannot replay our own data.
+- **The bare form is legal and we already produce it.** gmslcam writes plain
+  `"jpeg"`, exactly as gscam did before it. Every bag recorded so far contains
+  it. The crate must implement the channel-count fallback or it cannot replay
+  our own data.
 - **The target field does not decide the channel order -- the first field does.**
   Row two of the table above is the case: an `rgb8` source produces
   `"rgb8; jpeg compressed bgr8"`, a BGR payload that a subscriber must hand back
@@ -330,6 +338,14 @@ stage measured before and after, both numbers written down.
 
 ## Sub-phase B - who publishes the format string
 
+**Reversed 2026-09-21: gmslcam is the publisher.** gscam is gone from the
+repository; `src/sensor_component/external/gmslcam` (a submodule, `ament_cargo`,
+rclrs 0.7) runs as three nodes under the same names and namespaces, with
+`codec: jpeg` instead of its `h265` default. Its `compressed_format()` writes the
+bare `"jpeg"`, so the format on the wire, and everything in the table below
+about what the move does and does not buy, is unchanged. The decision it
+reverses is kept as written, because its reasoning is still the reasoning:
+
 **Decided 2026-08-21: gscam stays, and gmslcam is dropped from this plan.**
 
 gscam is an upstream deb and writes the bare `"jpeg"`. Confirmed live against
@@ -378,7 +394,7 @@ the vehicle, so it is now a **profile**, named by `camera.launch.xml`'s
 
 ```bash
 ros2 launch golfcart_sensor_kit_launch camera.launch.xml \
-    camera_model:=gscam capture_profile:=v4l2-mmap
+    camera_model:=gmslcam capture_profile:=v4l2-mmap
 ```
 
 That argument is the whole selection mechanism. It was also read from
@@ -395,14 +411,17 @@ what the vehicle runs is an edit to that default.
 | `nvv4l2camerasrc` | `nvv4l2camerasrc` | **default**, and verified on the vehicle: ~8% of a core per camera against ~40% on `v4l2-dmabuf` |
 | `v4l2-dmabuf` | `v4l2src io-mode=4` | what shipped before profiles |
 | `v4l2-mmap` | `v4l2src io-mode=2` | copies on purpose, to keep "camera dead" and "dmabuf dead" separable |
-| `sim` | `v4l2src` on v4l2loopback | no hardware; pairs with `just sim cameras` |
+| `sim` | `v4l2src` on v4l2loopback | no hardware; pairs with `just sim cameras`. Software `jpegenc` since 2026-09-21 so it runs on any machine; `sim-nvjpeg` is the same through NVJPG |
+| `videotestsrc` | `videotestsrc` in the node | added 2026-09-21: no devices, no sudo; proves launch, topics, frames, format and calibration wiring anywhere |
 
 `camera.launch.xml` loads `camera_<cam>.yaml` and then the profile, so the
-profile supplies `gscam_config`. Each profile carries all three cameras keyed by
-node name (`/**/camera_left:`), which is one file per profile rather than three.
-The device paths moved into the profile; they used to be declared in
+profile supplies `pipeline`. Since 2026-09-21 a profile is a **directory** of
+three files, `<profile>/{left,right,rear}.yaml`, each keyed `/**`: rclrs, which
+gmslcam is built on, matches parameter-file node keys literally and never
+expands the `/**/camera_left:` wildcard the single-file layout relied on. The
+device paths live in the profile; they used to be declared in
 `camera.launch.xml` as `left_camera_device` and friends, read by nothing, while
-the real paths sat inside the `gscam_config` strings.
+the real paths sat inside the pipeline strings.
 
 Exercised end to end on an AGX Orin with no cameras attached, through the real
 launch file:

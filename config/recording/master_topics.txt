@@ -60,10 +60,11 @@
 
 # ── GMSL cameras — compressed only, the raw streams are far too large ───────
 #
-# camera_info IS published, and the note that used to sit here saying gscam
-# publishes none was wrong. Checked 2026-08-20 by running gscam with these
-# YAMLs and these remaps against synthetic devices: it loads the calibration
-# from camera_info_url and publishes camera_info at the frame rate, 30 Hz.
+# camera_info IS published. gmslcam loads the calibration from camera_info_url
+# and publishes camera_info beside every image, at the frame rate, 30 Hz;
+# checked 2026-09-21 against synthetic sources, and the previous driver was
+# checked the same way on 2026-08-20. A note that used to sit here claiming
+# none is published was wrong.
 #
 # It has to be recorded. Without intrinsics a bag cannot be replayed through
 # anything that computes a pose from an image — the ArUco detector blocks

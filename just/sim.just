@@ -19,7 +19,7 @@ cameras-up:
 cameras-feed:
     ./scripts/sim/cameras.sh feed
 
-# Write gscam param files pointing at the synthetic devices
+# Write gmslcam param files pointing at the synthetic devices
 cameras-configs:
     ./scripts/sim/cameras.sh configs
 

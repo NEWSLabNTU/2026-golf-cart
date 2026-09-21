@@ -36,9 +36,9 @@ TOPICS=(
   # Cameras (USB: left, right, rear).
   #
   # There is no `front` camera and no raw `image_raw` on any of them. The sensor
-  # kit's camera.launch.xml brings up three cameras and gscam is configured with
-  # `enable_pub_plugins: ["image_transport/compressed"]`, so the compressed topic
-  # is the only one that exists. This list previously named
+  # kit's camera.launch.xml brings up three gmslcam nodes with `codec: jpeg`,
+  # and gmslcam publishes CompressedImage only, so the compressed topic is the
+  # only one that exists. This list previously named
   # /sensing/camera/front/* and recorded three empty channels.
   /sensing/camera/left/image_raw/compressed
   /sensing/camera/left/camera_info

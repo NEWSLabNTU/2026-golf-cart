@@ -68,7 +68,7 @@
     # refinement and only searches a reduced one, which is why it measures at
     # 0.002 px. Reach for detection_downscale first.
     #
-    # Measured live on an AGX Orin: one 1920x1280 camera at 30 fps, gscam with
+    # Measured live on an AGX Orin: one 1920x1280 camera at 30 fps, JPEG from
     # hardware NVJPG, whole-node CPU:
     #
     #   decode  downscale     rate      CPU
@@ -96,7 +96,7 @@
     #
     # OFF, and the default is the point. `k` is in pixels of the size CameraInfo
     # declares. Change the capture resolution in camera_capture/<profile>.yaml
-    # and forget to recalibrate, and gscam keeps publishing the old calibration
+    # and forget to recalibrate, and gmslcam keeps publishing the old calibration
     # verbatim -- it touches only the header -- so the images get bigger while
     # `k` does not, and every pose comes out wrong by that ratio. Nothing
     # downstream can tell: the poses are self-consistent, they are just not

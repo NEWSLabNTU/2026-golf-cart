@@ -111,11 +111,14 @@ sessions that happened to coincide.
 
 ### One thing that hides the resolution mismatch
 
-`camera_left.yaml` and its siblings set `camera_info_rescale: true`. gscam will
-silently rescale `camera_info` to the streamed resolution rather than reject a
-mismatch, so a wrong `image_width` produces plausible output instead of an
-error — and rescales from the wrong starting size. Turning this off during
-calibration verification would make the mismatch loud.
+`camera_left.yaml` and its siblings used to set `camera_info_rescale: true`, on
+the belief that the driver would silently rescale `camera_info` to the streamed
+resolution rather than reject a mismatch. It never did: the key was not a
+parameter of the old driver, and gmslcam (since 2026-09-21) has no such option
+either. Nothing rescales; the calibration file's `width`, `height` and `k` go
+out verbatim, so a mismatch shows up as a `camera_info` size that disagrees
+with the frames, and `golfcart_aruco_detector` suppresses detections when the
+two disagree. That is the loud failure this section wanted.
 
 The previous text of this section, retained because it describes what the files
 held before:
@@ -150,12 +153,12 @@ calibrated values (`yaw: -0.05`, `pitch: -1.7707963`). The camera entries do not
 ### Cameras in scope
 
 Three: `camera_left`, `camera_right`, `camera_rear`. All 1920×1280 @ 30 Hz via
-gscam. These are TIER IV GMSL cameras, not USB — the gscam pipeline reads
+gmslcam. These are TIER IV GMSL cameras, not USB — the capture pipeline reads
 `tegra-capture-vi` and encodes with `nvjpegenc`:
 
 ```yaml
-# camera_left.yaml:15
-gscam_config: "v4l2src device=/dev/v4l/by-path/platform-tegra-capture-vi-video-index0 io-mode=4 ! ..."
+# config/camera_capture/nvv4l2camerasrc/left.yaml
+pipeline: "nvv4l2camerasrc device=/dev/v4l/by-path/platform-tegra-capture-vi-video-index12 do-timestamp=true ! ..."
 ```
 
 `sensor_kit_calibration.yaml` also lists a `usb_camera_front` entry with no

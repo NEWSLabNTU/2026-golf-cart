@@ -32,8 +32,8 @@ launch:
 # description was never true.
 - arg:
     name: camera_model
-    default: "$(env CAMERA_MODEL gscam)"
-    description: "Camera driver: gscam | zedx | none. Defaults to $CAMERA_MODEL."
+    default: "$(env CAMERA_MODEL gmslcam)"
+    description: "Camera driver: gmslcam | zedx | none. Defaults to $CAMERA_MODEL."
 
 - arg:
     name: imu_source

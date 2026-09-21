@@ -118,9 +118,9 @@ and they are the whole of the remaining risk.
 
 #block(width: 100%, height: 136mm)[
   #dlbl(0mm, 0mm, "SENSING", col: c-soft, sz: 7.2pt)
-  #dbox(0mm, 5mm, 54mm, 12mm, c-faint, white, "camera left", "gscam · jpeg")
-  #dbox(58mm, 5mm, 54mm, 12mm, c-faint, white, "camera right", "gscam · jpeg")
-  #dbox(116mm, 5mm, 54mm, 12mm, c-faint, white, "camera rear", "gscam · jpeg")
+  #dbox(0mm, 5mm, 54mm, 12mm, c-faint, white, "camera left", "gmslcam · jpeg")
+  #dbox(58mm, 5mm, 54mm, 12mm, c-faint, white, "camera right", "gmslcam · jpeg")
+  #dbox(116mm, 5mm, 54mm, 12mm, c-faint, white, "camera rear", "gmslcam · jpeg")
 
   #arr-d(27mm, 17mm, 8mm) #arr-d(85mm, 17mm, 8mm) #arr-d(143mm, 17mm, 8mm)
 

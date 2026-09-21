@@ -283,7 +283,7 @@ launch` the selection is made by environment variable:
 
 ```bash
 # Three GMSL cameras on the Advantech (default)
-CAMERA_MODEL=gscam just launch
+CAMERA_MODEL=gmslcam just launch
 
 # ZED X — set automatically for the orin host; also selectable directly
 ros2 launch golfcart_sensor_kit_launch camera.launch.xml camera_model:=zedx
@@ -477,7 +477,7 @@ sensor_suite:=vlp32c             # Velodyne VLP-32C
 
 # Individual sensor overrides
 lidar_model:=vlp32c
-camera_model:=gscam|zedx|none   # env ONLY - see below
+camera_model:=gmslcam|zedx|none # env ONLY - see below
 imu_source:=xsens|zed           # env ONLY - see below
 gnss_receiver:=ublox|septentrio|none
 ```
@@ -539,7 +539,7 @@ run that isolates it. See
 `golfcart_autoware.launch.xml`, but the path onwards runs through
 `tier4_sensing_component.launch.xml` and `tier4_sensing_launch/sensing.launch.xml`
 — installed Autoware files that forward a fixed set of arguments and drop the
-rest. The sensor kit reads `$(env IMU_SOURCE xsens)` / `$(env CAMERA_MODEL gscam)`
+rest. The sensor kit reads `$(env IMU_SOURCE xsens)` / `$(env CAMERA_MODEL gmslcam)`
 instead, so `just launch "imu_source:=zed"` looks like it works and does nothing.
 Set them in `config/sensors.conf`, which `scripts/env.sh` sources for both shells
 and units.
@@ -1059,11 +1059,29 @@ parameters are per-device and do not transfer between sources:
 Two camera sets on two machines, both behind `camera.launch.xml`. Design:
 [docs/design/zed_camera_integration.md](docs/design/zed_camera_integration.md).
 
-### GMSL cameras — Advantech (`camera_model:=gscam`)
-Three TIER IV GMSL cameras (left, right, rear) via `gscam`:
+### GMSL cameras — Advantech (`camera_model:=gmslcam`)
+Three TIER IV GMSL cameras (left, right, rear) via `gmslcam`, the Rust (rclrs)
+GStreamer node at `src/sensor_component/external/gmslcam` (submodule, `ament_cargo`):
 - **Config**: `golfcart_sensor_kit_launch/config/camera_{left,right,rear}.yaml`
-- **Topics**: `/sensing/camera/{left,right,rear}/image_raw/compressed`
-- **Frames**: `camera_left`, `camera_right`, `camera_rear`
+  (device, geometry, `codec: jpeg`, frame, topic names) plus one capture profile,
+  `config/camera_capture/<profile>/{left,right,rear}.yaml`, holding the `pipeline`
+  string; `capture_profile` defaults to `nvv4l2camerasrc` in `camera.launch.xml`
+- **Topics**: `/sensing/camera/{left,right,rear}/image_raw/compressed` and
+  `/sensing/camera/{left,right,rear}/camera_info`, both at the frame rate,
+  `CompressedImage.format` the bare `jpeg`
+- **Frames**: `camera_left_optical_link`, `camera_right_optical_link`,
+  `camera_rear_optical_link`
+- **Calibration**: `camera_{left,right,rear}_calibration.yaml`, wired through
+  `camera_info_url` as a `file://` URL set in `camera.launch.xml`; gmslcam does
+  not resolve `package://`
+- **Parameter files must be keyed `/**` or by the node's full name.** rclrs does
+  not expand `/**/camera_left`; that is why a capture profile is a directory of
+  three files rather than one file keyed per node. Nothing warns when the key
+  misses, the node just runs its built-in pipeline.
+- **No hardware**: `capture_profile:=videotestsrc` needs no devices and no sudo;
+  `sim` runs against `just sim cameras` (v4l2loopback), `sim-nvjpeg` the same
+  through NVJPG on a Jetson
+- Read `golfcart_sensor_kit_launch/config/gmslcam.md` before changing any of it
 
 ### ZED X — orin (`camera_model:=zedx`)
 One ZED X stereo camera, driven as a composable node:

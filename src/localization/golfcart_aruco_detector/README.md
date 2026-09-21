@@ -96,7 +96,7 @@ The parameters worth knowing:
 |---|---|---|
 | `dictionary` | `DICT_5X5_1000` | |
 | `marker_size` | `0.384` | Side of the **black square**, not the printed board. The board has a white quiet zone that is not part of the marker; getting this wrong scales every reported range linearly. |
-| `use_compressed` | `true` | gscam publishes compressed only. A detector on the raw topic waits forever and looks like a camera that sees nothing. |
+| `use_compressed` | `true` | gmslcam publishes compressed only. A detector on the raw topic waits forever and looks like a camera that sees nothing. |
 | `corner_refinement` | `subpix` | OpenCV's default is none, which quantises corners to the pixel grid. Corner error is the direct input noise of the pose solve. |
 | `error_correction_rate` | `0.6` | Deliberately not raised: a false ID is associated to a real surveyed board pose and yields a confident wrong answer, which is worse than a missed marker. |
 

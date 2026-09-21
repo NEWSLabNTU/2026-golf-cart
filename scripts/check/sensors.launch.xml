@@ -39,36 +39,22 @@
     </node>
   </group>
 
-  <!-- ── GMSL Cameras (gscam, Jetson HW-accelerated via tegra-capture-vi) ── -->
+  <!-- ── GMSL Cameras (gmslcam, via the sensor kit's own camera.launch.xml) ── -->
+  <!--
+    The kit's launch file, not a copy of its nodes. This file used to carry its
+    own three camera nodes and drifted: it still remapped a raw image topic that
+    had not existed since the pipeline went JPEG. Pushing "sensing" here is what
+    tier4_sensing_component does above sensing.launch.xml, so the topics come out
+    at /sensing/camera/<cam>/..., exactly as in the full stack.
+  -->
+  <arg name="capture_profile" default="nvv4l2camerasrc"
+       description="a directory in the kit's config/camera_capture/; videotestsrc needs no hardware"/>
   <group if="$(var launch_camera)">
-    <push-ros-namespace namespace="sensing/camera"/>
-
-    <group>
-      <push-ros-namespace namespace="left"/>
-      <node pkg="gscam" exec="gscam_node" name="camera_left" output="screen">
-        <param from="$(find-pkg-share golfcart_sensor_kit_launch)/config/camera_left.yaml"/>
-        <remap from="camera/image_raw" to="image_raw"/>
-        <remap from="camera/camera_info" to="camera_info"/>
-      </node>
-    </group>
-
-    <group>
-      <push-ros-namespace namespace="right"/>
-      <node pkg="gscam" exec="gscam_node" name="camera_right" output="screen">
-        <param from="$(find-pkg-share golfcart_sensor_kit_launch)/config/camera_right.yaml"/>
-        <remap from="camera/image_raw" to="image_raw"/>
-        <remap from="camera/camera_info" to="camera_info"/>
-      </node>
-    </group>
-
-    <group>
-      <push-ros-namespace namespace="rear"/>
-      <node pkg="gscam" exec="gscam_node" name="camera_rear" output="screen">
-        <param from="$(find-pkg-share golfcart_sensor_kit_launch)/config/camera_rear.yaml"/>
-        <remap from="camera/image_raw" to="image_raw"/>
-        <remap from="camera/camera_info" to="camera_info"/>
-      </node>
-    </group>
+    <push-ros-namespace namespace="sensing"/>
+    <include file="$(find-pkg-share golfcart_sensor_kit_launch)/launch/camera.launch.xml">
+      <arg name="camera_model" value="gmslcam"/>
+      <arg name="capture_profile" value="$(var capture_profile)"/>
+    </include>
   </group>
 
 </launch>

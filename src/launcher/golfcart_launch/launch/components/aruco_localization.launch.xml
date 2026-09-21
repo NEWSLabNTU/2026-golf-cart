@@ -40,8 +40,8 @@
        alongside the camera they belong to. The localizer subscribes to all
        three and solves jointly over whatever they collectively see.
 
-       Subscribes to the COMPRESSED topic. The gscam pipeline is configured
-       with `enable_pub_plugins: ["image_transport/compressed"]`, so no raw
+       Subscribes to the COMPRESSED topic. gmslcam publishes CompressedImage
+       and nothing else (`codec: jpeg` in the sensor kit), so no raw
        sensor_msgs/Image is published at all — a detector on the raw topic
        waits forever and presents as a camera that sees nothing.
   -->

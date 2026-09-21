@@ -139,9 +139,10 @@ echo "  with three 30 fps streams and how much headroom is left."
 
 # ── capture profiles ────────────────────────────────────────────────────────
 #
-# Each file in camera_capture/ is one capture path. This runs them, so the
-# question "which profile does this vehicle need" has an answer that came from
-# the hardware rather than from a guess.
+# Each directory in camera_capture/ is one capture path, three files keyed
+# `/**`, one per camera. This runs them, so the question "which profile does
+# this vehicle need" has an answer that came from the hardware rather than from
+# a guess.
 hdr "Capture profiles"
 
 profile_dir=""
@@ -176,13 +177,15 @@ echo "  from ${profile_dir#"${repo_dir}/"}"
 
 # The pipeline for one camera, out of one profile. Reading the YAML rather than
 # reconstructing the string keeps this honest: it tests what launch will run.
-pipeline_of() {  # pipeline_of <profile-file> <camera>
-    python3 - "$1" "$2" <<'PYEOF'
+# The string ends in gmslcam's appsink, which gst-launch cannot drive, so the
+# sink is cut off here and a fakesink put in its place below.
+pipeline_of() {  # pipeline_of <profile-dir> <camera>
+    python3 - "$1/$2.yaml" <<'PYEOF'
 import sys, yaml
 with open(sys.argv[1]) as handle:
     doc = yaml.safe_load(handle) or {}
-key = f"/**/camera_{sys.argv[2]}"
-print(doc.get(key, {}).get("ros__parameters", {}).get("gscam_config", ""))
+pipeline = doc.get("/**", {}).get("ros__parameters", {}).get("pipeline", "")
+print(pipeline.split(" ! appsink", 1)[0])
 PYEOF
 }
 
@@ -194,13 +197,16 @@ for candidate in /dev/video40 /dev/video41 /dev/video42; do
 done
 
 cleared=()
-for profile_file in "$profile_dir"/*.yaml; do
-    profile=$(basename "$profile_file" .yaml)
-    pipeline=$(pipeline_of "$profile_file" left)
+for profile_path in "$profile_dir"/*/; do
+    profile=$(basename "$profile_path")
+    pipeline=$(pipeline_of "$profile_path" left)
     if [[ -z $pipeline ]]; then
-        err "$profile: no gscam_config for camera_left"
+        err "$profile: no pipeline in left.yaml"
         continue
     fi
+    # videotestsrc has no device and no capture path; it proves the launch
+    # file, not the camera, and is not a profile the vehicle would run.
+    [[ $profile == videotestsrc ]] && continue
     device=$(grep -oE 'device=[^ ]+' <<<"$pipeline" | head -1 | cut -d= -f2-)
 
     marker="$profile"
@@ -221,9 +227,9 @@ for profile_file in "$profile_dir"/*.yaml; do
     # shellcheck disable=SC2086
     if timeout 60 gst-launch-1.0 -q $run_pipeline ! fakesink num-buffers=30 &>/dev/null; then
         ok "$marker"
-        # `sim` is never a candidate: its device exists by construction, and a
-        # loopback clearing proves nothing about a camera.
-        [[ -e $device && $profile != sim ]] && cleared+=("$profile")
+        # `sim` and `sim-nvjpeg` are never candidates: their device exists by
+        # construction, and a loopback clearing proves nothing about a camera.
+        [[ -e $device && $profile != sim && $profile != sim-nvjpeg ]] && cleared+=("$profile")
     else
         if [[ -e $device ]]; then
             err "$profile: did not negotiate against $device"
@@ -252,7 +258,7 @@ else
     ok "cleared against a real device: ${cleared[*]}"
     echo "  Take the first one that works on the ladder. For one run:"
     echo "      ros2 launch golfcart_sensor_kit_launch camera.launch.xml \\"
-    echo "          camera_model:=gscam capture_profile:=${best}"
+    echo "          camera_model:=gmslcam capture_profile:=${best}"
     echo "  To make it what the vehicle runs, change capture_profile's default"
     echo "  in camera.launch.xml: \`just launch\` cannot pass the argument through."
 fi

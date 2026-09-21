@@ -31,10 +31,11 @@ Dropped from the previous system, by decision on 2026-09-02:
   `sudo apt remove ros-humble-ublox-gps ros-humble-ublox-msgs
   ros-humble-ublox-serialization` removes the ambiguity, and
   `scripts/check/run.sh` warns while it is there. `gscam`
-  resolves the same way; the GStreamer *plugin* packages it does not depend on
-  are now declared in the sensor kit's package.xml, which is where a runtime
-  dependency belongs. Nebula is the one that cannot work this way -- there is
-  no rosdep rule for `nebula_ros`, and apt carries only the versioned
+  resolved the same way; the GStreamer *plugin* packages it did not depend on
+  are declared in the sensor kit's package.xml, which is where a runtime
+  dependency belongs, and stayed there when gscam itself was replaced by the
+  in-tree `gmslcam` (2026-09-21). Nebula is the one that cannot work this way
+  -- there is no rosdep rule for `nebula_ros`, and apt carries only the versioned
   `ros-humble-nebula-ros-1-5-0` from the Autoware localrepo -- but it needs
   none: `autoware-full-1-5-0` pulls it through `autoware-ros-packages-1-5-0`,
   which is why all eight nebula packages are already marked auto-installed.
@@ -178,9 +179,10 @@ STEPS: list[Step] = [
     Step(
         id="colcon-cargo-ros2",
         label="Rust build support (colcon-cargo-ros2, clang, libclang-dev)",
-        why="Two workspace packages build with ament_cargo. Without the colcon "
-            "extension it skips them silently and the build aborts later, "
-            "confusingly; without libclang, bindgen panics mid-build.",
+        why="The Rust workspace packages, the gmslcam camera driver among them, "
+            "build with ament_cargo. Without the colcon extension it skips them "
+            "silently and the build aborts later, confusingly; without libclang, "
+            "bindgen panics mid-build.",
         group="Toolchain",
         run=[_S("install-colcon-cargo-ros2.sh")],
         requires=Requires(sudo=True),
@@ -289,8 +291,8 @@ STEPS: list[Step] = [
         id="ros-deps",
         label="Workspace ROS dependencies (rosdep)",
         why="Resolves the declared dependencies of everything under src/, which "
-            "is where the sensor drivers come from: gscam and its GStreamer "
-            "plugins, nmea_navsat_driver, and what the source-built ublox_gps "
+            "is where the sensor drivers come from: the GStreamer plugins gmslcam "
+            "needs, nmea_navsat_driver, and what the source-built ublox_gps "
             "and ntrip_client need (mavros_msgs, rtcm_msgs, nmea_msgs, asio).",
         group="Autoware",
         run=_ros_bash(

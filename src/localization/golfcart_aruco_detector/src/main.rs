@@ -176,10 +176,10 @@ impl Config {
         // a code change.
         //
         // Defaults to compressed because that is what this vehicle actually
-        // publishes: the gscam pipeline runs `image_encoding: "jpeg"`, so no
-        // raw sensor_msgs/Image exists on the camera topics at all. A node
-        // subscribing to the raw topic here sits silent forever and looks like
-        // a detector that cannot see anything.
+        // publishes: gmslcam runs with `codec: jpeg` and emits CompressedImage
+        // only, so no raw sensor_msgs/Image exists on the camera topics at all.
+        // A node subscribing to the raw topic here sits silent forever and
+        // looks like a detector that cannot see anything.
         // Decode the JPEG at a fraction of its stored size. libjpeg does this
         // inside the IDCT, so it is cheaper than decoding and resizing, and it
         // is a DIFFERENT knob from detection_downscale: this one throws pixels
@@ -667,7 +667,7 @@ fn main() -> Result<()> {
                 //
                 // The way this happens in practice is not exotic: someone
                 // changes the capture resolution in camera_capture/<profile>.yaml
-                // and does not recalibrate. gscam publishes the calibration file
+                // and does not recalibrate. gmslcam publishes the calibration file
                 // verbatim -- it touches only the header -- so the stale width
                 // and height come through with the stale k, and they are the
                 // evidence.
