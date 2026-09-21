@@ -4,6 +4,7 @@
 
 - [CUDA NDT on the Orin](handover/2026-08-30-cuda-ndt-on-orin.md) — measured on the target: why the CUDA build failed everywhere and how the floor is pinned now, the harness fault that made empty replays look like non-convergence, and the A/B against Autoware's NDT that traced 94% of the frame to a redundant CPU NVTL pass
 - [CUDA pipeline to the Orin](handover/2026-08-30-cuda-pipeline-to-orin.md) — checkpoint at parent `228e6f0`: what is validated, what is not, the libcuda symbol to check before running cuda_ndt there, and the traps that cost time
+- [F9P and NTRIP brought into this repo](handover/2026-09-21-f9p-ntrip-bringup.md) — the four things in the way (a `gh` token, an unbumped submodule pointer, a broken check script, an account living outside the repo), what verified indoors, why a position-less GGA makes the VRS caster hang up, and the GGA-drop caveat that did not reproduce
 
 ## Roadblocks
 
