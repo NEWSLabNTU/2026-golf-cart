@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Rust build support: colcon-cargo-ros2, plus clang/libclang for bindgen
 #
-# Two packages build with ament_cargo — golfcart_vehicle_interface and
-# cuda_ndt_matcher — and `just build` passes --cargo-args accordingly. Without
+# The Rust packages — golfcart_vehicle_interface, cuda_ndt_matcher,
+# golfcart_aruco_detector and the gmslcam camera driver — build with
+# ament_cargo, and `just build` passes --cargo-args accordingly. Without
 # this extension colcon does not process them at all: it reports them as "not
 # processed", every dependent fails looking for their package.sh, and the rest
 # of the workspace aborts. The error names the missing package.sh rather than
@@ -29,6 +30,28 @@ if ! dpkg -s libclang-dev >/dev/null 2>&1 || ! command -v clang >/dev/null 2>&1;
     sudo apt-get install -y clang libclang-dev
 else
     echo "clang and libclang-dev already installed."
+fi
+
+# ---------------------------------------------------------------------------
+# python3-tomli
+#
+# The extension reads each package's Cargo.toml with `tomllib`, which Python
+# 3.10 (Ubuntu 22.04) does not have, and falls back to `tomli`, which its wheel
+# does not declare. With neither, the read silently returns an empty manifest,
+# so a crate that pins an interface version -- gmslcam wants
+# `builtin_interfaces = "1.2.2"` -- gets a generated crate stamped 0.0.0 and
+# the build fails inside cargo:
+#
+#   failed to select a version for the requirement `builtin_interfaces = "^1.2.2"`
+#   candidate versions found which didn't match: 0.0.0
+#
+# naming neither Python nor tomli. Packages that ask for `*` never notice.
+# ---------------------------------------------------------------------------
+if ! python3 -c 'import tomllib' >/dev/null 2>&1 && ! python3 -c 'import tomli' >/dev/null 2>&1; then
+    echo "Installing python3-tomli (colcon-cargo-ros2 reads Cargo.toml with it on Python < 3.11)..."
+    sudo apt-get install -y python3-tomli
+else
+    echo "TOML reader for colcon-cargo-ros2 already present."
 fi
 
 # 0.5.1 is the floor: earlier releases do not emit the [patch.crates-io]
