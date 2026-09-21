@@ -50,6 +50,7 @@ Grouped families live in `just/*.just` and are reached as `just <module> <recipe
 | `tool` | RViz, PlotJuggler, TUI, keyboard controller |
 | `diag` | diagnostic graph: QoS checks, leaf listing, fault injection |
 | `gnss` | F9P / RTK: `check` the setup, `test` the receiver against the NTRIP caster |
+| `link` | the master/orin wire: what crosses it, `pressure`, the two-host `sim` |
 
 `build`, `test`, `clean`, `launch*`, `stop-all` and `logs` stay at the root —
 they are the daily verbs, and a module may not share a name with a recipe
@@ -162,6 +163,25 @@ of that in a new script; source `scripts/env.sh` and let it resolve.
 
 Units state their role with `GOLFCART_ENV_ROLE`, which outranks `config/host`: a
 unit must not depend on a file someone can edit underneath it.
+
+### The master/orin link is a separate ROS domain
+
+Under `host:=master` / `host:=orin`, `config/cyclonedds/{master,orin}.xml` bind
+ROS domain 0 to `lo` and only the link domain (`GOLFCART_LINK_DOMAIN_ID`, 42,
+`config/runtime.conf`) to the LAN address. Nothing in the stack can reach the
+other machine; `golfcart_domain_bridge` (one `link_bridge` node per host,
+started by `golfcart.launch.yaml`) copies exactly the topics in
+`config/link/topics.yaml` across, in the direction the file gives them. To add
+a cross-host topic, add it there — with a `max_hz` if it is an image. Never
+list a topic in both directions; the bridge refuses (echo loop).
+
+`ros2 topic list` shows domain 0; `just link topics` shows the wire, `just
+link pressure` measures it. Before the split, one domain on the LAN put every
+participant on the wire, and in simulation the master pushed ~13 MB/s of
+domain-0 multicast data out of its NIC with the orin subscribed to none of it.
+[docs/research/system/domain-split-link-pressure.md](docs/research/system/domain-split-link-pressure.md)
+has the numbers; `just link sim baseline|split` reproduces them, no root
+needed. Not yet measured on the vehicle.
 
 ### Recording: first-hand topics only
 

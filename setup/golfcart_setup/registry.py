@@ -322,7 +322,8 @@ STEPS: list[Step] = [
         id="multicast-lo",
         label="Multicast on loopback (persistent)",
         why="Installs multicast-lo.service. Without it lo loses MULTICAST across "
-            "a reboot and the loopback DDS profile stops working.",
+            "a reboot and every DDS profile stops working: loopback pins lo, and "
+            "master/orin pin it for domain 0 too.",
         group="Kernel and network",
         run=[_S("configure-multicast-lo.sh")],
         requires=Requires(sudo=True),

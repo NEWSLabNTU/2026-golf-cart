@@ -1,0 +1,85 @@
+# config/link/topics.yaml - what crosses the master/orin link, and in which
+# direction.
+#
+# Read by golfcart_domain_bridge, one process per host, started by
+# golfcart.launch.yaml whenever host:=master or host:=orin. Both hosts read
+# THIS file: a topic listed under orin_to_master is published by the orin's
+# bridge into the link domain and subscribed by the master's bridge out of it.
+# One list, no mirror to keep in step.
+#
+# Why a list exists at all: everything else on either host lives in ROS domain
+# 0 bound to `lo` and cannot reach the wire (config/cyclonedds/{master,orin}.xml).
+# The link domain (GOLFCART_LINK_DOMAIN_ID, config/runtime.conf) holds only the
+# two bridges. So the wire carries exactly what is written here, plus the
+# discovery traffic of two participants, and nothing an operator's `ros2 topic
+# echo` on either host can add to it.
+#
+# Per entry:
+#   topic        absolute name; the same name on both sides
+#   type         pkg/msg/Type; the type support library must be installed on
+#                BOTH hosts, or that host's bridge logs an error and skips it
+#   reliability  reliable | best_effort   (default best_effort)
+#   durability   volatile | transient_local (default volatile)
+#   depth        history depth, both ends   (default 10)
+#   max_hz       drop samples to hold this rate on the link, 0 = every sample
+#                (default 0). This is the knob for an image: the ZED's
+#                compressed stream is ~5 MB/s at 15 Hz, half the link.
+#
+# QoS applies to BOTH ends of a bridged topic, and must satisfy two matches:
+#   - the bridge's subscription against the source publisher: a reliable
+#     subscription matches only a reliable publisher; best_effort matches both
+#   - the bridge's publisher against the destination subscribers: a best_effort
+#     publisher is invisible to a reliable subscriber
+# So: best_effort for sensor streams (their Autoware consumers use
+# SensorDataQoS), reliable for anything a reliable subscriber waits on
+# (/diagnostics under diagnostic_aggregator, /tf_static under tf2).
+#
+# Never list one topic in both directions. The bridge refuses to start if you
+# do, because the alternative is an echo loop across the link.
+
+orin_to_master:
+  # The vehicle's IMU while IMU_SOURCE=zed (config/sensors.conf). gyro_odometer
+  # time-syncs it against vehicle twist, so it wants every sample and tolerates
+  # loss better than latency: best_effort, and never throttled.
+  - topic: /sensing/camera/zed/imu/data
+    type: sensor_msgs/msg/Imu
+    reliability: best_effort
+    depth: 10
+
+  # Intrinsics for whatever on the master consumes the ZED image later. Small,
+  # 15 Hz; the image itself stays on the orin (recorded there, see
+  # config/recording/orin_topics.txt). To bring a preview over, add
+  #   - topic: /sensing/camera/zed/rgb/color/rect/image/compressed
+  #     type: sensor_msgs/msg/CompressedImage
+  #     max_hz: 2
+  # and watch `just link pressure` before and after.
+  - topic: /sensing/camera/zed/rgb/color/rect/camera_info
+    type: sensor_msgs/msg/CameraInfo
+    reliability: reliable
+    depth: 5
+
+  # The orin's system monitor rows, for the master's diagnostic aggregator and
+  # the web UI on :8080. diagnostic_aggregator subscribes reliable.
+  - topic: /diagnostics
+    type: diagnostic_msgs/msg/DiagnosticArray
+    reliability: reliable
+    depth: 100
+
+  # The ZED's URDF subtree, published once per static publisher on the orin.
+  # transient_local so a tf2 listener on the master that starts later still
+  # gets it; the depth is the number of latched samples the bridge keeps, and
+  # has to cover every static publisher on the orin.
+  - topic: /tf_static
+    type: tf2_msgs/msg/TFMessage
+    reliability: reliable
+    durability: transient_local
+    depth: 50
+
+  # /sensing/camera/zed/status/health (zed_msgs/msg/Health) is deliberately
+  # absent: zed_msgs is not built on a host without the ZED SDK, so the master
+  # bridge could not load the type. It is recorded on the orin.
+
+# Nothing needs to go the other way today: the orin runs the ZED driver and its
+# own system monitor, neither of which subscribes to anything from the master.
+# The list is here so the direction exists when something does.
+master_to_orin: []

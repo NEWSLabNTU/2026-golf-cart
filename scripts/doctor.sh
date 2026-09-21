@@ -62,6 +62,9 @@ else
 fi
 
 case "${GOLFCART_DDS_PROFILE_SOURCE:-unknown}" in
+    role)
+        ok "host role: ${GOLFCART_HOST}  (from \$GOLFCART_ENV_ROLE, as a unit states it)"
+        ;;
     env)
         ok "host role: ${GOLFCART_HOST}  (from \$GOLFCART_DDS_PROFILE)"
         info "an explicit environment variable overrides ${MARKER##*/}"
@@ -184,6 +187,24 @@ else
     if [ -n "${RMW_IMPLEMENTATION:-}" ] && [ "${RMW_IMPLEMENTATION}" != "rmw_cyclonedds_cpp" ]; then
         warn "RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION} — the profiles above only apply to CycloneDDS"
     fi
+
+    # The two-machine profiles bind domain 0 to lo and put only the link
+    # domain on the LAN. Say which domain the wire is, and whether the topic
+    # list the bridge reads exists, because a process that skipped env.sh
+    # lands in domain 0 on lo and sees nothing of the other machine -- the
+    # same symptom as a dead link.
+    case "${GOLFCART_HOST:-}" in
+        master|orin)
+            ok "link domain: ${GOLFCART_LINK_DOMAIN_ID:-42}  (config/runtime.conf); domain 0 stays on lo"
+            info "ROS_DOMAIN_ID=${GOLFCART_LINK_DOMAIN_ID:-42} ros2 topic list   # what crosses the wire"
+            link_topics="${GOLFCART_LINK_TOPICS:-${REPO_ROOT}/config/link/topics.yaml}"
+            if [ -f "$link_topics" ]; then
+                ok "link topics: ${link_topics#${REPO_ROOT}/}"
+            else
+                fail "link topics file missing: ${link_topics}"
+            fi
+            ;;
+    esac
 fi
 
 # ── 2. ros2 daemon ───────────────────────────────────────────────────────────

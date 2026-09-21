@@ -517,8 +517,9 @@ fi
 #               <SocketReceiveBufferSize min="10MB"/>, and CycloneDDS treats
 #               `min` as a hard requirement. Below it EVERY ros2 process dies
 #               at startup with "rmw_create_node: failed to create domain".
-#               The loopback profile additionally pins `lo`, which then also
-#               needs the MULTICAST flag.
+#               Every profile pins `lo` for domain 0 (loopback for
+#               everything; master and orin for the stack, with only the
+#               link domain on the LAN), so lo also needs the MULTICAST flag.
 #
 #   SUBOPTIMAL  the tuned values (2GB buffer, ipfrag settings) prevent packet
 #               loss with high-bandwidth data. Worth having, not fatal.
@@ -543,8 +544,8 @@ golfcart_dds_problems() {
     local problems="" rmem
     # Every check below is about CycloneDDS: the 16MB floor comes from the
     # <SocketReceiveBufferSize min=> in config/cyclonedds/*.xml, and the lo
-    # MULTICAST flag matters only because the loopback profile pins that
-    # interface. Zenoh needs neither -- it carries data over TCP -- so under
+    # MULTICAST flag matters because every profile pins that interface for
+    # domain 0. Zenoh needs neither -- it carries data over TCP -- so under
     # zenoh this function has nothing to say, and saying it anyway would send
     # an operator to tune sysctls that cannot affect anything.
     # Zenoh's own precondition is that the interface carrying this host's LAN
@@ -556,10 +557,11 @@ golfcart_dds_problems() {
         problems="${problems}
   - net.core.rmem_max is ${rmem}; the DDS profile requires at least 16777216"
     fi
-    if [ "${CYCLONEDDS_URI:-}" != "${CYCLONEDDS_URI#*loopback.xml}" ] \
-       && ! ip link show lo 2>/dev/null | grep -q MULTICAST; then
+    # Every profile pins lo now: loopback for everything, master and orin for
+    # domain 0 (the stack), with only the link domain on the LAN interface.
+    if ! ip link show lo 2>/dev/null | grep -q MULTICAST; then
         problems="${problems}
-  - the loopback profile pins the lo interface, and lo has no MULTICAST flag"
+  - the ${GOLFCART_DDS_PROFILE:-} profile pins the lo interface for domain 0, and lo has no MULTICAST flag"
     fi
     [ -n "${problems}" ] || return 0
     printf '%s\n' "${problems}"
@@ -687,6 +689,16 @@ if [ -f "${GOLFCART_REPO_ROOT}/config/runtime.conf" ]; then
     export GOLFCART_CONTAINER_MODE
 fi
 
+# ── The master/orin link ─────────────────────────────────────────────────────
+# Under the master and orin profiles domain 0 is bound to `lo` and only the
+# link domain reaches the LAN, with golfcart_domain_bridge copying
+# config/link/topics.yaml across. Three consumers read these two values and
+# none of them may hold its own copy: the CycloneDDS profiles expand
+# ${GOLFCART_LINK_DOMAIN_ID} in their <Domain Id>, the bridge reads both, and
+# golfcart.launch.yaml passes the file path to the bridge as $(env ...).
+export GOLFCART_LINK_DOMAIN_ID="${GOLFCART_LINK_DOMAIN_ID:-42}"
+export GOLFCART_LINK_TOPICS="${GOLFCART_LINK_TOPICS:-${GOLFCART_REPO_ROOT}/config/link/topics.yaml}"
+
 # ── Vehicle interface ────────────────────────────────────────────────────────
 # GOLFCART_TX_ENABLED is an environment variable for the same forced reason:
 # the installed tier4_vehicle_launch/vehicle.launch.xml forwards three arguments
@@ -709,8 +721,8 @@ unset ROS_LOCALHOST_ONLY
 # ── CycloneDDS profile ───────────────────────────────────────────────────────
 # GOLFCART_DDS_PROFILE selects config/cyclonedds/<profile>.xml:
 #   loopback  single-machine (default; identical to the old root cyclonedds.xml)
-#   master    cart AGX Orin  on the GolfCart AP (192.168.13.1)
-#   orin      slave Jetson   on the GolfCart AP (192.168.13.2)
+#   master    cart Advantech: domain 0 on lo, link domain on 192.168.125.100
+#   orin      slave Jetson:   domain 0 on lo, link domain on 192.168.125.101
 # The profile normally comes from the gitignored `config/host` marker; see
 # golfcart_resolve_dds_profile above. The systemd units derive their own URI from
 # GOLFCART_HOST, so this only affects plain shells and `just launch`.

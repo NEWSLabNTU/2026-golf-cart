@@ -1,0 +1,6 @@
+orin sees, domain 0:
+  nodes  142
+  topics 552
+master sees, domain 0:
+  nodes  142
+  topics 552

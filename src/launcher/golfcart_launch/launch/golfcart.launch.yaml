@@ -500,12 +500,13 @@ launch:
 # the one machine there is, and launching both would put two of every monitor on
 # it. See the <let> above.
 #
-# The rows reach the master by themselves. diagnostic_updater publishes to the
-# absolute topic /diagnostics, both hosts share a DDS domain, and hardware_id is
-# the hostname, so the master's web UI on :8080 shows both machines. Node names
-# are prefixed `orin_` inside the include, because diagnostic_updater builds the
-# status name from the node name without its namespace and the two hosts would
-# otherwise publish identical names.
+# The rows reach the master through the link bridge below: diagnostic_updater
+# publishes to the absolute topic /diagnostics, /diagnostics is in
+# config/link/topics.yaml, and hardware_id is the hostname, so the master's web
+# UI on :8080 shows both machines. Node names are prefixed `orin_` inside the
+# include, because diagnostic_updater builds the status name from the node name
+# without its namespace and the two hosts would otherwise publish identical
+# names.
 - group:
     if: $(var is_orin_host)
     children:
@@ -515,6 +516,37 @@ launch:
         -
           name: master_ip
           value: $(var master_ip)
+
+# The link bridge: the only thing either host puts on the wire.
+#
+# Under host:=master or host:=orin the CycloneDDS profile binds domain 0 to `lo`
+# and only the link domain (GOLFCART_LINK_DOMAIN_ID, config/runtime.conf) to the
+# LAN interface, so nothing above this line can reach the other machine. This
+# node copies the topics in config/link/topics.yaml across, in the direction the
+# file gives them, and is what makes the orin's IMU, camera_info, diagnostics
+# and static TF appear on the master. See config/link/topics.yaml for the list
+# and docs/research/system/domain-split-link-pressure.md for why.
+#
+# is_two_machine, not is_master or is_orin: under host:=all there is one host,
+# one domain, and nothing to bridge; a bridge there would copy every listed
+# topic back into the domain it came from.
+#
+# The role and the file come from the environment scripts/env.sh exports
+# (GOLFCART_HOST, GOLFCART_LINK_TOPICS), the same way master_ip does above; the
+# domain ids are read from ROS_DOMAIN_ID and GOLFCART_LINK_DOMAIN_ID inside the
+# node. Nothing here spells out a value that lives in config/.
+- let:
+    name: is_two_machine
+    value: $(eval "'$(var host)' in ('master', 'orin')")
+
+- group:
+    if: $(var is_two_machine)
+    children:
+    - node:
+        pkg: golfcart_domain_bridge
+        exec: domain_bridge
+        name: link_bridge
+        args: --role $(var host) --config $(env GOLFCART_LINK_TOPICS)
 
 # Rosbag recording used to live here, as one `node:` entry per host. It is now a
 # separate systemd unit (golfcart-record.service ->
