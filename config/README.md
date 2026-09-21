@@ -145,8 +145,10 @@ Add a topic by adding an entry (name, `pkg/msg/Type`, QoS, optional `max_hz`);
 the type support has to exist on both hosts. Never list one topic in both
 directions: the bridge refuses to start, because the alternative is an echo
 loop. `just link topics` shows the wire; `just link pressure` measures it.
-Before this split the wire carried the master's whole domain-0 multicast
-data, ~13 MB/s in simulation, with the orin subscribed to none of it:
+Before this split the wire carried every raw cloud the master's recorder
+read, as multicast, whether or not the orin wanted it: the link at its
+100 Mbit/s ceiling in simulation with the real stack, and the master's own
+recorder losing more than half its scans to the backpressure:
 [docs/research/system/domain-split-link-pressure.md](../docs/research/system/domain-split-link-pressure.md).
 
 ## Choosing the container mode

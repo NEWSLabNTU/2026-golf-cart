@@ -1,7 +1,0 @@
-imu_msgs 9976
-imu_rate_hz 99.8
-imu_latency_mean_ms 0.165
-imu_latency_p99_ms 0.423
-imu_latency_max_ms 5.932
-orin_diagnostics_msgs 99
-tf_static_frames 32

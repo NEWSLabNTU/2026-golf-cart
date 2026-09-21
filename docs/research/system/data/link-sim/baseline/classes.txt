@@ -1,13 +1,11 @@
 direction     domain                class                          bytes   packets
-master->orin  0                     multicast-data            1253348426    875263
-master->orin  0                     unicast-discovery           67150956    134584
-master->orin  0                     multicast-discovery          3131072      6582
-master->orin  0                     unicast-data                 1310536      5484
-master->orin  fragment-of-unknown   multicast                     961988       653
-orin->master  0                     unicast-data                59056332     49206
-orin->master  0                     unicast-discovery            2843024     10805
-orin->master  0                     multicast-data                158988       221
-orin->master  0                     multicast-discovery            61656       250
-orin->master  fragment-of-unknown   unicast                         9188         7
-master->orin  TOTAL                                           1325902978
-orin->master  TOTAL                                             62129188
+master->orin  0                     multicast-data            1782025171   1268081
+master->orin  0                     unicast-discovery           64068468    133392
+master->orin  0                     multicast-discovery          3423556     11006
+master->orin  0                     unicast-data                 2544488     10325
+orin->master  0                     multicast-data             107266659     97084
+orin->master  0                     unicast-discovery            9705996     33934
+orin->master  0                     unicast-data                 1208536      7228
+orin->master  0                     multicast-discovery           175808       555
+master->orin  TOTAL                                           1852061683
+orin->master  TOTAL                                            118356999

@@ -57,18 +57,20 @@ pressure IFACE="enP5p3s0" SECS="60":
 bridge:
     ros2 run golfcart_domain_bridge domain_bridge --role "${GOLFCART_HOST}"
 
-# Two hosts, one wire, on this machine: network namespaces joined by a veth,
-# the real profiles, the real topic list, Autoware's planning simulator as the
-# master load. No root. `baseline` runs the pre-split profiles frozen in
-# scripts/testing/link_sim/baseline/; `split` runs what is checked in.
+# Two hosts, one wire, on this machine: network namespaces joined by a veth
+# shaped to 100 Mbit/s, the real profiles, the real topic list, the REAL
+# master stack (golfcart.launch.yaml host:=master, drivers replaced by
+# publishers with the real sizes and rates) and the real recorders on both
+# sides. No root. `baseline` runs the pre-split profiles frozen in
+# scripts/testing/link_sim/baseline/; `split` runs what is checked in. Needs
+# `just build` first; each run writes two bags (several GB) under its OUT_DIR.
 #
 #   just link sim baseline
 #   just link sim split
 #   just link sim-compare log/link_sim/baseline_<ts> log/link_sim/split_<ts>
 #
-# LINK_SIM_STARTUP / LINK_SIM_STEADY (seconds) and LINK_SIM_STACK=none shorten
-# it; LINK_SIM_BRIDGE_WS=<install dir> points at a scratch build of the bridge
-# when the workspace is not built.
+# LINK_SIM_STARTUP / LINK_SIM_STEADY (seconds) shorten it; LINK_SIM_LINK_RATE
+# changes the shaping (e.g. 1gbit for the interlink).
 
 # Run the two-host link simulation: MODE is baseline or split
 sim MODE:

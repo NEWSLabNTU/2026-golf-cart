@@ -175,11 +175,18 @@ list a topic in both directions; the bridge refuses (echo loop).
 
 `ros2 topic list` shows domain 0; `just link topics` shows the wire, `just
 link pressure` measures it. Before the split, one domain on the LAN put every
-participant on the wire, and in simulation the master pushed ~13 MB/s of
-domain-0 multicast data out of its NIC with the orin subscribed to none of it.
+participant on the wire, and because the recorder is a second reader of every
+raw cloud, CycloneDDS multicast the clouds out of the NIC: in simulation with
+the real stack the 100 Mbit/s link sat at its ceiling with the orin subscribed
+to none of it, and the master's own recorder lost 59 % of its scans to the
+backpressure.
 [docs/research/system/domain-split-link-pressure.md](docs/research/system/domain-split-link-pressure.md)
-has the numbers; `just link sim baseline|split` reproduces them, no root
-needed. Not yet measured on the vehicle.
+has the numbers and what in the simulation is synthetic (the driver bytes;
+nothing downstream). `just link sim baseline|split` reproduces it after `just
+build`, no root needed. Not yet measured on the vehicle. Lanes carry the
+consumer's QoS, not the sensor's instinct: the IMU is `reliable` because
+`imu_corrector` subscribes reliable, and the ZED's dynamic `/tf` is listed
+because gyro_odometer needs it.
 
 ### Recording: first-hand topics only
 

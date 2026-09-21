@@ -48,7 +48,7 @@ domains and never meet.
 orin_to_master:
   - topic: /sensing/camera/zed/imu/data
     type: sensor_msgs/msg/Imu
-    reliability: best_effort     # default
+    reliability: reliable        # default is best_effort; see below
     durability: volatile         # default
     depth: 10                    # default
     max_hz: 0                    # default: every sample
@@ -68,24 +68,32 @@ in opposite directions:
 - the bridge's *publisher* against the far consumers: a best_effort publisher
   is invisible to a reliable subscriber.
 
-So sensor streams are best_effort (their Autoware consumers use
-SensorDataQoS, and a lost IMU sample is cheaper than a retransmit storm on a
-100 Mb/s link), and `/diagnostics` and `/tf_static` are reliable because
-`diagnostic_aggregator` and tf2 subscribe reliable. `/tf_static` is also
+Read the consumer before choosing; instinct is wrong here. The ZED IMU is
+reliable because `imu_corrector` subscribes reliable and the wrapper
+publishes reliable, `/diagnostics` because `diagnostic_aggregator` does,
+`/tf` and `/tf_static` because tf2 does. `/tf_static` is also
 `transient_local` with a depth that covers every static publisher on the
 source host, since the bridge's one publisher has to hold all their latched
 samples for a listener that starts later.
 
 `max_hz` drops samples to hold a rate on the wire. It is the knob for an
-image: the ZED's compressed stream is ~5 MB/s at 15 Hz, half the link, and
+image: the ZED's compressed stream is ~6.5 MB/s at 30 Hz, half the link, and
 `max_hz: 2` makes it a preview.
 
 ## What it costs
 
-Measured in `scripts/testing/link_sim` (two network namespaces, one veth, the
-real profiles): the IMU crosses two bridges at 100.0 Hz with 0.17 ms mean and
-0.4 ms p99 added latency. Every 10 s each lane logs `forwarded=` and
-`throttled=` counts.
+Measured in `scripts/testing/link_sim` (two network namespaces, one veth
+shaped to 100 Mbit/s, the real master stack): the ZED IMU crosses two bridges
+and reaches `imu_corrector` at 99.7 Hz, and gyro_odometer produces twist from
+it, which means the IMU `/tf` lane arrived too. Every 10 s each lane logs
+`forwarded=` and `throttled=` counts.
+
+Two of the lanes in `config/link/topics.yaml` exist because running the real
+stack against the bridge showed they were wrong or missing: the IMU has to be
+`reliable` (the wrapper publishes reliable, `imu_corrector` subscribes
+reliable; a best_effort lane was invisible to the consumer, and the bridge
+said so: `requesting incompatible QoS`), and the ZED's dynamic `/tf` has to
+cross or gyro_odometer drops every IMU sample without a word.
 
 A type whose support library this host lacks (`zed_msgs` on a master without
 the ZED SDK) is logged as an error and skipped; the other lanes run.

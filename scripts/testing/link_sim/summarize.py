@@ -91,10 +91,65 @@ def read_graph(d):
             if m:
                 who = f"{m.group(1)} ({m.group(2)})"
                 continue
+            if line.startswith("readers"):
+                who = "readers"
+                continue
             m = re.match(r"^\s+(nodes|topics)\s+(\d+)$", line)
-            if m and who:
+            if m and who and who != "readers":
                 g[f"{who} {m.group(1)}"] = int(m.group(2))
+                continue
+            m = re.match(r"^\s+(/\S+)\s+(.*)$", line)
+            if m and who == "readers":
+                g[f"readers of {m.group(1)}"] = m.group(2).strip() or "-"
     return g
+
+
+def read_consumers(d):
+    """`ros2 topic hz` / `delay` at the real consumers, from consumers.txt."""
+    out = {}
+    path = os.path.join(d, "consumers.txt")
+    if not os.path.exists(path):
+        return out
+    key = None
+    with open(path) as f:
+        for line in f:
+            m = re.match(r"^(hz|delay) (\S+)$", line.strip())
+            if m:
+                key = f"{m.group(1)} {m.group(2)}"
+                out[key] = "no messages"
+                continue
+            m = re.search(r"average (rate|delay): ([0-9.]+)", line)
+            if m and key:
+                out[key] = m.group(2) + (" Hz" if m.group(1) == "rate" else " s")
+    return out
+
+
+def read_qdisc(d):
+    """tbf counters per direction: sent bytes, dropped packets, overlimits."""
+    out = {}
+    path = os.path.join(d, "qdisc.txt")
+    if not os.path.exists(path):
+        return out
+    which = None
+    with open(path) as f:
+        for line in f:
+            m = re.match(r"^(vm|vo) \((.+)\):", line)
+            if m:
+                which = m.group(2)
+                continue
+            m = re.search(r"Sent (\d+) bytes (\d+) pkt \(dropped (\d+), overlimits (\d+)", line)
+            if m and which:
+                out[which] = {"sent_bytes": int(m.group(1)), "sent_pkts": int(m.group(2)),
+                              "dropped": int(m.group(3)), "overlimits": int(m.group(4))}
+    return out
+
+
+def read_bags(d):
+    path = os.path.join(d, "bags.txt")
+    if not os.path.exists(path):
+        return []
+    with open(path) as f:
+        return [line.strip() for line in f if line.strip()]
 
 
 def read_classes(d):
@@ -152,21 +207,39 @@ def one(d):
     lines.append("tx = master -> orin, rx = orin -> master, as seen at the master's end of the veth.")
     lines.append("")
 
-    probe = read_kv(os.path.join(d, "probe.txt"))
-    if probe:
-        lines.append("## Data path (master's view of the orin's topics)")
+    q = read_qdisc(d)
+    if q:
+        lines.append("## The wire's token bucket (100 Mbit/s each way), whole run")
+        lines.append("")
+        lines.append("| direction | sent bytes | sent packets | dropped packets | overlimits |")
+        lines.append("|---|---:|---:|---:|---:|")
+        for k, v in q.items():
+            lines.append(f"| {k} | {v['sent_bytes']} | {v['sent_pkts']} | {v['dropped']} | {v['overlimits']} |")
+        lines.append("")
+
+    c = read_consumers(d)
+    if c:
+        lines.append("## At the real consumers on the master (mid-run, 20 s windows)")
         lines.append("")
         lines.append("| | |")
         lines.append("|---|---|")
-        for k, v in probe.items():
+        for k, v in c.items():
             lines.append(f"| {k} | {v} |")
+        lines.append("")
+
+    bags = read_bags(d)
+    if bags:
+        lines.append("## The two recorders")
+        lines.append("")
+        for b in bags:
+            lines.append(f"- {b}")
         lines.append("")
 
     g = read_graph(d)
     if g:
-        lines.append("## What a CLI participant discovers")
+        lines.append("## Readers, and what a CLI participant discovers")
         lines.append("")
-        lines.append("| | count |")
+        lines.append("| | |")
         lines.append("|---|---:|")
         for k, v in g.items():
             lines.append(f"| {k} | {v} |")
@@ -215,16 +288,24 @@ def compare(a, b):
             change = "n/a" if va == 0 else f"{(vb - va) / va * 100:+.1f}%"
             lines.append(f"| {k} | {label} | {fmt(va)} | {fmt(vb)} | {change} |")
     lines.append("")
-    pa, pb = read_kv(os.path.join(a, "probe.txt")), read_kv(os.path.join(b, "probe.txt"))
-    if pa or pb:
-        lines.append("| data path | " + na + " | " + nb + " |")
+    qa, qb = read_qdisc(a), read_qdisc(b)
+    if qa or qb:
+        lines.append("| token bucket, whole run | " + na + " | " + nb + " |")
         lines.append("|---|---:|---:|")
-        for k in sorted(set(pa) | set(pb)):
-            lines.append(f"| {k} | {pa.get(k, '-')} | {pb.get(k, '-')} |")
+        for k in sorted(set(qa) | set(qb)):
+            for m in ("sent_bytes", "dropped", "overlimits"):
+                lines.append(f"| {k} {m} | {qa.get(k, {}).get(m, '-')} | {qb.get(k, {}).get(m, '-')} |")
+        lines.append("")
+    ca, cb = read_consumers(a), read_consumers(b)
+    if ca or cb:
+        lines.append("| at the real consumers | " + na + " | " + nb + " |")
+        lines.append("|---|---:|---:|")
+        for k in sorted(set(ca) | set(cb)):
+            lines.append(f"| {k} | {ca.get(k, '-')} | {cb.get(k, '-')} |")
         lines.append("")
     ga, gb = read_graph(a), read_graph(b)
     if ga or gb:
-        lines.append("| discovery | " + na + " | " + nb + " |")
+        lines.append("| readers and discovery | " + na + " | " + nb + " |")
         lines.append("|---|---:|---:|")
         for k in sorted(set(ga) | set(gb)):
             lines.append(f"| {k} | {ga.get(k, '-')} | {gb.get(k, '-')} |")
