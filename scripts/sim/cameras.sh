@@ -65,6 +65,15 @@ dev_for() {  # dev_for <index>
     echo "/dev/video$((BASE_NR + $1))"
 }
 
+# Read /proc/modules rather than `lsmod | grep -q`: grep -q exits on the first
+# match, lsmod then dies of SIGPIPE, and under `pipefail` the whole test reads
+# as "not loaded". v4l2loopback is usually the most recently loaded module, so
+# it sits at the top of the list and the race was lost every time: `up` re-ran
+# modprobe over a loaded module and `down` refused to unload one.
+module_loaded() {
+    grep -q '^v4l2loopback ' /proc/modules 2>/dev/null
+}
+
 require() {
     local missing=0
     for c in "$@"; do
@@ -87,7 +96,7 @@ pick_encoder() {
 
 cmd_up() {
     require modprobe v4l2-ctl || return 1
-    if lsmod 2>/dev/null | grep -q '^v4l2loopback'; then
+    if module_loaded; then
         warn "v4l2loopback already loaded; run 'down' first to change geometry"
     else
         local nrs labels
@@ -343,7 +352,7 @@ cmd_bench() {
 
 cmd_status() {
     hdr "Module"
-    lsmod 2>/dev/null | grep '^v4l2loopback' || echo "  not loaded"
+    grep '^v4l2loopback ' /proc/modules 2>/dev/null || echo "  not loaded"
     hdr "Devices"
     for i in "${!CAMS[@]}"; do
         local d; d=$(dev_for "$i")
@@ -372,7 +381,7 @@ cmd_down() {
         while read -r p; do kill -9 "$p" 2>/dev/null; done < "$PIDFILE"
         rm -f "$PIDFILE"
     fi
-    if lsmod 2>/dev/null | grep -q '^v4l2loopback'; then
+    if module_loaded; then
         sudo modprobe -r v4l2loopback && ok "module unloaded" || err "rmmod failed, a consumer may still hold a device open"
     else
         ok "module not loaded"
