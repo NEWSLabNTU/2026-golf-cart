@@ -48,6 +48,19 @@
       -->
       <SocketReceiveBufferSize min="16MB" max="16MB"/>
       <!--
+        The send side. Without this element Cyclone never calls setsockopt on a
+        writer socket, so it lands on net.core.wmem_default, and a fragmented
+        point cloud does not fit the 208 kB stock value: the publishing thread
+        blocks in sock_alloc_send_pskb and stops draining its own receive
+        socket. Measured on the master 2026-09-21, where it cost the two LiDARs
+        roughly eight of their ten frames per second. Full reasoning and the
+        numbers are in master.xml; this profile carries it because the orin runs
+        the same large topics.
+
+        max= as well as min= for the same reason as the receive side above.
+      -->
+      <SocketSendBufferSize min="16MB" max="16MB"/>
+      <!--
         Cyclone's default heartbeat floor is 5 ms. Every reliable writer gets one,
         and each heartbeat draws AckNacks back from every matched reader, so the
         cost grows with the square of the participant count. 100 ms is still far

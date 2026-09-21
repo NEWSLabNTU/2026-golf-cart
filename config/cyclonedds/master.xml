@@ -73,6 +73,32 @@
       -->
       <SocketReceiveBufferSize min="16MB" max="16MB"/>
       <!--
+        The send side, and it was missing until 2026-09-21. Without this element
+        Cyclone never calls setsockopt on a writer socket, so every one of them
+        landed on net.core.wmem_default, which was still the 208 kB stock value
+        while rmem_default had been raised to 16 MB.
+
+        A 1.4 MB PointCloud2 fragments into roughly 22 datagrams at the
+        MaxMessageSize above, and that burst does not fit 208 kB. Measured with
+        both LiDARs live: the Velodyne driver's publishing thread sat in
+        sock_alloc_send_pskb, the kernel's wait for send buffer space, on every
+        scan. While parked there it stopped draining its own UDP receive socket,
+        so RecvQ pinned at 13 to 16 MB and /proc/net/snmp showed 1304
+        RcvbufErrors/s. The driver was idle at 0.5% CPU throughout: blocked, not
+        busy, which is why CPU and GPU load both looked healthy. Velodyne output
+        was 1.27 Hz and Falcon 2.91 Hz against 10 Hz hardware; the same driver
+        run alone, with no stack around it, held 10.02 Hz.
+
+        With 16 MB here both LiDARs hold 10 Hz, RecvQ stays 0 and RcvbufErrors
+        stays 0/s.
+
+        max= as well as min= for the same reason as the receive side: with only
+        min= set Cyclone accepts whatever the kernel returns, so the request
+        quietly falls back to wmem_default. The ceiling it needs is
+        net.core.wmem_max, raised in setup.sh cyclonedds-sysctl.
+      -->
+      <SocketSendBufferSize min="16MB" max="16MB"/>
+      <!--
         Cyclone's default heartbeat floor is 5 ms. Every reliable writer gets one,
         and each heartbeat draws AckNacks back from every matched reader, so the
         cost grows with the square of the participant count. 100 ms is still far

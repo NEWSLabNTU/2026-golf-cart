@@ -11,6 +11,7 @@ echo "  ip link set lo multicast on"
 echo "  net.core.rmem_max=2147483647"
 echo "  net.core.rmem_default=16777216"
 echo "  net.core.wmem_max=16777216"
+echo "  net.core.wmem_default=16777216"
 echo "  net.core.netdev_max_backlog=8192"
 echo "  net.ipv4.ipfrag_time=3"
 echo "  net.ipv4.ipfrag_high_thresh=134217728"
@@ -24,6 +25,7 @@ echo "Applying sysctl settings..."
 sudo sysctl -w net.core.rmem_max=2147483647
 sudo sysctl -w net.core.rmem_default=16777216
 sudo sysctl -w net.core.wmem_max=16777216
+sudo sysctl -w net.core.wmem_default=16777216
 sudo sysctl -w net.core.netdev_max_backlog=8192
 sudo sysctl -w net.ipv4.ipfrag_time=3
 sudo sysctl -w net.ipv4.ipfrag_high_thresh=134217728
@@ -66,6 +68,26 @@ net.core.rmem_default=16777216
 # at the 208kB stock value, so Cyclone could never grow a send buffer.
 net.core.wmem_max=16777216
 
+# wmem_default is the other half of that asymmetry, and raising wmem_max alone
+# did not close it. rmem_default was raised to 16MB; this stayed at the 208kB
+# stock value, and a ceiling only helps a socket that asks. Cyclone's profiles
+# ask on the receive side (SocketReceiveBufferSize) and, before 2026-09-21, did
+# not ask on the send side at all, so every writer socket landed here.
+#
+# Measured 2026-09-21 on the Advantech with both LiDARs live. A 1.4MB
+# PointCloud2 fragments into ~22 datagrams at the profile's 65500B
+# MaxMessageSize, which does not fit 208kB. The Velodyne driver's publishing
+# thread blocked in sock_alloc_send_pskb - waiting for send buffer space - on
+# every scan, and while blocked it stopped draining its own UDP receive socket:
+# RecvQ pinned at 13-16MB, 1304 UDP RcvbufErrors/s, and the driver idle at
+# ~0.5% CPU because it was parked, not busy. Output fell to 1.27Hz on the
+# Velodyne and 2.91Hz on the Falcon against 10Hz hardware. Raising this to 16MB
+# restored 9.98Hz / 10.00Hz with RecvQ 0 and 0 RcvbufErrors/s.
+#
+# The profiles now also set SocketSendBufferSize, which is the narrower fix;
+# this stays because it is what a socket gets when nothing calls setsockopt.
+net.core.wmem_default=16777216
+
 # --- device backlog ---------------------------------------------------------
 # Per-CPU queue between the driver and the NET_RX softirq. Measured at 0 drops
 # and 0 time_squeeze with the stack up, so this is headroom rather than a fix:
@@ -95,7 +117,8 @@ echo "  Settings will persist across reboots."
 echo ""
 echo "Verify configuration:"
 echo "  sysctl net.core.rmem_max net.core.rmem_default net.core.wmem_max \\"
-echo "        net.core.netdev_max_backlog net.ipv4.ipfrag_time net.ipv4.ipfrag_high_thresh"
+echo "        net.core.wmem_default net.core.netdev_max_backlog \\"
+echo "        net.ipv4.ipfrag_time net.ipv4.ipfrag_high_thresh"
 echo ""
 
 # Remove warning marker if it exists (force .envrc to re-check)
