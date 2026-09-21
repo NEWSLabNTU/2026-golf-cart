@@ -41,6 +41,8 @@ mod tool 'just/tool.just'
 mod sim 'just/sim.just'
 # Diagnostic graph: inspect it, and inject faults into it
 mod diag 'just/diag.just'
+# GNSS / RTK: verify the setup, then test the receiver against the NTRIP caster
+mod gnss 'just/gnss.just'
 # Middleware: which RMW this host runs, and the Zenoh router lifecycle
 mod rmw 'just/rmw.just'
 
