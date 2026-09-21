@@ -1105,9 +1105,13 @@ GStreamer node at `src/sensor_component/external/gmslcam` (submodule, `ament_car
 - **Viewer copy**: `/sensing/camera/<x>/rviz/image_raw/compressed` and
   `/sensing/camera/<x>/rviz/camera_info`, every `frames_per_sample`-th frame
   (2 in the camera YAMLs: 30 -> 15 fps; live-settable with `ros2 param set`),
-  same bytes and header, published only while the rviz image topic has a
+  same bytes and header, published only while either rviz topic has a
   subscriber. `golfcart.rviz` reads these; recording and the detector read the
   full-rate pair. Decimation happens inside the capture process, no DDS hop.
+- **One camera failing does not end the process.** It is reported once as
+  `WARN camera failed: key=<x> node=<fqn> stage=<startup|runtime>: ...` and stays
+  down (no restart); the process exits non-zero only when no camera is running.
+  A silent source counts as dead after `stall_timeout_ms` (5000).
 - **Frames**: `camera_left_optical_link`, `camera_right_optical_link`,
   `camera_rear_optical_link`
 - **Calibration**: `camera_{left,right,rear}_calibration.yaml`, wired through
