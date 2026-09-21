@@ -45,9 +45,13 @@ Consequences worth knowing:
   loopback profile always did (`./setup.sh`, the multicast-lo step).
 
 Why: before this, one domain bound to the LAN put every participant on the
-wire. In simulation the master sent ~13 MB/s of domain-0 multicast data out of
-its NIC with the orin subscribed to none of it, more than the link carries;
-the split brings the wire down to ~60 kB/s. Measurements and method in
+wire, and with the recorder running every raw cloud had two readers on the
+master, which is what makes CycloneDDS multicast it out of the NIC. In
+simulation with the real stack and a 100 Mbit/s wire, that pinned the link at
+its ceiling with the orin subscribed to none of it, dropped 160k packets in
+160 s, and cost the master's *own* recorder 59 % of its LiDAR scans. The
+split brings master → orin down to ~2 kB/s and orin → master to ~90 kB/s
+(the listed topics), with zero drops. Measurements and method in
 [research/system/domain-split-link-pressure.md](research/system/domain-split-link-pressure.md).
 
 ## Daily operation

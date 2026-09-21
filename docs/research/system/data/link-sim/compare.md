@@ -2,53 +2,66 @@
 
 | window | metric | baseline | split | change |
 |---|---|---:|---:|---:|
-| startup | tx mean kB/s | 13392.6 | 2.2 | -100.0% |
-| startup | tx peak kB/s | 28281.2 | 31.6 | -99.9% |
-| startup | rx mean kB/s | 74.0 | 54.0 | -26.9% |
-| startup | rx peak kB/s | 471.4 | 79.9 | -83.1% |
-| startup | tx pkt/s mean | 10280 | 6 | -99.9% |
-| startup | tx pkt/s peak | 36613 | 76 | -99.8% |
-| startup | rx pkt/s mean | 173 | 121 | -30.0% |
-| startup | rx pkt/s peak | 1099 | 189 | -82.8% |
-| startup | tx total bytes | 535702534 | 86862 | -100.0% |
-| startup | rx total bytes | 2958084 | 2161546 | -26.9% |
-| steady | tx mean kB/s | 13466.4 | 2.2 | -100.0% |
-| steady | tx peak kB/s | 18639.6 | 12.4 | -99.9% |
-| steady | rx mean kB/s | 103.7 | 55.0 | -46.9% |
-| steady | rx peak kB/s | 475.8 | 78.9 | -83.4% |
-| steady | tx pkt/s mean | 10495 | 6 | -99.9% |
-| steady | tx pkt/s peak | 20418 | 31 | -99.8% |
-| steady | rx pkt/s mean | 328 | 124 | -62.1% |
-| steady | rx pkt/s peak | 1739 | 213 | -87.8% |
-| steady | tx total bytes | 605988822 | 98012 | -100.0% |
-| steady | rx total bytes | 4665555 | 2475966 | -46.9% |
-| echo | tx mean kB/s | 13329.1 | 1.7 | -100.0% |
-| echo | tx peak kB/s | 18701.4 | 12.4 | -99.9% |
-| echo | rx mean kB/s | 4938.6 | 53.9 | -98.9% |
-| echo | rx peak kB/s | 5456.6 | 64.4 | -98.8% |
-| echo | tx pkt/s mean | 10336 | 5 | -100.0% |
-| echo | tx pkt/s peak | 20275 | 30 | -99.9% |
-| echo | rx pkt/s mean | 3506 | 120 | -96.6% |
-| echo | rx pkt/s peak | 4538 | 145 | -96.8% |
-| echo | tx total bytes | 199936550 | 26106 | -100.0% |
-| echo | rx total bytes | 74079372 | 807796 | -98.9% |
+| startup | tx mean kB/s | 8915.3 | 1.8 | -100.0% |
+| startup | tx peak kB/s | 12214.6 | 19.6 | -99.8% |
+| startup | rx mean kB/s | 110.9 | 75.0 | -32.4% |
+| startup | rx peak kB/s | 917.7 | 97.1 | -89.4% |
+| startup | tx pkt/s mean | 6788 | 5 | -99.9% |
+| startup | tx pkt/s peak | 18100 | 48 | -99.7% |
+| startup | rx pkt/s mean | 311 | 199 | -36.1% |
+| startup | rx pkt/s peak | 2973 | 255 | -91.4% |
+| startup | tx total bytes | 624071596 | 127502 | -100.0% |
+| startup | rx total bytes | 7763148 | 5251346 | -32.4% |
+| steady | tx mean kB/s | 12140.7 | 1.9 | -100.0% |
+| steady | tx peak kB/s | 12324.0 | 12.4 | -99.9% |
+| steady | rx mean kB/s | 148.7 | 89.3 | -39.9% |
+| steady | rx peak kB/s | 659.9 | 124.4 | -81.1% |
+| steady | tx pkt/s mean | 9229 | 5 | -99.9% |
+| steady | tx pkt/s peak | 11829 | 36 | -99.7% |
+| steady | rx pkt/s mean | 498 | 237 | -52.4% |
+| steady | rx pkt/s peak | 2801 | 357 | -87.3% |
+| steady | tx total bytes | 910551137 | 140734 | -100.0% |
+| steady | rx total bytes | 11154077 | 6698270 | -39.9% |
+| echo | tx mean kB/s | 12127.1 | 1.8 | -100.0% |
+| echo | tx peak kB/s | 12282.3 | 9.5 | -99.9% |
+| echo | rx mean kB/s | 6635.3 | 88.6 | -98.7% |
+| echo | rx peak kB/s | 7249.6 | 96.4 | -98.7% |
+| echo | tx pkt/s mean | 9109 | 5 | -99.9% |
+| echo | tx pkt/s peak | 11265 | 23 | -99.8% |
+| echo | rx pkt/s mean | 4871 | 235 | -95.2% |
+| echo | rx pkt/s peak | 6450 | 253 | -96.1% |
+| echo | tx total bytes | 181907027 | 26260 | -100.0% |
+| echo | rx total bytes | 99529028 | 1329390 | -98.7% |
 
-| data path | baseline | split |
+| token bucket, whole run | baseline | split |
 |---|---:|---:|
-| imu_latency_max_ms | 3.052 | 5.932 |
-| imu_latency_mean_ms | 0.119 | 0.165 |
-| imu_latency_p99_ms | 0.309 | 0.423 |
-| imu_msgs | 9970 | 9976 |
-| imu_rate_hz | 99.7 | 99.8 |
-| orin_diagnostics_msgs | 100 | 99 |
-| tf_static_frames | 32 | 32 |
+| master -> orin sent_bytes | 1872120077 | 317972 |
+| master -> orin dropped | 161840 | 0 |
+| master -> orin overlimits | 4185529 | 0 |
+| orin -> master sent_bytes | 120439879 | 14582668 |
+| orin -> master dropped | 0 | 0 |
+| orin -> master overlimits | 85756 | 0 |
 
-| discovery | baseline | split |
+| at the real consumers | baseline | split |
 |---|---:|---:|
-| master (domain 0) nodes | 142 | 142 |
-| master (domain 0) topics | 552 | 551 |
-| orin (domain 0) nodes | 142 | 2 |
-| orin (domain 0) topics | 552 | 7 |
+| delay /sensing/camera/zed/imu/data | 0.000 s | 0.000 s |
+| hz /localization/kinematic_state | no messages | no messages |
+| hz /localization/twist_estimator/twist_with_covariance | 2.069 Hz | 13.424 Hz |
+| hz /sensing/imu/imu_data | 100.003 Hz | 99.706 Hz |
+
+| readers and discovery | baseline | split |
+|---|---:|---:|
+| master (domain 0) nodes | 159 | 158 |
+| master (domain 0) topics | 624 | 623 |
+| orin (domain 0) nodes | 159 | 3 |
+| orin (domain 0) topics | 624 | 9 |
 | orin (link domain 42) nodes | - | 2 |
-| orin (link domain 42) topics | - | 6 |
+| orin (link domain 42) topics | - | 7 |
+| readers of /sensing/camera/left/image_raw/compressed | pubs=1 subs=1 | pubs=1 subs=1 |
+| readers of /sensing/camera/zed/imu/data | pubs=1 subs=3 | pubs=1 subs=2 |
+| readers of /sensing/lidar/concatenated/pointcloud | pubs=1 subs=1 | pubs=1 subs=1 |
+| readers of /sensing/lidar/falcon/iv_points | pubs=1 subs=2 | pubs=1 subs=2 |
+| readers of /sensing/lidar/vlp32/pointcloud | pubs=1 subs=1 | pubs=1 subs=1 |
+| readers of /sensing/lidar/vlp32/velodyne_points | pubs=1 subs=2 | pubs=1 subs=2 |
+| readers of /tf | pubs=5 subs=19 | pubs=5 subs=19 |
 

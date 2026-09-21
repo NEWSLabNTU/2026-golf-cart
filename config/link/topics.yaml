@@ -23,31 +23,48 @@
 #   depth        history depth, both ends   (default 10)
 #   max_hz       drop samples to hold this rate on the link, 0 = every sample
 #                (default 0). This is the knob for an image: the ZED's
-#                compressed stream is ~5 MB/s at 15 Hz, half the link.
+#                compressed stream is ~6.5 MB/s at 30 Hz, half the link.
 #
 # QoS applies to BOTH ends of a bridged topic, and must satisfy two matches:
 #   - the bridge's subscription against the source publisher: a reliable
 #     subscription matches only a reliable publisher; best_effort matches both
 #   - the bridge's publisher against the destination subscribers: a best_effort
 #     publisher is invisible to a reliable subscriber
-# So: best_effort for sensor streams (their Autoware consumers use
-# SensorDataQoS), reliable for anything a reliable subscriber waits on
-# (/diagnostics under diagnostic_aggregator, /tf_static under tf2).
+# Read the consumer's subscription before choosing. The bridge logs
+# "requesting incompatible QoS" when a destination subscriber cannot match,
+# and `ros2 topic info -v` on the destination host shows every subscriber's
+# policy. Everything listed today is reliable because every consumer is.
 #
 # Never list one topic in both directions. The bridge refuses to start if you
 # do, because the alternative is an echo loop across the link.
 
 orin_to_master:
-  # The vehicle's IMU while IMU_SOURCE=zed (config/sensors.conf). gyro_odometer
-  # time-syncs it against vehicle twist, so it wants every sample and tolerates
-  # loss better than latency: best_effort, and never throttled.
+  # The vehicle's IMU while IMU_SOURCE=zed (config/sensors.conf). RELIABLE on
+  # both ends, because both ends are: the ZED wrapper publishes every topic
+  # with rclcpp::QoS(10) (zed_camera_component_main.cpp, mQos), and Autoware's
+  # imu_corrector subscribes reliable. A best_effort lane here matched the
+  # publisher and was invisible to the consumer; the bridge logged
+  # "requesting incompatible QoS ... RELIABILITY" and imu_corrector got nothing.
+  # Found by running the real stack against the bridge (scripts/testing/link_sim).
   - topic: /sensing/camera/zed/imu/data
     type: sensor_msgs/msg/Imu
-    reliability: best_effort
+    reliability: reliable
     depth: 10
 
+  # The ZED wrapper broadcasts zed_left_camera_frame -> zed_imu_link on /tf as
+  # a DYNAMIC transform at the sensor rate (publish_imu_tf: true in
+  # zed.param.yaml; a cart bag held 43k of them). Without it gyro_odometer on
+  # the master cannot transform the IMU into base_link and silently drops
+  # every sample: every node stays healthy and the EKF never gets a twist
+  # (the comment in ntu_logging_sim.launch.xml). One direction only: the
+  # master's own /tf never goes to the orin, so there is no loop.
+  - topic: /tf
+    type: tf2_msgs/msg/TFMessage
+    reliability: reliable
+    depth: 100
+
   # Intrinsics for whatever on the master consumes the ZED image later. Small,
-  # 15 Hz; the image itself stays on the orin (recorded there, see
+  # 30 Hz; the image itself stays on the orin (recorded there, see
   # config/recording/orin_topics.txt). To bring a preview over, add
   #   - topic: /sensing/camera/zed/rgb/color/rect/image/compressed
   #     type: sensor_msgs/msg/CompressedImage

@@ -1,5 +1,5 @@
 start 0
-steady_start 40
-echo_start 64
-echo_end 79
-end 104
+steady_start 70
+echo_start 131
+echo_end 146
+end 171
