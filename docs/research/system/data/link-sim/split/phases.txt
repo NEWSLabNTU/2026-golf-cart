@@ -1,0 +1,5 @@
+start 0
+steady_start 40
+echo_start 66
+echo_end 81
+end 106

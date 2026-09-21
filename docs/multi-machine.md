@@ -13,6 +13,43 @@ way, see [design/multi_machine_deployment.md](design/multi_machine_deployment.md
 Both sit on the shared 4G LAN, which negotiates **100 Mb/s**. That is the reason
 each host records to its own disk instead of streaming images across.
 
+## What crosses the link
+
+Only what `config/link/topics.yaml` lists. Under `host:=master` and
+`host:=orin` the CycloneDDS profile binds ROS domain 0 to `lo`, so the stack
+on either machine cannot reach the wire; a second domain (`GOLFCART_LINK_DOMAIN_ID`,
+42) is bound to the LAN address and holds exactly one participant per host, the
+`link_bridge` node from `golfcart_domain_bridge`, which the launch starts. It
+copies the listed topics across in the listed direction: today the orin's IMU,
+`camera_info`, `/diagnostics` and `/tf_static` to the master, and nothing back.
+
+```bash
+just link topics        # ros2 topic list in the link domain: what is on the wire
+just link nodes         # should be the two bridges
+just link hz /sensing/camera/zed/imu/data
+just link pressure      # bytes and packets per second on enP5p3s0
+```
+
+Consequences worth knowing:
+
+- A bare `ros2 topic list` on either host shows that host's domain 0. The
+  orin's topics appear on the master under their own names, because the bridge
+  republishes them there; they do not appear on the orin's `ros2 topic list`
+  as anything special. To see the wire itself, `just link topics`.
+- `ros2 topic echo` of an unlisted orin topic on the master shows nothing, and
+  costs the link nothing. Before the split, echoing the ZED image pulled
+  ~5 MB/s across; now the image is not there to echo. Add it to
+  `topics.yaml` with a `max_hz` if a preview is wanted.
+- Recording is unchanged: each host records its own domain 0.
+- The two-machine profiles need `lo` to have the MULTICAST flag, as the
+  loopback profile always did (`./setup.sh`, the multicast-lo step).
+
+Why: before this, one domain bound to the LAN put every participant on the
+wire. In simulation the master sent ~13 MB/s of domain-0 multicast data out of
+its NIC with the orin subscribed to none of it, more than the link carries;
+the split brings the wire down to ~60 kB/s. Measurements and method in
+[research/system/domain-split-link-pressure.md](research/system/domain-split-link-pressure.md).
+
 ## Daily operation
 
 Everything runs from the master:

@@ -1,50 +1,97 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!--
   CycloneDDS profile for the master host (cart AGX Orin) in the two-machine
-  deployment. Pairs with orin.xml; see docs/design/multi_machine_deployment.md.
+  deployment. Pairs with orin.xml; see docs/design/multi_machine_deployment.md
+  and docs/research/system/domain-split-link-pressure.md.
 
-  Differences from loopback.xml, and why:
+  TWO DOMAINS, TWO INTERFACES. This file used to be one <Domain Id="any"> bound
+  to the LAN interface, which put every participant on this host on the wire:
+  the whole Autoware graph discovered itself across the 100 Mb/s link, every
+  writer with two or more readers chose the multicast locator and so sent its
+  samples out of the NIC whether or not the orin wanted them, and one `ros2
+  topic list` on the orin pulled the full endpoint set across. The link
+  saturated in bursts and dropped. The split:
+
+    * Domain 0 (the default; ROS_DOMAIN_ID unset) is bound to `lo`. It is the
+      stack, exactly as loopback.xml runs it on a single machine. Nothing in it
+      can reach the wire, because the interface it is bound to has no wire.
+
+    * Domain ${GOLFCART_LINK_DOMAIN_ID} (42 unless config/runtime.conf says
+      otherwise) is bound to the LAN address. Its only participant on this host
+      is golfcart_domain_bridge, which copies the topics named in
+      config/link/topics.yaml between the two. The orin's side is the mirror.
+
+  The env reference in the Id attribute is expanded by CycloneDDS itself, so a
+  bare `ROS_DOMAIN_ID=42 ros2 topic list` in a fresh shell lands in the right
+  domain, and the default written here has to match the one in runtime.conf.
+
+  The Id="any" section carries what both domains share. CycloneDDS merges it
+  with whichever specific section matches, and a process started in any other
+  domain id gets CycloneDDS defaults, which autodetermine an interface: that is
+  the one way to put a stray participant on the wire, and it takes an explicit
+  ROS_DOMAIN_ID to do it.
+
+  Link-domain choices, and why:
 
     * The interface is selected by address, not by name: the NIC is named
       differently on the two boxes and can be renamed by NetworkManager, while
       the addresses are fixed by the router's DHCP reservations.
-    * AllowMulticast stays default. The design assumed a WiFi AP and cut this
-      down to spdp; this is switched Ethernet instead, where multicast is
-      reliable and full rate.
-    * Peers pins the orin as a unicast discovery target anyway, as a fallback if
-      multicast is ever blocked on the segment. Harmless when multicast works.
-    * ParticipantIndex auto with a raised maximum. Autoware runs far more than
-      the default number of participants per host; the loopback profile can use
-      "none" (fully dynamic ports) because nothing has to guess its ports, but
-      unicast discovery needs the indexed, predictable port range.
+    * AllowMulticast is spdp, not default. With two participants on the link
+      there is nothing for data multicast to save, and on a segment shared with
+      the 4G router and other devices every multicast datagram is delivered to
+      every port. Discovery still multicasts so the bridges find each other
+      without configuration; data goes unicast to the one peer.
+    * Peers pins the other host as a unicast discovery target anyway, as a
+      fallback if multicast is ever blocked on the segment.
+    * ParticipantIndex auto with a small maximum: only bridges and CLI tools
+      live here. The internal domain keeps "none" (fully dynamic ports), as
+      loopback.xml does, because nothing has to guess its ports there.
 
   This segment is the shared 4G LAN (192.168.125.0/24, master enP5p3s0 at
-  100 Mb/s), not a dedicated link: other devices and the 4G router sit on it. Two
-  consequences. Full-rate ZED image topics must not cross it - they are recorded
-  on the orin's local disk, per the design's bandwidth rule. And any other ROS 2
-  machine that joins this LAN will merge into this graph, since ROS_DOMAIN_ID is
-  unset; set one on both hosts if that ever happens.
+  100 Mb/s), not a dedicated link. Full-rate ZED image topics must not cross it
+  and are not in topics.yaml; they are recorded on the orin's local disk.
 
   scripts/hardware/network/setup-interlink.sh installs a 1 Gb/s dedicated link on
-  192.168.13.1/.2 over the free enP5p6s0 NIC. It is currently unused - switching
+  192.168.13.1/.2 over the free enP5p6s0 NIC. It is currently unused. Switching
   to it means changing the addresses below and in orin.xml, nothing else.
 -->
 <CycloneDDS xmlns="https://cdds.io/config" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://cdds.io/config https://raw.githubusercontent.com/eclipse-cyclonedds/cyclonedds/master/etc/cyclonedds.xsd">
-  <Domain Id="any">
+
+  <!-- The stack. Byte-for-byte what loopback.xml does on a single machine. -->
+  <Domain Id="0">
+    <General>
+      <Interfaces>
+        <NetworkInterface autodetermine="false" name="lo" priority="default" multicast="default" />
+      </Interfaces>
+      <AllowMulticast>default</AllowMulticast>
+    </General>
+    <Discovery>
+      <ParticipantIndex>none</ParticipantIndex>
+    </Discovery>
+  </Domain>
+
+  <!-- The link. One bridge participant, plus whatever CLI you point at it. -->
+  <Domain Id="${GOLFCART_LINK_DOMAIN_ID:-42}">
     <General>
       <Interfaces>
         <NetworkInterface autodetermine="false" address="192.168.125.100" priority="default" multicast="default" />
       </Interfaces>
-      <AllowMulticast>default</AllowMulticast>
-      <MaxMessageSize>65500B</MaxMessageSize>
+      <AllowMulticast>spdp</AllowMulticast>
     </General>
     <Discovery>
       <ParticipantIndex>auto</ParticipantIndex>
-      <MaxAutoParticipantIndex>200</MaxAutoParticipantIndex>
+      <MaxAutoParticipantIndex>20</MaxAutoParticipantIndex>
       <Peers>
         <Peer address="192.168.125.101"/>
       </Peers>
     </Discovery>
+  </Domain>
+
+  <!-- Shared by both domains. -->
+  <Domain Id="any">
+    <General>
+      <MaxMessageSize>65500B</MaxMessageSize>
+    </General>
     <!--
       Iceoryx shared memory was removed on 2026-09-02. It never worked here: the
       runtime caps publisher ports at a count compiled into

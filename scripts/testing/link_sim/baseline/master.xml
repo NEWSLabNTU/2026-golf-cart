@@ -1,48 +1,26 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!--
-  CycloneDDS profile for the orin (slave Jetson) host in the two-machine
-  deployment. Mirror of master.xml with the addresses swapped; see that file for
-  the rationale behind each setting, and in particular for why there are two
-  domains: domain 0 on `lo` is the stack and never reaches the wire, domain
-  ${GOLFCART_LINK_DOMAIN_ID} on the LAN address holds only the bridge.
+  FROZEN COPY of config/cyclonedds/master.xml as it was before the domain split
+  (commit a9b8ef9): one <Domain Id="any"> bound to the LAN interface, so
+  every participant on the host is on the wire. scripts/testing/link_sim uses
+  it as the "before" leg of the measurement. Do not tune it; it is a record.
 -->
 <CycloneDDS xmlns="https://cdds.io/config" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://cdds.io/config https://raw.githubusercontent.com/eclipse-cyclonedds/cyclonedds/master/etc/cyclonedds.xsd">
-
-  <!-- The stack. Byte-for-byte what loopback.xml does on a single machine. -->
-  <Domain Id="0">
+  <Domain Id="any">
     <General>
       <Interfaces>
-        <NetworkInterface autodetermine="false" name="lo" priority="default" multicast="default" />
+        <NetworkInterface autodetermine="false" address="192.168.125.100" priority="default" multicast="default" />
       </Interfaces>
       <AllowMulticast>default</AllowMulticast>
-    </General>
-    <Discovery>
-      <ParticipantIndex>none</ParticipantIndex>
-    </Discovery>
-  </Domain>
-
-  <!-- The link. One bridge participant, plus whatever CLI you point at it. -->
-  <Domain Id="${GOLFCART_LINK_DOMAIN_ID:-42}">
-    <General>
-      <Interfaces>
-        <NetworkInterface autodetermine="false" address="192.168.125.101" priority="default" multicast="default" />
-      </Interfaces>
-      <AllowMulticast>spdp</AllowMulticast>
+      <MaxMessageSize>65500B</MaxMessageSize>
     </General>
     <Discovery>
       <ParticipantIndex>auto</ParticipantIndex>
-      <MaxAutoParticipantIndex>20</MaxAutoParticipantIndex>
+      <MaxAutoParticipantIndex>200</MaxAutoParticipantIndex>
       <Peers>
-        <Peer address="192.168.125.100"/>
+        <Peer address="192.168.125.101"/>
       </Peers>
     </Discovery>
-  </Domain>
-
-  <!-- Shared by both domains. -->
-  <Domain Id="any">
-    <General>
-      <MaxMessageSize>65500B</MaxMessageSize>
-    </General>
     <!--
       Iceoryx shared memory was removed on 2026-09-02. It never worked here: the
       runtime caps publisher ports at a count compiled into

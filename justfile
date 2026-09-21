@@ -43,6 +43,8 @@ mod sim 'just/sim.just'
 mod diag 'just/diag.just'
 # Middleware: which RMW this host runs, and the Zenoh router lifecycle
 mod rmw 'just/rmw.just'
+# The master/orin link: what crosses it, how much, and the two-host simulation
+mod link 'just/link.just'
 
 # CPU / kernel profiling of the running stack
 mod profile 'just/profile.just'
