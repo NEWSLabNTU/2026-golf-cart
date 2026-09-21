@@ -69,6 +69,17 @@ case "${GOLFCART_DDS_PROFILE_SOURCE:-unknown}" in
     marker)
         ok "host role: ${GOLFCART_HOST}  (from ${MARKER_REL})"
         ;;
+    marker-demoted)
+        warn "host role: ${GOLFCART_HOST} (from ${MARKER_REL}); DDS transport demoted to loopback"
+        info "the peer did not answer a ping, so the stack stays on 'lo'"
+        info "the machine is still ${GOLFCART_HOST}: only the transport changed"
+        info "the ${GOLFCART_DDS_DEMOTED_FROM:-master} profile puts every topic on the"
+        info "shared 100 Mb/s LAN, which two LiDARs alone saturate — that is what"
+        info "takes ssh to the other machine down when it is running solo"
+        info "expected when running single-machine; bring the peer up, or force it with:"
+        info "    GOLFCART_DDS_PROBE=0"
+        info "(not GOLFCART_DDS_PROFILE — it is ignored when it matches ${MARKER_REL})"
+        ;;
     fallback)
         warn "no config/host marker — falling back to the loopback profile"
         info "Two-machine operation needs one. On this machine run:"

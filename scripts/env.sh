@@ -35,6 +35,30 @@ export GOLFCART_REPO_ROOT
 #      `.golfcart-host` in the repo root is still read if `config/host` is absent
 #   4. loopback
 #
+# A marker-derived multi-machine role is then DEMOTED to loopback if the other
+# machine does not answer a ping. The master profile binds Cyclone to the shared
+# 192.168.125.0/24 LAN and puts every topic on it, including two LiDARs' worth of
+# PointCloud2. That segment is 100 Mb/s: measured 2026-09-21, a solo `just launch`
+# on the master pushed 11993 KiB/s against a 12800 KiB/s ceiling and took ssh to
+# the orin down with it, which is a miserable thing to debug because the symptom
+# (cannot reach the orin) looks nothing like the cause (the profile assumes it is
+# there). With the orin genuinely offline none of that traffic has a reader, so
+# the demotion costs nothing and the loopback profile keeps it on `lo`.
+#
+# Only a `marker` role is demoted. A GOLFCART_ENV_ROLE is a statement of intent
+# from a caller that knows better: the systemd units in particular must not
+# change transport because a ping happened to drop, so `just launch-all` keeps
+# the profile it was installed with.
+#
+# GOLFCART_DDS_PROBE=0 is the override, and it is deliberately NOT
+# `GOLFCART_DDS_PROFILE=master`. That variable only counts as explicit when it
+# DIFFERS from what the marker resolves to — see the "explicit export wins"
+# block below, which cannot tell a deliberate export from this file inheriting
+# its own previous one. On a master whose marker already says `master` the two
+# are identical, so it reads as `marker` and gets demoted like any other.
+# Suggesting it as the escape hatch would hand someone a knob that silently
+# does nothing in exactly the case they are trying to escape.
+#
 # GOLFCART_ENV_ROLE exists for the systemd units, which are told their role by an
 # installer-written drop-in (Environment=GOLFCART_HOST=master|orin) and must not
 # depend on the marker file: a unit whose role came from a marker someone edited
@@ -48,10 +72,74 @@ export GOLFCART_REPO_ROOT
 # profile is the exact failure this machinery exists to remove.
 #
 # Sets (and exports):
-#   GOLFCART_HOST                  resolved role / profile name
-#   GOLFCART_DDS_PROFILE           same value (kept for existing callers)
-#   GOLFCART_DDS_PROFILE_SOURCE    role | env | marker | fallback | invalid-*
+#   GOLFCART_HOST                  the MACHINE: master | orin | loopback.
+#                                  A demotion does NOT change this - the box is
+#                                  still the master when the orin is switched
+#                                  off. The justfile's host:= and
+#                                  record_unit_exec.sh's topic list key on it.
+#   GOLFCART_DDS_PROFILE           the TRANSPORT: which cyclonedds/<name>.xml.
+#                                  Same word as GOLFCART_HOST except after a
+#                                  demotion, which moves this to loopback and
+#                                  leaves the machine alone.
+#   GOLFCART_DDS_DEMOTED_FROM      set only while demoted: the role it came from
+#   GOLFCART_DDS_PROFILE_SOURCE    role | env | marker | marker-demoted |
+#                                  fallback | invalid-*
 #   CYCLONEDDS_URI                 file:// URI of the profile XML
+
+# The other machine's address, from the one file that holds it. Sourced in a
+# subshell because this runs BEFORE the main body sources multi_machine.conf
+# (scripts/doctor.sh resolves the profile with GOLFCART_ENV_RESOLVE_ONLY, which
+# returns long before that point) and must not leak the conf's variables into
+# the caller's shell.
+golfcart_peer_addr() {
+    local role="$1" conf="${GOLFCART_REPO_ROOT}/config/multi_machine.conf"
+    [ -f "$conf" ] || return 1
+    (
+        # shellcheck source=/dev/null
+        . "$conf" >/dev/null 2>&1 || exit 1
+        case "$role" in
+            # ORIN_SSH is user@addr; the expansion also copes with a bare addr.
+            master) printf '%s\n' "${ORIN_SSH##*@}" ;;
+            orin)   printf '%s\n' "${MASTER_IP:-}" ;;
+            *)      exit 1 ;;
+        esac
+    )
+}
+
+# 0 = up, 1 = definitely down, 2 = could not tell. Only a 1 demotes: failing to
+# probe must not silently change transport.
+#
+# Cached briefly because .envrc sources this file on every directory entry and
+# every new shell, and the down case costs the full ping timeout each time. The
+# TTL is short enough that bringing the orin up is noticed within a few seconds
+# of the next shell; `rm` the file, or pass GOLFCART_DDS_PROBE=0, to bypass it.
+golfcart_peer_reachable() {
+    local addr="$1"
+    [ -n "$addr" ] || return 2
+    command -v ping >/dev/null 2>&1 || return 2
+
+    local key cache ttl=15 now mtime cached
+    key=$(printf '%s' "$addr" | tr -c '0-9A-Za-z._-' '_')
+    cache="${TMPDIR:-/tmp}/.golfcart-peer-$(id -u)-${key}"
+    now=$(date +%s 2>/dev/null || echo 0)
+
+    if [ -f "$cache" ]; then
+        mtime=$(stat -c %Y "$cache" 2>/dev/null || echo 0)
+        if [ "$now" -gt 0 ] && [ $(( now - mtime )) -lt "$ttl" ]; then
+            read -r cached < "$cache" 2>/dev/null || cached=""
+            [ "$cached" = "up" ] && return 0
+            [ "$cached" = "down" ] && return 1
+        fi
+    fi
+
+    if ping -c1 -W1 "$addr" >/dev/null 2>&1; then
+        echo up > "$cache" 2>/dev/null || true
+        return 0
+    fi
+    echo down > "$cache" 2>/dev/null || true
+    return 1
+}
+
 golfcart_resolve_dds_profile() {
     local root="${GOLFCART_REPO_ROOT}"
     # config/ is the single place configuration lives; the repo-root dotfile is
@@ -63,6 +151,19 @@ golfcart_resolve_dds_profile() {
     local quiet="${GOLFCART_ENV_QUIET:-0}"
 
     local from_marker="" profile="" source_of="" raw=""
+
+    # Undo any demotion this function performed on a previous source, so the
+    # peer is probed again rather than inheriting the verdict.
+    #
+    # Without this the "explicit export wins" block below reads our own
+    # GOLFCART_DDS_PROFILE=loopback as a deliberate choice — it now differs from
+    # both the marker and GOLFCART_HOST, which is exactly the shape that test is
+    # looking for — and the demotion sticks even after the orin comes back.
+    if [ -n "${GOLFCART_DDS_DEMOTED_FROM:-}" ] &&
+       [ "${GOLFCART_DDS_PROFILE:-}" = "loopback" ]; then
+        GOLFCART_DDS_PROFILE="${GOLFCART_DDS_DEMOTED_FROM}"
+        unset GOLFCART_DDS_DEMOTED_FROM
+    fi
 
     if [ -f "$marker" ]; then
         # First whitespace-separated word of the first non-empty, non-comment line.
@@ -118,6 +219,46 @@ golfcart_resolve_dds_profile() {
         xml="${root}/config/cyclonedds/loopback.xml"
     fi
 
+    # Transport follows the machine unless the demotion below separates them.
+    local dds_profile="$profile"
+
+    # Demote a marker-derived multi-machine role when the peer is not there.
+    # After validation, so this can only ever act on a profile that resolved.
+    if [ "${GOLFCART_DDS_PROBE:-1}" != "0" ] &&
+       [ "$source_of" = "marker" ] && [ "$profile" != "loopback" ]; then
+        local peer peer_rc
+        peer=$(golfcart_peer_addr "$profile" 2>/dev/null) || peer=""
+        golfcart_peer_reachable "$peer"; peer_rc=$?
+        if [ "$peer_rc" = "1" ]; then
+            if [ "$quiet" != "1" ]; then
+                echo "NOTE: peer ${peer} did not answer; using the loopback DDS profile" \
+                     "instead of '${profile}'." >&2
+                echo "      Cross-machine topics will not appear." \
+                     "To keep '${profile}' anyway: GOLFCART_DDS_PROBE=0" >&2
+            fi
+            # Only the TRANSPORT changes. `profile` stays the machine role, so
+            # GOLFCART_HOST below still says `master`.
+            #
+            # Conflating the two broke `just launch` outright while this was
+            # being written. The justfile derives `host:=` from GOLFCART_HOST;
+            # anything that is not master or orin falls through to `host:=all`,
+            # which puts the is_orin group in scope, which includes
+            # camera.launch.xml with camera_model:=zedx, which resolves
+            # $(find-pkg-share zed_wrapper) — a package `just build` skips on
+            # any host without the ZED SDK. The launch then dies naming a
+            # package nobody asked for. That is the exact failure the comment
+            # at the host:= block in the justfile exists to prevent.
+            #
+            # The machine is still the master when the orin is switched off.
+            # Only where its packets go has changed.
+            GOLFCART_DDS_DEMOTED_FROM="$profile"
+            export GOLFCART_DDS_DEMOTED_FROM
+            dds_profile="loopback"
+            xml="${root}/config/cyclonedds/loopback.xml"
+            source_of="marker-demoted"
+        fi
+    fi
+
     if [ "$source_of" = "fallback" ] && [ "$quiet" != "1" ] && [ ! -f "$warn_stamp" ]; then
         echo "No config/host marker; using the loopback DDS profile."
         echo "Two-machine operation needs one. On this machine run:"
@@ -125,8 +266,12 @@ golfcart_resolve_dds_profile() {
         touch "$warn_stamp" 2>/dev/null || true
     fi
 
+    # GOLFCART_HOST is the MACHINE; GOLFCART_DDS_PROFILE is the TRANSPORT. They
+    # are the same word except when a demotion has separated them, and callers
+    # want different ones: the justfile's host:= and record_unit_exec.sh's
+    # per-host topic list key on the machine, CYCLONEDDS_URI on the transport.
     GOLFCART_HOST="$profile"
-    GOLFCART_DDS_PROFILE="$profile"
+    GOLFCART_DDS_PROFILE="$dds_profile"
     GOLFCART_DDS_PROFILE_SOURCE="$source_of"
     CYCLONEDDS_URI="file://${xml}"
     export GOLFCART_HOST GOLFCART_DDS_PROFILE GOLFCART_DDS_PROFILE_SOURCE CYCLONEDDS_URI
