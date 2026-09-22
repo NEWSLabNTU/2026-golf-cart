@@ -13,13 +13,35 @@ Feeds Phase 3 Track C: sub-phase D below migrates the ArUco detector, and
 [3-indoor-d5](3-indoor-d5-detector.md) is where its current hand-rolled
 transport lives.
 
-Last updated: 2026-09-21. **Sub-phase B is reversed: gmslcam is the driver.**
+Last updated: 2026-09-22. **Sub-phase B is reversed: gmslcam is the driver.**
 The 2026-08-21 decision below kept gscam; on 2026-09-21 gscam was removed from
 the tree and `NEWSLabNTU/gmslcam` brought in as a submodule and wired through
 the same topics, frame ids, calibration files and the bare `"jpeg"` format, so
 nothing downstream changes. The capture path is still a switchable profile,
 now one directory per profile (see *Capture profiles*). Verified against
-synthetic sources at 30 Hz on all six topics; not yet run on the vehicle.
+synthetic sources at 30 Hz on all six topics on 2026-09-21, and on the vehicle
+on 2026-09-22:
+
+**2026-09-22, gmslcam on the vehicle.** Three IMX390 cameras on the default
+`nvv4l2camerasrc` profile, 1920x1280 at 30 fps, `codec: jpeg`, under the full
+master stack with `launch_perception:=false`, loopback DDS, RViz on `:0`
+showing all three streams. MAXN, JetPack 6.2.1.
+
+|                              | per gmslcam node                             | three cameras                    |
+|------------------------------|----------------------------------------------|----------------------------------|
+| rate, `image_raw/compressed` | ~30 Hz each, `camera_info` alongside         |                                  |
+| CPU (`pidstat`, 5 s)         | 11.6-12.2% of a core, of which 2.8-3.8% user | ~36% of a core, ~3% of the board |
+| RSS                          | 230-238 MB, flat, 0 page faults/s            | ~0.7 GB                          |
+| GR3D                         | 0-48% sampled, all of it RViz compositing    |                                  |
+
+The encoder is on NVJPG, so the GPU load counter does not see it. RViz itself
+cost 93% of a core (11% iowait) drawing the three panels, and the board sat at
+~60% on every core and 7.45 GB RAM with the rest of the stack up -- none of that
+is the cameras. Against gscam on the same profile (~8-10% of a core per camera,
+2026-08-22 row below) the CPU is a wash; what changes is memory: gscam's
+footprint grew with frame rate, to the point that three cameras at 30 fps did
+not fit the 64 GB board, and gmslcam holds a constant ~235 MB per camera at
+30 fps. That was the reason to switch, and it holds.
 
 2026-08-22: **Sub-phase A is done, on the vehicle.** `nvv4l2camerasrc` binds to
 the oToCam driver, and it is now the default profile. Blockers 1, 3 and 4 and
@@ -29,10 +51,10 @@ compiled; see the note there.
 
 Measured with three cameras running on the vehicle:
 
-| profile | gscam CPU, per camera | rate, three cameras |
-|---|---|---|
-| `nvv4l2camerasrc` | **~8% of a core** | up to ~40 fps |
-| `v4l2-dmabuf` | ~40% of a core | drops to 29-30 Hz |
+| profile           | gscam CPU, per camera | rate, three cameras |
+|-------------------|-----------------------|---------------------|
+| `nvv4l2camerasrc` | **~8% of a core**     | up to ~40 fps       |
+| `v4l2-dmabuf`     | ~40% of a core        | drops to 29-30 Hz   |
 
 A factor of five, and it settles a question this document had been careful to
 leave open. `v4l2src io-mode=4` asks the driver to export dmabuf, and the note
@@ -98,12 +120,12 @@ compressed.format += targetFormat;            // "bgr8" color, "mono8" mono
 
 **Subscriber**, splitting on the first `;`
 
-| input | behaviour |
-|---|---|
-| first field | copied **verbatim** into `Image.encoding` |
-| second field contains `compressed bgr` | BGR to RGB/RGBA/BGRA conversion applied |
-| second field contains `jpeg` + 16-bit encoding | `convertTo(CV_16U, 256)` |
-| **no `;` at all** | guess by channel count: 1 to `mono8`, 3 to `bgr8`, else error |
+| input                                          | behaviour                                                     |
+|------------------------------------------------|---------------------------------------------------------------|
+| first field                                    | copied **verbatim** into `Image.encoding`                     |
+| second field contains `compressed bgr`         | BGR to RGB/RGBA/BGRA conversion applied                       |
+| second field contains `jpeg` + 16-bit encoding | `convertTo(CV_16U, 256)`                                      |
+| **no `;` at all**                              | guess by channel count: 1 to `mono8`, 3 to `bgr8`, else error |
 
 **We emit `"bgr8; jpeg compressed bgr8"`.** The identity case: no conversion in
 any subscriber, byte-identical to what a C++ `compressed` publisher produces from
@@ -115,18 +137,18 @@ Checked twice over, and the two checks found different things.
 `ros-perception/image_transport_plugins`, both `humble`), which is where the
 rules below come from:
 
-| fact | source |
-|---|---|
-| publisher writes `encoding` + `"; jpeg compressed "` + `bgr8`/`mono8` | `compressed_publisher.cpp` |
-| the target is `bgr8` when `enc::isColor(encoding)`, else `mono8` | same |
-| `isColor` is exactly `{rgb8, bgr8, rgba8, bgra8, rgb16, bgr16, rgba16, bgra16}` | `sensor_msgs/image_encodings.hpp` |
-| subscriber splits on the first `;`, copies field one into `Image.encoding` verbatim | `compressed_subscriber.cpp` |
-| it reverts the colour order only for `isColor` encodings, keyed on the substring `compressed bgr` | same |
-| **it decodes `IMREAD_UNCHANGED` by default** (`kDefaultMode = "unchanged"`), so the channel count comes from the payload and the target field never sizes the output | same |
-| no `;` at all: guess by channel count, 1 to `mono8`, 3 to `bgr8` | same |
-| `raw` subscribes to the base topic; every other transport to `base + "/" + name` | `raw_subscriber.hpp`, `simple_subscriber_plugin.hpp` |
-| `camera_info` is the sibling of the base topic: drop the last element, append `camera_info` | `camera_common.cpp` |
-| `CameraSubscriber` pairs them with an **exact-time** `TimeSynchronizer` | `camera_subscriber.cpp` |
+| fact                                                                                                                                                                 | source                                               |
+|----------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------|
+| publisher writes `encoding` + `"; jpeg compressed "` + `bgr8`/`mono8`                                                                                                | `compressed_publisher.cpp`                           |
+| the target is `bgr8` when `enc::isColor(encoding)`, else `mono8`                                                                                                     | same                                                 |
+| `isColor` is exactly `{rgb8, bgr8, rgba8, bgra8, rgb16, bgr16, rgba16, bgra16}`                                                                                      | `sensor_msgs/image_encodings.hpp`                    |
+| subscriber splits on the first `;`, copies field one into `Image.encoding` verbatim                                                                                  | `compressed_subscriber.cpp`                          |
+| it reverts the colour order only for `isColor` encodings, keyed on the substring `compressed bgr`                                                                    | same                                                 |
+| **it decodes `IMREAD_UNCHANGED` by default** (`kDefaultMode = "unchanged"`), so the channel count comes from the payload and the target field never sizes the output | same                                                 |
+| no `;` at all: guess by channel count, 1 to `mono8`, 3 to `bgr8`                                                                                                     | same                                                 |
+| `raw` subscribes to the base topic; every other transport to `base + "/" + name`                                                                                     | `raw_subscriber.hpp`, `simple_subscriber_plugin.hpp` |
+| `camera_info` is the sibling of the base topic: drop the last element, append `camera_info`                                                                          | `camera_common.cpp`                                  |
+| `CameraSubscriber` pairs them with an **exact-time** `TimeSynchronizer`                                                                                              | `camera_subscriber.cpp`                              |
 
 The `IMREAD_UNCHANGED` row is the one worth stopping on, because the crate had
 it wrong. The third field of the format string does not decide how many channels
@@ -142,11 +164,11 @@ the strings below were obtained rather than recalled: `scripts/make_fixtures.py`
 through `image_transport republish raw compressed` and commits the result. The
 three strings it produced:
 
-| source `Image.encoding` | `CompressedImage.format` |
-|---|---|
-| `bgr8` | `bgr8; jpeg compressed bgr8` |
-| `rgb8` | `rgb8; jpeg compressed bgr8` |
-| `mono8` | `mono8; jpeg compressed mono8` |
+| source `Image.encoding` | `CompressedImage.format`       |
+|-------------------------|--------------------------------|
+| `bgr8`                  | `bgr8; jpeg compressed bgr8`   |
+| `rgb8`                  | `rgb8; jpeg compressed bgr8`   |
+| `mono8`                 | `mono8; jpeg compressed mono8` |
 
 Three traps this encodes, all of which the crate must enforce:
 
@@ -172,13 +194,13 @@ Three traps this encodes, all of which the crate must enforce:
 
 ## Blockers to clear before anything below is worth doing
 
-| # | Blocker | Blocks | Status |
-|---|---|---|---|
-| 1 | **`camera_info` may never reach the detector.** `config/recording/master_topics.txt` stated "gscam publishes none for these". But gscam holds a `CameraInfo` publisher on `camera/camera_info`, uses `camera_info_manager`, `camera_info_url` is set in all three YAMLs, `camera_left_calibration.yaml` is a real calibration, and `camera.launch.xml` remaps it. Those could not all be true. | D, and every indoor run | **Answered 2026-08-20: gscam publishes it.** Run against three v4l2loopback devices with the same YAML shape and the same two remaps `camera.launch.xml` uses, gscam loaded the calibration from `camera_info_url` and published `camera_info` at 30 Hz alongside the image. The recording comment was wrong, and the three topics are now recorded. One `ros2 topic list` on the master is still worth doing, but the detector's intrinsics problem is blocker 2, not this. |
-| 2 | **All three calibration files are one calibration copied three times.** Verified by diff on 2026-08-20: byte-identical apart from `camera_name`. The intrinsics are real, not placeholders, which makes this worse rather than better -- a plausible matrix on the wrong lens yields plausible poses that are wrong. Also `cx` is 712 on a 1920-wide image, about 248 px off centre. See [3-indoor-a](3-indoor-a-camera-calibration.md). | D | Confirmed, unfixed |
-| 3 | **`nvv4l2camerasrc` binding to the oToCam driver is unverified.** It is verified by NVIDIA against their own V4L2 driver; oToCam is a vendor `nv_imx390.ko` behind a MAX9296. | A | **CLEARED on the vehicle, 2026-08-22.** It binds. Three cameras run on it, gscam costs ~8% of a core each against ~40% on `v4l2-dmabuf`, and `jtop` shows NVJPG active. It is now `capture_profile`'s default. |
-| 4 | **`nvjpegenc` NVMM sink caps unverified on this install.** Decides whether today's pipeline is hardware or a silent software fallback: the hardware JPEG encoder needs a dmabuf fd. | A | **Cleared 2026-08-20.** `nvjpegenc` lists `video/x-raw(memory:NVMM), format={I420, NV12}`, and the committed `nvvidconv ! NV12(NVMM) ! nvjpegenc` chain negotiates and runs. No silent software fallback. One thing the caps do say: `GRAY8` is accepted in **system memory only**, so encoding mono at the source -- the open question below -- would leave NVMM and hand the import copy back. |
-| 5 | **`config/gscam.md` is stale on two counts.** It documents an `RGBA -> videoconvert -> RGB` pipeline with `image_encoding: rgb8` that is not what the YAMLs carry, and a `platform-3610000.usb-...` USB adapter rig that has been replaced by `platform-tegra-capture-vi-...`. It is the source of the "CPU conversion per camera" claim. | reading anything | Confirmed stale |
+| # | Blocker                                                                                                                                                                                                                                                                                                                                                                                                                                  | Blocks                  | Status                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+|---|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1 | **`camera_info` may never reach the detector.** `config/recording/master_topics.txt` stated "gscam publishes none for these". But gscam holds a `CameraInfo` publisher on `camera/camera_info`, uses `camera_info_manager`, `camera_info_url` is set in all three YAMLs, `camera_left_calibration.yaml` is a real calibration, and `camera.launch.xml` remaps it. Those could not all be true.                                           | D, and every indoor run | **Answered 2026-08-20: gscam publishes it.** Run against three v4l2loopback devices with the same YAML shape and the same two remaps `camera.launch.xml` uses, gscam loaded the calibration from `camera_info_url` and published `camera_info` at 30 Hz alongside the image. The recording comment was wrong, and the three topics are now recorded. One `ros2 topic list` on the master is still worth doing, but the detector's intrinsics problem is blocker 2, not this. |
+| 2 | **All three calibration files are one calibration copied three times.** Verified by diff on 2026-08-20: byte-identical apart from `camera_name`. The intrinsics are real, not placeholders, which makes this worse rather than better -- a plausible matrix on the wrong lens yields plausible poses that are wrong. Also `cx` is 712 on a 1920-wide image, about 248 px off centre. See [3-indoor-a](3-indoor-a-camera-calibration.md). | D                       | Confirmed, unfixed                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| 3 | **`nvv4l2camerasrc` binding to the oToCam driver is unverified.** It is verified by NVIDIA against their own V4L2 driver; oToCam is a vendor `nv_imx390.ko` behind a MAX9296.                                                                                                                                                                                                                                                            | A                       | **CLEARED on the vehicle, 2026-08-22.** It binds. Three cameras run on it, gscam costs ~8% of a core each against ~40% on `v4l2-dmabuf`, and `jtop` shows NVJPG active. It is now `capture_profile`'s default.                                                                                                                                                                                                                                                               |
+| 4 | **`nvjpegenc` NVMM sink caps unverified on this install.** Decides whether today's pipeline is hardware or a silent software fallback: the hardware JPEG encoder needs a dmabuf fd.                                                                                                                                                                                                                                                      | A                       | **Cleared 2026-08-20.** `nvjpegenc` lists `video/x-raw(memory:NVMM), format={I420, NV12}`, and the committed `nvvidconv ! NV12(NVMM) ! nvjpegenc` chain negotiates and runs. No silent software fallback. One thing the caps do say: `GRAY8` is accepted in **system memory only**, so encoding mono at the source -- the open question below -- would leave NVMM and hand the import copy back.                                                                             |
+| 5 | **`config/gscam.md` is stale on two counts.** It documents an `RGBA -> videoconvert -> RGB` pipeline with `image_encoding: rgb8` that is not what the YAMLs carry, and a `platform-3610000.usb-...` USB adapter rig that has been replaced by `platform-tegra-capture-vi-...`. It is the source of the "CPU conversion per camera" claim.                                                                                                | reading anything        | Confirmed stale                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
 ---
 
@@ -225,12 +247,12 @@ not care where the pixels came from.
 **Measured 2026-08-20, and the risk is not real.** AGX Orin, MAXN, 1920x1280
 quality 90:
 
-| | fps | MP/s | dropped |
-|---|---|---|---|
-| sustain, 1 live stream at 30 fps | 30.9 | 76 | 0 |
-| sustain, 3 live streams at 30 fps | 87.9 | 216 | 0 |
-| ceiling, 1 free-running process | 103 | 253 | -- |
-| ceiling, 3 free-running processes | 365 | 899 | -- |
+|                                   | fps  | MP/s | dropped |
+|-----------------------------------|------|------|---------|
+| sustain, 1 live stream at 30 fps  | 30.9 | 76   | 0       |
+| sustain, 3 live streams at 30 fps | 87.9 | 216  | 0       |
+| ceiling, 1 free-running process   | 103  | 253  | --      |
+| ceiling, 3 free-running processes | 365  | 899  | --      |
 
 Three cameras is met with zero drops and **4.1x headroom**. Two things this
 measurement had to be fixed to say, both of which had been reporting nonsense:
@@ -370,11 +392,11 @@ The earlier recommendation was "accept the bare form now, move to gmslcam when A
 is settled". The move is now off the table, and the reasons it looked attractive
 have each been dealt with in gscam instead:
 
-| what gmslcam was for | how it stands now |
-|---|---|
-| we would own the publisher and emit the compound string | gmslcam's `compressed_format()` writes the bare `"jpeg"` too. The move did not buy the compound string; it bought the *option* to patch one. |
+| what gmslcam was for                                         | how it stands now                                                                                                                                                                                                                                     |
+|--------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| we would own the publisher and emit the compound string      | gmslcam's `compressed_format()` writes the bare `"jpeg"` too. The move did not buy the compound string; it bought the *option* to patch one.                                                                                                          |
 | `appsink max-buffers=2 drop=true`, the fix for gscam's stall | a `queue leaky=downstream max-size-buffers=2` at the tail of `gscam_config`, immediately before gscam's appsink. Same effect from the outside: a wedged sink costs frames instead of back-pressuring NVJPG and the camera. Verified running at 30 Hz. |
-| it publishes `CameraInfo` | so does gscam, at frame rate. Blocker 1. |
+| it publishes `CameraInfo`                                    | so does gscam, at frame rate. Blocker 1.                                                                                                                                                                                                              |
 
 So the bare form is the format this project publishes, permanently, and the
 crate's channel-count fallback is not a compatibility shim for old bags: it is
@@ -406,13 +428,13 @@ what the vehicle runs is an edit to that default.
 
 `golfcart_sensor_kit_launch/config/camera_capture/`:
 
-| profile | source | status |
-|---|---|---|
-| `nvv4l2camerasrc` | `nvv4l2camerasrc` | **default**, and verified on the vehicle: ~8% of a core per camera against ~40% on `v4l2-dmabuf` |
-| `v4l2-dmabuf` | `v4l2src io-mode=4` | what shipped before profiles |
-| `v4l2-mmap` | `v4l2src io-mode=2` | copies on purpose, to keep "camera dead" and "dmabuf dead" separable |
-| `sim` | `v4l2src` on v4l2loopback | no hardware; pairs with `just sim cameras`. Software `jpegenc` since 2026-09-21 so it runs on any machine; `sim-nvjpeg` is the same through NVJPG |
-| `videotestsrc` | `videotestsrc` in the node | added 2026-09-21: no devices, no sudo; proves launch, topics, frames, format and calibration wiring anywhere |
+| profile           | source                     | status                                                                                                                                            |
+|-------------------|----------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------|
+| `nvv4l2camerasrc` | `nvv4l2camerasrc`          | **default**, and verified on the vehicle: ~8% of a core per camera against ~40% on `v4l2-dmabuf`                                                  |
+| `v4l2-dmabuf`     | `v4l2src io-mode=4`        | what shipped before profiles                                                                                                                      |
+| `v4l2-mmap`       | `v4l2src io-mode=2`        | copies on purpose, to keep "camera dead" and "dmabuf dead" separable                                                                              |
+| `sim`             | `v4l2src` on v4l2loopback  | no hardware; pairs with `just sim cameras`. Software `jpegenc` since 2026-09-21 so it runs on any machine; `sim-nvjpeg` is the same through NVJPG |
+| `videotestsrc`    | `videotestsrc` in the node | added 2026-09-21: no devices, no sudo; proves launch, topics, frames, format and calibration wiring anywhere                                      |
 
 `camera.launch.xml` loads `camera_<cam>.yaml` and then the profile, so the
 profile supplies `pipeline`. Since 2026-09-21 a profile is a **directory** of
@@ -451,10 +473,10 @@ and `nvv4l2h26xenc` in one process; there is a reported freeze on AGX Orin.
 
 **Implemented.** `src/common/rclrs_image_transport/`, as two crates:
 
-| crate | ROS deps | holds |
-|---|---|---|
-| `image_transport_codec` (`codec/`) | none | the format contract, decode, encode |
-| `rclrs_image_transport` | rclrs, sensor_msgs, std_msgs | transport hints, image and camera subscriptions, `image_transport_echo` |
+| crate                              | ROS deps                     | holds                                                                   |
+|------------------------------------|------------------------------|-------------------------------------------------------------------------|
+| `image_transport_codec` (`codec/`) | none                         | the format contract, decode, encode                                     |
+| `rclrs_image_transport`            | rclrs, sensor_msgs, std_msgs | transport hints, image and camera subscriptions, `image_transport_echo` |
 
 The split is not tidiness. The message crates do not exist on crates.io --
 colcon-cargo-ros2 substitutes generated bindings through `[patch.crates-io]` at
@@ -501,14 +523,14 @@ orders the build.
 measurement, and is worth correcting rather than deleting.** One 1920x1280
 quality-90 frame on this AGX Orin:
 
-| path | ms |
-|---|---|
-| `turbojpeg` gray, full | 5.3 |
-| `turbojpeg` BGR, full | 9.1 |
-| `turbojpeg` gray, 1/2 | 3.1 |
-| `turbojpeg` gray, 1/4 | 2.9 |
-| OpenCV `imdecode(IMREAD_GRAYSCALE)` | 4.9 |
-| OpenCV `imdecode(IMREAD_COLOR)` | 12.6 |
+| path                                | ms   |
+|-------------------------------------|------|
+| `turbojpeg` gray, full              | 5.3  |
+| `turbojpeg` BGR, full               | 9.1  |
+| `turbojpeg` gray, 1/2               | 3.1  |
+| `turbojpeg` gray, 1/4               | 2.9  |
+| OpenCV `imdecode(IMREAD_GRAYSCALE)` | 4.9  |
+| OpenCV `imdecode(IMREAD_COLOR)`     | 12.6 |
 
 OpenCV's `IMREAD_GRAYSCALE` already decodes grayscale directly -- it is not
 "a full colour decode thrown away", and it is if anything a shade faster than
@@ -611,12 +633,12 @@ code change.
       `image_decode_scale` exposes the crate's scaled decode separately, with
       the intrinsics scaled to match. Live, one camera at 30 fps:
 
-      | decode | downscale | CPU |
-      |---|---|---|
-      | 1 | 1 | 187% |
-      | 1 | 2 | 76% |
-      | 2 | 1 | 57% |
-      | 2 | 2 | 53% |
+| decode | downscale | CPU  |
+|--------|-----------|------|
+| 1      | 1         | 187% |
+| 1      | 2         | 76%  |
+| 2      | 1         | 57%  |
+| 2      | 2         | 53%  |
 
 - [ ] **Choose the defaults from a recorded bag.** Both knobs ship at 1, so none
       of the above is switched on. The numbers come from a synthetic scene, and
