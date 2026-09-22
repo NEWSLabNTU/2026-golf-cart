@@ -312,3 +312,62 @@ Both pre-date this work:
   two parents today. This one directly weakens the "every frame has one parent"
   acceptance criterion above — the criterion is judged on ZED frames until it is
   fixed.
+
+## Known issue — `image/compressed` runs at 16–21 Hz, not 30 (found 2026-09-22)
+
+Found while checking a 34 s recording under `perf/domain-split`: the orin bag
+held 732 ZED images and 732 `camera_info` (21.3 Hz); `ros2 topic hz` on the
+orin gave 16 Hz live a minute later. The IMU was at 100.3 Hz in the same bag,
+so the driver is fine — and the 2026-08-12 record above measured the *raw*
+`rgb/color/rect/image` at 30.1 Hz. What is slow is the compressed topic, which
+is the only one anything records or bridges.
+
+Cause: `zed_wrapper` publishes through `image_transport`, so `image/compressed`
+comes from `compressed_image_transport`, which JPEG-encodes every frame with
+libjpeg on the CPU, one thread, at `jpeg_quality` 95. `zed_main` sat at 87 % of
+one Orin core with nothing else loaded (11 other cores under 16 %, GR3D 12 %).
+The `theora` transport is advertised too; it encodes only while someone is
+subscribed, so it costs nothing today and a whole second encoder the moment an
+RViz panel picks it.
+
+Two fixes, not exclusive.
+
+**Naive — parameters only, in `zed.param.yaml`:**
+
+```yaml
+/**:
+  ros__parameters:
+    # image_transport plugin params, keyed by the topic below the node
+    zed.rgb.color.rect.image.jpeg_quality: 80
+    zed.rgb.color.rect.image.enable_pub_plugins: ["image_transport/compressed"]
+```
+
+Quality 95 → 80 roughly halves the encode time and the bytes, which should
+clear 30 Hz on its own; the plugin list drops `theora` and the raw `image`
+so nothing can accidentally subscribe to a second encoder. Next knob if still
+short: `general.pub_resolution: MEDIUM` (half the pixels; the raw record above
+already shows 960×600 at `pub_resolution`, so check what the current value is
+before changing it). Cost: JPEG ringing at q80 lands on marker edges; the
+GMSL cameras stay at q90 for exactly that reason (2-camera-image-pipeline.md),
+and the ZED does not feed the ArUco detector today, so it is acceptable there
+until it does.
+
+**Full — the gmslcam way, hardware encode:**
+
+The wrapper has no NVJPEG path; the SDK returns a frame and the plugin does
+the rest. A hardware path is a separate republisher on the orin: subscribe
+`rgb/color/rect/image` (raw `bgr8`, zero copy inside the same container if it
+is loaded as a component beside `zed_node`), hand it to a GStreamer
+`appsrc ! nvvidconv ! nvjpegenc quality=90 ! appsink` pipeline, publish
+`CompressedImage` with the bare `"jpeg"` format on the same
+`image/compressed` name, and set `enable_pub_plugins: []` on the wrapper so
+it stops publishing its own. That is what `gmslcam` does for the GMSL
+cameras from a V4L2 source, and its `appsink` and format-string handling are
+the parts to reuse; the difference is the source is a ROS image, not a
+device. Expected cost from the GMSL measurement: ~12 % of a core per stream
+and nothing on GR3D (NVJPG is its own block). Worth doing when the ZED image
+is bridged to the master or fed to a detector, since both of those want the
+full 30 Hz at q90; until then the naive fix is enough.
+
+Either way, verify with `ros2 topic hz --window 60` on the orin and a second
+bag; the number to beat is 21.3 Hz.
