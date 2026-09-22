@@ -1,12 +1,14 @@
 # The master/orin link.
 #
-# Under the master and orin profiles the stack's domain (50 master, 60 orin,
-# exported as ROS_DOMAIN_ID by scripts/env.sh) is bound to `lo` and cannot
-# reach the wire; only the link domain (10, GOLFCART_LINK_DOMAIN_ID,
-# config/runtime.conf) is on the LAN, and its only participant per host is golfcart_domain_bridge,
-# which copies config/link/topics.yaml across. These recipes look at that
-# domain, measure the wire, and run the two-host simulation that produced
-# docs/research/system/domain-split-link-pressure.md.
+# Both hosts run ONE DDS domain on the LAN. What keeps the link quiet is not a
+# domain boundary but the multicast scope: config/cyclonedds/{master,orin}.xml
+# set `AllowMulticast` to `spdp`, so multicast carries participant discovery
+# only and every sample goes unicast to the readers that asked for it. A local
+# reader's unicast locator is this host's own address, which the kernel routes
+# over lo, so a cloud with three local readers never reaches the NIC.
+#
+# These recipes measure the wire and run the two-host simulation behind
+# docs/research/system/link-multicast-scope.md.
 #
 # Recipes here run from the REPO ROOT, not from just/. Without this a module
 # recipe runs with its cwd set to this directory and every ./scripts/... path
@@ -19,25 +21,26 @@ set working-directory := '..'
 default:
     @just --list link
 
-# The link domain is a different ROS domain, so a bare `ros2 topic list` (this
-# host's stack domain, on lo) never shows it. These set ROS_DOMAIN_ID for one command. The daemon
-# is per domain too (port 11511 + id), so the first call starts one.
+# Topics visible on this host (one domain, so this is also what the other host
+# can reach). `-v` shows publisher and subscriber counts per topic, which is
+# what decides whether a writer would have used multicast under the old
+# profiles.
 
-# Topics on the wire: `ros2 topic list` in the link domain
+# Topics, with publisher and subscriber counts
 topics:
-    ROS_DOMAIN_ID="${GOLFCART_LINK_DOMAIN_ID:-10}" ros2 topic list -v
+    ros2 topic list -v
 
-# Nodes on the wire: should be exactly the two bridges
+# Nodes visible on this host
 nodes:
-    ROS_DOMAIN_ID="${GOLFCART_LINK_DOMAIN_ID:-10}" ros2 node list
+    ros2 node list
 
-# Rate of one topic as it crosses the link: `just link hz /sensing/camera/zed/imu/data`
+# Rate of one topic: `just link hz /sensing/camera/zed/imu/data`
 hz TOPIC:
-    ROS_DOMAIN_ID="${GOLFCART_LINK_DOMAIN_ID:-10}" ros2 topic hz {{TOPIC}}
+    ros2 topic hz {{TOPIC}}
 
 # Delay of one topic as it crosses the link (needs a header stamp)
 delay TOPIC:
-    ROS_DOMAIN_ID="${GOLFCART_LINK_DOMAIN_ID:-10}" ros2 topic delay {{TOPIC}}
+    ros2 topic delay {{TOPIC}}
 
 # What the LAN interface carries, per second, for SECS seconds. The same
 # instrument the simulation uses on its veth, so the numbers compare.
@@ -49,41 +52,43 @@ delay TOPIC:
 pressure IFACE="enP5p3s0" SECS="60":
     ./scripts/check/link_pressure.sh {{IFACE}} {{SECS}}
 
-# The bridge on its own, for a host whose stack is not up (e.g. recording only,
-# or checking the orin's topics reach here before launching anything). The
-# launch starts one of these itself under host:=master / host:=orin; do not run
-# both.
+# Which multicast groups this host has actually joined, and on which interface.
+# Under `spdp` the only DDS group that should appear on the LAN NIC is the SPDP
+# one (239.255.0.1); a data group there means a profile did not take.
 
-# Run the link bridge standalone for this host's role (from config/host)
-bridge:
-    ros2 run golfcart_domain_bridge domain_bridge --role "${GOLFCART_HOST}"
+# Multicast group memberships per interface
+groups:
+    @echo "== IGMP memberships (/proc/net/igmp) =="
+    @ip maddr show | grep -A2 -E '^[0-9]+:' | grep -E '^[0-9]+:|inet ' || true
 
 # Two hosts, one wire, on this machine: network namespaces joined by a veth
-# shaped to 100 Mbit/s, the real profiles, the real topic list, the REAL
-# master stack (golfcart.launch.yaml host:=master, drivers replaced by
-# publishers with the real sizes and rates) and the real recorders on both
-# sides. No root. `baseline` runs the pre-split profiles frozen in
-# scripts/testing/link_sim/baseline/; `split` runs what is checked in. Needs
-# `just build` first; each run writes two bags (several GB) under its OUT_DIR.
+# shaped to 100 Mbit/s, the REAL master stack (golfcart.launch.yaml
+# host:=master, drivers replaced by publishers with the real sizes and rates)
+# and the real recorders on both sides. No root.
 #
-#   just link sim baseline
-#   just link sim split
-#   LINK_SIM_RVIZ=1 just link sim split                        # + the real RViz on the master
-#   LINK_SIM_RVIZ=1 LINK_SIM_ZED_IMAGE=1 just link sim split   # + RViz showing the ZED image
-#   just link sim-compare log/link_sim/baseline_<ts> log/link_sim/split_<ts>
+# Both modes run ONE domain and the SAME graph. The only difference is
+# AllowMulticast, and run.sh derives both profiles from config/cyclonedds so
+# that stays true; OUT_DIR/profiles.diff is the proof.
+#
+#   just link sim baseline                                     # AllowMulticast default
+#   just link sim spdp                                         # AllowMulticast spdp
+#   LINK_SIM_RVIZ=1 just link sim baseline                     # + the real RViz on the master
+#   LINK_SIM_RVIZ=1 LINK_SIM_ZED_IMAGE=1 just link sim spdp    # + RViz showing the ZED image
+#   just link sim-compare log/link_sim/baseline_<ts> log/link_sim/spdp_<ts>
 #   just link sim-matrix log/link_sim/*                        # one table, both directions
 #
-# LINK_SIM_STARTUP / LINK_SIM_STEADY (seconds) shorten it; LINK_SIM_LINK_RATE
-# changes the shaping (e.g. 1gbit for the interlink). RViz needs TurboVNC's
-# Xvnc, which the setup's turbovnc step installs.
+# Needs `just build` first; each run writes two bags (several GB) under its
+# OUT_DIR. LINK_SIM_STARTUP / LINK_SIM_STEADY (seconds) shorten it;
+# LINK_SIM_LINK_RATE changes the shaping (e.g. 1gbit for the interlink). RViz
+# needs TurboVNC's Xvnc, which the setup's turbovnc step installs.
 
-# Run the two-host link simulation: MODE is baseline or split
+# Run the two-host link simulation: MODE is baseline or spdp
 sim MODE:
     ./scripts/testing/link_sim/run.sh {{MODE}}
 
 # Side-by-side tables from two simulation runs
-sim-compare BASELINE SPLIT:
-    ./scripts/testing/link_sim/summarize.py {{BASELINE}} {{SPLIT}}
+sim-compare BASELINE SPDP:
+    ./scripts/testing/link_sim/summarize.py {{BASELINE}} {{SPDP}}
 
 # One table across any number of runs: both directions, drops, scans kept
 sim-matrix +RUNS:

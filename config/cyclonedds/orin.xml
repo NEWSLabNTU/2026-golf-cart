@@ -2,50 +2,24 @@
 <!--
   CycloneDDS profile for the orin (slave Jetson) host in the two-machine
   deployment. Mirror of master.xml with the addresses swapped; see that file for
-  the rationale behind each setting, and in particular for why there are two
-  domains: domain 60 (GOLFCART_ORIN_DOMAIN_ID) on `lo` is the stack and never
-  reaches the wire, domain 10 (GOLFCART_LINK_DOMAIN_ID) on the LAN address
-  holds only the bridge.
+  the rationale behind each setting.
 -->
 <CycloneDDS xmlns="https://cdds.io/config" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://cdds.io/config https://raw.githubusercontent.com/eclipse-cyclonedds/cyclonedds/master/etc/cyclonedds.xsd">
-
-  <!-- The stack, domain 60 (GOLFCART_ORIN_DOMAIN_ID; env.sh exports it as
-       ROS_DOMAIN_ID on this host). Byte-for-byte what loopback.xml does on a
-       single machine, on a different id. -->
-  <Domain Id="${GOLFCART_STACK_DOMAIN_ID:-60}">
-    <General>
-      <Interfaces>
-        <NetworkInterface autodetermine="false" name="lo" priority="default" multicast="default" />
-      </Interfaces>
-      <AllowMulticast>default</AllowMulticast>
-    </General>
-    <Discovery>
-      <ParticipantIndex>none</ParticipantIndex>
-    </Discovery>
-  </Domain>
-
-  <!-- The link. One bridge participant, plus whatever CLI you point at it. -->
-  <Domain Id="${GOLFCART_LINK_DOMAIN_ID:-10}">
+  <Domain Id="any">
     <General>
       <Interfaces>
         <NetworkInterface autodetermine="false" address="192.168.125.101" priority="default" multicast="default" />
       </Interfaces>
       <AllowMulticast>spdp</AllowMulticast>
+      <MaxMessageSize>65500B</MaxMessageSize>
     </General>
     <Discovery>
       <ParticipantIndex>auto</ParticipantIndex>
-      <MaxAutoParticipantIndex>20</MaxAutoParticipantIndex>
+      <MaxAutoParticipantIndex>200</MaxAutoParticipantIndex>
       <Peers>
         <Peer address="192.168.125.100"/>
       </Peers>
     </Discovery>
-  </Domain>
-
-  <!-- Shared by both domains. -->
-  <Domain Id="any">
-    <General>
-      <MaxMessageSize>65500B</MaxMessageSize>
-    </General>
     <!--
       Iceoryx shared memory was removed on 2026-09-02. It never worked here: the
       runtime caps publisher ports at a count compiled into

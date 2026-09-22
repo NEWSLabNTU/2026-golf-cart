@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # run.sh - the two-machine deployment on one machine, with the link measured.
 #
-#   scripts/testing/link_sim/run.sh baseline|split [OUT_DIR]
-#   just link sim baseline && just link sim split && just link sim-compare A B
+#   scripts/testing/link_sim/run.sh baseline|spdp [OUT_DIR]
+#   just link sim baseline && just link sim spdp && just link sim-compare A B
 #
 # What runs, and what is real:
 #
@@ -15,7 +15,7 @@
 #            every test drive.
 #   orin     synthetic_sensors.py orin (the ZED X's topics at the ZED's rates,
 #            sizes from the wrapper config and cart bags), the REAL recorder on
-#            config/recording/orin_topics.txt, and under `split` the bridge.
+#            config/recording/orin_topics.txt.
 #   drivers  synthetic_sensors.py master: VLP-32C, Falcon, three GMSL cameras,
 #            vehicle status, on the real topic names with the real point and
 #            frame sizes. Read that file's header for where each number is
@@ -23,10 +23,16 @@
 #   wire     one veth pair on the real addresses, shaped to 100 Mbit/s each
 #            way with tbf (the segment's negotiated rate), so the counters read
 #            as what the link delivers and the qdisc counts what it drops.
-#   profile  `baseline`: config/cyclonedds as it was before the split, frozen
-#            in baseline/, one domain on the LAN, no bridge.
-#            `split`: what is checked in, plus one bridge per host from the
-#            launch, reading config/link/topics.yaml.
+#   profile  ONE DDS domain on the LAN in both modes - this measures the
+#            multicast scope, not a domain split, so the graph is identical
+#            and only AllowMulticast differs.
+#            `baseline`: the profiles frozen in baseline/, AllowMulticast
+#            default, which is what the cart ran.
+#            `spdp`: config/cyclonedds/{master,orin}.xml as checked in,
+#            AllowMulticast spdp. Multicast carries SPDP participant
+#            announcements only; data and SEDP go unicast, and a local
+#            reader's unicast locator is this host's own address, so the
+#            kernel routes it over lo instead of out the NIC.
 #   operator `ros2 topic list` every 10 s on both hosts; one 15 s
 #            `ros2 topic echo` of the ZED image on the master.
 #   RViz     LINK_SIM_RVIZ=1: the REAL rviz2 with golfcart.rviz on the master,
@@ -34,9 +40,8 @@
 #            a third reader of both raw clouds and a reader of the three GMSL
 #            images, the concatenated cloud, the map and ~140 more.
 #   ZED view LINK_SIM_ZED_IMAGE=1: RViz also shows the ZED image, the way an
-#            operator would drag it in. Under `split` the image lane is added
-#            to a copy of topics.yaml at full rate, because otherwise there is
-#            nothing for RViz to show; under `baseline` RViz simply subscribes.
+#            operator would drag it in. One domain in both modes, so RViz
+#            simply subscribes and the orin->master direction carries it.
 #
 # What is NOT real, so nobody over-reads the numbers: the bytes inside the
 # sensor messages; the orin's own stack (it is a driver and a recorder here,
@@ -50,7 +55,9 @@
 # Output, under OUT_DIR:
 #   link.csv          per-second veth counters (scripts/check/link_pressure.sh)
 #   phases.txt        second offsets of the startup / steady / echo windows
-#   classes.txt       bytes by direction x domain x multicast|unicast (sniff.py)
+#   classes.txt       bytes by direction x domain x multicast|unicast
+#                     (sniff.py). THE line of this experiment: the
+#                     master->orin multicast-data row.
 #   qdisc.txt         tbf statistics at the end: sent, dropped, overlimits
 #   consumers.txt     rates at the REAL consumers on the master, and the
 #                     link delay of the IMU, measured mid-run
@@ -61,8 +68,8 @@ set -uo pipefail
 
 MODE="${1:-}"
 case "$MODE" in
-    baseline|split) ;;
-    *) echo "usage: $0 baseline|split [OUT_DIR]" >&2; exit 64 ;;
+    baseline|spdp) ;;
+    *) echo "usage: $0 baseline|spdp [OUT_DIR]" >&2; exit 64 ;;
 esac
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -136,57 +143,52 @@ unset ROS_DOMAIN_ID
 # camera driver: gscam with no device hangs, and the GMSL topics come from the
 # synthetic drivers anyway. IMU from the ZED, as the cart runs today.
 export CAMERA_MODEL=none IMU_SOURCE=zed
-export GOLFCART_LINK_TOPICS="${REPO_ROOT}/config/link/topics.yaml"
-LINK_DOMAIN="${GOLFCART_LINK_DOMAIN_ID:-10}"
-MASTER_DOMAIN="${GOLFCART_MASTER_DOMAIN_ID:-50}"
-ORIN_DOMAIN="${GOLFCART_ORIN_DOMAIN_ID:-60}"
+# One domain in both modes: this experiment changes the multicast scope and
+# nothing else, so the DDS graph on either side of the comparison is the same.
+DOMAIN=0
 
-for pkg in golfcart_launch golfcart_domain_bridge; do
-    if ! ros2 pkg prefix "$pkg" >/dev/null 2>&1; then
-        echo "link_sim: $pkg is not built; run just build first" >&2
-        exit 1
-    fi
-done
-BRIDGE="$(ros2 pkg prefix golfcart_domain_bridge)/lib/golfcart_domain_bridge/domain_bridge"
+if ! ros2 pkg prefix golfcart_launch >/dev/null 2>&1; then
+    echo "link_sim: golfcart_launch is not built; run just build first" >&2
+    exit 1
+fi
 
-# Per-host environment. The baseline is the cart as it was: one domain, id 0,
-# ROS_DOMAIN_ID unset on both hosts. The split is the cart as configured now:
-# each host in its own stack domain, exactly what scripts/env.sh exports for
-# that host's role.
+# Per-host environment. Same domain, same graph, same everything in both
+# modes; the ONLY difference is which CycloneDDS profile is loaded, and the
+# only line that differs between those two profiles is AllowMulticast.
+# The control is DERIVED FROM THE LIVE PROFILE, not from a frozen copy, and
+# this matters more than it looks. scripts/testing/link_sim/baseline/ holds the
+# profiles as they were before the domain split, and they predate c228d87 -
+# they have no <SocketSendBufferSize>, which on its own costs the two LiDARs
+# about eight of their ten frames per second (see master.xml). Running that as
+# the control would compare two changes at once and credit AllowMulticast with
+# the send-buffer fix as well. So baseline mode takes config/cyclonedds/*.xml
+# and rewrites exactly one element back to "default". Everything else -
+# interface, domain, buffers, heartbeat, watermarks - is byte-identical
+# between the two legs, and profiles.diff in OUT_DIR proves it.
 case "$MODE" in
-    baseline)
-        MASTER_URI="file://${SCRIPT_DIR}/baseline/master.xml"
-        ORIN_URI="file://${SCRIPT_DIR}/baseline/orin.xml"
-        BRIDGE_ARG="launch_link_bridge:=false"
-        MASTER_ENV=(CYCLONEDDS_URI="$MASTER_URI" GOLFCART_HOST=master ROS_DOMAIN_ID=0 GOLFCART_STACK_DOMAIN_ID=0)
-        ORIN_ENV=(CYCLONEDDS_URI="$ORIN_URI" GOLFCART_HOST=orin ROS_DOMAIN_ID=0 GOLFCART_STACK_DOMAIN_ID=0)
-        ;;
-    split)
-        MASTER_URI="file://${REPO_ROOT}/config/cyclonedds/master.xml"
-        ORIN_URI="file://${REPO_ROOT}/config/cyclonedds/orin.xml"
-        BRIDGE_ARG="launch_link_bridge:=true"
-        MASTER_ENV=(CYCLONEDDS_URI="$MASTER_URI" GOLFCART_HOST=master ROS_DOMAIN_ID="$MASTER_DOMAIN" GOLFCART_STACK_DOMAIN_ID="$MASTER_DOMAIN")
-        ORIN_ENV=(CYCLONEDDS_URI="$ORIN_URI" GOLFCART_HOST=orin ROS_DOMAIN_ID="$ORIN_DOMAIN" GOLFCART_STACK_DOMAIN_ID="$ORIN_DOMAIN")
-        if [ "$ZED_IMAGE" = 1 ]; then
-            # The real list plus the image lane, full rate: what an operator who
-            # wants the ZED in RViz on the master would add.
-            cp "$GOLFCART_LINK_TOPICS" "$OUT/topics.yaml"
-            python3 - "$OUT/topics.yaml" <<'PY'
-import sys
-p = sys.argv[1]
-s = open(p).read()
-s = s.replace("master_to_orin: []", """  - topic: /sensing/camera/zed/rgb/color/rect/image/compressed
-    type: sensor_msgs/msg/CompressedImage
-    reliability: reliable
-    depth: 5
-
-master_to_orin: []""")
-open(p, "w").write(s)
-PY
-            export GOLFCART_LINK_TOPICS="$OUT/topics.yaml"
-        fi
-        ;;
+    baseline) WANT_MULTICAST=default ;;
+    spdp)     WANT_MULTICAST=spdp ;;
 esac
+for host in master orin; do
+    python3 - "${REPO_ROOT}/config/cyclonedds/${host}.xml" "$OUT/${host}.xml" "$WANT_MULTICAST" <<'PYX'
+import sys
+src, dst, want = sys.argv[1], sys.argv[2], sys.argv[3]
+s = open(src).read()
+n = s.count("<AllowMulticast>")
+if n != 1:
+    sys.exit(f"link_sim: expected one AllowMulticast in {src}, found {n}")
+import re
+s = re.sub(r"<AllowMulticast>[^<]*</AllowMulticast>",
+           f"<AllowMulticast>{want}</AllowMulticast>", s)
+open(dst, "w").write(s)
+PYX
+    [ $? -eq 0 ] || exit 1
+done
+diff -u "${REPO_ROOT}/config/cyclonedds/master.xml" "$OUT/master.xml" > "$OUT/profiles.diff"
+MASTER_URI="file://$OUT/master.xml"
+ORIN_URI="file://$OUT/orin.xml"
+MASTER_ENV=(CYCLONEDDS_URI="$MASTER_URI" GOLFCART_HOST=master ROS_DOMAIN_ID="$DOMAIN")
+ORIN_ENV=(CYCLONEDDS_URI="$ORIN_URI" GOLFCART_HOST=orin ROS_DOMAIN_ID="$DOMAIN")
 
 # ── the two hosts and the wire ───────────────────────────────────────────────
 ip link set lo up; ip link set lo multicast on
@@ -282,7 +284,7 @@ mapfile -t ORIN_TOPICS < <(record_topics config/recording/orin_topics.txt)
 # ── instruments first, so startup is in the numbers ──────────────────────────
 TOTAL=$((STARTUP + STEADY))
 ./scripts/check/link_pressure.sh vm "$TOTAL" "$OUT/link.csv" > "$OUT/link_pressure.txt" & PIDS+=($!)
-python3 "$SCRIPT_DIR/sniff.py" vm "$OUT/classes.txt" "$MASTER_IP" "0,${LINK_DOMAIN},${MASTER_DOMAIN},${ORIN_DOMAIN}" 2> "$OUT/sniff.err" & SNIFF_PID=$!
+python3 "$SCRIPT_DIR/sniff.py" vm "$OUT/classes.txt" "$MASTER_IP" "$DOMAIN" 2> "$OUT/sniff.err" & SNIFF_PID=$!
 T0=$(date +%s)
 mark() { echo "$1 $(( $(date +%s) - T0 ))" >> "$OUT/phases.txt"; }
 mark start
@@ -290,15 +292,12 @@ mark start
 # ── orin ─────────────────────────────────────────────────────────────────────
 spawn_orin python3 "$SCRIPT_DIR/synthetic_sensors.py" orin > "$OUT/orin_sensors.log" 2>&1
 spawn_orin ros2 bag record -o "$OUT/bags/orin" "${ORIN_TOPICS[@]}" > "$OUT/orin_record.log" 2>&1
-if [ "$MODE" = split ]; then
-    spawn_orin "$BRIDGE" --role orin > "$OUT/orin_bridge.log" 2>&1
-fi
 
 # ── master ───────────────────────────────────────────────────────────────────
 spawn_master python3 "$SCRIPT_DIR/synthetic_sensors.py" master > "$OUT/master_sensors.log" 2>&1
 spawn_master ros2 launch golfcart_launch golfcart.launch.yaml host:=master \
     launch_sensing_driver:=false launch_vehicle_interface:=false \
-    use_cuda:=false pose_source:=ndt use_gnss:=false rviz:=false "$BRIDGE_ARG" \
+    use_cuda:=false pose_source:=ndt use_gnss:=false rviz:=false \
     > "$OUT/master_stack.log" 2>&1
 sleep 20  # let the containers exist before the recorder's discovery burst
 spawn_master ros2 bag record -o "$OUT/bags/master" "${MASTER_TOPICS[@]}" > "$OUT/master_record.log" 2>&1
@@ -320,22 +319,17 @@ mark steady_start
 # CycloneDDS choose the multicast locator. `ros2 topic info` creates a
 # participant but no reader, so it does not change the answer it reports.
 {
-    echo "readers (master's domain):"
+    echo "readers (domain ${DOMAIN}):"
     for t in /sensing/lidar/vlp32/velodyne_points /sensing/lidar/vlp32/pointcloud \
              /sensing/lidar/falcon/iv_points /sensing/lidar/concatenated/pointcloud \
              /sensing/camera/zed/imu/data /tf /sensing/camera/left/image_raw/compressed \
              /sensing/camera/zed/rgb/color/rect/image/compressed; do
         echo "  $t $(on_master timeout 15 ros2 topic info --no-daemon "$t" 2>/dev/null | awk '/Subscription count/ {print "subs=" $3} /Publisher count/ {print "pubs=" $3}' | tr '\n' ' ')"
     done
-    echo "orin sees, its stack domain:"
+    echo "orin sees, domain ${DOMAIN}:"
     echo "  nodes  $(on_orin ros2 node list --no-daemon 2>/dev/null | wc -l)"
     echo "  topics $(on_orin ros2 topic list --no-daemon 2>/dev/null | wc -l)"
-    if [ "$MODE" = split ]; then
-        echo "orin sees, link domain ${LINK_DOMAIN}:"
-        echo "  nodes  $(on_orin env ROS_DOMAIN_ID="$LINK_DOMAIN" ros2 node list --no-daemon 2>/dev/null | wc -l)"
-        echo "  topics $(on_orin env ROS_DOMAIN_ID="$LINK_DOMAIN" ros2 topic list --no-daemon 2>/dev/null | wc -l)"
-    fi
-    echo "master sees, its stack domain:"
+    echo "master sees, domain ${DOMAIN}:"
     echo "  nodes  $(on_master ros2 node list --no-daemon 2>/dev/null | wc -l)"
     echo "  topics $(on_master ros2 topic list --no-daemon 2>/dev/null | wc -l)"
 } > "$OUT/graph.txt"

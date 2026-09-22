@@ -11,10 +11,9 @@ changing a value here changes it for every consumer on both hosts.
 | `sensors.conf` | shell assignments | which IMU and camera driver the sensor kit uses (`IMU_SOURCE`, `CAMERA_MODEL`) |
 | `vehicle.conf` | shell assignments | whether the vehicle interface may transmit on CAN (`GOLFCART_TX_ENABLED`) |
 | `ntrip.param.yaml` | ROS 2 parameter YAML | the NTRIP caster account for RTK corrections. **Gitignored**, it is a secret; start from `ntrip.param.yaml.example`. Exported as `NTRIP_PARAM_FILE`, read only with `use_ntrip:=true` |
-| `runtime.conf` | shell assignments | how play_launch runs composable nodes (`GOLFCART_CONTAINER_MODE`), which middleware this host uses (`GOLFCART_RMW`), and the three ROS domain ids: master stack 50, orin stack 60, wire 10 |
+| `runtime.conf` | shell assignments | how play_launch runs composable nodes (`GOLFCART_CONTAINER_MODE`), and which middleware this host uses (`GOLFCART_RMW`) |
 | `recording/master_topics.txt`<br>`recording/orin_topics.txt` | one topic per line, `#` comments | what each host records |
-| `link/topics.yaml` | YAML | what crosses the master/orin wire, in which direction, with what QoS. One file, read by both hosts' bridges |
-| `cyclonedds/{master,orin,loopback}.xml` | CycloneDDS XML | DDS network profiles, one per role. `master` and `orin` bind the stack domain (50 / 60) to `lo` and only the link domain (10) to the LAN |
+| `cyclonedds/{master,orin,loopback}.xml` | CycloneDDS XML | DDS network profiles, one per role |
 | `zenoh/{master,orin}-session.json5` | Zenoh JSON5 | Zenoh session profiles, used only when `GOLFCART_RMW=zenoh`. **Generated** — see [`zenoh/README.md`](zenoh/README.md) |
 
 Formats are deliberately unlike each other: the topic lists are edited by hand and
@@ -131,26 +130,6 @@ grep -vE '^\s*(#|$)' config/recording/master_topics.txt | tr -d ' ' \
 
 A stale entry records zero messages while still appearing in `ros2 bag info`,
 which reads as "the sensor was quiet" rather than "the name is wrong".
-
-## What crosses the link
-
-`link/topics.yaml`. Under the `master` and `orin` profiles the stack runs in
-ROS domain 0 bound to `lo`, so nothing in it can reach the wire; only the link
-domain (`GOLFCART_LINK_DOMAIN_ID` in `runtime.conf`, 10) is on the LAN, and its
-only participant per host is `golfcart_domain_bridge`, which copies the topics
-in this file across in the direction the file gives them. The wire therefore
-carries exactly this list plus the discovery traffic of two participants, and
-nothing an operator's `ros2 topic echo` on either host can add to it.
-
-Add a topic by adding an entry (name, `pkg/msg/Type`, QoS, optional `max_hz`);
-the type support has to exist on both hosts. Never list one topic in both
-directions: the bridge refuses to start, because the alternative is an echo
-loop. `just link topics` shows the wire; `just link pressure` measures it.
-Before this split the wire carried every raw cloud the master's recorder
-read, as multicast, whether or not the orin wanted it: the link at its
-100 Mbit/s ceiling in simulation with the real stack, and the master's own
-recorder losing more than half its scans to the backpressure:
-[docs/research/system/domain-split-link-pressure.md](../docs/research/system/domain-split-link-pressure.md).
 
 ## Choosing the container mode
 

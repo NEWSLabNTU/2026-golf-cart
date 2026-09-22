@@ -95,6 +95,33 @@ build *FLAGS="":
         echo "  (needed only on the machine driving the CAN bus; see README)"
         IGNORE_PKGS+=(golfcart_vehicle_interface)
     fi
+    # The Rust packages need colcon's cargo extension. Without it colcon
+    # identifies them as 'ros.ament_cargo', finds no task extension for that
+    # build type, and SILENTLY SKIPS them -- then every ament_cmake package
+    # that depends on one fails looking for a package.sh that was never
+    # written, which aborts the rest of the build. The failure names the
+    # dependent (cuda_ndt_matcher_launch), not the cause, so skip the cargo
+    # packages and their dependents outright on a host that cannot build them.
+    # Install it with `./setup.sh --rerun colcon-cargo-ros2` to get them back.
+    #
+    # Dropping `--cargo-args --release` is half the fix and the less obvious
+    # half. colcon only knows that option when the extension provides it;
+    # without it the two tokens are not parsed as an option at all, they are
+    # swallowed by the greedy `--cmake-args` ahead of them, and every
+    # ament_cmake package in the workspace dies on
+    #     CMake Error: Unknown argument --release
+    CARGO_ARGS=(--cargo-args --release)
+    if ! python3 -c 'import colcon_cargo' 2>/dev/null; then
+        echo "→ colcon cargo extension not installed — skipping the Rust packages"
+        echo "  (./setup.sh --rerun colcon-cargo-ros2 installs it; CPU NDT and the"
+        echo "   link simulation do not need them)"
+        # The three packages with a Cargo.toml, plus the one ament_cmake
+        # package that build-depends on one of them. Keep this list in step
+        # with `colcon list --base-paths src --packages-above <the cargo ones>`.
+        IGNORE_PKGS+=(cuda_ndt_matcher cuda_ndt_matcher_launch
+                      golfcart_aruco_detector golfcart_vehicle_interface)
+        CARGO_ARGS=()
+    fi
     IGNORE_ARGS=()
     if [[ ${#IGNORE_PKGS[@]} -gt 0 ]]; then
         IGNORE_ARGS=(--packages-ignore "${IGNORE_PKGS[@]}")
@@ -103,7 +130,7 @@ build *FLAGS="":
         --base-paths src \
         --symlink-install \
         --cmake-args -DCMAKE_BUILD_TYPE=Release \
-        --cargo-args --release \
+        "${CARGO_ARGS[@]}" \
         "${IGNORE_ARGS[@]}"
 
 # Symlink the packaged Autoware models into a writable tree so TensorRT can

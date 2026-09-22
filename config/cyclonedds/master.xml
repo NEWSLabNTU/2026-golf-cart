@@ -1,102 +1,71 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!--
   CycloneDDS profile for the master host (cart AGX Orin) in the two-machine
-  deployment. Pairs with orin.xml; see docs/design/multi_machine_deployment.md
-  and docs/research/system/domain-split-link-pressure.md.
+  deployment. Pairs with orin.xml; see docs/design/multi_machine_deployment.md.
 
-  TWO DOMAINS, TWO INTERFACES. This file used to be one <Domain Id="any"> bound
-  to the LAN interface, which put every participant on this host on the wire:
-  the whole Autoware graph discovered itself across the 100 Mb/s link, every
-  writer with two or more readers chose the multicast locator and so sent its
-  samples out of the NIC whether or not the orin wanted them, and one `ros2
-  topic list` on the orin pulled the full endpoint set across. The link
-  saturated in bursts and dropped. The split:
-
-    * Domain 50 (GOLFCART_MASTER_DOMAIN_ID; scripts/env.sh exports it as
-      ROS_DOMAIN_ID for the master role) is bound to `lo`. It is the stack,
-      exactly as loopback.xml runs it on a single machine. Nothing in it can
-      reach the wire, because the interface it is bound to has no wire. The
-      orin's stack is domain 60 on its own lo; the two never meet.
-
-    * Domain 10 (GOLFCART_LINK_DOMAIN_ID) is bound to the LAN address. Its
-      only participant on this host is golfcart_domain_bridge, which copies
-      the topics named in config/link/topics.yaml between the two. The orin's
-      side is the mirror.
-
-  The env references in the Id attributes are expanded by CycloneDDS itself,
-  and the defaults written here equal the ones in config/runtime.conf, so a
-  process that skipped scripts/env.sh is still matched by the right section
-  once its ROS_DOMAIN_ID is right. One that has ROS_DOMAIN_ID unset lands in
-  domain 0, which no section here matches: CycloneDDS defaults, autodetermined
-  interface, an empty graph. That is the one way to put a stray participant on
-  the wire, and `just service doctor` reports the domain a shell is in.
-
-  The Id="any" section carries what both domains share; CycloneDDS merges it
-  with whichever specific section matches.
-
-  Link-domain choices, and why:
+  Differences from loopback.xml, and why:
 
     * The interface is selected by address, not by name: the NIC is named
       differently on the two boxes and can be renamed by NetworkManager, while
       the addresses are fixed by the router's DHCP reservations.
-    * AllowMulticast is spdp, not default. With two participants on the link
-      there is nothing for data multicast to save, and on a segment shared with
-      the 4G router and other devices every multicast datagram is delivered to
-      every port. Discovery still multicasts so the bridges find each other
-      without configuration; data goes unicast to the one peer.
-    * Peers pins the other host as a unicast discovery target anyway, as a
-      fallback if multicast is ever blocked on the segment.
-    * ParticipantIndex auto with a small maximum: only bridges and CLI tools
-      live here. The internal domain keeps "none" (fully dynamic ports), as
-      loopback.xml does, because nothing has to guess its ports there.
+    * AllowMulticast is spdp, and that is the one setting this whole profile
+      turns on. With "default" every writer that has two or more reader
+      PROCESSES switches to the multicast locator, and because the interface
+      bound here is the LAN NIC, that one copy leaves the machine. The readers
+      it was meant for are all local - NDT preprocessing, the recorder, RViz -
+      and the orin subscribes to none of it, so the clouds were flooded across
+      a 100 Mb/s segment for nobody. Opening RViz was enough to do it, since
+      RViz is the third reader of both raw clouds.
+
+      With spdp, multicast is used for SPDP participant announcements only.
+      Data and endpoint discovery go unicast to each matched reader's locator,
+      and a local reader's locator is this host's own address, which the
+      kernel routes over lo. Nothing of it reaches the NIC.
+
+      What it costs: a writer with N local readers now sends N copies over lo
+      instead of one multicast datagram. That is loopback bandwidth and memcpy,
+      on a machine with SocketSendBufferSize sized for it, in exchange for not
+      putting those bytes on a shared wire.
+
+      What it does NOT fix: SEDP endpoint discovery is unicast either way, so
+      the two hosts still exchange their full endpoint sets across the link.
+      That is the residual, and it is bounded by the size of the graph rather
+      than by the sensor rates. Measured at ~0.4 MB/s in
+      docs/research/system/link-multicast-scope.md.
+    * Peers pins the orin as a unicast discovery target anyway, as a fallback if
+      multicast is ever blocked on the segment. Harmless when multicast works.
+    * ParticipantIndex auto with a raised maximum. Autoware runs far more than
+      the default number of participants per host; the loopback profile can use
+      "none" (fully dynamic ports) because nothing has to guess its ports, but
+      unicast discovery needs the indexed, predictable port range.
 
   This segment is the shared 4G LAN (192.168.125.0/24, master enP5p3s0 at
-  100 Mb/s), not a dedicated link. Full-rate ZED image topics must not cross it
-  and are not in topics.yaml; they are recorded on the orin's local disk.
+  100 Mb/s), not a dedicated link: other devices and the 4G router sit on it. Two
+  consequences. Full-rate ZED image topics must not cross it - they are recorded
+  on the orin's local disk, per the design's bandwidth rule. And any other ROS 2
+  machine that joins this LAN will merge into this graph, since ROS_DOMAIN_ID is
+  unset; set one on both hosts if that ever happens.
 
   scripts/hardware/network/setup-interlink.sh installs a 1 Gb/s dedicated link on
-  192.168.13.1/.2 over the free enP5p6s0 NIC. It is currently unused. Switching
+  192.168.13.1/.2 over the free enP5p6s0 NIC. It is currently unused - switching
   to it means changing the addresses below and in orin.xml, nothing else.
 -->
 <CycloneDDS xmlns="https://cdds.io/config" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://cdds.io/config https://raw.githubusercontent.com/eclipse-cyclonedds/cyclonedds/master/etc/cyclonedds.xsd">
-
-  <!-- The stack, domain 50 (GOLFCART_MASTER_DOMAIN_ID; env.sh exports it as
-       ROS_DOMAIN_ID on this host). Byte-for-byte what loopback.xml does on a
-       single machine, on a different id. -->
-  <Domain Id="${GOLFCART_STACK_DOMAIN_ID:-50}">
-    <General>
-      <Interfaces>
-        <NetworkInterface autodetermine="false" name="lo" priority="default" multicast="default" />
-      </Interfaces>
-      <AllowMulticast>default</AllowMulticast>
-    </General>
-    <Discovery>
-      <ParticipantIndex>none</ParticipantIndex>
-    </Discovery>
-  </Domain>
-
-  <!-- The link. One bridge participant, plus whatever CLI you point at it. -->
-  <Domain Id="${GOLFCART_LINK_DOMAIN_ID:-10}">
+  <Domain Id="any">
     <General>
       <Interfaces>
         <NetworkInterface autodetermine="false" address="192.168.125.100" priority="default" multicast="default" />
       </Interfaces>
       <AllowMulticast>spdp</AllowMulticast>
+      <MaxMessageSize>65500B</MaxMessageSize>
     </General>
     <Discovery>
       <ParticipantIndex>auto</ParticipantIndex>
-      <MaxAutoParticipantIndex>20</MaxAutoParticipantIndex>
+      <MaxAutoParticipantIndex>200</MaxAutoParticipantIndex>
       <Peers>
         <Peer address="192.168.125.101"/>
       </Peers>
     </Discovery>
-  </Domain>
-
-  <!-- Shared by both domains. -->
-  <Domain Id="any">
-    <General>
-      <MaxMessageSize>65500B</MaxMessageSize>
-    </General>
     <!--
       Iceoryx shared memory was removed on 2026-09-02. It never worked here: the
       runtime caps publisher ports at a count compiled into

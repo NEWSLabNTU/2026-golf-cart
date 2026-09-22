@@ -338,20 +338,6 @@ launch:
     default: "false"
     description: "Launch perception module (object detection). When false, empty objects are published."
 
-# Off for a run with no hardware attached: the link simulation
-# (scripts/testing/link_sim) feeds the real stack from synthetic drivers on the
-# real topic names, and a machine with no DBC has no golfcart_vehicle_interface
-# to launch. Both default to true, so nothing changes for the vehicle.
-- arg:
-    name: launch_sensing_driver
-    default: "true"
-    description: "Start the sensor drivers. False when the topics come from elsewhere (replay, simulation)."
-
-- arg:
-    name: launch_vehicle_interface
-    default: "true"
-    description: "Start the CAN vehicle interface. False on a machine without the bus or the DBC."
-
 # Preset Configuration
 - arg:
     name: perception_preset
@@ -395,10 +381,7 @@ launch:
       value: "true"
     -
       name: launch_sensing_driver
-      value: $(var launch_sensing_driver)
-    -
-      name: launch_vehicle_interface
-      value: $(var launch_vehicle_interface)
+      value: "true"
     -
       name: launch_localization
       value: "true"
@@ -517,13 +500,12 @@ launch:
 # the one machine there is, and launching both would put two of every monitor on
 # it. See the <let> above.
 #
-# The rows reach the master through the link bridge below: diagnostic_updater
-# publishes to the absolute topic /diagnostics, /diagnostics is in
-# config/link/topics.yaml, and hardware_id is the hostname, so the master's web
-# UI on :8080 shows both machines. Node names are prefixed `orin_` inside the
-# include, because diagnostic_updater builds the status name from the node name
-# without its namespace and the two hosts would otherwise publish identical
-# names.
+# The rows reach the master by themselves. diagnostic_updater publishes to the
+# absolute topic /diagnostics, both hosts share a DDS domain, and hardware_id is
+# the hostname, so the master's web UI on :8080 shows both machines. Node names
+# are prefixed `orin_` inside the include, because diagnostic_updater builds the
+# status name from the node name without its namespace and the two hosts would
+# otherwise publish identical names.
 - group:
     if: $(var is_orin_host)
     children:
@@ -533,48 +515,6 @@ launch:
         -
           name: master_ip
           value: $(var master_ip)
-
-# The link bridge: the only thing either host puts on the wire.
-#
-# Under host:=master or host:=orin the CycloneDDS profile binds domain 0 to `lo`
-# and only the link domain (GOLFCART_LINK_DOMAIN_ID, config/runtime.conf) to the
-# LAN interface, so nothing above this line can reach the other machine. This
-# node copies the topics in config/link/topics.yaml across, in the direction the
-# file gives them, and is what makes the orin's IMU, camera_info, diagnostics
-# and static TF appear on the master. See config/link/topics.yaml for the list
-# and docs/research/system/domain-split-link-pressure.md for why.
-#
-# is_two_machine, not is_master or is_orin: under host:=all there is one host,
-# one domain, and nothing to bridge; a bridge there would copy every listed
-# topic back into the domain it came from.
-#
-# The role and the file come from the environment scripts/env.sh exports
-# (GOLFCART_HOST, GOLFCART_LINK_TOPICS), the same way master_ip does above; the
-# domain ids are read from ROS_DOMAIN_ID and GOLFCART_LINK_DOMAIN_ID inside the
-# node. Nothing here spells out a value that lives in config/.
-- let:
-    name: is_two_machine
-    value: $(eval "'$(var host)' in ('master', 'orin')")
-
-# launch_link_bridge exists for one caller: the link simulation's baseline
-# leg, which runs the pre-split profiles and must not have a bridge in the
-# graph. Leave it true everywhere else; without the bridge a two-machine
-# launch sees nothing of the other host.
-- arg:
-    name: launch_link_bridge
-    default: "true"
-    description: "Start the link bridge under host:=master / host:=orin. False only for the pre-split baseline."
-
-# is_two_machine is a Python bool from its eval; launch_link_bridge is the
-# string a user typed, so it is compared as one.
-- group:
-    if: $(eval "$(var is_two_machine) and '$(var launch_link_bridge)'.lower() in ('true', '1')")
-    children:
-    - node:
-        pkg: golfcart_domain_bridge
-        exec: domain_bridge
-        name: link_bridge
-        args: --role $(var host) --config $(env GOLFCART_LINK_TOPICS)
 
 # Rosbag recording used to live here, as one `node:` entry per host. It is now a
 # separate systemd unit (golfcart-record.service ->

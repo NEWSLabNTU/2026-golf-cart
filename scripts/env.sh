@@ -392,34 +392,6 @@ golfcart_resolve_rmw() {
     export GOLFCART_RMW RMW_IMPLEMENTATION
 }
 
-# ── Domain per role ──────────────────────────────────────────────────────────
-#
-# master -> ROS_DOMAIN_ID=GOLFCART_MASTER_DOMAIN_ID (50), orin -> 60. The
-# loopback role leaves ROS_DOMAIN_ID as the shell had it: single-machine
-# operation is domain 0 on lo, as it always was, and a laptop must not
-# inherit a vehicle's id. Call after golfcart_resolve_dds_profile (needs
-# $GOLFCART_HOST) and after runtime.conf has been sourced (golfcart_resolve_rmw
-# does that on the resolve-only path).
-#
-# Exported as GOLFCART_STACK_DOMAIN_ID too, which is the name the CycloneDDS
-# profiles expand: the value has to reach Cyclone under a name ROS itself does
-# not set, so a process that inherited some other ROS_DOMAIN_ID is still
-# matched by the section for this host's stack.
-golfcart_resolve_domains() {
-    local root="${GOLFCART_REPO_ROOT}"
-    if [ -z "${GOLFCART_MASTER_DOMAIN_ID:-}" ] && [ -f "${root}/config/runtime.conf" ]; then
-        # shellcheck source=/dev/null
-        . "${root}/config/runtime.conf"
-    fi
-    case "${GOLFCART_HOST:-}" in
-        master) GOLFCART_STACK_DOMAIN_ID="${GOLFCART_MASTER_DOMAIN_ID:-50}" ;;
-        orin)   GOLFCART_STACK_DOMAIN_ID="${GOLFCART_ORIN_DOMAIN_ID:-60}" ;;
-        *)      unset GOLFCART_STACK_DOMAIN_ID; return 0 ;;
-    esac
-    ROS_DOMAIN_ID="${GOLFCART_STACK_DOMAIN_ID}"
-    export GOLFCART_STACK_DOMAIN_ID ROS_DOMAIN_ID GOLFCART_LINK_DOMAIN_ID
-}
-
 # Which RMW the RUNNING ros2 daemon was started with, or "" if none is running.
 #
 # The daemon binds its middleware at startup and keeps it for its lifetime, so
@@ -483,7 +455,6 @@ golfcart_dds_profiles() {
 if [ "${GOLFCART_ENV_RESOLVE_ONLY:-0}" = "1" ]; then
     golfcart_resolve_dds_profile
     golfcart_resolve_rmw
-    golfcart_resolve_domains
 else
 
 # ── Autoware / ROS 2 ─────────────────────────────────────────────────────────
@@ -546,9 +517,8 @@ fi
 #               <SocketReceiveBufferSize min="10MB"/>, and CycloneDDS treats
 #               `min` as a hard requirement. Below it EVERY ros2 process dies
 #               at startup with "rmw_create_node: failed to create domain".
-#               Every profile pins `lo` for domain 0 (loopback for
-#               everything; master and orin for the stack, with only the
-#               link domain on the LAN), so lo also needs the MULTICAST flag.
+#               The loopback profile additionally pins `lo`, which then also
+#               needs the MULTICAST flag.
 #
 #   SUBOPTIMAL  the tuned values (2GB buffer, ipfrag settings) prevent packet
 #               loss with high-bandwidth data. Worth having, not fatal.
@@ -573,8 +543,8 @@ golfcart_dds_problems() {
     local problems="" rmem
     # Every check below is about CycloneDDS: the 16MB floor comes from the
     # <SocketReceiveBufferSize min=> in config/cyclonedds/*.xml, and the lo
-    # MULTICAST flag matters because every profile pins that interface for
-    # domain 0. Zenoh needs neither -- it carries data over TCP -- so under
+    # MULTICAST flag matters only because the loopback profile pins that
+    # interface. Zenoh needs neither -- it carries data over TCP -- so under
     # zenoh this function has nothing to say, and saying it anyway would send
     # an operator to tune sysctls that cannot affect anything.
     # Zenoh's own precondition is that the interface carrying this host's LAN
@@ -586,11 +556,10 @@ golfcart_dds_problems() {
         problems="${problems}
   - net.core.rmem_max is ${rmem}; the DDS profile requires at least 16777216"
     fi
-    # Every profile pins lo now: loopback for everything, master and orin for
-    # domain 0 (the stack), with only the link domain on the LAN interface.
-    if ! ip link show lo 2>/dev/null | grep -q MULTICAST; then
+    if [ "${CYCLONEDDS_URI:-}" != "${CYCLONEDDS_URI#*loopback.xml}" ] \
+       && ! ip link show lo 2>/dev/null | grep -q MULTICAST; then
         problems="${problems}
-  - the ${GOLFCART_DDS_PROFILE:-} profile pins the lo interface for domain 0, and lo has no MULTICAST flag"
+  - the loopback profile pins the lo interface, and lo has no MULTICAST flag"
     fi
     [ -n "${problems}" ] || return 0
     printf '%s\n' "${problems}"
@@ -718,17 +687,6 @@ if [ -f "${GOLFCART_REPO_ROOT}/config/runtime.conf" ]; then
     export GOLFCART_CONTAINER_MODE
 fi
 
-# ── The master/orin link, and this host's domain ─────────────────────────────
-# Under the master and orin profiles the stack runs in its own domain (50 on
-# the master, 60 on the orin) bound to `lo`, and only the link domain (10)
-# reaches the LAN, with golfcart_domain_bridge copying config/link/topics.yaml
-# across. The values live in config/runtime.conf; the CycloneDDS profiles
-# expand them in their <Domain Id>, the bridge reads them, golfcart.launch.yaml
-# passes the topic file to the bridge as $(env ...). golfcart_resolve_domains,
-# called at the bottom once the role is known, exports ROS_DOMAIN_ID.
-export GOLFCART_LINK_DOMAIN_ID="${GOLFCART_LINK_DOMAIN_ID:-10}"
-export GOLFCART_LINK_TOPICS="${GOLFCART_LINK_TOPICS:-${GOLFCART_REPO_ROOT}/config/link/topics.yaml}"
-
 # ── Vehicle interface ────────────────────────────────────────────────────────
 # GOLFCART_TX_ENABLED is an environment variable for the same forced reason:
 # the installed tier4_vehicle_launch/vehicle.launch.xml forwards three arguments
@@ -751,8 +709,8 @@ unset ROS_LOCALHOST_ONLY
 # ── CycloneDDS profile ───────────────────────────────────────────────────────
 # GOLFCART_DDS_PROFILE selects config/cyclonedds/<profile>.xml:
 #   loopback  single-machine (default; identical to the old root cyclonedds.xml)
-#   master    cart Advantech: domain 50 on lo, link domain 10 on 192.168.125.100
-#   orin      slave Jetson:   domain 60 on lo, link domain 10 on 192.168.125.101
+#   master    cart AGX Orin  on the GolfCart AP (192.168.13.1)
+#   orin      slave Jetson   on the GolfCart AP (192.168.13.2)
 # The profile normally comes from the gitignored `config/host` marker; see
 # golfcart_resolve_dds_profile above. The systemd units derive their own URI from
 # GOLFCART_HOST, so this only affects plain shells and `just launch`.
@@ -762,7 +720,6 @@ unset ROS_LOCALHOST_ONLY
 # surprising side effect of opening a shell. `just service doctor` reports it instead.
 golfcart_resolve_dds_profile
 golfcart_resolve_rmw
-golfcart_resolve_domains
 
 # ── Recording ────────────────────────────────────────────────────────────────
 # Record to the external SSD when it is mounted. The root filesystem has only a

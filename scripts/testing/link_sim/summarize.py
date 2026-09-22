@@ -166,30 +166,6 @@ def read_classes(d):
     return rows
 
 
-def read_bridge(d):
-    """Per lane, from the LAST stats line of each bridge log: forwarded and
-    throttled counts and payload bytes, plus the seconds between the first and
-    last stats line so a rate can be given. The orin's `out` lanes are what it
-    put on the wire; the master's `out` lanes are the other direction."""
-    out = {}
-    for host in ("master", "orin"):
-        path = os.path.join(d, f"{host}_bridge.log")
-        if not os.path.exists(path):
-            continue
-        first = {}
-        with open(path) as f:
-            for line in f:
-                m = re.search(r"\[(\d+)\.\d+\] \[\S+\]: (out|in) (\S+) forwarded=(\d+) throttled=(\d+)(?: bytes=(\d+))?", line)
-                if not m:
-                    continue
-                key = f"{host} {m.group(2)} {m.group(3)}"
-                t = int(m.group(1))
-                first.setdefault(key, t)
-                out[key] = {"forwarded": int(m.group(4)), "throttled": int(m.group(5)),
-                            "bytes": int(m.group(6) or 0), "seconds": max(t - first[key], 1)}
-    return out
-
-
 def kb(b):
     return f"{b / 1000:.1f}"
 
@@ -267,19 +243,6 @@ def one(d):
             lines.append(f"| {direction} | {dom} | {kind} | {b} | {p} |")
         lines.append("")
 
-    br = read_bridge(d)
-    if br:
-        lines.append("## Bridge lanes: what each host put on the wire, per topic")
-        lines.append("")
-        lines.append("Payload bytes from the bridge's own counters; the wire adds ~60-100 B of RTPS/UDP/IP per sample, more for fragmented ones.")
-        lines.append("")
-        lines.append("| host | direction | topic | msgs | payload kB/s | throttled |")
-        lines.append("|---|---|---|---:|---:|---:|")
-        for k, v in br.items():
-            host, direction, topic = k.split(" ", 2)
-            arrow = "-> wire" if direction == "out" else "wire ->"
-            lines.append(f"| {host} | {arrow} | {topic} | {v['forwarded']} | {v['bytes'] / v['seconds'] / 1000:.1f} | {v['throttled']} |")
-        lines.append("")
     return "\n".join(lines)
 
 

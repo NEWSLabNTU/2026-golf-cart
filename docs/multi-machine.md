@@ -13,50 +13,6 @@ way, see [design/multi_machine_deployment.md](design/multi_machine_deployment.md
 Both sit on the shared 4G LAN, which negotiates **100 Mb/s**. That is the reason
 each host records to its own disk instead of streaming images across.
 
-## What crosses the link
-
-Only what `config/link/topics.yaml` lists. Under `host:=master` and
-`host:=orin` the CycloneDDS profile binds the stack to its own domain on `lo`
-(50 on the master, 60 on the orin; `scripts/env.sh` exports it as
-`ROS_DOMAIN_ID`), so the stack on either machine cannot reach the wire; the
-link domain (10, `GOLFCART_LINK_DOMAIN_ID`) is bound to the LAN address and holds exactly one participant per host, the
-`link_bridge` node from `golfcart_domain_bridge`, which the launch starts. It
-copies the listed topics across in the listed direction: today the orin's IMU,
-`camera_info`, `/diagnostics` and `/tf_static` to the master, and nothing back.
-
-```bash
-just link topics        # ros2 topic list in the link domain: what is on the wire
-just link nodes         # should be the two bridges
-just link hz /sensing/camera/zed/imu/data
-just link pressure      # bytes and packets per second on enP5p3s0
-```
-
-Consequences worth knowing:
-
-- A `ros2 topic list` on either host shows that host's stack domain, provided
-  the shell sourced `scripts/env.sh` (direnv does; a bare fresh shell is in
-  domain 0 and sees nothing). The
-  orin's topics appear on the master under their own names, because the bridge
-  republishes them there; they do not appear on the orin's `ros2 topic list`
-  as anything special. To see the wire itself, `just link topics`.
-- `ros2 topic echo` of an unlisted orin topic on the master shows nothing, and
-  costs the link nothing. Before the split, echoing the ZED image pulled
-  ~5 MB/s across; now the image is not there to echo. Add it to
-  `topics.yaml` with a `max_hz` if a preview is wanted.
-- Recording is unchanged: each host records its own stack domain.
-- The two-machine profiles need `lo` to have the MULTICAST flag, as the
-  loopback profile always did (`./setup.sh`, the multicast-lo step).
-
-Why: before this, one domain bound to the LAN put every participant on the
-wire, and with the recorder running every raw cloud had two readers on the
-master, which is what makes CycloneDDS multicast it out of the NIC. In
-simulation with the real stack and a 100 Mbit/s wire, that pinned the link at
-its ceiling with the orin subscribed to none of it, dropped 160k packets in
-160 s, and cost the master's *own* recorder 59 % of its LiDAR scans. The
-split brings master → orin down to ~2 kB/s and orin → master to ~90 kB/s
-(the listed topics), with zero drops. Measurements and method in
-[research/system/domain-split-link-pressure.md](research/system/domain-split-link-pressure.md).
-
 ## Daily operation
 
 Everything runs from the master:
