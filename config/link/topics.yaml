@@ -7,10 +7,10 @@
 # bridge into the link domain and subscribed by the master's bridge out of it.
 # One list, no mirror to keep in step.
 #
-# Why a list exists at all: everything else on either host lives in ROS domain
-# 0 bound to `lo` and cannot reach the wire (config/cyclonedds/{master,orin}.xml).
-# The link domain (GOLFCART_LINK_DOMAIN_ID, config/runtime.conf) holds only the
-# two bridges. So the wire carries exactly what is written here, plus the
+# Why a list exists at all: everything else on either host lives in that
+# host's stack domain (50 master, 60 orin) bound to `lo` and cannot reach the
+# wire (config/cyclonedds/{master,orin}.xml). The link domain (10,
+# GOLFCART_LINK_DOMAIN_ID, config/runtime.conf) holds only the two bridges. So the wire carries exactly what is written here, plus the
 # discovery traffic of two participants, and nothing an operator's `ros2 topic
 # echo` on either host can add to it.
 #
@@ -65,10 +65,14 @@ orin_to_master:
 
   # Intrinsics for whatever on the master consumes the ZED image later. Small,
   # 30 Hz; the image itself stays on the orin (recorded there, see
-  # config/recording/orin_topics.txt). To bring a preview over, add
+  # config/recording/orin_topics.txt). At the camera's 30 Hz the compressed
+  # image is 7.0 MB/s payload = 55 Mbit/s of the 100 Mbit/s link, measured
+  # (docs/research/system/domain-split-link-pressure.md), and at that rate it
+  # already costs the IMU samples. To look at it on the master, add
   #   - topic: /sensing/camera/zed/rgb/color/rect/image/compressed
   #     type: sensor_msgs/msg/CompressedImage
-  #     max_hz: 2
+  #     reliability: reliable      # the wrapper publishes reliable; RViz subscribes reliable
+  #     max_hz: 5                  # ~9 Mbit/s; 2 Hz is ~3.7
   # and watch `just link pressure` before and after.
   - topic: /sensing/camera/zed/rgb/color/rect/camera_info
     type: sensor_msgs/msg/CameraInfo

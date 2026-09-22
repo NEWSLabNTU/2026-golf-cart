@@ -195,8 +195,14 @@ else
     # same symptom as a dead link.
     case "${GOLFCART_HOST:-}" in
         master|orin)
-            ok "link domain: ${GOLFCART_LINK_DOMAIN_ID:-42}  (config/runtime.conf); domain 0 stays on lo"
-            info "ROS_DOMAIN_ID=${GOLFCART_LINK_DOMAIN_ID:-42} ros2 topic list   # what crosses the wire"
+            if [ "${ROS_DOMAIN_ID:-}" = "${GOLFCART_STACK_DOMAIN_ID:-}" ]; then
+                ok "stack domain: ${GOLFCART_STACK_DOMAIN_ID:-?} on lo  (ROS_DOMAIN_ID, from config/runtime.conf)"
+            else
+                fail "ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-<unset>} but this host's stack is domain ${GOLFCART_STACK_DOMAIN_ID:-?}"
+                info "a shell that did not source scripts/env.sh sees an empty graph"
+            fi
+            ok "link domain: ${GOLFCART_LINK_DOMAIN_ID:-10} on the LAN  (config/runtime.conf)"
+            info "ROS_DOMAIN_ID=${GOLFCART_LINK_DOMAIN_ID:-10} ros2 topic list   # what crosses the wire"
             link_topics="${GOLFCART_LINK_TOPICS:-${REPO_ROOT}/config/link/topics.yaml}"
             if [ -f "$link_topics" ]; then
                 ok "link topics: ${link_topics#${REPO_ROOT}/}"

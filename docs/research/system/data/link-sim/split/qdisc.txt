@@ -1,8 +1,0 @@
-vm (master -> orin):
-qdisc tbf 8009: root refcnt 33 rate 100Mbit burst 128Kb lat 73.4ms 
- Sent 317972 bytes 912 pkt (dropped 0, overlimits 0 requeues 0) 
- backlog 0b 0p requeues 0
-vo (orin -> master):
-qdisc tbf 800a: root refcnt 33 rate 100Mbit burst 128Kb lat 73.4ms 
- Sent 14582668 bytes 38696 pkt (dropped 0, overlimits 0 requeues 0) 
- backlog 0b 0p requeues 0

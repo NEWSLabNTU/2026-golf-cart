@@ -1,0 +1,11 @@
+direction     domain                class                          bytes   packets
+master->orin  0                     multicast-data            1777957120   1266042
+master->orin  0                     unicast-discovery           75397620    156750
+master->orin  0                     multicast-discovery          3578896     11256
+master->orin  0                     unicast-data                 2691368     10593
+orin->master  0                     multicast-data             107743551     97473
+orin->master  0                     unicast-discovery            9716304     34007
+orin->master  0                     unicast-data                  965260      7198
+orin->master  0                     multicast-discovery           156008       545
+master->orin  TOTAL                                           1859625004
+orin->master  TOTAL                                            118581123

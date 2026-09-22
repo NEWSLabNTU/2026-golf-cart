@@ -1,7 +1,0 @@
-hz /sensing/imu/imu_data
-average rate: 99.706
-hz /localization/twist_estimator/twist_with_covariance
-average rate: 13.424
-hz /localization/kinematic_state
-delay /sensing/camera/zed/imu/data
-average delay: 0.000

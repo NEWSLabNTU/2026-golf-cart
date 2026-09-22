@@ -2,15 +2,16 @@
 
 The one participant each host puts on the master/orin wire.
 
-Under `host:=master` and `host:=orin` the CycloneDDS profiles bind ROS domain 0
-to `lo` and only the link domain (`GOLFCART_LINK_DOMAIN_ID`, 42) to the LAN
+Under `host:=master` and `host:=orin` the CycloneDDS profiles bind the stack's
+domain (50 on the master, 60 on the orin; `ROS_DOMAIN_ID` from `scripts/env.sh`)
+to `lo` and only the link domain (`GOLFCART_LINK_DOMAIN_ID`, 10) to the LAN
 interface. Nothing in the stack can reach the other machine. This process
 holds one node in each domain and copies the topics listed in
 `config/link/topics.yaml` between them, in the direction the file gives, as
 serialized bytes. It never deserializes a message.
 
 ```
-domain 0 on lo                 link domain on the LAN                 domain 0 on lo
+domain 60 on lo                link domain 10 on the LAN              domain 50 on lo
 ┌──────────────────────┐      ┌────────────────────────────┐      ┌─────────────────────┐
 │ orin stack (ZED, ...)│ ──▶  │ bridge(orin) ── bridge(master)│ ──▶│ master stack        │
 │ /sensing/camera/zed/…│      │  the only two participants │      │ gyro_odometer, agg… │
@@ -33,8 +34,8 @@ Arguments, each with an environment fallback that `scripts/env.sh` exports:
 |---|---|---|
 | `--role master\|orin` | `GOLFCART_HOST` | which end this is; decides direction |
 | `--config PATH` | `GOLFCART_LINK_TOPICS` | the topic list |
-| `--internal-domain N` | `ROS_DOMAIN_ID` (0) | the stack's domain |
-| `--link-domain M` | `GOLFCART_LINK_DOMAIN_ID` (42) | the wire's domain |
+| `--internal-domain N` | `ROS_DOMAIN_ID` (50 / 60) | the stack's domain |
+| `--link-domain M` | `GOLFCART_LINK_DOMAIN_ID` (10) | the wire's domain |
 
 Anything after `--ros-args` goes to rclcpp, which is how play_launch's node
 name remap reaches it. Both nodes then carry that name; they are in different

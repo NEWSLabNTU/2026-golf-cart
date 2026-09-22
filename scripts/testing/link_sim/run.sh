@@ -29,6 +29,14 @@
 #            launch, reading config/link/topics.yaml.
 #   operator `ros2 topic list` every 10 s on both hosts; one 15 s
 #            `ros2 topic echo` of the ZED image on the master.
+#   RViz     LINK_SIM_RVIZ=1: the REAL rviz2 with golfcart.rviz on the master,
+#            on a private TurboVNC display started here (software GL). It is
+#            a third reader of both raw clouds and a reader of the three GMSL
+#            images, the concatenated cloud, the map and ~140 more.
+#   ZED view LINK_SIM_ZED_IMAGE=1: RViz also shows the ZED image, the way an
+#            operator would drag it in. Under `split` the image lane is added
+#            to a copy of topics.yaml at full rate, because otherwise there is
+#            nothing for RViz to show; under `baseline` RViz simply subscribes.
 #
 # What is NOT real, so nobody over-reads the numbers: the bytes inside the
 # sensor messages; the orin's own stack (it is a driver and a recorder here,
@@ -67,6 +75,8 @@ ECHO_AT="${LINK_SIM_ECHO_AT:-50}"      # s into steady: master echoes the ZED im
 ECHO_FOR="${LINK_SIM_ECHO_FOR:-15}"    # s
 CHURN_EVERY="${LINK_SIM_CHURN_EVERY:-10}"
 LINK_RATE="${LINK_SIM_LINK_RATE:-100mbit}"   # what enP5p3s0 negotiates
+RVIZ="${LINK_SIM_RVIZ:-0}"
+ZED_IMAGE="${LINK_SIM_ZED_IMAGE:-0}"
 MASTER_IP=192.168.125.100
 ORIN_IP=192.168.125.101
 
@@ -77,13 +87,39 @@ if [ "${LINK_SIM_INNER:-}" != "1" ]; then
         exit 1
     fi
     mkdir -p "$OUT"
+    # RViz needs an X display with GLX. TurboVNC's Xvnc provides one with no
+    # GPU and no session, rendered by llvmpipe. It has to start OUT HERE, as
+    # the real user: inside the user namespace root maps to this user and
+    # Xvnc's check that /etc/turbovncserver-security.conf is owned by root
+    # fails. The socket in /tmp/.X11-unix is visible from inside regardless.
+    XVNC_PID=""
+    if [ "$RVIZ" = 1 ]; then
+        XVNC=/opt/TurboVNC/bin/Xvnc
+        [ -x "$XVNC" ] || XVNC=$(command -v Xvnc || true)
+        if [ -z "$XVNC" ]; then
+            echo "link_sim: LINK_SIM_RVIZ=1 needs Xvnc (TurboVNC)" >&2
+            exit 1
+        fi
+        export LINK_SIM_DISPLAY=":$((90 + RANDOM % 9))"
+        "$XVNC" "$LINK_SIM_DISPLAY" -geometry 1600x1000 -depth 24 -SecurityTypes None -localhost \
+            -rfbport $((5900 + ${LINK_SIM_DISPLAY#:})) -fp /usr/share/fonts/X11/misc \
+            -dridir /usr/lib/x86_64-linux-gnu/dri -registrydir /usr/lib/xorg > "$OUT/xvnc.log" 2>&1 & XVNC_PID=$!
+        sleep 2
+        if ! kill -0 "$XVNC_PID" 2>/dev/null; then
+            echo "link_sim: Xvnc did not start; see $OUT/xvnc.log" >&2
+            exit 1
+        fi
+    fi
     export LINK_SIM_INNER=1
-    exec unshare -Urn "$0" "$MODE" "$OUT"
+    unshare -Urn "$0" "$MODE" "$OUT"
+    rc=$?
+    [ -n "$XVNC_PID" ] && kill "$XVNC_PID" 2>/dev/null
+    exit $rc
 fi
 
 mkdir -p "$OUT/bags"
 exec > >(tee -a "$OUT/run.log") 2>&1
-echo "link_sim: mode=$MODE out=$OUT startup=${STARTUP}s steady=${STEADY}s link=${LINK_RATE}"
+echo "link_sim: mode=$MODE out=$OUT startup=${STARTUP}s steady=${STEADY}s link=${LINK_RATE} rviz=${RVIZ} zed_image=${ZED_IMAGE}"
 
 # ── environment ──────────────────────────────────────────────────────────────
 cd "$REPO_ROOT" || exit 1
@@ -101,7 +137,9 @@ unset ROS_DOMAIN_ID
 # synthetic drivers anyway. IMU from the ZED, as the cart runs today.
 export CAMERA_MODEL=none IMU_SOURCE=zed
 export GOLFCART_LINK_TOPICS="${REPO_ROOT}/config/link/topics.yaml"
-LINK_DOMAIN="${GOLFCART_LINK_DOMAIN_ID:-42}"
+LINK_DOMAIN="${GOLFCART_LINK_DOMAIN_ID:-10}"
+MASTER_DOMAIN="${GOLFCART_MASTER_DOMAIN_ID:-50}"
+ORIN_DOMAIN="${GOLFCART_ORIN_DOMAIN_ID:-60}"
 
 for pkg in golfcart_launch golfcart_domain_bridge; do
     if ! ros2 pkg prefix "$pkg" >/dev/null 2>&1; then
@@ -111,16 +149,42 @@ for pkg in golfcart_launch golfcart_domain_bridge; do
 done
 BRIDGE="$(ros2 pkg prefix golfcart_domain_bridge)/lib/golfcart_domain_bridge/domain_bridge"
 
+# Per-host environment. The baseline is the cart as it was: one domain, id 0,
+# ROS_DOMAIN_ID unset on both hosts. The split is the cart as configured now:
+# each host in its own stack domain, exactly what scripts/env.sh exports for
+# that host's role.
 case "$MODE" in
     baseline)
         MASTER_URI="file://${SCRIPT_DIR}/baseline/master.xml"
         ORIN_URI="file://${SCRIPT_DIR}/baseline/orin.xml"
         BRIDGE_ARG="launch_link_bridge:=false"
+        MASTER_ENV=(CYCLONEDDS_URI="$MASTER_URI" GOLFCART_HOST=master ROS_DOMAIN_ID=0 GOLFCART_STACK_DOMAIN_ID=0)
+        ORIN_ENV=(CYCLONEDDS_URI="$ORIN_URI" GOLFCART_HOST=orin ROS_DOMAIN_ID=0 GOLFCART_STACK_DOMAIN_ID=0)
         ;;
     split)
         MASTER_URI="file://${REPO_ROOT}/config/cyclonedds/master.xml"
         ORIN_URI="file://${REPO_ROOT}/config/cyclonedds/orin.xml"
         BRIDGE_ARG="launch_link_bridge:=true"
+        MASTER_ENV=(CYCLONEDDS_URI="$MASTER_URI" GOLFCART_HOST=master ROS_DOMAIN_ID="$MASTER_DOMAIN" GOLFCART_STACK_DOMAIN_ID="$MASTER_DOMAIN")
+        ORIN_ENV=(CYCLONEDDS_URI="$ORIN_URI" GOLFCART_HOST=orin ROS_DOMAIN_ID="$ORIN_DOMAIN" GOLFCART_STACK_DOMAIN_ID="$ORIN_DOMAIN")
+        if [ "$ZED_IMAGE" = 1 ]; then
+            # The real list plus the image lane, full rate: what an operator who
+            # wants the ZED in RViz on the master would add.
+            cp "$GOLFCART_LINK_TOPICS" "$OUT/topics.yaml"
+            python3 - "$OUT/topics.yaml" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+s = s.replace("master_to_orin: []", """  - topic: /sensing/camera/zed/rgb/color/rect/image/compressed
+    type: sensor_msgs/msg/CompressedImage
+    reliability: reliable
+    depth: 5
+
+master_to_orin: []""")
+open(p, "w").write(s)
+PY
+            export GOLFCART_LINK_TOPICS="$OUT/topics.yaml"
+        fi
         ;;
 esac
 
@@ -139,11 +203,11 @@ tc qdisc add dev vm root tbf rate "$LINK_RATE" burst 128kb limit 1mb
 nsenter -n -t "$ORIN_NS" tc qdisc add dev vo root tbf rate "$LINK_RATE" burst 128kb limit 1mb
 ping -c1 -W1 "$ORIN_IP" >/dev/null || { echo "link_sim: veth is not up" >&2; exit 1; }
 
-on_master() { env CYCLONEDDS_URI="$MASTER_URI" GOLFCART_HOST=master "$@"; }
-on_orin()   { nsenter -n -t "$ORIN_NS" env CYCLONEDDS_URI="$ORIN_URI" GOLFCART_HOST=orin "$@"; }
+on_master() { env "${MASTER_ENV[@]}" "$@"; }
+on_orin()   { nsenter -n -t "$ORIN_NS" env "${ORIN_ENV[@]}" "$@"; }
 PIDS=()
-spawn_master() { ( exec env CYCLONEDDS_URI="$MASTER_URI" GOLFCART_HOST=master "$@" ) & PIDS+=($!); }
-spawn_orin()   { ( exec nsenter -n -t "$ORIN_NS" env CYCLONEDDS_URI="$ORIN_URI" GOLFCART_HOST=orin "$@" ) & PIDS+=($!); }
+spawn_master() { ( exec env "${MASTER_ENV[@]}" "$@" ) & PIDS+=($!); }
+spawn_orin()   { ( exec nsenter -n -t "$ORIN_NS" env "${ORIN_ENV[@]}" "$@" ) & PIDS+=($!); }
 
 alive() { local p; for p in "${PIDS[@]}"; do kill -0 "$p" 2>/dev/null && return 0; done; return 1; }
 cleanup() {
@@ -159,6 +223,46 @@ cleanup() {
     wait "${PIDS[@]}" "$ORIN_NS" 2>/dev/null
 }
 trap cleanup EXIT
+
+# The display was started by the outer process (see the re-exec above).
+RVIZ_CONFIG="$(ros2 pkg prefix golfcart_launch)/share/golfcart_launch/rviz/golfcart.rviz"
+RVIZ_DISPLAY="${LINK_SIM_DISPLAY:-}"
+if [ "$RVIZ" = 1 ]; then
+    if [ -z "$RVIZ_DISPLAY" ] || ! command -v rviz2 >/dev/null; then
+        echo "link_sim: LINK_SIM_RVIZ=1 needs a display from the outer process and rviz2" >&2
+        exit 1
+    fi
+    if [ "$ZED_IMAGE" = 1 ]; then
+        # golfcart.rviz plus one Image display on the ZED's compressed topic,
+        # written the way the file's three GMSL panels are: the panel an
+        # operator adds to look at the camera.
+        python3 - "$RVIZ_CONFIG" "$OUT/golfcart_zed.rviz" <<'PY'
+import sys
+src, dst = sys.argv[1], sys.argv[2]
+s = open(src).read()
+panel = """    - Class: rviz_default_plugins/Image
+      Enabled: true
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: ZED
+      Normalize Range: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /sensing/camera/zed/rgb/color/rect/image/compressed
+      Value: true
+"""
+marker = "  Enabled: true\n  Global Options:"
+assert marker in s, "unexpected golfcart.rviz layout"
+s = s.replace(marker, panel + marker, 1)
+open(dst, "w").write(s)
+PY
+        RVIZ_CONFIG="$OUT/golfcart_zed.rviz"
+    fi
+fi
 
 # The recorder, invoked as scripts/recording/record_unit_exec.sh invokes it
 # (same list parsing, same `ros2 bag record -o DIR TOPICS...`), but with this
@@ -178,7 +282,7 @@ mapfile -t ORIN_TOPICS < <(record_topics config/recording/orin_topics.txt)
 # ── instruments first, so startup is in the numbers ──────────────────────────
 TOTAL=$((STARTUP + STEADY))
 ./scripts/check/link_pressure.sh vm "$TOTAL" "$OUT/link.csv" > "$OUT/link_pressure.txt" & PIDS+=($!)
-python3 "$SCRIPT_DIR/sniff.py" vm "$OUT/classes.txt" "$MASTER_IP" "0,${LINK_DOMAIN}" 2> "$OUT/sniff.err" & SNIFF_PID=$!
+python3 "$SCRIPT_DIR/sniff.py" vm "$OUT/classes.txt" "$MASTER_IP" "0,${LINK_DOMAIN},${MASTER_DOMAIN},${ORIN_DOMAIN}" 2> "$OUT/sniff.err" & SNIFF_PID=$!
 T0=$(date +%s)
 mark() { echo "$1 $(( $(date +%s) - T0 ))" >> "$OUT/phases.txt"; }
 mark start
@@ -198,6 +302,10 @@ spawn_master ros2 launch golfcart_launch golfcart.launch.yaml host:=master \
     > "$OUT/master_stack.log" 2>&1
 sleep 20  # let the containers exist before the recorder's discovery burst
 spawn_master ros2 bag record -o "$OUT/bags/master" "${MASTER_TOPICS[@]}" > "$OUT/master_record.log" 2>&1
+if [ "$RVIZ" = 1 ]; then
+    spawn_master env DISPLAY="$RVIZ_DISPLAY" LIBGL_ALWAYS_SOFTWARE=1 QT_X11_NO_MITSHM=1 \
+        rviz2 -d "$RVIZ_CONFIG" > "$OUT/master_rviz.log" 2>&1
+fi
 
 # ── timeline ─────────────────────────────────────────────────────────────────
 churn() {
@@ -212,13 +320,14 @@ mark steady_start
 # CycloneDDS choose the multicast locator. `ros2 topic info` creates a
 # participant but no reader, so it does not change the answer it reports.
 {
-    echo "readers (master, domain 0):"
+    echo "readers (master's domain):"
     for t in /sensing/lidar/vlp32/velodyne_points /sensing/lidar/vlp32/pointcloud \
              /sensing/lidar/falcon/iv_points /sensing/lidar/concatenated/pointcloud \
-             /sensing/camera/zed/imu/data /tf /sensing/camera/left/image_raw/compressed; do
+             /sensing/camera/zed/imu/data /tf /sensing/camera/left/image_raw/compressed \
+             /sensing/camera/zed/rgb/color/rect/image/compressed; do
         echo "  $t $(on_master timeout 15 ros2 topic info --no-daemon "$t" 2>/dev/null | awk '/Subscription count/ {print "subs=" $3} /Publisher count/ {print "pubs=" $3}' | tr '\n' ' ')"
     done
-    echo "orin sees, domain 0:"
+    echo "orin sees, its stack domain:"
     echo "  nodes  $(on_orin ros2 node list --no-daemon 2>/dev/null | wc -l)"
     echo "  topics $(on_orin ros2 topic list --no-daemon 2>/dev/null | wc -l)"
     if [ "$MODE" = split ]; then
@@ -226,7 +335,7 @@ mark steady_start
         echo "  nodes  $(on_orin env ROS_DOMAIN_ID="$LINK_DOMAIN" ros2 node list --no-daemon 2>/dev/null | wc -l)"
         echo "  topics $(on_orin env ROS_DOMAIN_ID="$LINK_DOMAIN" ros2 topic list --no-daemon 2>/dev/null | wc -l)"
     fi
-    echo "master sees, domain 0:"
+    echo "master sees, its stack domain:"
     echo "  nodes  $(on_master ros2 node list --no-daemon 2>/dev/null | wc -l)"
     echo "  topics $(on_master ros2 topic list --no-daemon 2>/dev/null | wc -l)"
 } > "$OUT/graph.txt"

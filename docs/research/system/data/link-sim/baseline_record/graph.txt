@@ -1,0 +1,15 @@
+readers (master's domain):
+  /sensing/lidar/vlp32/velodyne_points pubs=1 subs=2 
+  /sensing/lidar/vlp32/pointcloud pubs=1 subs=1 
+  /sensing/lidar/falcon/iv_points pubs=1 subs=2 
+  /sensing/lidar/concatenated/pointcloud pubs=1 subs=1 
+  /sensing/camera/zed/imu/data pubs=1 subs=3 
+  /tf pubs=5 subs=19 
+  /sensing/camera/left/image_raw/compressed pubs=1 subs=1 
+  /sensing/camera/zed/rgb/color/rect/image/compressed pubs=1 subs=1 
+orin sees, its stack domain:
+  nodes  159
+  topics 624
+master sees, its stack domain:
+  nodes  159
+  topics 624

@@ -167,15 +167,16 @@ unit must not depend on a file someone can edit underneath it.
 ### The master/orin link is a separate ROS domain
 
 Under `host:=master` / `host:=orin`, `config/cyclonedds/{master,orin}.xml` bind
-ROS domain 0 to `lo` and only the link domain (`GOLFCART_LINK_DOMAIN_ID`, 42,
-`config/runtime.conf`) to the LAN address. Nothing in the stack can reach the
+the stack's own domain (50 on the master, 60 on the orin, exported as
+`ROS_DOMAIN_ID` by `scripts/env.sh`) to `lo` and only the link domain (10,
+`GOLFCART_LINK_DOMAIN_ID`, all three in `config/runtime.conf`) to the LAN address. Nothing in the stack can reach the
 other machine; `golfcart_domain_bridge` (one `link_bridge` node per host,
 started by `golfcart.launch.yaml`) copies exactly the topics in
 `config/link/topics.yaml` across, in the direction the file gives them. To add
 a cross-host topic, add it there — with a `max_hz` if it is an image. Never
 list a topic in both directions; the bridge refuses (echo loop).
 
-`ros2 topic list` shows domain 0; `just link topics` shows the wire, `just
+`ros2 topic list` in a shell that sourced `scripts/env.sh` shows this host's stack domain; `just link topics` shows the wire, `just
 link pressure` measures it. Before the split, one domain on the LAN put every
 participant on the wire, and because the recorder is a second reader of every
 raw cloud, CycloneDDS multicast the clouds out of the NIC: in simulation with
