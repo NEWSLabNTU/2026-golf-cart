@@ -4,6 +4,41 @@
 **Verified**: 2026-08-10 — see *Sensor status* below. The 2026-04-07 survey further down is superseded.
 
 ---
+## `feat/gmslcam-rviz-sampler`: play_launch's Rust parser rejects `value-sep` (found 2026-09-22)
+
+The one-process `camera.launch.xml` on that branch (sensor kit `360c51c`)
+passes gmslcam its camera list and per-camera file lists as launch-XML list
+parameters:
+
+```xml
+<param name="cameras" type="list_of_str" value="rear,left,right" value-sep=","/>
+<param name="rear.params_files" type="list_of_str" value-sep="," value="…/camera_rear.yaml,…/rear.yaml"/>
+```
+
+`value-sep` is a documented `launch_xml` attribute and `ros2 launch` accepts
+it. play_launch 0.11.0 (PyPI latest, the Advantech's version; the orin has
+0.10.0) does not, and its default Rust parser has no fallback, so the unit
+exits in its second second and `just launch-all` reports it as `failed`:
+
+```
+Error: Rust parser error while parsing golfcart_launch: Unexpected attribute(s) found in `param`: {'value-sep'}
+Hint: if this is a parser limitation rather than a bad launch file, re-run the same command with `--parser python` (slower, maximum compatibility).
+```
+
+Seen from RViz it is "no camera image, no LiDAR", because nothing at all is
+running; the only topics listed are RViz's own subscriptions. Not a rebase
+artifact: the pre-rebase tip `0aec5ee` has the same seven `value-sep`
+attributes and `main`'s `ebad63a` has none, so the branch was only ever run
+under `ros2 launch` or `--parser python`.
+
+Undecided. Two ways out: (a) drop `value-sep` and express the lists in a form
+the Rust parser takes — untested, `type="list_of_str"` alone may or may not
+parse a bracketed literal; (b) run the units with `--parser python`, at the
+cost of a slower parse on every start. Until one is chosen the branch cannot
+be launched on the vehicle through the units.
+
+---
+
 ## Orin: unit active, every node dies at birth — `wmem_max` too small for the DDS profile (found 2026-09-22)
 
 After `just launch-all` the orin's unit was `active`, `ros2 node list` there
