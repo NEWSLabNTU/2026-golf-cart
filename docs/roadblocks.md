@@ -4,6 +4,58 @@
 **Verified**: 2026-08-10 — see *Sensor status* below. The 2026-04-07 survey further down is superseded.
 
 ---
+## Stale unit files: `just launch-all` reports active, the stack never runs (found 2026-09-22)
+
+On the Advantech, `just launch-all` printed `advantech: launch active` and RViz
+came up, but no camera or LiDAR data appeared. `ros2 topic list` showed only
+the topics RViz itself subscribes to (three `image_raw/compressed`, two LiDAR
+clouds, no `camera_info`), `ros2 node list` returned two nodes, and
+`ros2 topic hz` on anything printed nothing. That is what a display with no
+publishers behind it looks like, and it is easy to misread as a transport
+problem: it was first blamed on the domain split of `perf/domain-split`, which
+had run the same stack fine in the foreground an hour earlier.
+
+`systemctl --user status golfcart-launch.service` gave it away:
+`Active: active (running) since ... 11ms ago`, a new `Main PID` on every look,
+`NRestarts=0`. Two seconds after each start systemd logged `Stopping Golf Cart
+launch stack`, with nothing on the machine issuing a stop.
+
+The installed unit was from 2026-08-25 and still carried
+
+```
+Requires=iox-roudi.service
+After=iox-roudi.service
+```
+
+Iceoryx was removed from the project on 2026-09-02, `scripts/iceoryx/` with
+it. `iox-roudi.service` was still installed, `enabled`, with
+`Restart=on-failure` and `RestartSec=2`; its `ExecStart` now pointed at a
+deleted script (`code=exited, status=203/EXEC`). Every two seconds it failed,
+and `Requires=` stopped the launch unit along with it; the next start of the
+launch unit pulled roudi in again, which failed again. The orin's units, from
+2026-08-14, predate iceoryx on that host and were fine.
+
+Fix, on the machine with the stale units:
+
+```bash
+just stop-all
+systemctl --user disable --now iox-roudi.service
+rm -rf ~/.config/systemd/user/iox-roudi.service ~/.config/systemd/user/iox-roudi.service.d
+systemctl --user daemon-reload && systemctl --user reset-failed
+just service install master        # regenerates from setup/files/systemd
+grep -n 'Requires\|iox' ~/.config/systemd/user/golfcart-launch.service   # expect nothing
+```
+
+Two lessons. `just service install` is not idempotent against units it no
+longer knows about: the installer removes only the units it installs, so a unit
+dropped from the repo stays on every machine it was ever installed on, and a
+`Requires=` from an older launch unit keeps it alive. And "launch active" from
+`just launch-all` means the unit started, not that play_launch survived; when
+RViz shows nothing, look at `systemctl --user status` for the PID age before
+looking at DDS.
+
+---
+
 
 ## A partial Autoware download looked like a tampered one (found and fixed 2026-09-11)
 
