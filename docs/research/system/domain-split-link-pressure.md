@@ -1,8 +1,9 @@
 # The master/orin link: one domain on the wire vs. a bridged link domain
 
 **Date**: 2026-09-22. **Branch**: `perf/domain-split`.
-**Status**: measured with the real stack in a two-namespace simulation on a
-workstation, link shaped to 100 Mbit/s. **Not yet measured on the vehicle.**
+**Status**: measured with the real stack, both recorders and the real RViz in
+a two-namespace simulation on a workstation, link shaped to 100 Mbit/s, three
+operator situations, both directions. **Not yet measured on the vehicle.**
 
 ## The problem as reported
 
@@ -37,14 +38,16 @@ Category=config`):
 
 | domain | interface | who is in it |
 |---|---|---|
-| `0` (ROS_DOMAIN_ID unset) | `lo` | the whole stack, on both hosts, exactly as `loopback.xml` runs it single-machine |
-| `${GOLFCART_LINK_DOMAIN_ID:-42}` | the LAN address | one `golfcart_domain_bridge` per host, and any CLI pointed at it |
+| `50` master, `60` orin (`ROS_DOMAIN_ID`, exported by `scripts/env.sh` per role) | `lo` | the whole stack, exactly as `loopback.xml` runs it single-machine, on an id of its own |
+| `10` (`${GOLFCART_LINK_DOMAIN_ID}`) | the LAN address | one `golfcart_domain_bridge` per host, and any CLI pointed at it |
 
 `golfcart_domain_bridge` (`src/system/golfcart_domain_bridge`) copies the
 topics in `config/link/topics.yaml` between the two domains as serialized
 bytes. Today: the orin's IMU, its dynamic `/tf` (the `zed_imu_link` frame
 the wrapper broadcasts at 100 Hz), `camera_info`, `/diagnostics`,
-`/tf_static`; nothing back. `golfcart.launch.yaml` starts it under
+`/tf_static`; nothing back. The ZED image is deliberately not on it: at the
+camera's rate it is 55 Mbit/s of the link (measured below), so it goes in
+with a `max_hz` when someone wants it on the master. `golfcart.launch.yaml` starts it under
 `host:=master` and `host:=orin`.
 
 ## The simulation, and what in it is real
@@ -63,6 +66,8 @@ network namespaces joined by a veth pair on the real addresses; no root
 | orin stack | driver + recorder only | partly: the orin runs no Autoware; its system monitor rows are synthetic |
 | wire | veth, `tbf rate 100mbit burst 128kb limit 1mb` each way | shaped to the segment's negotiated rate; not an i226 behind a 4G router's switch |
 | operator | `ros2 topic list` every 10 s on both hosts; one 15 s `ros2 topic echo` of the ZED image on the master | scripted |
+| RViz (two of the three situations) | `rviz2 -d golfcart.rviz` on the master, on a private TurboVNC display, software GL | yes: the real RViz with the repo's config, a third reader of both raw clouds and a reader of ~140 topics |
+| ZED view (one situation) | the same RViz with one more Image panel on the ZED's compressed topic, written as the file's three GMSL panels are | yes |
 
 Driver sizes, from `synthetic_sensors.py`:
 
@@ -83,83 +88,125 @@ consumers** (`imu_corrector`'s output, `gyro_odometer`'s twist) with
 reader and change the thing measured. Bag message counts from the recorders.
 
 70 s startup, 90 s steady with the 15 s echo carved out. Workstation: Ryzen
-9 9950X, Ubuntu 22.04, ROS 2 Humble, CycloneDDS 0.10.5. Runs archived in
-[`data/link-sim/`](data/link-sim/).
+9 9950X, Ubuntu 22.04, ROS 2 Humble, CycloneDDS 0.10.5. Domains as
+configured: master stack 50, orin stack 60, link 10; the baseline runs both
+hosts in domain 0 as the cart did. Runs archived in
+[`data/link-sim/`](data/link-sim/), one directory each, `matrix.md` across
+them.
 
 ## Results
 
-tx = master → orin, rx = orin → master. Wire shaped to 100 Mbit/s = 12.5 MB/s.
+Six runs: three operator situations, each under the old profile (one domain
+on the LAN, no bridge) and the split. Every run: real stack, both recorders,
+wire shaped to 100 Mbit/s = 12.5 MB/s each way, 70 s startup then a 90 s
+steady window. All numbers are the steady window unless marked. "worst s" is
+the worst single second. Every cell is read from a file under
+[`data/link-sim/`](data/link-sim/), by `scripts/testing/link_sim/matrix.py`.
 
-| window | metric | one domain on the LAN | split | change |
-|---|---|---:|---:|---:|
-| steady | **tx mean** | **12 141 kB/s (97.1 Mbit/s — the ceiling)** | **1.9 kB/s** | −100 % |
-| steady | tx peak second | 12 324 kB/s | 12.4 kB/s | −99.9 % |
-| steady | tx packets/s | 9 229 | 5 | −99.9 % |
-| steady | rx mean | 148.7 kB/s | 89.3 kB/s | −40 % |
-| steady | rx peak second | 659.9 kB/s | 124.4 kB/s | −81 % |
-| echo | rx mean | 6 635 kB/s (53 Mbit/s) | 88.6 kB/s | −98.7 % |
-| whole run | tx bytes through the bucket | 1 872 MB | 0.32 MB | |
-| whole run | **tx packets dropped by the bucket** | **161 840** | **0** | |
+| situation | readers of each raw cloud on the master |
+|---|---:|
+| **record**: stack + `just record start` | 2 (preprocessing container, recorder) |
+| **RViz + record**: plus `rviz2 -d golfcart.rviz` on the master, the real one | 3 |
+| **RViz + ZED view + record**: RViz also shows the ZED image (in the split, the image lane is added to `topics.yaml` at full rate so there is something to show) | 3 |
 
-| at the real consumers on the master | one domain | split |
+### Both directions
+
+| run | master → orin mean | worst s | dropped | orin → master mean | worst s | dropped |
+|---|---:|---:|---:|---:|---:|---:|
+| record, one domain | **12.10 MB/s (96.8 Mbit/s)** | 12.43 MB/s | 137 358 pkts | 150 kB/s (1.2 Mbit/s) | 533 kB/s | 0 |
+| record, split | **1.9 kB/s** | 10 kB/s | 0 | 89 kB/s (0.7 Mbit/s) | 115 kB/s | 0 |
+| RViz + record, one domain | **12.53 MB/s (100.3 Mbit/s)** | 12.54 MB/s | 156 205 pkts | 158 kB/s (1.3 Mbit/s) | 754 kB/s | 0 |
+| RViz + record, split | **1.9 kB/s** | 10 kB/s | 0 | 89 kB/s (0.7 Mbit/s) | 115 kB/s | 0 |
+| RViz + ZED view + record, one domain | **12.53 MB/s (100.3 Mbit/s)** | 12.62 MB/s | 143 138 pkts | **6.93 MB/s (55.5 Mbit/s)** | 7.39 MB/s | 0 |
+| RViz + ZED view + record, split | **1.9 kB/s** | 10 kB/s | 0 | **6.87 MB/s (55.0 Mbit/s)** | 7.01 MB/s | 0 |
+
+Master → orin under the old profile is the link ceiling in all three
+situations, and it is the ceiling with the orin subscribed to none of it.
+The sniffer's account of the RViz + ZED view baseline, whole run: 1 846 MB
+domain-0 multicast clouds master → orin (95.8 %), 75 MB discovery; orin →
+master 1 045 MB multicast ZED image (RViz on the master and the recorder on
+the orin: two readers, so multicast), 9.6 MB discovery.
+
+### What each direction is made of, after the split
+
+Master → orin: nothing is listed, so the 1.9 kB/s is the bridges' discovery
+and AckNacks. `master_to_orin: []`.
+
+Orin → master, per lane, from the bridge's own counters (payload; the wire
+adds RTPS/UDP/IP), RViz + ZED view run:
+
+| lane | msgs in 160 s | payload |
 |---|---:|---:|
-| `/sensing/imu/imu_data` (imu_corrector out) | 100.0 Hz | 99.7 Hz |
-| `/localization/twist_estimator/twist_with_covariance` (gyro_odometer out) | **2.07 Hz** | **13.4 Hz** |
+| `/sensing/camera/zed/imu/data` 100 Hz | 16 737 | 34.7 kB/s |
+| `/tf` (`zed_imu_link`) 100 Hz | 16 737 | 13.0 kB/s |
+| `/sensing/camera/zed/rgb/color/rect/camera_info` 30 Hz | 5 095 | 10.7 kB/s |
+| `/diagnostics` 1 Hz | 169 | 1.4 kB/s |
+| `/tf_static` | 1 | 0 |
+| **subtotal, the checked-in list** | | **~60 kB/s payload, 89 kB/s on the wire** |
+| `/sensing/camera/zed/rgb/color/rect/image/compressed` 30 Hz, only when listed | 5 095 | **7 008 kB/s** |
 
-| the recorders (bag message counts, ~155 s) | one domain | split |
-|---|---:|---:|
-| master: `/sensing/lidar/vlp32/velodyne_points` | **634** | **1 550** |
-| master: `/sensing/lidar/falcon/iv_points` | 634 | 1 550 |
-| orin: ZED image | 5 191 | 5 250 |
-| orin: ZED IMU | 17 254 | 17 421 |
+So: the ZED image at the ZED's rate is **55 Mbit/s of a 100 Mbit/s link**,
+before and after the split alike. The split does not make an image cheap; it
+makes carrying it a line someone wrote, with a `max_hz` beside it. At
+`max_hz: 5` the same panel costs ~9 Mbit/s; at 2 Hz, ~3.7. Without the line,
+opening the panel on the master shows nothing and costs nothing.
 
-| readers, discovery | one domain | split |
-|---|---:|---:|
-| readers of `velodyne_points` / `iv_points` (container + recorder) | 2 | 2 |
-| nodes a fresh `ros2 node list` on the orin discovers | 159 | 3 (domain 0) / 2 (link) |
+### At the real consumers, and in the recordings
 
-Where the baseline's master → orin bytes went (sniffer, whole run):
+| run | Velodyne scans kept by the master's recorder (of ~1 560) | gyro_odometer twist | imu_corrector |
+|---|---:|---:|---:|
+| record, one domain | **625** | **2.0 Hz** | 100.0 Hz |
+| record, split | 1 558 | 14.2 Hz | 100.0 Hz |
+| RViz + record, one domain | **495** | **1.6 Hz** | 100.0 Hz |
+| RViz + record, split | 1 561 | 13.0 Hz | 99.9 Hz |
+| RViz + ZED view + record, one domain | **490** | **1.6 Hz** | 99.0 Hz |
+| RViz + ZED view + record, split | 1 561 | 13.7 Hz | 97.1 Hz |
 
-| class | bytes | share |
-|---|---:|---:|
-| domain 0, **multicast data** | 1 782 MB | 96.2 % |
-| domain 0, unicast discovery | 64 MB | 3.5 % |
-| domain 0, multicast discovery | 3.4 MB | 0.2 % |
-| domain 0, unicast data (what the orin actually subscribed to) | 2.5 MB | 0.1 % |
+The master's recorder is a local reader; it lost 60–69 % of the LiDAR scans
+under the old profile. The writer's socket is backpressured by the full
+egress queue, the send fails, and a best-effort sample lost at the sender is
+lost for every reader. Opening RViz made it worse (495 of 1 561), because a
+third reader adds nothing to the multicast decision but does add a local
+consumer competing for the same stalled writer.
 
-After the split every byte on the wire is in domain 42, unicast: 13.7 MB of
-data orin → master in 160 s (IMU, IMU `/tf`, `camera_info`, diagnostics),
-0.5 MB of discovery both ways together.
+The IMU (reliable) is retransmitted through in every run and reaches
+`imu_corrector` at ~100 Hz; but gyro_odometer, which also needs the IMU's
+`/tf`, fell to 1.6–2.0 Hz whenever the wire was full. With the ZED image
+listed at full rate in the split, imu_corrector dropped to 97 Hz: 55 Mbit/s
+of image on a 100 Mbit/s link is already costing the IMU samples.
+
+### Discovery
+
+A fresh `ros2 node list` on the orin under the old profile discovers 159
+nodes and 624 topics; under the split, 3 nodes and 9 topics in its own
+domain and 2 nodes in the link domain.
 
 ## What this says
 
 - **With the cart's own recorder running, the old profile saturates the
-  link by itself.** Two readers of each raw cloud on the master, so
-  CycloneDDS multicasts 27.5 MB/s of clouds out of the NIC; the 100 Mbit
-  wire carries 12.1 of it and drops the rest, every second, with the orin
-  subscribed to none of it. This is the cart's configuration on every
-  recorded test drive.
-- **The saturation reaches back into the master.** The recorder on the
-  master, a *local* reader, got 634 of 1 550 scans. The writer's socket is
-  backpressured by the full egress queue, the send fails, and a best-effort
-  sample lost at the sender is lost for every reader. That is a real effect
-  of a full transmit queue, not of the token bucket in particular; expect
-  recordings on the cart to have gaps whenever the link was full.
-- **The orin's data still arrives, degraded.** The IMU (reliable) is
-  retransmitted through and reaches `imu_corrector` at 100 Hz either way,
-  but gyro_odometer's twist fell from 13.4 Hz to 2.1 Hz on the saturated
-  link: the `/tf` it needs for the transform arrives late or not at all.
-- **The split removes all of it structurally.** Master → orin is 1.9 kB/s,
-  zero drops, the orin sees 3 nodes instead of 159, and the ZED image is not
-  there for an operator's echo to pull across (6.6 MB/s before). What does
-  cross is exactly `topics.yaml`.
-- **Running the real stack against the bridge found two bugs in my own
-  list** that the earlier, synthetic-consumer version of this simulation
-  could not: the IMU lane was best_effort while `imu_corrector` subscribes
-  reliable (the bridge logged `requesting incompatible QoS` and the consumer
-  would have got nothing), and the ZED's dynamic `/tf` was not listed at all
-  (gyro_odometer would have dropped every sample, silently). Both fixed;
-  both are in this run.
+  link by itself, in the direction the orin never asked for.** Two readers
+  of each raw cloud on the master, so CycloneDDS multicasts 27.5 MB/s of
+  clouds out of the NIC; the 100 Mbit wire carries 12.1–12.5 MB/s of it and
+  drops 140–156k packets per 160 s. This is the cart's configuration on every
+  recorded test drive. Opening RViz changes nothing about it: the wire was
+  already full.
+- **The saturation reaches back into the master.** Its own recorder kept
+  40 % of the LiDAR scans without RViz, 31 % with. Expect the cart's
+  recordings to have gaps wherever the link was full.
+- **Orin → master is what the operator makes it.** With the checked-in list
+  it is ~90 kB/s on the wire. Viewing the ZED image on the master is
+  55 Mbit/s at the camera's 30 Hz, old profile or split; the split only
+  turns that from an accident (a panel opened) into a line in `topics.yaml`
+  with a rate cap next to it, and makes an unlisted panel cost nothing.
+- **The split removes the master → orin leg structurally**: 1.9 kB/s, zero
+  drops, and the orin discovers 3 nodes instead of 159. Nothing on either
+  host can reach the wire except through the bridge's list.
+- **Running the real consumers against the bridge found two errors in my
+  own list** that a synthetic-consumer simulation could not: the IMU lane
+  was best_effort while `imu_corrector` subscribes reliable (the bridge
+  logged `requesting incompatible QoS`; the consumer would have received
+  nothing), and the ZED's dynamic `/tf` was not listed (gyro_odometer would
+  have dropped every sample, silently). Both fixed; both are in these runs.
 
 ## What this does not say
 

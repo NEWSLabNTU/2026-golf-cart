@@ -1,0 +1,8 @@
+== baseline_rviz_record master bag
+Duration: 154.219327470s
+ Topic: /sensing/lidar/falcon/iv_points | Type: sensor_msgs/msg/PointCloud2 | Count: 496 | Serialization Format: cdr
+ Topic: /sensing/lidar/vlp32/velodyne_points | Type: sensor_msgs/msg/PointCloud2 | Count: 495 | Serialization Format: cdr
+== baseline_rviz_record orin bag
+Duration: 174.251861699s
+ Topic: /sensing/camera/zed/rgb/color/rect/image/compressed | Type: sensor_msgs/msg/CompressedImage | Count: 5228 | Serialization Format: cdr
+ Topic: /sensing/camera/zed/imu/data | Type: sensor_msgs/msg/Imu | Count: 17318 | Serialization Format: cdr

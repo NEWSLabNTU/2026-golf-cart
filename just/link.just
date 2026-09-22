@@ -1,8 +1,9 @@
 # The master/orin link.
 #
-# Under the master and orin profiles domain 0 is bound to `lo` and cannot reach
-# the wire; only the link domain (GOLFCART_LINK_DOMAIN_ID, config/runtime.conf)
-# is on the LAN, and its only participant per host is golfcart_domain_bridge,
+# Under the master and orin profiles the stack's domain (50 master, 60 orin,
+# exported as ROS_DOMAIN_ID by scripts/env.sh) is bound to `lo` and cannot
+# reach the wire; only the link domain (10, GOLFCART_LINK_DOMAIN_ID,
+# config/runtime.conf) is on the LAN, and its only participant per host is golfcart_domain_bridge,
 # which copies config/link/topics.yaml across. These recipes look at that
 # domain, measure the wire, and run the two-host simulation that produced
 # docs/research/system/domain-split-link-pressure.md.
@@ -18,25 +19,25 @@ set working-directory := '..'
 default:
     @just --list link
 
-# The link domain is a different ROS domain, so a bare `ros2 topic list` (domain
-# 0, on lo) never shows it. These set ROS_DOMAIN_ID for one command. The daemon
+# The link domain is a different ROS domain, so a bare `ros2 topic list` (this
+# host's stack domain, on lo) never shows it. These set ROS_DOMAIN_ID for one command. The daemon
 # is per domain too (port 11511 + id), so the first call starts one.
 
 # Topics on the wire: `ros2 topic list` in the link domain
 topics:
-    ROS_DOMAIN_ID="${GOLFCART_LINK_DOMAIN_ID:-42}" ros2 topic list -v
+    ROS_DOMAIN_ID="${GOLFCART_LINK_DOMAIN_ID:-10}" ros2 topic list -v
 
 # Nodes on the wire: should be exactly the two bridges
 nodes:
-    ROS_DOMAIN_ID="${GOLFCART_LINK_DOMAIN_ID:-42}" ros2 node list
+    ROS_DOMAIN_ID="${GOLFCART_LINK_DOMAIN_ID:-10}" ros2 node list
 
 # Rate of one topic as it crosses the link: `just link hz /sensing/camera/zed/imu/data`
 hz TOPIC:
-    ROS_DOMAIN_ID="${GOLFCART_LINK_DOMAIN_ID:-42}" ros2 topic hz {{TOPIC}}
+    ROS_DOMAIN_ID="${GOLFCART_LINK_DOMAIN_ID:-10}" ros2 topic hz {{TOPIC}}
 
 # Delay of one topic as it crosses the link (needs a header stamp)
 delay TOPIC:
-    ROS_DOMAIN_ID="${GOLFCART_LINK_DOMAIN_ID:-42}" ros2 topic delay {{TOPIC}}
+    ROS_DOMAIN_ID="${GOLFCART_LINK_DOMAIN_ID:-10}" ros2 topic delay {{TOPIC}}
 
 # What the LAN interface carries, per second, for SECS seconds. The same
 # instrument the simulation uses on its veth, so the numbers compare.
@@ -67,10 +68,14 @@ bridge:
 #
 #   just link sim baseline
 #   just link sim split
+#   LINK_SIM_RVIZ=1 just link sim split                        # + the real RViz on the master
+#   LINK_SIM_RVIZ=1 LINK_SIM_ZED_IMAGE=1 just link sim split   # + RViz showing the ZED image
 #   just link sim-compare log/link_sim/baseline_<ts> log/link_sim/split_<ts>
+#   just link sim-matrix log/link_sim/*                        # one table, both directions
 #
 # LINK_SIM_STARTUP / LINK_SIM_STEADY (seconds) shorten it; LINK_SIM_LINK_RATE
-# changes the shaping (e.g. 1gbit for the interlink).
+# changes the shaping (e.g. 1gbit for the interlink). RViz needs TurboVNC's
+# Xvnc, which the setup's turbovnc step installs.
 
 # Run the two-host link simulation: MODE is baseline or split
 sim MODE:
@@ -79,3 +84,7 @@ sim MODE:
 # Side-by-side tables from two simulation runs
 sim-compare BASELINE SPLIT:
     ./scripts/testing/link_sim/summarize.py {{BASELINE}} {{SPLIT}}
+
+# One table across any number of runs: both directions, drops, scans kept
+sim-matrix +RUNS:
+    ./scripts/testing/link_sim/matrix.py {{RUNS}}

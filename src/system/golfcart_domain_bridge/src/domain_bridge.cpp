@@ -4,8 +4,8 @@
 // golfcart_domain_bridge - the one participant a host puts on the master/orin
 // link.
 //
-// Two rclcpp contexts in one process: one in the internal domain (0, bound to
-// lo by config/cyclonedds/<role>.xml) and one in the link domain (bound to the
+// Two rclcpp contexts in one process: one in the internal domain (50 on the
+// master, 60 on the orin; ROS_DOMAIN_ID, bound to lo by config/cyclonedds/<role>.xml) and one in the link domain (bound to the
 // LAN interface). For every topic in config/link/topics.yaml a generic
 // subscription in the source domain hands serialized bytes to a generic
 // publisher in the other. No type is deserialized, so the bridge does not
@@ -19,7 +19,7 @@
 //
 // Usage:
 //   domain_bridge --role master|orin [--config topics.yaml]
-//                 [--internal-domain 0] [--link-domain 42]
+//                 [--internal-domain 50] [--link-domain 10]
 // Defaults come from the environment scripts/env.sh exports: GOLFCART_HOST,
 // GOLFCART_LINK_TOPICS, GOLFCART_LINK_DOMAIN_ID. Anything after --ros-args is
 // left to rclcpp, which is how play_launch's node remaps reach the nodes.
@@ -48,7 +48,7 @@ struct Args
   std::string role;
   std::string config;
   std::size_t internal_domain{0};
-  std::size_t link_domain{42};
+  std::size_t link_domain{10};
 };
 
 std::string env_or(const char * name, const std::string & fallback)
@@ -71,7 +71,7 @@ Args parse_args(int argc, char ** argv)
   a.role = env_or("GOLFCART_HOST", "");
   a.config = env_or("GOLFCART_LINK_TOPICS", "");
   a.internal_domain = parse_domain(env_or("ROS_DOMAIN_ID", "0"), "ROS_DOMAIN_ID");
-  a.link_domain = parse_domain(env_or("GOLFCART_LINK_DOMAIN_ID", "42"), "GOLFCART_LINK_DOMAIN_ID");
+  a.link_domain = parse_domain(env_or("GOLFCART_LINK_DOMAIN_ID", "10"), "GOLFCART_LINK_DOMAIN_ID");
 
   for (int i = 1; i < argc; ++i) {
     const std::string flag = argv[i];
@@ -140,6 +140,7 @@ struct Lane
   rclcpp::GenericSubscription::SharedPtr sub;
   std::atomic<uint64_t> forwarded{0};
   std::atomic<uint64_t> throttled{0};
+  std::atomic<uint64_t> bytes{0};  // serialized payload forwarded; the wire adds RTPS/UDP/IP
   std::chrono::steady_clock::time_point last_sent{};
   std::chrono::steady_clock::duration min_gap{};
 };
@@ -183,6 +184,7 @@ void add_lanes(
           }
           l->pub->publish(*msg);
           l->forwarded.fetch_add(1, std::memory_order_relaxed);
+          l->bytes.fetch_add(msg->size(), std::memory_order_relaxed);
         });
     } catch (const std::exception & e) {
       RCLCPP_ERROR(
@@ -268,10 +270,11 @@ int main(int argc, char ** argv)
     std::chrono::seconds(10), [&lanes, internal_node]() {
       for (const auto & l : lanes) {
         RCLCPP_INFO(
-          internal_node->get_logger(), "%s %s forwarded=%lu throttled=%lu",
+          internal_node->get_logger(), "%s %s forwarded=%lu throttled=%lu bytes=%lu",
           l->direction.c_str(), l->spec.topic.c_str(),
           static_cast<unsigned long>(l->forwarded.load(std::memory_order_relaxed)),
-          static_cast<unsigned long>(l->throttled.load(std::memory_order_relaxed)));
+          static_cast<unsigned long>(l->throttled.load(std::memory_order_relaxed)),
+          static_cast<unsigned long>(l->bytes.load(std::memory_order_relaxed)));
       }
     });
 

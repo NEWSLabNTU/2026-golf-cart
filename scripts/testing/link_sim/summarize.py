@@ -167,17 +167,26 @@ def read_classes(d):
 
 
 def read_bridge(d):
-    """Last forwarded/throttled count per lane from the bridge logs."""
+    """Per lane, from the LAST stats line of each bridge log: forwarded and
+    throttled counts and payload bytes, plus the seconds between the first and
+    last stats line so a rate can be given. The orin's `out` lanes are what it
+    put on the wire; the master's `out` lanes are the other direction."""
     out = {}
     for host in ("master", "orin"):
         path = os.path.join(d, f"{host}_bridge.log")
         if not os.path.exists(path):
             continue
+        first = {}
         with open(path) as f:
             for line in f:
-                m = re.search(r"\] (out|in) (\S+) forwarded=(\d+) throttled=(\d+)", line)
-                if m:
-                    out[f"{host} {m.group(1)} {m.group(2)}"] = (int(m.group(3)), int(m.group(4)))
+                m = re.search(r"\[(\d+)\.\d+\] \[\S+\]: (out|in) (\S+) forwarded=(\d+) throttled=(\d+)(?: bytes=(\d+))?", line)
+                if not m:
+                    continue
+                key = f"{host} {m.group(2)} {m.group(3)}"
+                t = int(m.group(1))
+                first.setdefault(key, t)
+                out[key] = {"forwarded": int(m.group(4)), "throttled": int(m.group(5)),
+                            "bytes": int(m.group(6) or 0), "seconds": max(t - first[key], 1)}
     return out
 
 
@@ -193,18 +202,21 @@ def one(d):
     name = os.path.basename(d.rstrip("/"))
     w = windows(d)
     lines = [f"# link_sim: {name}", ""]
-    lines.append("| window | s | tx mean kB/s | tx peak kB/s (Mbit/s) | rx mean kB/s | rx peak kB/s (Mbit/s) | tx pkt/s mean/peak | rx pkt/s mean/peak |")
-    lines.append("|---|---:|---:|---:|---:|---:|---:|---:|")
-    for k in ("startup", "steady", "echo"):
-        s = w.get(k)
-        if not s:
-            continue
-        lines.append(
-            f"| {k} | {s['seconds']} | {kb(s['tx_mean'])} | {kb(s['tx_peak'])} ({mbit(s['tx_peak'])}) "
-            f"| {kb(s['rx_mean'])} | {kb(s['rx_peak'])} ({mbit(s['rx_peak'])}) "
-            f"| {s['txp_mean']:.0f} / {s['txp_peak']} | {s['rxp_mean']:.0f} / {s['rxp_peak']} |")
-    lines.append("")
-    lines.append("tx = master -> orin, rx = orin -> master, as seen at the master's end of the veth.")
+    for direction, pre in (("master -> orin (Advantech transmits)", "tx"), ("orin -> master (Advantech receives)", "rx")):
+        lines.append(f"## {direction}")
+        lines.append("")
+        lines.append("| window | s | mean kB/s | mean Mbit/s | peak second kB/s | peak Mbit/s | pkt/s mean | pkt/s peak |")
+        lines.append("|---|---:|---:|---:|---:|---:|---:|---:|")
+        for k in ("startup", "steady", "echo"):
+            s = w.get(k)
+            if not s:
+                continue
+            lines.append(
+                f"| {k} | {s['seconds']} | {kb(s[pre + '_mean'])} | {mbit(s[pre + '_mean'])} "
+                f"| {kb(s[pre + '_peak'])} | {mbit(s[pre + '_peak'])} "
+                f"| {s[pre + 'p_mean']:.0f} | {s[pre + 'p_peak']} |")
+        lines.append("")
+    lines.append("Counted at the master's end of the veth, both directions, one second at a time.")
     lines.append("")
 
     q = read_qdisc(d)
@@ -257,12 +269,16 @@ def one(d):
 
     br = read_bridge(d)
     if br:
-        lines.append("## Bridge lanes (forwarded / throttled, at the last report)")
+        lines.append("## Bridge lanes: what each host put on the wire, per topic")
         lines.append("")
-        lines.append("| lane | forwarded | throttled |")
-        lines.append("|---|---:|---:|")
-        for k, (f, t) in br.items():
-            lines.append(f"| {k} | {f} | {t} |")
+        lines.append("Payload bytes from the bridge's own counters; the wire adds ~60-100 B of RTPS/UDP/IP per sample, more for fragmented ones.")
+        lines.append("")
+        lines.append("| host | direction | topic | msgs | payload kB/s | throttled |")
+        lines.append("|---|---|---|---:|---:|---:|")
+        for k, v in br.items():
+            host, direction, topic = k.split(" ", 2)
+            arrow = "-> wire" if direction == "out" else "wire ->"
+            lines.append(f"| {host} | {arrow} | {topic} | {v['forwarded']} | {v['bytes'] / v['seconds'] / 1000:.1f} | {v['throttled']} |")
         lines.append("")
     return "\n".join(lines)
 
@@ -278,11 +294,11 @@ def compare(a, b):
         if not sa or not sb:
             continue
         for metric, label, fmt in (
-            ("tx_mean", "tx mean kB/s", kb), ("tx_peak", "tx peak kB/s", kb),
-            ("rx_mean", "rx mean kB/s", kb), ("rx_peak", "rx peak kB/s", kb),
-            ("txp_mean", "tx pkt/s mean", lambda v: f"{v:.0f}"), ("txp_peak", "tx pkt/s peak", str),
-            ("rxp_mean", "rx pkt/s mean", lambda v: f"{v:.0f}"), ("rxp_peak", "rx pkt/s peak", str),
-            ("tx_total", "tx total bytes", str), ("rx_total", "rx total bytes", str),
+            ("tx_mean", "master->orin mean kB/s", kb), ("tx_peak", "master->orin peak kB/s", kb),
+            ("rx_mean", "orin->master mean kB/s", kb), ("rx_peak", "orin->master peak kB/s", kb),
+            ("txp_mean", "master->orin pkt/s mean", lambda v: f"{v:.0f}"), ("txp_peak", "master->orin pkt/s peak", str),
+            ("rxp_mean", "orin->master pkt/s mean", lambda v: f"{v:.0f}"), ("rxp_peak", "orin->master pkt/s peak", str),
+            ("tx_total", "master->orin total bytes", str), ("rx_total", "orin->master total bytes", str),
         ):
             va, vb = sa[metric], sb[metric]
             change = "n/a" if va == 0 else f"{(vb - va) / va * 100:+.1f}%"

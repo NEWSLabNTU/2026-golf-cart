@@ -12,24 +12,27 @@
   topic list` on the orin pulled the full endpoint set across. The link
   saturated in bursts and dropped. The split:
 
-    * Domain 0 (the default; ROS_DOMAIN_ID unset) is bound to `lo`. It is the
-      stack, exactly as loopback.xml runs it on a single machine. Nothing in it
-      can reach the wire, because the interface it is bound to has no wire.
+    * Domain 50 (GOLFCART_MASTER_DOMAIN_ID; scripts/env.sh exports it as
+      ROS_DOMAIN_ID for the master role) is bound to `lo`. It is the stack,
+      exactly as loopback.xml runs it on a single machine. Nothing in it can
+      reach the wire, because the interface it is bound to has no wire. The
+      orin's stack is domain 60 on its own lo; the two never meet.
 
-    * Domain ${GOLFCART_LINK_DOMAIN_ID} (42 unless config/runtime.conf says
-      otherwise) is bound to the LAN address. Its only participant on this host
-      is golfcart_domain_bridge, which copies the topics named in
-      config/link/topics.yaml between the two. The orin's side is the mirror.
+    * Domain 10 (GOLFCART_LINK_DOMAIN_ID) is bound to the LAN address. Its
+      only participant on this host is golfcart_domain_bridge, which copies
+      the topics named in config/link/topics.yaml between the two. The orin's
+      side is the mirror.
 
-  The env reference in the Id attribute is expanded by CycloneDDS itself, so a
-  bare `ROS_DOMAIN_ID=42 ros2 topic list` in a fresh shell lands in the right
-  domain, and the default written here has to match the one in runtime.conf.
+  The env references in the Id attributes are expanded by CycloneDDS itself,
+  and the defaults written here equal the ones in config/runtime.conf, so a
+  process that skipped scripts/env.sh is still matched by the right section
+  once its ROS_DOMAIN_ID is right. One that has ROS_DOMAIN_ID unset lands in
+  domain 0, which no section here matches: CycloneDDS defaults, autodetermined
+  interface, an empty graph. That is the one way to put a stray participant on
+  the wire, and `just service doctor` reports the domain a shell is in.
 
-  The Id="any" section carries what both domains share. CycloneDDS merges it
-  with whichever specific section matches, and a process started in any other
-  domain id gets CycloneDDS defaults, which autodetermine an interface: that is
-  the one way to put a stray participant on the wire, and it takes an explicit
-  ROS_DOMAIN_ID to do it.
+  The Id="any" section carries what both domains share; CycloneDDS merges it
+  with whichever specific section matches.
 
   Link-domain choices, and why:
 
@@ -57,8 +60,10 @@
 -->
 <CycloneDDS xmlns="https://cdds.io/config" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://cdds.io/config https://raw.githubusercontent.com/eclipse-cyclonedds/cyclonedds/master/etc/cyclonedds.xsd">
 
-  <!-- The stack. Byte-for-byte what loopback.xml does on a single machine. -->
-  <Domain Id="0">
+  <!-- The stack, domain 50 (GOLFCART_MASTER_DOMAIN_ID; env.sh exports it as
+       ROS_DOMAIN_ID on this host). Byte-for-byte what loopback.xml does on a
+       single machine, on a different id. -->
+  <Domain Id="${GOLFCART_STACK_DOMAIN_ID:-50}">
     <General>
       <Interfaces>
         <NetworkInterface autodetermine="false" name="lo" priority="default" multicast="default" />
@@ -71,7 +76,7 @@
   </Domain>
 
   <!-- The link. One bridge participant, plus whatever CLI you point at it. -->
-  <Domain Id="${GOLFCART_LINK_DOMAIN_ID:-42}">
+  <Domain Id="${GOLFCART_LINK_DOMAIN_ID:-10}">
     <General>
       <Interfaces>
         <NetworkInterface autodetermine="false" address="192.168.125.100" priority="default" multicast="default" />

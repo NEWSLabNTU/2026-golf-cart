@@ -1,0 +1,8 @@
+vm (master -> orin):
+qdisc tbf 8013: root refcnt 33 rate 100Mbit burst 128Kb lat 73.4ms 
+ Sent 1880007436 bytes 1444968 pkt (dropped 137358, overlimits 4226422 requeues 0) 
+ backlog 0b 0p requeues 0
+vo (orin -> master):
+qdisc tbf 8014: root refcnt 33 rate 100Mbit burst 128Kb lat 73.4ms 
+ Sent 120745953 bytes 139683 pkt (dropped 0, overlimits 83339 requeues 0) 
+ backlog 0b 0p requeues 0

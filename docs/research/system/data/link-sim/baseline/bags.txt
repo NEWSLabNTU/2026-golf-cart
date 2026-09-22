@@ -1,2 +1,0 @@
-bag master: Duration: 153.015712563s Messages: 78937 
-bag orin: Duration: 173.024074817s Messages: 27639 
