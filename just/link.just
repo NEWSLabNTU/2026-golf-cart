@@ -58,8 +58,11 @@ pressure IFACE="enP5p3s0" SECS="60":
 
 # Multicast group memberships per interface
 groups:
-    @echo "== IGMP memberships (/proc/net/igmp) =="
-    @ip maddr show | grep -A2 -E '^[0-9]+:' | grep -E '^[0-9]+:|inet ' || true
+    @echo "== joined IPv4 multicast groups, per interface (ip maddr) =="
+    @ip -4 maddr show | grep -E '^[0-9]+:|inet ' || true
+    @echo
+    @echo "239.255.0.1 is CycloneDDS SPDP and is expected on the LAN NIC."
+    @echo "Any 239.255.0.x DATA group there means a profile did not take."
 
 # Two hosts, one wire, on this machine: network namespaces joined by a veth
 # shaped to 100 Mbit/s, the REAL master stack (golfcart.launch.yaml

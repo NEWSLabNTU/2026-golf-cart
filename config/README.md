@@ -131,6 +131,46 @@ grep -vE '^\s*(#|$)' config/recording/master_topics.txt | tr -d ' ' \
 A stale entry records zero messages while still appearing in `ros2 bag info`,
 which reads as "the sensor was quiet" rather than "the name is wrong".
 
+## Keeping the master/orin link quiet: `AllowMulticast`
+
+`cyclonedds/master.xml` and `cyclonedds/orin.xml` bind one domain to the LAN
+address and set
+
+```xml
+<AllowMulticast>spdp</AllowMulticast>
+```
+
+That one element is what keeps the sensor traffic off the wire, and it is not
+a tuning preference — with the default it saturates a 100 Mb/s segment.
+
+CycloneDDS picks a writer's destination by coverage: as soon as a topic has
+**two or more reader processes**, one multicast datagram beats several unicast
+ones and the writer switches to the multicast locator. The interface bound
+here is the LAN NIC, so that one datagram leaves the machine. On the master
+every raw cloud already has two readers — the preprocessing container and the
+recorder — and opening RViz makes three. The orin subscribes to none of it.
+
+With `spdp`, multicast carries SPDP participant announcements only. Data and
+SEDP endpoint discovery go unicast to each matched reader, and a local
+reader's unicast locator is this host's own address, which the kernel routes
+over `lo`. Nothing of it reaches the NIC.
+
+The trade: a writer with N local readers sends N copies over `lo` instead of
+one multicast datagram. That is loopback bandwidth and memcpy in exchange for
+not putting the bytes on a shared wire, and it is why `SocketSendBufferSize`
+below it matters.
+
+What this does **not** do is decide *which* topics may cross. One domain means
+anything either host subscribes to is fetched across the link, so an operator
+who opens a ZED image panel in RViz on the master pulls that stream over at
+the camera's full rate. See
+[`docs/research/system/link-multicast-scope.md`](../docs/research/system/link-multicast-scope.md)
+for the measurements on both points, and `just link sim baseline|spdp` to
+reproduce them.
+
+`loopback.xml` keeps `default`: it is pinned to `lo`, where there is no wire
+to flood.
+
 ## Choosing the container mode
 
 `runtime.conf` holds `GOLFCART_CONTAINER_MODE`, which every `play_launch`

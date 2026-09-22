@@ -50,6 +50,7 @@ Grouped families live in `just/*.just` and are reached as `just <module> <recipe
 | `tool` | RViz, PlotJuggler, TUI, keyboard controller |
 | `diag` | diagnostic graph: QoS checks, leaf listing, fault injection |
 | `gnss` | F9P / RTK: `check` the setup, `test` the receiver against the NTRIP caster |
+| `link` | the master/orin wire: what crosses it, `pressure`, `groups`, the two-host `sim` |
 
 `build`, `test`, `clean`, `launch*`, `stop-all` and `logs` stay at the root —
 they are the daily verbs, and a module may not share a name with a recipe
@@ -162,6 +163,66 @@ of that in a new script; source `scripts/env.sh` and let it resolve.
 
 Units state their role with `GOLFCART_ENV_ROLE`, which outranks `config/host`: a
 unit must not depend on a file someone can edit underneath it.
+
+### The master/orin link: one domain, `AllowMulticast=spdp`
+
+Both hosts run **one** ROS domain, bound to the LAN address, and see each
+other's whole graph. There is no bridge and no second domain: an earlier
+`perf/domain-split` branch put the stack on `lo` and bridged a link domain
+across, and it was reverted because every cross-host topic then paid a bridge
+hop — an extra copy, an extra scheduling boundary and extra jitter on exactly
+the topics `gyro_odometer` time-syncs against.
+
+What keeps the wire quiet is one element in
+`config/cyclonedds/{master,orin}.xml`:
+
+```xml
+<AllowMulticast>spdp</AllowMulticast>
+```
+
+**The storm was never about sharing a domain.** CycloneDDS picks a writer's
+destination by coverage: once a topic has two or more reader *processes*, one
+multicast datagram beats several unicast ones and the writer switches to the
+multicast locator. The interface bound here is the LAN NIC, so that datagram
+leaves the machine whether or not the other host wants it. On the master every
+raw cloud already has two readers — the preprocessing container and the
+recorder — and opening RViz makes three. Under `spdp`, multicast carries SPDP
+participant announcements only; samples and SEDP go unicast to each matched
+reader, and a local reader's locator is this host's own address, which the
+kernel routes over `lo`.
+
+Measured with the real stack in the two-namespace simulation, 100 Mbit/s wire,
+RViz open, both recorders running:
+
+| | `default` | `spdp` |
+|---|---:|---:|
+| master → orin, steady | ~12.5 MB/s (the ceiling) | ~1 MB/s |
+| of which point cloud multicast | 1.75 GB/run | **none** |
+| Velodyne scans kept by the master's own recorder | 647 of ~1560 | 1549 |
+| `gyro_odometer` twist | 2.2 Hz | 14.5 Hz |
+
+The trade, and the two things it does **not** buy:
+
+- A writer with N local readers now sends N copies over `lo` rather than one
+  multicast datagram. That is why `SocketSendBufferSize` is 16 MB, and why
+  `net.core.wmem_max` must be at least that — CycloneDDS treats an unmet `min`
+  as fatal to the domain, so every node dies at startup with
+  `rmw_create_node: failed to create domain`. `just service doctor` checks both
+  buffers now.
+- **No allowlist.** One domain means a subscription anywhere fetches the topic
+  across the link. Opening an Image panel on the ZED's compressed topic in RViz
+  on the master costs ~55 Mbit/s for as long as it is open. `max_hz` belonged to
+  the bridge and went with it. Keep full-rate image panels closed on the master;
+  images are recorded on the orin's local disk.
+- **Discovery still crosses.** SEDP is unicast either way, so the hosts still
+  exchange their full endpoint sets — ~160 nodes and ~624 topics each — and
+  every fresh `ros2 topic list` pulls it again. That is the residual, bounded by
+  graph size rather than sensor rates.
+
+`just link topics|pressure|groups` inspect it; `just link sim baseline|spdp`
+reproduces the table above with no root and no vehicle. Full measurements:
+[docs/research/system/link-multicast-scope.md](docs/research/system/link-multicast-scope.md).
+`loopback.xml` keeps `default` — it is pinned to `lo`, where there is no wire.
 
 ### Recording: first-hand topics only
 

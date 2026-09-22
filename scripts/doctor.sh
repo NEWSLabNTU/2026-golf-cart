@@ -260,6 +260,26 @@ else
     ok "net.core.rmem_max = ${rmem} (>= ${MIN_RMEM})"
 fi
 
+# The send side, and it fails exactly as hard. c228d87 added
+# <SocketSendBufferSize min="16MB"> to every profile so the LiDARs hold 10 Hz,
+# and CycloneDDS treats an unmet `min` as fatal to the DOMAIN, not as a
+# warning: every node dies in its first second with "rmw_create_node: failed
+# to create domain" and the real reason one line above it on stderr. This was
+# missed here because the section only ever checked rmem_max, while the two
+# sysctls are set by different generations of the setup step -- the orin had
+# rmem_max at 2 GB and wmem_max at the kernel's 212992. See docs/roadblocks.md.
+MIN_WMEM=16777216   # the min= in config/cyclonedds/*.xml
+wmem=$(sysctl -n net.core.wmem_max 2>/dev/null || cat /proc/sys/net/core/wmem_max 2>/dev/null || echo "")
+if ! printf '%s' "$wmem" | grep -Eq '^[0-9]+$'; then
+    warn "net.core.wmem_max unreadable on this system"
+elif [ "$wmem" -lt "$MIN_WMEM" ]; then
+    fail "net.core.wmem_max = ${wmem} (< ${MIN_WMEM} required by our DDS profiles)"
+    info "CycloneDDS will refuse to create a domain; every node exits at startup."
+    info "Fix: ./setup.sh --rerun cyclonedds-sysctl"
+else
+    ok "net.core.wmem_max = ${wmem} (>= ${MIN_WMEM})"
+fi
+
 fi  # GOLFCART_RMW = cyclonedds (kernel buffer section)
 
 # ── 4. golfcart-* user units ─────────────────────────────────────────────────

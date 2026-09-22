@@ -111,15 +111,30 @@ build *FLAGS="":
     # ament_cmake package in the workspace dies on
     #     CMake Error: Unknown argument --release
     CARGO_ARGS=(--cargo-args --release)
-    if ! python3 -c 'import colcon_cargo' 2>/dev/null; then
+    # The module is colcon_cargo_ros2. NOT colcon_cargo: that is a different,
+    # upstream package, and testing for it here reported "no cargo extension"
+    # on a machine that had colcon-cargo-ros2 installed and could build the
+    # Rust packages perfectly well.
+    if ! python3 -c 'import colcon_cargo_ros2' 2>/dev/null; then
         echo "→ colcon cargo extension not installed — skipping the Rust packages"
         echo "  (./setup.sh --rerun colcon-cargo-ros2 installs it; CPU NDT and the"
         echo "   link simulation do not need them)"
-        # The three packages with a Cargo.toml, plus the one ament_cmake
-        # package that build-depends on one of them. Keep this list in step
-        # with `colcon list --base-paths src --packages-above <the cargo ones>`.
-        IGNORE_PKGS+=(cuda_ndt_matcher cuda_ndt_matcher_launch
-                      golfcart_aruco_detector golfcart_vehicle_interface)
+        # Exactly the packages with a Cargo.toml, and no more. Naming them
+        # here is also what lets their ament_cmake dependents build: colcon
+        # skips an unbuildable ament_cargo package SILENTLY, then refuses to
+        # build anything that depends on it because the package.sh it would
+        # source is missing. Listed in --packages-ignore instead, the package
+        # is out of scope and the dependent builds.
+        #
+        # cuda_ndt_matcher_launch must NOT be added here. It is ament_cmake,
+        # it installs launch and config files only, and its tie to the Rust
+        # crate is a bare <exec_depend>. It is also what
+        # tier4_localization_component.launch.xml includes for pose_source
+        # `ndt` as well as `cuda_ndt` - Autoware's own NDT runs through that
+        # package's drop-in - so skipping it leaves a workspace whose stack
+        # cannot launch at all, with only "package not found" to say why.
+        IGNORE_PKGS+=(cuda_ndt_matcher golfcart_aruco_detector
+                      golfcart_vehicle_interface)
         CARGO_ARGS=()
     fi
     IGNORE_ARGS=()

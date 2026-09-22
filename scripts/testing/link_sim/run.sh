@@ -6,15 +6,22 @@
 #
 # What runs, and what is real:
 #
+# WHAT IS BEING MEASURED, AND THEREFORE WHAT HAS TO BE REAL: routing. Which
+# topic leaves which interface, to how many readers, as multicast or unicast.
+# CycloneDDS decides that from the FLOW - publishers, subscribers, and how many
+# reader PROCESSES a writer has - and never from what a sample contains. So the
+# flow here is the one `just launch-all` produces, on both hosts, and only the
+# sample bytes are synthetic.
+#
 #   master   the REAL stack: `ros2 launch golfcart_launch golfcart.launch.yaml
-#            host:=master`, drivers off, CPU NDT and CPU preprocessing (this box
-#            has no colcon cargo extension for the Rust matcher; the DDS graph
-#            is the same). ~157 nodes, ~620 topics. Plus the REAL recorder,
-#            `ros2 bag record` on config/recording/master_topics.txt, because
-#            the recorder is a second reader of every raw cloud and runs on
-#            every test drive.
-#   orin     synthetic_sensors.py orin (the ZED X's topics at the ZED's rates,
-#            sizes from the wrapper config and cart bags), the REAL recorder on
+#            host:=master` at launch-all's own defaults - use_cuda true, so
+#            pointcloud_backend cuda, and pose_source cuda_ndt. ~160 nodes,
+#            ~624 topics. Plus the REAL recorder, `ros2 bag record` on
+#            config/recording/master_topics.txt, because the recorder is a
+#            second reader of every raw cloud and runs on every test drive.
+#   orin     the REAL stack too: `golfcart.launch.yaml host:=orin`, as
+#            launch-all starts it there, plus synthetic_sensors.py orin for the
+#            ZED X's topics and the REAL recorder on
 #            config/recording/orin_topics.txt.
 #   drivers  synthetic_sensors.py master: VLP-32C, Falcon, three GMSL cameras,
 #            vehicle status, on the real topic names with the real point and
@@ -139,9 +146,13 @@ set +u
 set -u
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 unset ROS_DOMAIN_ID
-# The sensor kit reads these from the environment (config/sensors.conf). No
-# camera driver: gscam with no device hangs, and the GMSL topics come from the
-# synthetic drivers anyway. IMU from the ZED, as the cart runs today.
+# The sensor kit reads these from the environment (config/sensors.conf).
+# CAMERA_MODEL=none rather than the cart's gmslcam: there are no capture
+# devices here, and with launch_sensing_driver:=false the camera launch is not
+# reached anyway. It costs the flow nothing, because the camera TOPICS - the
+# part routing depends on - are published by synthetic_sensors.py under the
+# real names, and their subscribers (the recorder, RViz) are real.
+# IMU_SOURCE=zed as the cart runs today.
 export CAMERA_MODEL=none IMU_SOURCE=zed
 # One domain in both modes: this experiment changes the multicast scope and
 # nothing else, so the DDS graph on either side of the comparison is the same.
@@ -185,6 +196,15 @@ PYX
     [ $? -eq 0 ] || exit 1
 done
 diff -u "${REPO_ROOT}/config/cyclonedds/master.xml" "$OUT/master.xml" > "$OUT/profiles.diff"
+# Provenance. profiles.diff only shows the one element this script rewrites,
+# which says nothing about whether the checked-out profile was itself edited
+# to fit the machine the simulation is running on. Record that too, so a run
+# taken on a box that cannot meet the real profile's socket buffers carries
+# the deviation with it instead of looking like the vehicle's configuration.
+git -C "$REPO_ROOT" diff -- config/cyclonedds > "$OUT/profile_local_edits.diff" 2>/dev/null || true
+if [ -s "$OUT/profile_local_edits.diff" ]; then
+    echo "link_sim: WARNING config/cyclonedds has uncommitted edits; see profile_local_edits.diff"
+fi
 MASTER_URI="file://$OUT/master.xml"
 ORIN_URI="file://$OUT/orin.xml"
 MASTER_ENV=(CYCLONEDDS_URI="$MASTER_URI" GOLFCART_HOST=master ROS_DOMAIN_ID="$DOMAIN")
@@ -289,15 +309,53 @@ T0=$(date +%s)
 mark() { echo "$1 $(( $(date +%s) - T0 ))" >> "$OUT/phases.txt"; }
 mark start
 
+# What is deliberately NOT passed, and why it is the whole point of this file.
+#
+# This simulation exists to measure ROUTING: which topic goes out of which
+# interface, to how many readers, over multicast or unicast. That is decided by
+# the DDS FLOW - who publishes, who subscribes, and how many reader processes a
+# writer has - and not at all by what the samples contain. So the sample bytes
+# are synthetic and the flow must be the real one.
+#
+# Which means the launch arguments have to be the ones `just launch-all` uses.
+# Only the four that stand in for absent hardware are overridden:
+#
+#   launch_sensing_driver:=false    no LiDAR, no camera, no GNSS on this box;
+#                                   synthetic_sensors.py publishes those topics
+#                                   instead, so the flow keeps its sources
+#   launch_vehicle_interface:=false no CAN bus
+#   use_gnss:=false                 no receiver
+#   rviz:=false                     RViz is started separately below, so it can
+#                                   be the variable under test
+#
+# Everything else is left at golfcart.launch.yaml's defaults, which is what the
+# unit gets under launch-all: use_cuda true, therefore pointcloud_backend cuda,
+# and pose_source cuda_ndt. Those two are NOT cosmetic here. The CUDA backend
+# replaces three preprocessing nodes per LiDAR with one
+# CudaPointcloudPreprocessorNode and carries the cloud over cuda_blackboard, so
+# it changes the READER COUNT on exactly the topics whose multicast decision is
+# being measured. An earlier revision of this file pinned `use_cuda:=false
+# pose_source:=ndt` because the workstation had no colcon cargo extension; that
+# made the run cheap and the result not comparable.
+
 # ── orin ─────────────────────────────────────────────────────────────────────
+# The orin runs its REAL stack, as `just launch-all` starts it there. Without
+# this the orin was a bare publisher plus a recorder: two participants against
+# the master's ~160, subscribing to nothing the master sends. Its discovery
+# traffic, its subscriptions and its share of the link were all missing from
+# the measurement.
 spawn_orin python3 "$SCRIPT_DIR/synthetic_sensors.py" orin > "$OUT/orin_sensors.log" 2>&1
+spawn_orin ros2 launch golfcart_launch golfcart.launch.yaml host:=orin \
+    launch_sensing_driver:=false launch_vehicle_interface:=false \
+    use_gnss:=false rviz:=false \
+    > "$OUT/orin_stack.log" 2>&1
 spawn_orin ros2 bag record -o "$OUT/bags/orin" "${ORIN_TOPICS[@]}" > "$OUT/orin_record.log" 2>&1
 
 # ── master ───────────────────────────────────────────────────────────────────
 spawn_master python3 "$SCRIPT_DIR/synthetic_sensors.py" master > "$OUT/master_sensors.log" 2>&1
 spawn_master ros2 launch golfcart_launch golfcart.launch.yaml host:=master \
     launch_sensing_driver:=false launch_vehicle_interface:=false \
-    use_cuda:=false pose_source:=ndt use_gnss:=false rviz:=false \
+    use_gnss:=false rviz:=false \
     > "$OUT/master_stack.log" 2>&1
 sleep 20  # let the containers exist before the recorder's discovery burst
 spawn_master ros2 bag record -o "$OUT/bags/master" "${MASTER_TOPICS[@]}" > "$OUT/master_record.log" 2>&1
@@ -379,6 +437,56 @@ trap - EXIT
 for b in master orin; do
     echo "bag $b: $(on_master ros2 bag info "$OUT/bags/$b" 2>/dev/null | grep -E 'Duration|Messages' | tr -s ' ' | tr '\n' ' ')"
 done > "$OUT/bags.txt"
+# Per-topic counts, which matrix.py reads as "scans kept". This is the metric
+# that says whether the pipeline was healthy while the link was being measured,
+# so it has to survive the bags being deleted afterwards - they are several GB
+# and nothing else reads them.
+RUN_NAME=$(basename "$OUT")
+for b in master orin; do
+    echo "== ${RUN_NAME} ${b} bag"
+    on_master ros2 bag info "$OUT/bags/$b" 2>/dev/null \
+        | grep -E 'Duration|Topic: .*(velodyne_points|iv_points|image/compressed|imu/data)'
+done > "$OUT/bag_counts.txt"
 python3 "$SCRIPT_DIR/summarize.py" "$OUT" > "$OUT/summary.md"
+
+# ── validity gate ────────────────────────────────────────────────────────────
+#
+# A quiet link is only good news if the stack was busy. A run where the
+# publishers never started, the stack died in startup or the recorder attached
+# to nothing also produces a beautifully empty wire, and read on its own it
+# looks exactly like the result this experiment is trying to find. So state the
+# work done BEFORE the link numbers, and refuse to call the run usable when
+# there is none.
+#
+# The threshold is deliberately loose. It is not a performance bar - the
+# baseline leg is EXPECTED to do badly, that is the finding - it only
+# separates "the pipeline ran" from "nothing happened".
+EXPECT_SCANS=$(( (STARTUP + STEADY) * 10 * 60 / 100 ))   # 10 Hz, 60% of wall
+{
+    echo "== work done during the run (read this before any link number)"
+    for t in velodyne_points iv_points; do
+        n=$(grep -m1 "master bag" -A6 "$OUT/bag_counts.txt" 2>/dev/null \
+            | grep -m1 "$t" | sed -n 's/.*Count: \([0-9]*\).*/\1/p')
+        echo "   master recorder kept ${n:-0} ${t} (a healthy run is ~$(( (STARTUP + STEADY) * 10 )))"
+    done
+    grep -A1 'hz /sensing/imu/imu_data' "$OUT/consumers.txt" 2>/dev/null | tail -1 \
+        | sed 's/^/   imu_corrector /'
+    grep -A1 'twist_with_covariance' "$OUT/consumers.txt" 2>/dev/null | tail -1 \
+        | sed 's/^/   gyro_odometer  /'
+} > "$OUT/validity.txt"
+
+VELO=$(grep -m1 'velodyne_points' "$OUT/validity.txt" | sed -n 's/.*kept \([0-9]*\).*/\1/p')
+if [ "${VELO:-0}" -lt 1 ]; then
+    echo "INVALID: the master recorder kept no Velodyne scans at all." >> "$OUT/validity.txt"
+    echo "         Nothing was flowing, so the link numbers below mean nothing." >> "$OUT/validity.txt"
+    echo "         Check master_stack.log, orin_stack.log and master_sensors.log." >> "$OUT/validity.txt"
+fi
+
+cat "$OUT/validity.txt"
+echo
 cat "$OUT/summary.md"
 echo "link_sim: results in $OUT"
+if [ "${VELO:-0}" -lt 1 ]; then
+    echo "link_sim: RUN IS NOT USABLE - see validity.txt" >&2
+    exit 3
+fi

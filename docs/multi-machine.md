@@ -382,6 +382,43 @@ Shells without direnv get the same environment from `source scripts/env.sh`.
 A running `ros2` daemon keeps whatever DDS context it started with, so changing
 the profile does not reach it — `just service doctor` says so when one is running.
 
+## What crosses the link, and why it is not the sensors
+
+Both hosts are in one ROS domain, bound to the LAN address, and see each
+other's whole graph. What keeps the 100 Mb/s segment from filling is
+`<AllowMulticast>spdp</AllowMulticast>` in `config/cyclonedds/{master,orin}.xml`.
+
+CycloneDDS switches a writer to the multicast locator once a topic has two or
+more reader **processes**, and the bound interface is the LAN NIC, so that one
+datagram leaves the machine whether or not the other host wants it. On the
+master every raw cloud has two readers before anyone touches anything —
+preprocessing and the recorder — and RViz makes three. Left at the default
+this put 12.1–12.5 MB/s of point cloud on the wire, in the direction the orin
+subscribed to none of, and dropped 140–156k packets per 160 s. Under `spdp`
+multicast carries participant discovery only; sample data goes unicast to each
+matched reader, and a reader on this host has this host's address, so the
+kernel routes it over `lo`.
+
+Inspecting it:
+
+```bash
+just link topics          # topics with their publisher and subscriber counts
+just link pressure        # bytes/s on enP5p3s0 (eno1 on the orin)
+just link groups          # multicast groups joined, per interface
+just link sim baseline    # reproduce the old behaviour, no root, no vehicle
+just link sim spdp        # and the current one
+```
+
+The part this does **not** solve: one domain means a subscription anywhere
+fetches the topic across the link. Opening an Image panel on
+`/sensing/camera/zed/rgb/color/rect/image/compressed` in RViz on the master
+costs ~55 Mbit/s of the link for as long as it is open, because the orin's
+writer now has a remote reader and has to serve it. There is no allowlist and
+no rate cap; `max_hz` belonged to the bridge that was reverted. Keep full-rate
+image panels closed on the master, and record images on the orin's local disk
+(`config/recording/orin_topics.txt`), which is what that split exists for.
+Measurements: [research/system/link-multicast-scope.md](research/system/link-multicast-scope.md).
+
 ## Troubleshooting
 
 **`rmw_create_node: failed to create domain`, and `failed to increase socket

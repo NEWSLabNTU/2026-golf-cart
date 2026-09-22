@@ -157,9 +157,26 @@ def make_cloud(frame_id, dtype, n, hfov_deg, vfov_deg, channels, rng):
 # ── the two hosts ────────────────────────────────────────────────────────────
 
 class Master(Node):
-    VLP32_POINTS = 60_000        # 600 000 pts/s single return, 10 Hz
-    FALCON_POINTS = 51_743       # measured on the cart
-    GMSL_JPEG_BYTES = 300_000    # 250-400 kB measured at q90, 1920x1280
+    # LINK_SIM_LOAD picks which end of the sourced range these run at. It exists
+    # so the offered load is an explicit, stated choice rather than a number
+    # buried in a class body - a simulation can be wrong by inventing too much
+    # load as easily as too little, and either way the conclusion is worthless.
+    #
+    #   spec    the datasheet/config upper bound, the outdoor worst case
+    #   cart    what was actually measured in cart bags
+    #
+    # Use it as a sensitivity check: a conclusion that flips between these two
+    # is a conclusion about the guess, not about the configuration under test.
+    # The multicast-vs-unicast routing this harness measures does not depend on
+    # message size at all; whether the link SATURATES obviously does.
+    LOAD = os.environ.get("LINK_SIM_LOAD", "spec")
+    # VLP-32C single return: 600 000 pts/s (datasheet) at the 10 Hz in
+    # VLP32.param.yaml -> 60 000/frame. Cart bags measured 48 700 indoors
+    # (docs/research/performance/indoor-replay-bottlenecks.md).
+    VLP32_POINTS = 60_000 if LOAD == "spec" else 48_700
+    FALCON_POINTS = 51_743       # measured on the cart, 3 677 frames
+    # 250-400 kB measured at q90, 1920x1280
+    GMSL_JPEG_BYTES = 300_000 if LOAD == "spec" else 250_000
     CAMERAS = ("left", "right", "rear")
 
     def __init__(self):
