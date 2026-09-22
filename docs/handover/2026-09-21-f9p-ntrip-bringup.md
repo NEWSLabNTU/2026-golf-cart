@@ -15,18 +15,7 @@ the next session should do differently.
 
 ## What was in the way
 
-Four things, none of them the driver.
-
-**The submodule would not clone.** `just checkout` failed on
-`ublox_f9p_ws` with `Invalid username or token`. The cause was `gh`, not git:
-two accounts were logged in and the *active* one (`jerry73204`) had an invalid
-keyring token, which is the token `credential.https://github.com.helper` hands
-to git. The other account (`qwaszxallen`) had a valid token all along.
-`gh auth switch -h github.com -u qwaszxallen` fixed it outright.
-
-> Worth knowing: `gh auth status` reports a healthy second account cheerfully
-> enough that the broken active one is easy to miss. The clone failure names
-> neither account.
+Three things, none of them the driver.
 
 **The sensor kit pointer was never bumped.** The parent's `feat/f9p` pinned
 `golfcart_sensor_kit_launch` at `0a0c021` (its `main`), but the NTRIP work is a
