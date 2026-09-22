@@ -4,6 +4,39 @@
 **Verified**: 2026-08-10 — see *Sensor status* below. The 2026-04-07 survey further down is superseded.
 
 ---
+## Orin: unit active, every node dies at birth — `wmem_max` too small for the DDS profile (found 2026-09-22)
+
+After `just launch-all` the orin's unit was `active`, `ros2 node list` there
+returned nothing, and every process in the play_log had exited within its
+first second with
+
+```
+rmw_create_node: failed to create domain, error Error
+failed to initialize rcl node: rcl node's rmw handle is invalid
+```
+
+With stderr not thrown away the line above it says why:
+
+```
+failed to increase socket send buffer size to at least 16777216 bytes, current is 425984 bytes
+```
+
+`c228d87` (2026-09-21) added `<SocketSendBufferSize min="16MB">` to every
+CycloneDDS profile so the LiDARs hold 10 Hz, and CycloneDDS treats an unmet
+`min` as fatal to the domain. The Advantech had `net.core.wmem_max=16777216`;
+the orin's `/etc/sysctl.d/99-cyclonedds-max.conf` was written by an older
+`cyclonedds-sysctl` step that set only the receive side, so `wmem_max` was the
+kernel default 212992. Fix on the orin: `./setup.sh --rerun cyclonedds-sysctl`,
+then `sysctl net.core.wmem_max` must print 16777216, then relaunch.
+
+The lesson is the same as the stale-unit entry above: a commit that changes
+what a setup step writes does nothing on a machine until that step is re-run
+there, and `setup/.state.json` marks the step *stale*, not failed, so nothing
+shouts. After pulling a change to `setup/scripts/`, run `./setup.sh --status`
+on both hosts.
+
+---
+
 ## Stale unit files: `just launch-all` reports active, the stack never runs (found 2026-09-22)
 
 On the Advantech, `just launch-all` printed `advantech: launch active` and RViz

@@ -3,7 +3,8 @@
 **Date**: 2026-09-22. **Branch**: `perf/domain-split`.
 **Status**: measured with the real stack, both recorders and the real RViz in
 a two-namespace simulation on a workstation, link shaped to 100 Mbit/s, three
-operator situations, both directions. **Not yet measured on the vehicle.**
+operator situations, both directions. **Measured on the vehicle 2026-09-22**,
+both hosts up, no recorder, RViz on the master: see *On the vehicle*.
 
 ## The problem as reported
 
@@ -224,10 +225,47 @@ domain and 2 nodes in the link domain.
 
 ## On the vehicle
 
-With the stack up and recording, old profiles then new:
+**Measured 2026-09-22**, Advantech and orin on the real 100 Mb/s segment,
+`just launch-all` (both units, `launch_perception:=false` on the first run,
+perception on the second), RViz on the master via `just tool rviz`, no
+recorder. `scripts/check/link_pressure.sh` on the master's `enP5p3s0`.
+
+| situation | tx mean | tx peak | rx mean | rx peak |
+|---|---:|---:|---:|---:|
+| old profiles, master alone, 2026-09-21 (`scripts/env.sh` header) | ~12 MB/s | at the 12.5 MB/s ceiling | | |
+| split, master alone, 150 s | 12.9 kB/s | 95.6 kB/s | 0.6 kB/s | 5.5 kB/s |
+| split, both up, 60 s | 15.7 kB/s | 98.0 kB/s | 128.9 kB/s | 148.3 kB/s |
+
+Both up is 1.2 Mbit/s at the worst second, ~1% of the link, and the rx is the
+payload: ZED IMU and its `/tf` at 100 Hz plus `camera_info` at 30 Hz.
+
+What crosses, with the rates seen on the master in domain 50 against the
+orin's own domain 60:
+
+| topic | orin, d60 | master, d50 |
+|---|---:|---:|
+| `/sensing/camera/zed/imu/data` | 100.2 Hz | 100.1 Hz |
+| `/tf` (`zed_imu_link`) | 101.3 Hz | 98.3 Hz |
+| `/sensing/camera/zed/rgb/color/rect/camera_info` | 30 Hz | 29.0 Hz |
+
+`ros2 topic list` in domain 10 from either host shows exactly the five topics
+in `config/link/topics.yaml` plus `/rosout` and `/parameter_events`. The
+LiDARs, the three GMSL cameras and the other ~600 master topics never appear
+on the wire; the master's own stack is unaffected (166 nodes, VLP-32C 10 Hz,
+cameras 30 Hz with `camera_info`).
+
+Two failures on the way that were not the split, both recorded in
+`docs/roadblocks.md`: the Advantech's installed units still carried
+`Requires=iox-roudi.service` from before the iceoryx removal, and the orin's
+`net.core.wmem_max` was 212992 so CycloneDDS refused the 16 MB
+`SocketSendBufferSize` that `c228d87` added and created no participant at all
+(`rmw_create_node: failed to create domain`). Neither host had had its setup
+steps re-run after those two commits. The second one hides well: the unit is
+`active`, every node dies in its first second, and the symptom is "no data".
+
+Still to do with the stack up and recording:
 
 ```bash
-just link pressure              # enP5p3s0, 60 s: tx mean at ~12 MB/s is the old world
 just link nodes                 # exactly two bridges
 ros2 topic hz /sensing/imu/imu_data
 ros2 topic hz /localization/twist_estimator/twist_with_covariance
