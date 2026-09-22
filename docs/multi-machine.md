@@ -392,12 +392,25 @@ CycloneDDS switches a writer to the multicast locator once a topic has two or
 more reader **processes**, and the bound interface is the LAN NIC, so that one
 datagram leaves the machine whether or not the other host wants it. On the
 master every raw cloud has two readers before anyone touches anything —
-preprocessing and the recorder — and RViz makes three. Left at the default
-this put 12.1–12.5 MB/s of point cloud on the wire, in the direction the orin
-subscribed to none of, and dropped 140–156k packets per 160 s. Under `spdp`
-multicast carries participant discovery only; sample data goes unicast to each
-matched reader, and a reader on this host has this host's address, so the
-kernel routes it over `lo`.
+preprocessing and the recorder — and RViz makes three. Under `spdp` multicast
+carries participant discovery only; sample data goes unicast to each matched
+reader, and a reader on this host has this host's address, so the kernel
+routes it over `lo`.
+
+**How much this is worth has not been measured.** Measure it on the vehicle
+with `just link pressure` under each setting. Do not quote the workstation
+simulation: its runs had the orin idle and the master on CPU NDT, neither of
+which is what `just launch-all` does.
+
+**And it is not sufficient on its own.** `golfcart_system_monitor` is gated on
+`launch_web_monitor` with no host condition
+(`golfcart.launch.yaml:547-558`), so it also runs on the orin, and
+`golfcart_system_monitor/config/monitor_topics.yaml` makes it a real
+`create_subscription` on the master's three point clouds and three GMSL
+images. That makes the orin a genuine remote reader: `spdp` turns one
+multicast datagram into one unicast copy per remote reader and the bytes
+still cross the link. Give the monitor a per-host topic list, or gate it on
+the host, before expecting the multicast setting to help.
 
 Inspecting it:
 
@@ -410,14 +423,15 @@ just link sim spdp        # and the current one
 ```
 
 The part this does **not** solve: one domain means a subscription anywhere
-fetches the topic across the link. Opening an Image panel on
-`/sensing/camera/zed/rgb/color/rect/image/compressed` in RViz on the master
-costs ~55 Mbit/s of the link for as long as it is open, because the orin's
-writer now has a remote reader and has to serve it. There is no allowlist and
-no rate cap; `max_hz` belonged to the bridge that was reverted. Keep full-rate
-image panels closed on the master, and record images on the orin's local disk
-(`config/recording/orin_topics.txt`), which is what that split exists for.
-Measurements: [research/system/link-multicast-scope.md](research/system/link-multicast-scope.md).
+fetches the topic across the link, at the publisher's rate. There is no
+allowlist and no rate cap; `max_hz` belonged to the bridge that was reverted.
+Record images on the orin's local disk (`config/recording/orin_topics.txt`)
+rather than pulling them to the master.
+
+The checked-in `golfcart.rviz` is not the culprit here: it has 71 enabled
+display subscriptions and **no ZED topic** — its three Image panels are the
+master's own GMSL cameras. The unconditional cross-link readers are the two
+`golfcart_system_monitor` instances described above.
 
 ## Troubleshooting
 

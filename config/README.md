@@ -161,12 +161,20 @@ not putting the bytes on a shared wire, and it is why `SocketSendBufferSize`
 below it matters.
 
 What this does **not** do is decide *which* topics may cross. One domain means
-anything either host subscribes to is fetched across the link, so an operator
-who opens a ZED image panel in RViz on the master pulls that stream over at
-the camera's full rate. See
-[`docs/research/system/link-multicast-scope.md`](../docs/research/system/link-multicast-scope.md)
-for the measurements on both points, and `just link sim baseline|spdp` to
-reproduce them.
+anything either host subscribes to is fetched across the link at the
+publisher's rate, and there is no `max_hz` any more.
+
+That is not hypothetical. `golfcart_system_monitor` is gated on
+`launch_web_monitor` with no host condition (`golfcart.launch.yaml:547-558`),
+so it runs on both machines, and `golfcart_system_monitor/config/monitor_topics.yaml`
+makes it a real subscriber — the orin's copy to the master's three point clouds
+and three GMSL images, the master's copy to the ZED image, `camera_info` and
+IMU. Those remote readers survive `spdp`: it sends them a unicast copy instead
+of a multicast one. Split that list per host before relying on this setting.
+
+**Unmeasured.** No figure is quoted here because the simulation runs taken so
+far do not correspond to `just launch-all`. Measure with `just link pressure`
+on the vehicle.
 
 `loopback.xml` keeps `default`: it is pinned to `lo`, where there is no wire
 to flood.

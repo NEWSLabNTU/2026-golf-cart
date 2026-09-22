@@ -191,15 +191,19 @@ participant announcements only; samples and SEDP go unicast to each matched
 reader, and a local reader's locator is this host's own address, which the
 kernel routes over `lo`.
 
-Measured with the real stack in the two-namespace simulation, 100 Mbit/s wire,
-RViz open, both recorders running:
+**NOT MEASURED. No numbers here on purpose.** The runs taken so far used a
+configuration that does not correspond to `just launch-all`: the orin ran no
+stack at all, so it subscribed to nothing and the wire was quiet by
+construction, and the master ran `use_cuda:=false pose_source:=ndt` rather
+than launch-all's CUDA defaults, which changes the reader count on the very
+topics whose multicast decision is at issue. Those numbers are not quoted
+anywhere and must not be reconstructed from the run directories.
 
-| | `default` | `spdp` |
-|---|---:|---:|
-| master → orin, steady | ~12.5 MB/s (the ceiling) | ~1 MB/s |
-| of which point cloud multicast | 1.75 GB/run | **none** |
-| Velodyne scans kept by the master's own recorder | 647 of ~1560 | 1549 |
-| `gyro_odometer` twist | 2.2 Hz | 14.5 Hz |
+Reproducing this properly on a workstation is additionally blocked: the
+profiles require `SocketSendBufferSize min=16MB`, a machine without
+`net.core.wmem_max` raised that far cannot create the domain at all, and
+lowering it for the simulation measures a transport nobody deploys. Measure
+on the vehicle with `just link pressure`, or not at all.
 
 The trade, and the two things it does **not** buy:
 
@@ -210,18 +214,32 @@ The trade, and the two things it does **not** buy:
   `rmw_create_node: failed to create domain`. `just service doctor` checks both
   buffers now.
 - **No allowlist.** One domain means a subscription anywhere fetches the topic
-  across the link. Opening an Image panel on the ZED's compressed topic in RViz
-  on the master costs ~55 Mbit/s for as long as it is open. `max_hz` belonged to
-  the bridge and went with it. Keep full-rate image panels closed on the master;
-  images are recorded on the orin's local disk.
-- **Discovery still crosses.** SEDP is unicast either way, so the hosts still
-  exchange their full endpoint sets — ~160 nodes and ~624 topics each — and
-  every fresh `ros2 topic list` pulls it again. That is the residual, bounded by
-  graph size rather than sensor rates.
+  across the link, at the publisher's rate, with no `max_hz` — that belonged to
+  the bridge and went with it.
+- **Discovery still crosses.** SEDP is unicast either way, so both hosts still
+  exchange their full endpoint sets, and every fresh `ros2 topic list` pulls it
+  again. Bounded by graph size rather than sensor rates.
+- **It does not remove the subscriptions that actually cross.**
+  `golfcart_system_monitor` is gated on `launch_web_monitor` with no host
+  condition (`golfcart.launch.yaml:547-558`), so it runs on BOTH machines, and
+  `golfcart_system_monitor/config/monitor_topics.yaml` makes it a real
+  `create_subscription` — the orin's copy on the master's three point clouds
+  and three GMSL images, the master's copy on the ZED image, its `camera_info`
+  and its IMU. Those are genuine remote readers, so `spdp` converts one
+  multicast datagram into one unicast copy per remote reader and the bytes
+  still leave the NIC. **Fix the monitor's topic list per host before expecting
+  the multicast setting to buy anything.**
 
-`just link topics|pressure|groups` inspect it; `just link sim baseline|spdp`
-reproduces the table above with no root and no vehicle. Full measurements:
-[docs/research/system/link-multicast-scope.md](docs/research/system/link-multicast-scope.md).
+For reference, read rather than measured: `golfcart.rviz` has 71 enabled
+display subscriptions plus RViz's own `/tf` and `/tf_static`, and **no ZED
+topic at all** — its three Image panels are the master's own GMSL cameras, so
+RViz adds readers to master-local topics and pulls nothing across the link.
+`host:=orin` starts 11 nodes: `zed_container` + `zed` + `zed_state_publisher`,
+`orin_system_monitor_container` + five monitors, `golfcart_rosbridge` +
+`golfcart_system_monitor`.
+
+`just link topics|pressure|groups` inspect it. `just link sim baseline|spdp`
+exists but has NOT produced a comparable result; see the note above.
 `loopback.xml` keeps `default` — it is pinned to `lo`, where there is no wire.
 
 ### Recording: first-hand topics only
