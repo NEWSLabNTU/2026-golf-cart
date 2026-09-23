@@ -222,18 +222,32 @@ wait "${OPID}" 2>/dev/null
 # Small topics only. Both are the ones that degrade first when the wire fills:
 # the twist estimator needs the ZED IMU and its /tf, and imu_corrector's output
 # is reliable, so a drop there means the link is badly gone.
-log "rates of the two small cross-link topics"
-for topic in /sensing/imu/imu_data /localization/twist_estimator/twist_with_covariance; do
+# The first topic is the CONTROL and is why this loop is trustworthy. It is
+# published on this host, by this host's own driver, and crosses nothing; if it
+# reads zero then the CLI failed to discover under load and the other two rows
+# say nothing about the link. Cell 1 returned an empty file for both cross-link
+# topics with no way to tell those cases apart.
+log "rates: one local control topic, then the two small cross-link ones"
+for topic in /sensing/lidar/vlp32/velodyne_points /sensing/imu/imu_data /localization/twist_estimator/twist_with_covariance; do
 	echo "== ${topic}" >>"${OUT}/topic_hz.txt"
-	timeout 20 ros2 topic hz "${topic}" >>"${OUT}/topic_hz.txt" 2>&1
+	timeout 25 ros2 topic hz --window 20 "${topic}" >>"${OUT}/topic_hz.txt" 2>&1
+	echo >>"${OUT}/topic_hz.txt"
 done
+# Graph size beside the rates: a CLI that discovered nothing and a link that
+# delivered nothing look identical in `topic hz` and nothing else.
+{
+	echo "== graph as this host sees it"
+	echo "topics: $(ros2 topic list 2>/dev/null | wc -l)  nodes: $(ros2 node list 2>/dev/null | wc -l)"
+} >>"${OUT}/topic_hz.txt" 2>&1
 
-log "multicast groups on both hosts"
+# The orin's groups are collected ON the orin, into its own log/, and fetched
+# after teardown. In cell 1 this ran as an ssh during the storm and timed out:
+# an ssh opened while the wire is full is not an instrument.
+log "multicast groups (master now, orin collected locally)"
+run orin bash -c 'ip -4 maddr show > log/link_cell_groups.txt 2>&1'
 {
 	echo "== master"
 	just link groups
-	echo "== orin"
-	orin just link groups
 } >"${OUT}/groups.txt" 2>&1
 
 log "stopping the recorders and reading the bags"
@@ -250,8 +264,12 @@ log "stopping both stacks"
 run just stop-all
 
 # Now the wire is quiet, so fetching the orin's cross-check costs nothing.
-log "fetching the orin's own NIC sample"
+log "fetching the orin's own NIC sample and groups"
 orin cat log/link_cell_orin.txt >"${OUT}/orin_nic.txt" 2>/dev/null
+{
+	echo "== orin"
+	orin cat log/link_cell_groups.txt
+} >>"${OUT}/groups.txt" 2>&1
 
 # The trap restores spdp; say so in the log so a reader of OUT knows the vehicle
 # is not left on whatever this cell set.

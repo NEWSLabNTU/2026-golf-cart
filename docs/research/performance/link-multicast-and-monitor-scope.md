@@ -1,7 +1,9 @@
 # The master/orin link in ONE domain: multicast scope and monitor scope
 
-**Status**: simulated on a workstation, **not yet measured on the vehicle**.
-The vehicle table below is deliberately empty; filling it is the next job.
+**Status**: simulated on a workstation; **one of the four vehicle cells measured**
+(2026-09-23, `default` + shared monitor list). That cell reproduces the
+2026-09-21 storm at 11.4 MB/s mean, which confirms the instrument. The other
+three are still TODO.
 
 **Branch**: `perf/spdp-multicast`. **Date**: 2026-09-23.
 
@@ -117,17 +119,68 @@ monitors receiving `diagnostics=112 health=112`.
 Four cells, same two axes. `just link pressure` on the master's `enP5p3s0`
 (`eno1` on the orin) during a steady period with both hosts up.
 
-### Vehicle results — TO BE FILLED
+### Vehicle results — one cell measured, 2026-09-23
+
+Each cell is `just link cell <multicast> <monitor>`, which is the whole
+procedure: both profiles set, `just launch-all`, both recorders started, 60 s
+of NIC counters on both hosts at once, teardown, `spdp` restored.
 
 | master → orin | shared monitor list | per-host + `/system/health` |
-|---|---|---|
-| `AllowMulticast=default` | TODO mean / peak kB/s | TODO mean / peak kB/s |
+|---|---|---:|
+| `AllowMulticast=default` | **11431.6 / 12633.0 kB/s** | TODO mean / peak kB/s |
 | `AllowMulticast=spdp` | TODO mean / peak kB/s | TODO mean / peak kB/s |
 
-| orin → master | shared monitor list | per-host + `/system/health` |
-|---|---|---|
-| `AllowMulticast=default` | TODO | TODO |
-| `AllowMulticast=spdp` | TODO | TODO |
+| orin → master            | shared monitor list       | per-host + `/system/health` |
+|--------------------------|---------------------------|-----------------------------|
+| `AllowMulticast=default` | **9961.1 / 12382.5 kB/s** | TODO                        |
+| `AllowMulticast=spdp`    | TODO                      | TODO                        |
+
+Cell: `log/link_cells/default-shared_20260923-114136`. mean / peak over 60 s.
+
+**Read each direction from the SENDING host's own tx counter.** The master's rx
+column disagrees with the orin's tx column by a factor of 100 — the orin's NIC
+counted 597,666,196 B sent in the window, the master's counted 5,735,045 B
+received — with zero errors and zero drops at both ends, 100 Mb/s full duplex
+confirmed by ethtool on both. The lifetime counters carry the same ratio, so it
+is not a one-off. The likely mechanism is IGMP snooping: under the storm the
+master's own membership reports compete with 91 Mbit/s of outbound DDS, the
+switch times the master's port out of the group, and orin → master multicast
+stops being forwarded. Whatever the cause, a host's account of what it sent is
+not in doubt, so that is the number this table carries.
+
+**The orin has the same disease as the master.** 9961 kB/s leaving the orin is
+not the monitor's cross-subscriptions alone; its own local readers are enough to
+put the ZED image on the wire. Both fixes are needed on both hosts, which the
+simulation predicted and this confirms.
+
+Alongside, from the same cell:
+
+| what                                              | result                                                                                                                                                                                                      |
+|---------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Velodyne scans kept                               | 1412 in 141.4 s = 9.98 Hz — **no loss**. The storm is outbound; the master's recorder is a local reader and never sees the wire.                                                                            |
+| readers on `/sensing/lidar/vlp32/velodyne_points` | 3 subscriber processes: `golfcart_system_monitor`, `rosbag2_recorder`, `vlp32_cuda_pointcloud_preprocessor_node` — exactly the "two or more reader processes" that makes Cyclone pick the multicast locator |
+| `gyro_odometer` / `imu_corrector` rates           | **not obtained** — see below                                                                                                                                                                                |
+| multicast groups on the NIC                       | `239.255.0.1 users 132` on `enP5p3s0`, and nothing else                                                                                                                                                     |
+| localization converges                            | not applicable; the cart was stationary with no map loaded                                                                                                                                                  |
+
+### Two instrument problems this cell exposed
+
+**`just link groups` cannot discriminate, and the check as written is wrong.**
+CycloneDDS uses 239.255.0.1 for SPDP *and* for user data by default, so "any
+239.255.0.x DATA group means a profile did not take" describes a signal that
+never appears: under `default` the data simply goes to the SPDP group, with the
+join count rising (132 users here). The instrument that does work is the reader
+census — `ros2 topic info -v`, which names every subscriber and its host, and is
+a graph query so it adds no reader to the topic it reports on.
+
+**`ros2 topic hz` returned nothing for either small topic**, and as written the
+cell cannot tell "the link starved them" from "the CLI could not discover under
+load". Both readings are plausible at 91 Mbit/s. Needs a control — a topic known
+to be publishing locally — before either row can be believed.
+
+The orin's `just link groups` also timed out mid-storm. Like the NIC sample, it
+has to be collected into the orin's own `log/` during the cell and fetched after
+teardown; an ssh opened while the wire is full is not an instrument.
 
 Alongside each cell, record:
 
