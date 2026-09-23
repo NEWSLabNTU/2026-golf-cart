@@ -27,8 +27,18 @@
 #   - `ros2 topic hz` is used only on the two SMALL topics. Subscribing to a point
 #     cloud would add a reader process and change the very decision being measured.
 #
+# LINK_CELL_RVIZ=1 additionally runs the real RViz on the master for the whole
+# cell. That is a third axis, and it is opt-in because it only proves something
+# in ONE place: under `spdp`, RViz's 71 display subscriptions are a third LOCAL
+# reader, so the wire must NOT move. If it does, a subscription the design
+# assumes is local is crossing the link, or the profile did not take. Under
+# `default` it proves nothing - every cloud already has two readers, so the
+# multicast locator is already chosen and a third reader changes no routing.
+# RViz is not part of `just launch-all` (launch_unit_exec.sh passes rviz:=false),
+# so this is the only way to measure it.
+#
 # Knobs (environment): LINK_CELL_STARTUP, LINK_CELL_STEADY, LINK_CELL_SAMPLE,
-# LINK_CELL_IFACE, LINK_CELL_ORIN_IFACE.
+# LINK_CELL_IFACE, LINK_CELL_ORIN_IFACE, LINK_CELL_RVIZ, LINK_CELL_DISPLAY.
 set -uo pipefail
 
 MULTICAST="${1:-}"
@@ -58,12 +68,17 @@ STEADY="${LINK_CELL_STEADY:-20}"   # recorder started to first sample
 SAMPLE="${LINK_CELL_SAMPLE:-60}"   # seconds of wire measured
 IFACE="${LINK_CELL_IFACE:-enP5p3s0}"
 ORIN_IFACE="${LINK_CELL_ORIN_IFACE:-eno1}"
+RVIZ="${LINK_CELL_RVIZ:-0}"
+RVIZ_DISPLAY="${LINK_CELL_DISPLAY:-:0}"
+RVIZ_PID=""
 
 ON_ORIN="${REPO_DIR}/scripts/multi_machine/on_orin.sh"
 MASTER_XML="${REPO_DIR}/config/cyclonedds/master.xml"
 
 STAMP="$(date +%Y%m%d-%H%M%S)"
-OUT="${REPO_DIR}/log/link_cells/${MULTICAST}-${MONITOR}_${STAMP}"
+CELL="${MULTICAST}-${MONITOR}"
+[ "${RVIZ}" = "1" ] && CELL="${CELL}-rviz"
+OUT="${REPO_DIR}/log/link_cells/${CELL}_${STAMP}"
 mkdir -p "${OUT}" || exit 1
 
 log() { printf '[link_cell %s] %s\n' "$(date +%H:%M:%S)" "$1" | tee -a "${OUT}/run.log"; }
@@ -81,6 +96,10 @@ set_multicast() {
 # Ctrl-C in the middle of a saturated cell.
 cleanup() {
 	log "cleanup: stopping record and stack, restoring spdp"
+	if [ -n "${RVIZ_PID}" ]; then
+		kill "${RVIZ_PID}" 2>/dev/null
+		pkill -f 'rviz2 .*golfcart' 2>/dev/null
+	fi
 	run just record stop
 	run just stop-all
 	set_multicast spdp
@@ -113,6 +132,18 @@ fi
 
 log "waiting ${STARTUP}s for the stacks"
 sleep "${STARTUP}"
+
+# The real operator verb, not a hand-built rviz2 command line: `just tool rviz`
+# is what someone watching the vehicle actually runs, and it loads the same
+# golfcart.rviz with its 71 display subscriptions.
+if [ "${RVIZ}" = "1" ]; then
+	log "starting RViz on the master (DISPLAY=${RVIZ_DISPLAY})"
+	DISPLAY="${RVIZ_DISPLAY}" just tool rviz >>"${OUT}/rviz.log" 2>&1 &
+	RVIZ_PID=$!
+	# RViz subscribes as its displays come up, so the wire must not be sampled
+	# until they have. 30 s is the observed time to a drawn window on the Orin.
+	sleep 30
+fi
 
 log "stopping the orin watchdog for the duration of this cell"
 run "${ON_ORIN}" systemctl --user stop golfcart-watchdog.service

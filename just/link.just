@@ -74,6 +74,12 @@ groups:
 #   just link cell default perhost
 #   just link cell spdp shared
 #   just link cell spdp perhost        # the branch's own configuration
+#   LINK_CELL_RVIZ=1 just link cell spdp perhost    # + the real `just tool rviz`
+#
+# The RViz axis is opt-in because it only proves something under `spdp`: RViz's
+# 71 display subscriptions are a third LOCAL reader, so the wire must not move.
+# Under `default` every cloud already has two readers and the multicast locator
+# is already chosen, so a third reader cannot change the routing.
 #
 # The two `default` cells saturate the 100 Mb/s link on purpose, so run them
 # from a terminal ON the master, not over ssh.
