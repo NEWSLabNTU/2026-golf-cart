@@ -84,25 +84,58 @@ mkdir -p "${OUT}" || exit 1
 log() { printf '[link_cell %s] %s\n' "$(date +%H:%M:%S)" "$1" | tee -a "${OUT}/run.log"; }
 run() { "$@" >>"${OUT}/run.log" 2>&1; }
 
+# Every remote call is bounded. on_orin.sh passes ConnectTimeout=5, but that
+# covers only the handshake: an ssh that has already connected and then loses
+# its link - which is what a saturated 100 Mb/s wire does to it - waits forever.
+# An unbounded remote call inside the teardown means the storm keeps running
+# while the script that was supposed to end it is blocked.
+orin() { timeout "${ORIN_TIMEOUT:-60}" "${ON_ORIN}" "$@"; }
+
+# A whole-cell deadline, because the failure this guards against is precisely
+# the one that makes a human unable to intervene over the network. On expiry the
+# script signals itself, the EXIT trap runs, and the vehicle is put back the way
+# it was found.
+DEADLINE="${LINK_CELL_DEADLINE:-$((STARTUP + STEADY + SAMPLE + 300))}"
+(
+	sleep "${DEADLINE}"
+	kill -TERM $$ 2>/dev/null
+) &
+GUARD_PID=$!
+
 # One sed per host, on the one element that is the whole axis. Nothing else in
 # the profile is touched, and the profiles are copied into OUT as proof.
 set_multicast() {
 	local value="$1"
 	sed -i "s|<AllowMulticast>[^<]*</AllowMulticast>|<AllowMulticast>${value}</AllowMulticast>|" "${MASTER_XML}"
-	"${ON_ORIN}" sed -i "s|<AllowMulticast>[^<]*</AllowMulticast>|<AllowMulticast>${value}</AllowMulticast>|" config/cyclonedds/orin.xml
+	orin sed -i "s|<AllowMulticast>[^<]*</AllowMulticast>|<AllowMulticast>${value}</AllowMulticast>|" config/cyclonedds/orin.xml
 }
 
 # Leave the vehicle in the branch's resting state whatever happens, including a
 # Ctrl-C in the middle of a saturated cell.
+# Teardown order matters and is the reverse of `just stop-all`'s. stop-all stops
+# the orin FIRST, over ssh, while the master can still reach it - correct when
+# the link is healthy, useless when the link is the problem. Here the master's
+# own units go down first, because they are what is filling the wire; once they
+# are gone the ssh to the orin succeeds and the rest is ordinary.
 cleanup() {
-	log "cleanup: stopping record and stack, restoring spdp"
+	trap '' INT TERM
+	kill "${GUARD_PID}" 2>/dev/null
+	log "cleanup: master units down first, then the orin"
 	if [ -n "${RVIZ_PID}" ]; then
 		kill "${RVIZ_PID}" 2>/dev/null
 		pkill -f 'rviz2 .*golfcart' 2>/dev/null
 	fi
-	run just record stop
-	run just stop-all
+	# Straight at systemd rather than through the recipes: these cannot touch the
+	# network, so they cannot hang however bad the link is.
+	run systemctl --user stop golfcart-record.service
+	run systemctl --user stop golfcart-launch.service
+	log "master quiet; stopping the orin"
+	run orin systemctl --user stop golfcart-record.service
+	run orin systemctl --user stop golfcart-launch.service
 	set_multicast spdp
+	# Say what the vehicle was left in, so a reader of OUT never has to guess
+	# whether a killed cell left `default` in a profile.
+	grep -h AllowMulticast "${MASTER_XML}" | tee -a "${OUT}/run.log"
 	log "cleanup done"
 }
 trap cleanup EXIT INT TERM
@@ -118,11 +151,11 @@ run ros2 daemon stop
 # holding the PREVIOUS cell's profile - which shows up later as a data multicast
 # group in its groups.txt under spdp, looking exactly like a profile that did not
 # take.
-run "${ON_ORIN}" bash -c '. scripts/env.sh >/dev/null 2>&1; ros2 daemon stop'
+run orin bash -c '. scripts/env.sh >/dev/null 2>&1; ros2 daemon stop'
 
 set_multicast "${MULTICAST}"
 cp "${MASTER_XML}" "${OUT}/master.xml"
-"${ON_ORIN}" cat config/cyclonedds/orin.xml >"${OUT}/orin.xml" 2>/dev/null
+orin cat config/cyclonedds/orin.xml >"${OUT}/orin.xml" 2>/dev/null
 grep -n AllowMulticast "${OUT}/master.xml" "${OUT}/orin.xml" | tee -a "${OUT}/run.log"
 
 # `shared` is the control: monitor_host:=any makes every instance watch every
@@ -142,7 +175,7 @@ fi
 # orin's own launch-up start it before we stop it.
 sleep 5
 log "stopping the orin watchdog for the duration of this cell"
-run "${ON_ORIN}" systemctl --user stop golfcart-watchdog.service
+run orin systemctl --user stop golfcart-watchdog.service
 
 log "waiting ${STARTUP}s for the stacks"
 sleep "${STARTUP}"
@@ -180,7 +213,7 @@ done
 # flooded wire - so it writes to the orin's own log/ and is fetched after the
 # wire is quiet again. A failure there must not cost the cell.
 log "sampling the wire for ${SAMPLE}s, both directions at once"
-"${ON_ORIN}" bash -c ". scripts/env.sh >/dev/null 2>&1; ./scripts/check/link_pressure.sh ${ORIN_IFACE} ${SAMPLE} > log/link_cell_orin.txt 2>&1" &
+timeout $((SAMPLE + 90)) "${ON_ORIN}" bash -c ". scripts/env.sh >/dev/null 2>&1; ./scripts/check/link_pressure.sh ${ORIN_IFACE} ${SAMPLE} > log/link_cell_orin.txt 2>&1" &
 OPID=$!
 "${REPO_DIR}/scripts/check/link_pressure.sh" "${IFACE}" "${SAMPLE}" "${OUT}/master_nic.csv" \
 	>"${OUT}/master_nic.txt" 2>&1
@@ -200,7 +233,7 @@ log "multicast groups on both hosts"
 	echo "== master"
 	just link groups
 	echo "== orin"
-	"${ON_ORIN}" just link groups
+	orin just link groups
 } >"${OUT}/groups.txt" 2>&1
 
 log "stopping the recorders and reading the bags"
@@ -218,7 +251,7 @@ run just stop-all
 
 # Now the wire is quiet, so fetching the orin's cross-check costs nothing.
 log "fetching the orin's own NIC sample"
-"${ON_ORIN}" cat log/link_cell_orin.txt >"${OUT}/orin_nic.txt" 2>/dev/null
+orin cat log/link_cell_orin.txt >"${OUT}/orin_nic.txt" 2>/dev/null
 
 # The trap restores spdp; say so in the log so a reader of OUT knows the vehicle
 # is not left on whatever this cell set.
