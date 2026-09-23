@@ -1,9 +1,10 @@
 # The master/orin link in ONE domain: multicast scope and monitor scope
 
-**Status**: simulated on a workstation; **one of the four vehicle cells measured**
-(2026-09-23, `default` + shared monitor list). That cell reproduces the
-2026-09-21 storm at 11.4 MB/s mean, which confirms the instrument. The other
-three are still TODO.
+**Status**: simulated on a workstation; **two of the four vehicle cells
+measured** (2026-09-23, both `AllowMulticast=default`). They reproduce the
+2026-09-21 storm at 11.4 and 11.2 MB/s mean — which confirms the instrument,
+and confirms that the monitor fix alone changes nothing. The two `spdp` cells
+are still TODO.
 
 **Branch**: `perf/spdp-multicast`. **Date**: 2026-09-23.
 
@@ -127,15 +128,26 @@ of NIC counters on both hosts at once, teardown, `spdp` restored.
 
 | master → orin | shared monitor list | per-host + `/system/health` |
 |---|---|---:|
-| `AllowMulticast=default` | **11431.6 / 12633.0 kB/s** | TODO mean / peak kB/s |
+| `AllowMulticast=default` | **11431.6 / 12633.0 kB/s** | **11236.1 / 12715.5 kB/s** |
 | `AllowMulticast=spdp` | TODO mean / peak kB/s | TODO mean / peak kB/s |
 
 | orin → master            | shared monitor list       | per-host + `/system/health` |
 |--------------------------|---------------------------|-----------------------------|
-| `AllowMulticast=default` | **9961.1 / 12382.5 kB/s** | TODO                        |
+| `AllowMulticast=default` | **9961.1 / 12382.5 kB/s** | **10641.0 / 12380.3 kB/s**  |
 | `AllowMulticast=spdp`    | TODO                      | TODO                        |
 
-Cell: `log/link_cells/default-shared_20260923-114136`. mean / peak over 60 s.
+Cells: `log/link_cells/default-shared_20260923-114136` and
+`default-perhost_20260923-115959`. mean / peak over 60 s.
+
+**The monitor fix alone does nothing, on the vehicle as in the simulation.**
+Per-host scoping moves master → orin by 1.7 % (11431.6 → 11236.1 kB/s mean) and
+moves orin → master the WRONG way by 6.8 % (9961.1 → 10641.0). On a link pinned
+at its ceiling that is run-to-run noise, not an effect. Whatever fixes this
+link, it is the multicast axis — and per the simulation, only both together.
+
+The Velodyne is lossless in both cells: 1412 scans in 141.4 s and 1365 in
+136.6 s, both 9.98 Hz against 10 Hz published. The storm is outbound; the
+recorder is a local reader and never touches the wire.
 
 **Read each direction from the SENDING host's own tx counter.** The master's rx
 column disagrees with the orin's tx column by a factor of 100 — the orin's NIC
