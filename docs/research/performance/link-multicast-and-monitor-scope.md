@@ -1,10 +1,16 @@
 # The master/orin link in ONE domain: multicast scope and monitor scope
 
-**Status**: simulated on a workstation; **three of the four vehicle cells
-measured** (2026-09-23). The two `default` cells reproduce the 2026-09-21 storm
-at 11.4 and 11.2 MB/s mean, and `spdp` with the shared monitor list is WORSE at
-12.3 MB/s. Every single-axis change has now been shown not to work on the
-vehicle; the corner cell is the whole experiment, and is still TODO.
+**Status**: **all four vehicle cells measured plus an isolation run,
+2026-09-23. Half the branch is proved; the link is still full.**
+
+The corner — `spdp` plus the per-host monitor, which the simulation put at
+228× — measures 12336.9 kB/s mean master → orin, against a one-domain baseline
+of ~12100. But with the orin's stack stopped and nothing else changed, the same
+configuration measures **676.1 kB/s**. So `AllowMulticast=spdp` does keep
+local-reader traffic off the NIC, and the remaining ~11.7 MB/s is a real
+subscriber on the orin that the source audit says should not exist. Do not
+merge on the strength of the simulated table; the next step is two commands on
+the orin, at the end of this section.
 
 **Branch**: `perf/spdp-multicast`. **Date**: 2026-09-23.
 
@@ -120,7 +126,7 @@ monitors receiving `diagnostics=112 health=112`.
 Four cells, same two axes. `just link pressure` on the master's `enP5p3s0`
 (`eno1` on the orin) during a steady period with both hosts up.
 
-### Vehicle results — three cells measured, 2026-09-23
+### Vehicle results — all four cells measured, 2026-09-23
 
 Each cell is `just link cell <multicast> <monitor>`, which is the whole
 procedure: both profiles set, `just launch-all`, both recorders started, 60 s
@@ -129,12 +135,12 @@ of NIC counters on both hosts at once, teardown, `spdp` restored.
 | master → orin | shared monitor list | per-host + `/system/health` |
 |---|---|---:|
 | `AllowMulticast=default` | **11431.6 / 12633.0 kB/s** | **11236.1 / 12715.5 kB/s** |
-| `AllowMulticast=spdp` | **12347.2 / 12425.6 kB/s** | TODO mean / peak kB/s |
+| `AllowMulticast=spdp` | **12347.2 / 12425.6 kB/s** | **12336.9 / 12399.0 kB/s** |
 
 | orin → master            | shared monitor list        | per-host + `/system/health` |
 |--------------------------|----------------------------|-----------------------------|
 | `AllowMulticast=default` | **9961.1 / 12382.5 kB/s**  | **10641.0 / 12380.3 kB/s**  |
-| `AllowMulticast=spdp`    | **10596.4 / 12349.3 kB/s** | TODO                        |
+| `AllowMulticast=spdp`    | **10596.4 / 12349.3 kB/s** | **10963.6 / 12359.3 kB/s**  |
 
 Cells: `log/link_cells/default-shared_20260923-114136` and
 `default-perhost_20260923-115959`. mean / peak over 60 s.
@@ -272,6 +278,142 @@ just link groups            # which multicast groups are joined, per interface
 rewritten, and writes `profiles.diff` to prove the one-line delta; the frozen
 copies under `baseline/` predate the `SocketSendBufferSize` commit and would
 have credited `AllowMulticast` with that fix as well.
+
+## The corner cell FAILED on the vehicle, 2026-09-23
+
+`log/link_cells/spdp-perhost_20260923-121720`: **12336.9 kB/s mean**, 12399.0
+peak, master → orin, with 10963.6 kB/s coming back. The configuration the whole
+branch exists to produce is indistinguishable from doing nothing.
+
+For scale, the committed baseline of the *earlier* domain-split experiment
+(`docs/research/system/data/link-sim/baseline_record/summary.md`, one domain,
+`AllowMulticast` default) is 12100.0 kB/s steady. Every vehicle cell, including
+the corner, sits on that number:
+
+| run | steady master → orin |
+|---|---:|
+| old sim baseline, one domain, default | 12100.0 kB/s |
+| vehicle `default` + shared | 11431.6 |
+| vehicle `default` + per-host | 11236.1 |
+| vehicle `spdp` + shared | 12347.2 |
+| **vehicle `spdp` + per-host** | **12336.9** |
+
+The simulation predicted 801 MB → 3.5 MB for this cell. It did not happen.
+
+**The cell is not contaminated.** Its `run.log` opens with `launch inactive` on
+both hosts and both ros2 daemons stopped, and the copied profiles in the cell
+directory show `spdp` on both machines before launch. The units load that
+profile through `launch_unit_exec.sh`, which sets `GOLFCART_ENV_ROLE=master` and
+**aborts** if the resolved profile is not the host's own, so a silently wrong
+transport is not possible either.
+
+### What the audit rules out
+
+The monitor half of the branch was read line by line after the failure, and it
+is correct:
+
+- every one of the 21 rows in `monitor_topics.yaml` carries the sixth field:
+  16 `master`, 3 `orin` (the ZED image, its `camera_info`, its IMU), `/rosout`
+  and `/diagnostics` as `any`. No row falls back to `any` by accident.
+- the host test in `_setup_subscriptions` runs **before** `_create_subscription`,
+  so a foreign row creates no subscription at all rather than being filtered at
+  report time — the only version that saves anything.
+- the node creates exactly **one** publisher, `/system/health`. It does not
+  publish `/diagnostics`; that row is watched, and Autoware's own
+  `system_monitor` publishes it on both hosts.
+- `/system/health` carries metadata only: per watched topic, `display_name`,
+  `type`, `rate_hz`, `count`, plus OK / `STALE` / `NO DATA`. No sample contents.
+  One topic name shared by both hosts, not one per watched topic: the master's
+  summary is 16 statuses once a second, the orin's is 3.
+
+### Every subscription that legitimately crosses, and what it costs
+
+| subscriber             | remote topic                                             | scale                     |
+|------------------------|----------------------------------------------------------|---------------------------|
+| master `imu_corrector` | `/sensing/camera/zed/imu/data` (`IMU_SOURCE=zed`)        | 100 Hz × ~300 B ≈ 30 kB/s |
+| master `gyro_odometer` | the ZED driver's dynamic `/tf`                           | small                     |
+| master recorder        | `/tf`, `/tf_static`, `/diagnostics` (both hosts publish) | small                     |
+| both monitors          | `/diagnostics`, `/rosout`, `/system/health`              | ~1 Hz                     |
+
+Both recording lists are otherwise host-local: the master records its own
+clouds, GMSL images and vehicle status; the orin records four ZED topics and
+`/tf_static`. Nothing in this table is within two orders of magnitude of
+12 MB/s.
+
+### The three candidates, and which survived
+
+1. **`AllowMulticast=spdp` does not stop data leaving the NIC for purely LOCAL
+   readers.** **DISPROVED** — see the isolation run below.
+2. **A subscriber that no config records.** `rosbridge` runs on both hosts
+   (`launch_rosbridge` defaults true) and creates subscriptions *on client
+   request*, so a browser tab on either host's web UI pulls topics across the
+   link invisibly to any file review. **Struck**: the operator confirms no
+   browser was open during any cell.
+3. **Something on the orin genuinely subscribes to the master's sensor data**,
+   despite `monitor_host:=orin`. **The one left standing.**
+
+### The isolation run settles the transport, 2026-09-23
+
+`log/link_cells/spdp-perhost_20260923-125011`, run as
+`GOLFCART_USE_ORIN=0 just link cell spdp perhost`: the master launches alone,
+nothing runs on the orin, everything else identical.
+
+| configuration | master tx mean |
+|---|---:|
+| `spdp` + per-host, orin up | 12336.9 kB/s |
+| **`spdp` + per-host, orin stack DOWN** | **676.1 kB/s** |
+
+**18× lower with nothing on the far side, so `AllowMulticast=spdp` works.** It
+does keep a cloud with three local reader processes off the LAN NIC — which is
+precisely what the 2026-09-21 storm was, and precisely what this branch set out
+to fix. The transport half of the design is sound and stays.
+
+It follows that the missing ~11.7 MB/s is a **real remote reader on the orin**.
+That is candidate 3, and it contradicts the source audit above: with
+`monitor_host:=orin` the monitor creates no subscription for a `master` row,
+and nothing else in either recording list or launch file asks for a master
+cloud. One of those two readings is wrong, and only the running system can say
+which.
+
+**The next measurement is two commands, on the orin, with both stacks up:**
+
+```bash
+ros2 param get /golfcart_system_monitor monitor_host   # did the param arrive?
+ros2 node info /golfcart_system_monitor                # what does it subscribe to?
+```
+
+If `monitor_host` is not `orin`, the parameter never reached the node and the
+bug is in launch plumbing, not in the monitor. If it is `orin` and the master's
+clouds are still in its subscription list, the filter does not do what the code
+reads like. If that node is clean, the subscriber is something else on the orin
+and every topic needs a census from the orin's side.
+
+Two smaller facts from the same run, recorded so they are not rediscovered:
+
+- **676 kB/s mean with 5.2 MB/s peaks still leaves the master** when the orin
+  runs nothing at all. Discovery accounts for some of it; `just record start`
+  is not gated on `GOLFCART_USE_ORIN`, so the orin's recorder came up and
+  subscribes `/tf_static` from the master. Small against 12 MB/s, but it is not
+  zero and nobody has accounted for all of it.
+- **Teardown took one second here**, against the 4+ minutes it hung in the
+  corner cell. `GOLFCART_USE_ORIN=0` removes the orin ssh from `stop-all`,
+  which localises that hang to the remote `just launch-down`, not to the
+  network.
+
+Note that the spdp simulation's raw logs are **not in the repository** — commit
+`283f741` added 195 lines of prose and no data, and the model itself lives
+outside the tree — so its table cannot be audited from here. Only the older
+domain-split runs under `docs/research/system/data/link-sim/` are committed.
+Whatever the outcome, a claim that cannot be re-derived should not have been
+recorded as a result.
+
+### Where this stands
+
+The branch is **half proved and half open**. `spdp` demonstrably keeps
+local-reader traffic off the wire; the per-host monitor demonstrably does not
+empty the link, because something on the orin is still reading the master's
+sensors. Merging now would ship a transport fix whose benefit is entirely
+masked by that reader, so the two commands above come first.
 
 ## Open questions
 
