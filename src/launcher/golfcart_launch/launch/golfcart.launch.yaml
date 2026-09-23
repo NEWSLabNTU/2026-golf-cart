@@ -556,6 +556,15 @@ launch:
         -
           name: use_gnss
           value: $(var use_gnss)
+        # This group is NOT host-gated, so the monitor runs on both machines.
+        # That is intentional - each host wants its own web UI - but it means
+        # the node has to be told which host it is on, or it subscribes to the
+        # other machine's raw sensor topics across the link. With one shared
+        # DDS domain that costs the whole 100 Mb/s budget in both directions;
+        # see monitor_topics.yaml and the `host` field there.
+        -
+          name: monitor_host
+          value: $(var host)
 
 # # RQT Runtime Monitor
 # - node:
