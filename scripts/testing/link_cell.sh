@@ -113,7 +113,12 @@ log "cell ${MULTICAST}/${MONITOR}: startup ${STARTUP}s, steady ${STEADY}s, sampl
 # edited the XML would measure the previous cell's transport.
 run just stop-all
 run ros2 daemon stop
-run "${ON_ORIN}" ros2 daemon stop
+# on_orin.sh puts ~/.local/bin on the remote PATH but sources no ROS environment,
+# so a bare `ros2` there is "command not found" and the orin would keep a daemon
+# holding the PREVIOUS cell's profile - which shows up later as a data multicast
+# group in its groups.txt under spdp, looking exactly like a profile that did not
+# take.
+run "${ON_ORIN}" bash -c '. scripts/env.sh >/dev/null 2>&1; ros2 daemon stop'
 
 set_multicast "${MULTICAST}"
 cp "${MASTER_XML}" "${OUT}/master.xml"
@@ -130,6 +135,15 @@ else
 	run just launch-all
 fi
 
+# The watchdog has to go FIRST, not after the startup wait. It stops every
+# golfcart unit after 6 missed pings (~42 s), and the link fills the moment the
+# stacks are up - well inside a 90 s wait - so stopping it later means the orin
+# is already dead in exactly the cells that matter. The short sleep lets the
+# orin's own launch-up start it before we stop it.
+sleep 5
+log "stopping the orin watchdog for the duration of this cell"
+run "${ON_ORIN}" systemctl --user stop golfcart-watchdog.service
+
 log "waiting ${STARTUP}s for the stacks"
 sleep "${STARTUP}"
 
@@ -145,21 +159,32 @@ if [ "${RVIZ}" = "1" ]; then
 	sleep 30
 fi
 
-log "stopping the orin watchdog for the duration of this cell"
-run "${ON_ORIN}" systemctl --user stop golfcart-watchdog.service
-
 log "starting recorders on both hosts"
 run just record start
 sleep "${STEADY}"
 
+# Who actually reads the clouds, and on which host. This is the direct
+# instrument for the mechanism the whole branch rests on: "two or more reader
+# PROCESSES" versus "the orin genuinely subscribed". It is a graph query, not a
+# subscription, so it adds no reader and cannot perturb the decision it reports.
+log "reader census on the raw clouds"
+for topic in /sensing/lidar/vlp32/velodyne_points /sensing/camera/zed/rgb/color/rect/image; do
+	echo "== ${topic}" >>"${OUT}/readers.txt"
+	ros2 topic info -v "${topic}" >>"${OUT}/readers.txt" 2>&1
+done
+
+# The MASTER's NIC counters already describe both directions: tx is
+# master->orin, rx is orin->master. That is what fills both tables in the doc.
+# The orin's own sample is a cross-check only, and it is the fragile one - its
+# ssh is opened during saturation and would stream its output back over the
+# flooded wire - so it writes to the orin's own log/ and is fetched after the
+# wire is quiet again. A failure there must not cost the cell.
 log "sampling the wire for ${SAMPLE}s, both directions at once"
-"${REPO_DIR}/scripts/check/link_pressure.sh" "${IFACE}" "${SAMPLE}" "${OUT}/master_pressure.csv" \
-	>"${OUT}/master_to_orin.txt" 2>&1 &
-MPID=$!
-"${ON_ORIN}" ./scripts/check/link_pressure.sh "${ORIN_IFACE}" "${SAMPLE}" \
-	>"${OUT}/orin_to_master.txt" 2>&1 &
+"${ON_ORIN}" bash -c ". scripts/env.sh >/dev/null 2>&1; ./scripts/check/link_pressure.sh ${ORIN_IFACE} ${SAMPLE} > log/link_cell_orin.txt 2>&1" &
 OPID=$!
-wait "${MPID}" "${OPID}"
+"${REPO_DIR}/scripts/check/link_pressure.sh" "${IFACE}" "${SAMPLE}" "${OUT}/master_nic.csv" \
+	>"${OUT}/master_nic.txt" 2>&1
+wait "${OPID}" 2>/dev/null
 
 # Small topics only. Both are the ones that degrade first when the wire fills:
 # the twist estimator needs the ZED IMU and its /tf, and imu_corrector's output
@@ -190,6 +215,10 @@ sleep 5
 
 log "stopping both stacks"
 run just stop-all
+
+# Now the wire is quiet, so fetching the orin's cross-check costs nothing.
+log "fetching the orin's own NIC sample"
+"${ON_ORIN}" cat log/link_cell_orin.txt >"${OUT}/orin_nic.txt" 2>/dev/null
 
 # The trap restores spdp; say so in the log so a reader of OUT knows the vehicle
 # is not left on whatever this cell set.
