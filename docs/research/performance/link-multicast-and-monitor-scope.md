@@ -1,10 +1,10 @@
 # The master/orin link in ONE domain: multicast scope and monitor scope
 
-**Status**: simulated on a workstation; **two of the four vehicle cells
-measured** (2026-09-23, both `AllowMulticast=default`). They reproduce the
-2026-09-21 storm at 11.4 and 11.2 MB/s mean — which confirms the instrument,
-and confirms that the monitor fix alone changes nothing. The two `spdp` cells
-are still TODO.
+**Status**: simulated on a workstation; **three of the four vehicle cells
+measured** (2026-09-23). The two `default` cells reproduce the 2026-09-21 storm
+at 11.4 and 11.2 MB/s mean, and `spdp` with the shared monitor list is WORSE at
+12.3 MB/s. Every single-axis change has now been shown not to work on the
+vehicle; the corner cell is the whole experiment, and is still TODO.
 
 **Branch**: `perf/spdp-multicast`. **Date**: 2026-09-23.
 
@@ -120,7 +120,7 @@ monitors receiving `diagnostics=112 health=112`.
 Four cells, same two axes. `just link pressure` on the master's `enP5p3s0`
 (`eno1` on the orin) during a steady period with both hosts up.
 
-### Vehicle results — one cell measured, 2026-09-23
+### Vehicle results — three cells measured, 2026-09-23
 
 Each cell is `just link cell <multicast> <monitor>`, which is the whole
 procedure: both profiles set, `just launch-all`, both recorders started, 60 s
@@ -129,12 +129,12 @@ of NIC counters on both hosts at once, teardown, `spdp` restored.
 | master → orin | shared monitor list | per-host + `/system/health` |
 |---|---|---:|
 | `AllowMulticast=default` | **11431.6 / 12633.0 kB/s** | **11236.1 / 12715.5 kB/s** |
-| `AllowMulticast=spdp` | TODO mean / peak kB/s | TODO mean / peak kB/s |
+| `AllowMulticast=spdp` | **12347.2 / 12425.6 kB/s** | TODO mean / peak kB/s |
 
-| orin → master            | shared monitor list       | per-host + `/system/health` |
-|--------------------------|---------------------------|-----------------------------|
-| `AllowMulticast=default` | **9961.1 / 12382.5 kB/s** | **10641.0 / 12380.3 kB/s**  |
-| `AllowMulticast=spdp`    | TODO                      | TODO                        |
+| orin → master            | shared monitor list        | per-host + `/system/health` |
+|--------------------------|----------------------------|-----------------------------|
+| `AllowMulticast=default` | **9961.1 / 12382.5 kB/s**  | **10641.0 / 12380.3 kB/s**  |
+| `AllowMulticast=spdp`    | **10596.4 / 12349.3 kB/s** | TODO                        |
 
 Cells: `log/link_cells/default-shared_20260923-114136` and
 `default-perhost_20260923-115959`. mean / peak over 60 s.
@@ -148,6 +148,31 @@ link, it is the multicast axis — and per the simulation, only both together.
 The Velodyne is lossless in both cells: 1412 scans in 141.4 s and 1365 in
 136.6 s, both 9.98 Hz against 10 Hz published. The storm is outbound; the
 recorder is a local reader and never touches the wire.
+
+**`spdp` alone is WORSE, not merely useless**
+(`log/link_cells/spdp-shared_20260923-121039`). 12347.2 kB/s mean master →
+orin, above both `default` cells, and the mechanism is not subtle: with the
+shared monitor list the orin's copy genuinely subscribes to the master's three
+clouds and three GMSL images, so a payload that was one multicast datagram
+becomes one unicast copy per remote reader. Removing multicast without removing
+the subscriptions multiplies the bytes.
+
+**That cell also settles the missing-rx question.** The master's rx mean goes
+from 95.6 and 341.2 kB/s in the `default` cells to 10634.2 kB/s here, against
+the orin's own tx of 10596.4 — agreement to 0.4 %. Unicast is not subject to
+IGMP snooping, so the 100× shortfall under `default` was multicast that never
+reached the master's NIC, not an accounting error, and reading each direction
+from the sending host's tx was the right call.
+
+Instrument health in that cell, now that the control exists: the local control
+topic `/sensing/lidar/vlp32/velodyne_points` held 10.00 Hz throughout
+(9.975–10.034 over 21 windows), so CLI discovery is unaffected by the load and
+an empty row means an empty topic. `/sensing/imu/imu_data` arrives but bursty,
+13.2–128.6 Hz across the window against 100 Hz published — the ZED IMU crossing
+a saturated link, which is exactly the jitter `gyro_odometer` time-syncs
+against. `/localization/twist_estimator/twist_with_covariance` is silent
+because the cart is stationary with no velocity source, not because of the
+link; that row needs a moving vehicle and does not belong to this matrix.
 
 **Read each direction from the SENDING host's own tx counter.** The master's rx
 column disagrees with the orin's tx column by a factor of 100 — the orin's NIC
