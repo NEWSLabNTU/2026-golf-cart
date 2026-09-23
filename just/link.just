@@ -64,6 +64,24 @@ groups:
     @echo "239.255.0.1 is CycloneDDS SPDP and is expected on the LAN NIC."
     @echo "Any 239.255.0.x DATA group there means a profile did not take."
 
+# One cell of the vehicle matrix in docs/research/performance/link-multicast-and-monitor-scope.md.
+# Run it ON THE MASTER. It sets AllowMulticast on both hosts, launches both
+# stacks with the chosen monitor scope, records on both, measures both
+# directions of the wire over the same 60 s, tears down and restores spdp.
+# Everything lands in log/link_cells/<cell>_<timestamp>/.
+#
+#   just link cell default shared      # control: the 2026-09-21 state
+#   just link cell default perhost
+#   just link cell spdp shared
+#   just link cell spdp perhost        # the branch's own configuration
+#
+# The two `default` cells saturate the 100 Mb/s link on purpose, so run them
+# from a terminal ON the master, not over ssh.
+
+# Run one matrix cell: MULTICAST is default|spdp, MONITOR is shared|perhost
+cell MULTICAST MONITOR:
+    ./scripts/testing/link_cell.sh {{MULTICAST}} {{MONITOR}}
+
 # Two hosts, one wire, on this machine: network namespaces joined by a veth
 # shaped to 100 Mbit/s, the REAL master stack (golfcart.launch.yaml
 # host:=master, drivers replaced by publishers with the real sizes and rates)
