@@ -64,7 +64,3 @@
 [submodule "src/sensor_component/external/ublox_f9p_ws"]
 	path = src/sensor_component/external/ublox_f9p_ws
 	url = https://github.com/NEWSLabNTU/ublox_f9p_ws.git
-[submodule "src/sensor_component/external/gmslcam"]
-	path = src/sensor_component/external/gmslcam
-	url = https://github.com/NEWSLabNTU/gmslcam.git
-	branch = main
