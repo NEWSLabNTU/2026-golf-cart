@@ -24,6 +24,7 @@ Background research and technology surveys (some carry historical AutoSDV-era co
 - [Where the Orin's CPU Actually Goes](research/system/where-the-orin-cpu-goes.md) — the 2026-08-25 capture re-read for what else it holds: a 4.9%-per-process floor paid by 45 standalone nodes, a GNSS node respawning every 4 s, and why no run record has ever carried a GPU number
 - [Autoware CUDA Point Cloud Chain](research/sensing/autoware-cuda-pointcloud-chain.md) — the four pipeline modes, why a CPU chain cannot feed the CUDA concatenator, and the per-sensor preprocessing this repo is missing entirely
 - [LiDAR Pipeline Starvation](research/sensing/lidar-pipeline-starvation.md) — why NDT gets ~4 Hz of half-empty cloud and why the Velodyne is missing from RViz; two unrelated faults, a QoS mismatch and a 200 ms sync window
+- [VLP32 Point Cloud Rate Drop](research/sensing/vlp32-pointcloud-rate-drop.md) — why `vlp32/pointcloud` records at 9.5 Hz: the pipeline and concatenator lose nothing, the recorder drops that one topic, and why `ros2 topic hz` misread it as a sync-window fault
 - [NDT Parameter Tuning](research/localization/ndt_parameter_tuning_coss_map.md) — NDT scan matcher tuning for VLP-32C on COSS map
 - [Indoor Localization](research/indoor_localization.md) — ROS 2 indoor localization solutions survey (historical)
 - [NVIDIA Isaac ROS](research/nvidia_isaac_ros.md) — Isaac ROS Visual SLAM analysis (historical)
