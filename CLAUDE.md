@@ -861,7 +861,7 @@ just service install-orin              # the orin, over ssh
 just launch-all                     # starts both; returns immediately
 just stop-all                       # stops both; leaves recording alone
 just logs
-just record start / record-stop        # recording, independent of the launch
+just record start / record stop        # recording, independent of the launch; stop fetches + merges the orin bag
 just service doctor                            # when topics do not show up
 ```
 

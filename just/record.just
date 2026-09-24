@@ -27,15 +27,50 @@ start:
     ./scripts/multi_machine/on_orin.sh just record up || RC=1
     exit $RC
 
-# Stop recording on both hosts and let each finalize its bag.
-stop:
+# Stop both recorders, then fetch the orin bag and merge the pair. OPTS: merge=off
+stop *OPTS="":
     #!/usr/bin/env bash
     set -o pipefail
+    MERGE=on
+    for opt in {{OPTS}}; do
+        case "$opt" in
+            merge=on|merge=true)   MERGE=on ;;
+            merge=off|merge=false) MERGE=off ;;
+            *)
+                echo "Unknown option '$opt'" >&2
+                echo "Usage: just record stop [merge=on|off]" >&2
+                exit 2 ;;
+        esac
+    done
     RC=0
     # Stop both even if the first fails - a half-stopped pair is worse than either.
     just record down || RC=1
     ./scripts/multi_machine/on_orin.sh just record down || RC=1
+    # Both units have exited, so both bags are finalized. Collecting after a
+    # failed stop would merge whatever half is there; leave that to a human.
+    if [ "$RC" -eq 0 ] && [ "$MERGE" = on ]; then
+        # In the background: the merge rewrites the whole master bag, minutes
+        # for a long drive. A transient unit, not `&`, so closing this terminal
+        # does not kill a half-written merged bag. Logged to a file beside the
+        # bags because the user journal is not persistent on every host.
+        GOLFCART_ENV_QUIET=1 source scripts/env.sh >/dev/null 2>&1
+        BAG_DIR="${GOLFCART_BAG_DIR:-${HOME}/rosbags}"
+        UNIT="golfcart-collect-$(date +%Y%m%d_%H%M%S)"
+        LOG="${BAG_DIR}/${UNIT}.log"
+        if systemd-run --user --quiet --collect --unit "$UNIT" \
+                -E "GOLFCART_BAG_DIR=${BAG_DIR}" \
+                -p "StandardOutput=append:${LOG}" -p "StandardError=append:${LOG}" \
+                "$PWD/scripts/multi_machine/record_collect.sh"; then
+            echo "fetch + merge running in the background; progress: tail -f ${LOG}"
+        else
+            RC=1
+        fi
+    fi
     exit $RC
+
+# Fetch the orin bag paired with a master bag (default: newest) and merge them.
+collect MASTER_BAG="":
+    ./scripts/multi_machine/record_collect.sh {{MASTER_BAG}}
 
 # Is either host recording?
 status:

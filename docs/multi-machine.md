@@ -122,8 +122,32 @@ stack up, down, or half-up:
 ```bash
 just record start     # both hosts begin recording to their own local disk
 just record status
-just record stop      # both finalize their bags
+just record stop      # both finalize their bags; fetch + merge into merged_<ts> runs in the background
+just record stop merge=off   # only stop; collect later with `just record collect`
 ```
+
+`record stop` ends the session as one bag on the master: once both recorders
+have exited it fetches the orin bag and merges it with the master bag into
+`merged_<ts>` (named after the master bag's timestamp). The orin bag is the one
+whose timestamp is within 60 s of the master's; anything further is treated as
+another session and nothing is merged. Nor is an orin bag holding nothing but
+`/tf_static` (the orin stack was down): the merge rewrites the whole master bag,
+13 GB for a few minutes of driving, so it is only done when it adds something.
+
+The collection runs as a transient user unit (`golfcart-collect-<ts>`), so
+`record stop` returns as soon as both bags are finalized, and closing the
+terminal does not kill a half-written merge. Its output goes to
+`$GOLFCART_BAG_DIR/golfcart-collect-<ts>.log`, which `record stop` prints; the
+user journal is not persistent on every host. If either host failed to stop,
+nothing is collected and the stop exits non-zero. Re-run the collection with:
+
+```bash
+just record collect                          # newest master_<ts> bag
+just record collect master_20260924_124734   # a given session
+```
+
+It is safe to re-run: the fetch resumes, and an existing `merged_<ts>` is left
+alone.
 
 Bags land in `$GOLFCART_BAG_DIR/master_<ts>` and `.../orin_<ts>` on their
 respective machines — the external SSD (`/mnt/external/rosbags`) when mounted,
@@ -199,7 +223,8 @@ LiDAR. Do not reverse phc2sys's direction while chrony is running.
 ## Collecting the bags
 
 Each host records to its own disk, so a session leaves two bags on two machines.
-Bring the orin's side over afterwards:
+`just record stop` brings the orin's side over and merges it (see *Recording*).
+For bags from `just bag record`, or anything else, fetch by hand:
 
 ```bash
 just bag fetch-orin              # everything not already here
