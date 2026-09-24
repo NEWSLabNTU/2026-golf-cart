@@ -147,12 +147,29 @@ just bag merge "master_<ts> orin_<ts>"
 just bag replay
 ```
 
+Or record in the foreground, this host only, from a terminal — Ctrl-C stops it
+and finalizes the bag:
+
+```bash
+just bag record                # $GOLFCART_BAG_DIR/master_<ts>
+just bag record campus_loop    # $GOLFCART_BAG_DIR/master_<ts>_campus_loop
+just bag record-indoor         # pre-drive checklist, then the same recording
+just bag play                  # newest finalized bag in $GOLFCART_BAG_DIR
+```
+
 Topics recorded are plain lists, one per line — edit these, not any script:
 
 ```
 config/recording/master_topics.txt
 config/recording/orin_topics.txt
 ```
+
+These are the only lists. `just record start`, `just bag record` and `just bag
+record-indoor` all read them through `scripts/recording/topics.sh`; no recorder
+carries its own copy. A host whose role is neither `master` nor `orin` (one
+machine running everything) records both. `just bag record-aruco` is the
+exception: it records a purpose-built set including the detector's output, for
+one analysis script.
 
 ### Where the bag lands
 
@@ -205,10 +222,6 @@ just bag merge "master_20260814_152605 orin_20260814_152603"
 `bag-merge` writes `merged_<timestamp>` next to the first input unless you pass
 `-o /path/to/output`. The merged bag is roughly the sum of its inputs, so point
 `-o` at the SSD if the inputs are large.
-
-> The legacy single-machine recipes are a **different** location: `just
-> bag-record` writes to `<repo>/rosbags/outdoor_<timestamp>` and `just bag play`
-> reads from there. Only the systemd recorder above uses `GOLFCART_BAG_DIR`.
 
 `just stop-all` deliberately leaves a recording running; stopping the stack and
 stopping a recording are separate decisions.

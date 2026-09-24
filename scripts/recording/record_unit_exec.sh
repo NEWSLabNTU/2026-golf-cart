@@ -65,15 +65,10 @@ if [ ! -f "${TOPIC_FILE}" ]; then
     exit 1
 fi
 
-# Strip comments (whole-line and trailing) and surrounding whitespace, then drop
-# blank lines.
-TOPICS=()
-while IFS= read -r line; do
-    line="${line%%#*}"
-    line="${line#"${line%%[![:space:]]*}"}"
-    line="${line%"${line##*[![:space:]]}"}"
-    [ -n "${line}" ] && TOPICS+=("${line}")
-done < "${TOPIC_FILE}"
+# The one list reader, shared with `just bag record` and the link simulation.
+# shellcheck source=topics.sh
+source "${WORKSPACE}/scripts/recording/topics.sh"
+mapfile -t TOPICS < <(golfcart_recording_topics "${TOPIC_FILE}")
 
 if [ "${#TOPICS[@]}" -eq 0 ]; then
     echo "record_unit_exec: ${TOPIC_FILE} lists no topics — refusing to record nothing" >&2

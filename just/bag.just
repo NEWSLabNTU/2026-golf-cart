@@ -13,16 +13,28 @@ set working-directory := '..'
 default:
     @just --list bag
 
-# Play the most recent outdoor recording
+# Play the most recent recording in $GOLFCART_BAG_DIR
 play:
     #!/usr/bin/env bash
-    LATEST=$(ls -td rosbags/outdoor_* 2>/dev/null | head -1); \
-    if [ -z "$LATEST" ]; then \
-        echo "No outdoor recordings found in rosbags/"; \
-        exit 1; \
-    fi; \
-    echo "Playing: $LATEST"; \
-    ros2 bag play "$LATEST" --clock
+    set -eo pipefail
+    GOLFCART_ENV_QUIET=1 source scripts/env.sh
+    BAG_DIR="${GOLFCART_BAG_DIR:-${HOME}/rosbags}"
+    # Newest finalized bag, whichever recorder wrote it: <role>_<ts>[_NAME]
+    # from `just bag record` or the unit, merged_<ts> from `just bag merge`.
+    LATEST=""
+    for candidate in "${BAG_DIR}"/*_*/metadata.yaml; do
+        [ -s "${candidate}" ] || continue
+        candidate="$(dirname "${candidate}")"
+        if [ -z "${LATEST}" ] || [ "${candidate}" -nt "${LATEST}" ]; then
+            LATEST="${candidate}"
+        fi
+    done
+    if [ -z "${LATEST}" ]; then
+        echo "No finalized bag found in ${BAG_DIR}" >&2
+        exit 1
+    fi
+    echo "Playing: ${LATEST}"
+    ros2 bag play "${LATEST}" --clock
 
 # ============================================================================
 # Multi-machine services (systemd user units, one role per machine)
@@ -49,9 +61,17 @@ play-ntu SET="CSIE-1" ARGS="":
 # either wrong fails silently and still looks like it is working — see the
 # comment at the top of scripts/rosbag/ntu_sim_bag.sh.
 
-# Record outdoor sensor topics to rosbags/ directory
-record:
-    ./scripts/rosbag/record_outdoor.sh
+# Record this host's config/recording list from this terminal; Ctrl-C stops
+#
+#   just bag record              ->  $GOLFCART_BAG_DIR/master_<ts>
+#   just bag record campus_loop  ->  $GOLFCART_BAG_DIR/master_<ts>_campus_loop
+#
+# Same list, directory and naming as `just record start`, which runs the same
+# thing under systemd on both hosts. The topics live in
+# config/recording/<role>_topics.txt and nowhere else.
+# Record this host's topic list (config/recording/) in the foreground
+record NAME="":
+    ./scripts/recording/record_foreground.sh {{NAME}}
 
 # Record everything the ArUco indoor localizer needs (phase 3D-7).
 # Name the scenario so the bag is readable without opening it:
@@ -60,7 +80,7 @@ record:
 record-aruco SCENARIO="session":
     ./scripts/rosbag/record_aruco.sh {{SCENARIO}}
 
-# Record the phase 3B indoor mapping run: LiDAR + IMU for SLAM, cameras for 3C
+# Record the phase 3B indoor mapping run: pre-drive checklist, then `bag record`
 record-indoor:
     ./scripts/rosbag/record_indoor_mapping.sh
 

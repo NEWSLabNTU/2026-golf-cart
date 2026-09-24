@@ -25,6 +25,7 @@
 
 # ── LiDAR — Velodyne VLP-32C (namespace is vlp32, NOT top) ──────────────────
 /sensing/lidar/vlp32/velodyne_points
+/sensing/lidar/vlp32/velodyne_packets
 /sensing/lidar/vlp32/pointcloud
 
 # Concatenated cloud: OFF. It is derived, not measured — the stack rebuilds it
@@ -36,8 +37,21 @@
 # ── LiDAR — Falcon (Seyond) ─────────────────────────────────────────────────
 /sensing/lidar/falcon/iv_points
 
-# ── GNSS — Xsens MTi, not the u-blox the design assumed ─────────────────────
-/sensing/gnss/mti/fix
+# ── GNSS — u-blox ZED-F9P (ublox_f9p_ws) ────────────────────────────────────
+#
+# Driver output, checked against a running stack on 2026-09-24. nav_sat_fix is
+# what gnss_poser reads. rxmrtcm is the receiver's own account of which
+# corrections it accepted, and ntrip/rtcm what the caster sent; both are
+# silent without use_ntrip:=true, which is the case the rule above keeps them
+# listed for. This section used to name /sensing/gnss/mti/fix, from an Xsens
+# GNSS that is not on the vehicle, and so recorded no fix at all.
+/sensing/gnss/ublox/nav_sat_fix
+/sensing/gnss/ublox/nmea_sentence
+/sensing/gnss/ublox/rxmrtcm
+/sensing/gnss/ntrip/rtcm
+
+# gnss_poser output. Derived, like the concatenated cloud, but kept: it is
+# small, and it is the pose the initializer was actually handed.
 /sensing/gnss/fixed
 /sensing/gnss/pose
 /sensing/gnss/pose_with_covariance

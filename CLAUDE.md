@@ -90,8 +90,8 @@ just vehicle control-circle     # Run circular trajectory
 
 ### Rosbag
 ```bash
-just bag record         # Record outdoor sensor topics
-just bag play           # Play most recent recording
+just bag record [NAME]  # Record this host's config/recording list, foreground
+just bag play           # Play most recent recording in $GOLFCART_BAG_DIR
 ```
 
 ### Simulation

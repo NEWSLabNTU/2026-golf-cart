@@ -267,17 +267,10 @@ fi
 # The recorder, invoked as scripts/recording/record_unit_exec.sh invokes it
 # (same list parsing, same `ros2 bag record -o DIR TOPICS...`), but with this
 # run's profile rather than the one env.sh would resolve.
-record_topics() {
-    local line
-    while IFS= read -r line; do
-        line="${line%%#*}"
-        line="${line#"${line%%[![:space:]]*}"}"
-        line="${line%"${line##*[![:space:]]}"}"
-        [ -n "$line" ] && echo "$line"
-    done < "$1"
-}
-mapfile -t MASTER_TOPICS < <(record_topics config/recording/master_topics.txt)
-mapfile -t ORIN_TOPICS < <(record_topics config/recording/orin_topics.txt)
+# shellcheck source=../../recording/topics.sh
+source scripts/recording/topics.sh
+mapfile -t MASTER_TOPICS < <(golfcart_recording_topics config/recording/master_topics.txt)
+mapfile -t ORIN_TOPICS < <(golfcart_recording_topics config/recording/orin_topics.txt)
 
 # ── instruments first, so startup is in the numbers ──────────────────────────
 TOTAL=$((STARTUP + STEADY))
