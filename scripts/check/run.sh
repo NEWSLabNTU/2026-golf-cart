@@ -2,6 +2,13 @@
 # Golf cart sensor & interface health check
 # 1. Runs hardware-level connectivity checks (no ROS required)
 # 2. Launches available sensor drivers + RViz for live visualization
+#
+# Unlike scripts/check/vehicle.sh, this script has no ssh-routing concept: the
+# LiDAR checks below (and phase 2's `ros2 launch`) always run against THIS
+# host. If config/sensors.conf's LIDAR_HOST is ever set to orin, run this
+# script ON the orin instead of adding remote routing here - phase 2 starts
+# real ROS nodes and RViz locally, which cannot sensibly be done "for" another
+# machine. See docs/roadmaps/8-lidar-on-orin.md.
 set -uo pipefail
 
 script_dir=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &>/dev/null && pwd )

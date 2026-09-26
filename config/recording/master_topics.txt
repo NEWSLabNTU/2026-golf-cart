@@ -22,8 +22,17 @@
 # *compressed* stream (~5 MB/s) is small enough to cross it, and even that is
 # recorded on the orin instead. Each host therefore records its own sensors to
 # its own disk; the orin's ZED topics are deliberately absent from this file.
+#
+# Recording follows the driver, not the machine that happens to run this
+# service: config/sensors.conf's LIDAR_HOST picks which host launches the two
+# LiDAR drivers (see docs/roadmaps/8-lidar-on-orin.md), and the three topics
+# marked below are only live HERE while LIDAR_HOST=master, the default. If it
+# is ever set to orin, comment those three out and uncomment their twins in
+# orin_topics.txt instead - this file is a static list, not templated by that
+# variable, so the switch is a hand edit in both files together.
 
 # ── LiDAR — Velodyne VLP-32C (namespace is vlp32, NOT top) ──────────────────
+# Live while LIDAR_HOST=master (the default). See the note above.
 /sensing/lidar/vlp32/velodyne_points
 /sensing/lidar/vlp32/velodyne_packets
 /sensing/lidar/vlp32/pointcloud
@@ -35,6 +44,7 @@
 #/sensing/lidar/concatenated/pointcloud
 
 # ── LiDAR — Falcon (Seyond) ─────────────────────────────────────────────────
+# Live while LIDAR_HOST=master (the default). See the note above.
 /sensing/lidar/falcon/iv_points
 
 # ── GNSS — u-blox ZED-F9P (ublox_f9p_ws) ────────────────────────────────────

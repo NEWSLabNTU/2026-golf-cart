@@ -7,11 +7,16 @@ way, see [design/multi_machine_deployment.md](design/multi_machine_deployment.md
 
 | | address | interface | runs |
 |---|---|---|---|
-| master | `192.168.125.100` | `enP5p3s0` | the whole Autoware stack, plus the wired sensors (Velodyne, Falcon, GNSS, IMU, USB cameras) |
-| orin | `jetson@192.168.125.101` | `eno1` | the ZED X camera only |
+| master | `192.168.125.100` | `enP5p3s0` | the whole Autoware stack, plus the wired sensors (Velodyne, Falcon, GNSS, IMU, USB cameras) by default |
+| orin | `jetson@192.168.125.101` | `eno1` | the ZED X camera only by default |
 
 Both sit on the shared 4G LAN, which negotiates **100 Mb/s**. That is the reason
-each host records to its own disk instead of streaming images across.
+each host records to its own disk instead of streaming images across, and the
+reason the Velodyne and Falcon drivers stay on the master: `config/sensors.conf`'s
+`LIDAR_HOST` can name the orin instead, but each raw LiDAR is ~30 MB/s
+(~240 Mb/s for both), which this link cannot carry either direction. See
+[config/README.md](../config/README.md#moving-the-lidar-drivers) and
+[docs/roadmaps/8-lidar-on-orin.md](roadmaps/8-lidar-on-orin.md).
 
 ## What crosses the link
 
@@ -161,9 +166,11 @@ config/recording/orin_topics.txt
 ```
 
 Edit those rather than any script. The split is deliberate: both LiDARs are
-cabled to the master at ~30 MB/s each, and only the ZED's *compressed* stream is
-small enough to cross the shared 100 Mb/s LAN, so each host records its own
-sensors locally.
+cabled to the master at ~30 MB/s each (while `LIDAR_HOST=master`, the default —
+see `config/sensors.conf`), and only the ZED's *compressed* stream is small
+enough to cross the shared 100 Mb/s LAN, so each host records its own sensors
+locally. Recording follows the driver: `orin_topics.txt` carries the same three
+LiDAR topics, commented out, for the day `LIDAR_HOST` actually moves them.
 
 Recording used to be part of the launch (`record:=true`), and that argument no
 longer exists. Two reasons it moved out. You could not start or stop a recording
@@ -218,7 +225,11 @@ the easier confirmation that the master is answering.
 **PTP:** the master also runs `phc2sys -s CLOCK_REALTIME -c enP5p5s0`, pushing the
 system clock out to the Falcon LiDAR's NIC. Chrony disciplines `CLOCK_REALTIME`,
 so the two compose — chrony sets the system clock, phc2sys propagates it to the
-LiDAR. Do not reverse phc2sys's direction while chrony is running.
+LiDAR. Do not reverse phc2sys's direction while chrony is running. This unit is
+master-only and hardcodes `enP5p5s0`; if `LIDAR_HOST` ever moves the Falcon to
+the orin, `ptp4l.service`/`phc2sys.service` have to move and be re-pointed at
+whatever interface it lands on there — not done by this change, see
+[docs/roadmaps/8-lidar-on-orin.md](roadmaps/8-lidar-on-orin.md).
 
 ## Collecting the bags
 
