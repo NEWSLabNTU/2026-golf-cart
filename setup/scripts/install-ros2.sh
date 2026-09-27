@@ -51,11 +51,29 @@ echo "Using ros-apt-source version: ${ROS_APT_VERSION}"
 # Download and install ros-apt-source. Upstream publishes no per-release
 # checksum, so we retry the download and sanity-check that the result is a
 # valid .deb before installing rather than verifying a hash.
-ROS_APT_DEB="/tmp/ros2-apt-source.deb"
-curl -fSL --retry 3 -o "${ROS_APT_DEB}" \
-    "https://github.com/ros-infrastructure/ros-apt-source/releases/download/${ROS_APT_VERSION}/ros2-apt-source_${ROS_APT_VERSION}.${UBUNTU_CODENAME}_all.deb"
+#
+# The .deb goes into the checkout, beside the Autoware one, not into /tmp. On
+# a shared machine a fixed /tmp name belongs to whoever ran setup first, and
+# the sticky bit plus fs.protected_regular stop every other user (root
+# included) from overwriting it: "curl: (23) Failure writing output".
+SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
+DATA_DIR="${DATA_DIR:-${SCRIPT_DIR}/../../data}"
+DEB_DOWNLOAD_DIR="${DATA_DIR}/ros-apt-source"
+mkdir -p "${DEB_DOWNLOAD_DIR}"
 
-dpkg-deb --info "${ROS_APT_DEB}" > /dev/null 2>&1 || { echo "Error: downloaded ros-apt-source is not a valid .deb"; rm -f "${ROS_APT_DEB}"; exit 1; }
+DEB_FILE="ros2-apt-source_${ROS_APT_VERSION}.${UBUNTU_CODENAME}_all.deb"
+ROS_APT_DEB="$(readlink -f "${DEB_DOWNLOAD_DIR}")/${DEB_FILE}"
+
+if [[ -f "${ROS_APT_DEB}" ]] && dpkg-deb --info "${ROS_APT_DEB}" > /dev/null 2>&1; then
+    echo "Using cached ${ROS_APT_DEB}"
+else
+    # Download to .part and rename, so an interrupted transfer never leaves a
+    # file the cache check above would accept.
+    curl -fSL --retry 3 -o "${ROS_APT_DEB}.part" \
+        "https://github.com/ros-infrastructure/ros-apt-source/releases/download/${ROS_APT_VERSION}/${DEB_FILE}"
+    dpkg-deb --info "${ROS_APT_DEB}.part" > /dev/null 2>&1 || { echo "Error: downloaded ros-apt-source is not a valid .deb"; rm -f "${ROS_APT_DEB}.part"; exit 1; }
+    mv "${ROS_APT_DEB}.part" "${ROS_APT_DEB}"
+fi
 
 sudo apt-get install -y "${ROS_APT_DEB}"
 sudo apt-get update

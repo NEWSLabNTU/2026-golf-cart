@@ -29,14 +29,10 @@ fi
 
 # Generate connection file from template
 echo "Generating NetworkManager profile from template..."
-cat "${VELODYNE_TEMPLATE}" > /tmp/velodyne.nmconnection
-
-# Install connection file
+# Streamed straight into place: a fixed /tmp name is owned by whoever ran
+# this first, and fs.protected_regular stops even root from rewriting it.
 echo "Installing NetworkManager profile..."
-install -m 600 /tmp/velodyne.nmconnection "${CONNECTIONS_DIR}/velodyne.nmconnection"
-
-# Clean up temporary file
-rm /tmp/velodyne.nmconnection
+install -m 600 /dev/stdin "${CONNECTIONS_DIR}/velodyne.nmconnection" < "${VELODYNE_TEMPLATE}"
 
 # Reload NetworkManager connections
 echo "Reloading NetworkManager connections..."

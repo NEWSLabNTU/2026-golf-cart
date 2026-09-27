@@ -18,7 +18,7 @@
 #   sudo ./setup-interlink.sh master enP5p6s0
 #   sudo ./setup-interlink.sh orin   <iface>
 
-set -e
+set -eo pipefail  # a failed sed must not install an empty profile
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 CONNECTIONS_DIR="/etc/NetworkManager/system-connections"
@@ -61,19 +61,15 @@ if [ ! -f "${TEMPLATE}" ]; then
   exit 1
 fi
 
-# Generate connection file from template
+# Generate the profile and stream it straight into place: a fixed /tmp name
+# is owned by whoever ran this first, and fs.protected_regular stops even
+# root from rewriting it.
 echo "Generating NetworkManager profile from template..."
 sed -e "s/@ID@/${ID}/g" \
     -e "s/@IFACE@/${IFACE}/g" \
     -e "s/@ADDRESS@/${ADDRESS}/g" \
-    "${TEMPLATE}" > "/tmp/${ID}.nmconnection"
-
-# Install connection file
-echo "Installing NetworkManager profile..."
-install -m 600 "/tmp/${ID}.nmconnection" "${CONNECTIONS_DIR}/${ID}.nmconnection"
-
-# Clean up temporary file
-rm "/tmp/${ID}.nmconnection"
+    "${TEMPLATE}" \
+  | install -m 600 /dev/stdin "${CONNECTIONS_DIR}/${ID}.nmconnection"
 
 # Reload NetworkManager connections
 echo "Reloading NetworkManager connections..."

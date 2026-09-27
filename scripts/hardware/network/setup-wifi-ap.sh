@@ -3,7 +3,7 @@
 # Script to create NetworkManager profile for WiFi AP
 # Created for Golf Cart project
 
-set -e
+set -eo pipefail  # a failed sed must not install an empty profile
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 CONNECTIONS_DIR="/etc/NetworkManager/system-connections"
@@ -40,14 +40,10 @@ fi
 echo "Generating NetworkManager profile from template..."
 
 # Replace placeholders in WiFi AP template
-sed "s/@WIFI_AP_NAME@/${WIFI_AP_NAME}/g" "${WIFI_AP_TEMPLATE}" > /tmp/golfcart-ap.nmconnection
-
-# Install connection file
-echo "Installing NetworkManager profile..."
-install -m 600 /tmp/golfcart-ap.nmconnection "${CONNECTIONS_DIR}/golfcart-ap.nmconnection"
-
-# Clean up temporary file
-rm /tmp/golfcart-ap.nmconnection
+# Streamed straight into place: a fixed /tmp name is owned by whoever ran
+# this first, and fs.protected_regular stops even root from rewriting it.
+sed "s/@WIFI_AP_NAME@/${WIFI_AP_NAME}/g" "${WIFI_AP_TEMPLATE}" \
+  | install -m 600 /dev/stdin "${CONNECTIONS_DIR}/golfcart-ap.nmconnection"
 
 # Reload NetworkManager connections
 echo "Reloading NetworkManager connections..."
