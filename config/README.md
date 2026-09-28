@@ -8,7 +8,7 @@ changing a value here changes it for every consumer on both hosts.
 |---|---|---|
 | `host` | one word (`master` or `orin`) | which machine this checkout is on. Selects the DDS profile. **Gitignored** — it is a property of the machine, not the branch |
 | `multi_machine.conf` | shell assignments | the other host's `user@addr`, its repo path, the ssh key, the master's IP |
-| `sensors.conf` | shell assignments | which IMU and camera driver the sensor kit uses (`IMU_SOURCE`, `CAMERA_MODEL`) |
+| `sensors.conf` | shell assignments | which IMU and camera driver the sensor kit uses (`IMU_SOURCE`, `CAMERA_MODEL`), and which host runs the LiDAR drivers (`LIDAR_HOST`) |
 | `vehicle.conf` | shell assignments | whether the vehicle interface may transmit on CAN (`GOLFCART_TX_ENABLED`) |
 | `ntrip.param.yaml` | ROS 2 parameter YAML | the NTRIP caster account for RTK corrections. **Gitignored**, it is a secret; start from `ntrip.param.yaml.example`. Exported as `NTRIP_PARAM_FILE`, read only with `use_ntrip:=true` |
 | `runtime.conf` | shell assignments | how play_launch runs composable nodes (`GOLFCART_CONTAINER_MODE`), which middleware this host uses (`GOLFCART_RMW`), and the three ROS domain ids: master stack 50, orin stack 60, wire 10 |
@@ -63,6 +63,24 @@ actually reads.
 
 Currently `IMU_SOURCE=zed` — the ZED X's built-in IMU, published by the orin —
 because the Xsens MTi is broken.
+
+## Moving the LiDAR drivers
+
+`sensors.conf` also holds `LIDAR_HOST` — `master` (default) or `orin` — naming
+which host runs the Velodyne VLP-32C (nebula) and Seyond Falcon drivers. Same
+environment-variable mechanism as `IMU_SOURCE` for the same forced reason: the
+launch argument path from `golfcart.launch.yaml` down to `lidar.launch.xml`
+runs through the same installed tier4 files.
+
+Point cloud preprocessing and concatenation are **not** governed by this — they
+always run on the master and consume the drivers' topics over DDS, wherever
+`LIDAR_HOST` put the drivers.
+
+`LIDAR_HOST=orin` is a placement knob, not a switch to flip today: each raw
+LiDAR is ~30 MB/s (~240 Mb/s for both), and the master↔orin link is a shared
+100 Mb/s LAN — it cannot carry them. See
+[docs/roadmaps/8-lidar-on-orin.md](../docs/roadmaps/8-lidar-on-orin.md) for the
+full accounting and what has to move first (network profiles, PTP).
 
 ## Turning CAN TX on
 

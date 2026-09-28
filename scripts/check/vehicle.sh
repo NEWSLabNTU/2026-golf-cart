@@ -12,6 +12,10 @@
 #   can       VCU on can0: link state, bitrate, live RX frames
 #   gnss      u-blox on a serial port: node, permissions, bytes, NMEA/UBX sync
 #
+# velodyne and seyond run against THIS host by default. Set LIDAR_HOST=orin
+# (must match config/sensors.conf) to route both over ssh instead, the same
+# way zedx already does - see docs/roadmaps/8-lidar-on-orin.md.
+#
 # Usage:
 #   scripts/check/vehicle.sh                # everything
 #   scripts/check/vehicle.sh velodyne can   # only those
@@ -19,6 +23,7 @@
 #
 # Every setting below is overridable from the environment:
 #   VELODYNE_IP=192.168.7.11 scripts/check/vehicle.sh velodyne
+#   LIDAR_HOST=orin scripts/check/vehicle.sh velodyne seyond
 #
 # Exit status: 0 = no failures (warnings allowed), 1 = at least one failure.
 
@@ -37,6 +42,14 @@ set -u
 ORIN_SSH="${ORIN_SSH:-jetson@192.168.125.101}"            # user@addr, key auth only
 ORIN_SSH_KEY="${ORIN_SSH_KEY:-$HOME/.ssh/golfcart_orin}"  # empty = ssh defaults
 SSH_TIMEOUT="${SSH_TIMEOUT:-5}"                           # seconds for the connect
+
+# Which host the two LiDARs are cabled to: master | orin. Must match
+# config/sensors.conf's LIDAR_HOST - this script does not read that file, since
+# it is meant to run standalone before the workspace exists. master (default)
+# means "this host"; orin routes the velodyne/seyond checks below over ssh,
+# the same way the zedx check already does, instead of against this host's own
+# interfaces. See docs/roadmaps/8-lidar-on-orin.md.
+LIDAR_HOST="${LIDAR_HOST:-master}"
 
 # ── Velodyne VLP-32C ───────────────────────────────────────────────────────
 VELODYNE_IP="${VELODYNE_IP:-192.168.7.10}"                # the sensor
@@ -140,9 +153,29 @@ orin_reachable=unknown   # set by check_ssh; the remote checks refuse without it
 
 orin_sh() { ssh "${ssh_opts[@]}" "$ORIN_SSH" "$@"; }
 
+# When LIDAR_HOST=orin the two LiDARs are cabled to the orin instead of this
+# host, so check_velodyne/check_seyond below run there over ssh - the same
+# routing the zedx check already uses - rather than against this host's own
+# interfaces. Empty when LIDAR_HOST=master (the default): every "${lidar_remote[@]}"
+# prefix below then vanishes and the command runs locally, unchanged from
+# before LIDAR_HOST existed.
+lidar_remote=()
+[ "$LIDAR_HOST" = orin ] && lidar_remote=(ssh "${ssh_opts[@]}" "$ORIN_SSH")
+
+# Like have(), but checks the routed host - a local `command -v` says nothing
+# about what the orin has installed when LIDAR_HOST=orin.
+have_remote() {
+    if [ "${#lidar_remote[@]}" -eq 0 ]; then
+        have "$1"
+    else
+        "${lidar_remote[@]}" command -v "$1" >/dev/null 2>&1
+    fi
+}
+
 # Interface carrying a given host address, e.g. 192.168.7.1 -> enP5p3s0.
+# Routed by lidar_remote: see above.
 iface_for_ip() {
-    ip -4 -o addr show 2>/dev/null | awk -v want="$1" '
+    "${lidar_remote[@]}" ip -4 -o addr show 2>/dev/null | awk -v want="$1" '
         { split($4, a, "/"); if (a[1] == want) { print $2; exit } }'
 }
 
@@ -161,8 +194,10 @@ count_udp() { # count_udp <port> <seconds> [iface]
     local port="$1" secs="$2" iface="${3:-any}" out n
 
     # Nothing bound to the port: just listen on it. No privileges involved.
-    if have nc && port_free_udp "$port"; then
-        out=$(timeout "$secs" nc -u -l -n "$port" 2>/dev/null | wc -c)
+    # Routed by lidar_remote when LIDAR_HOST=orin: nc runs there, piping its
+    # output back to this host's own wc over the ssh connection.
+    if have_remote nc && port_free_udp "$port"; then
+        out=$(timeout "$secs" "${lidar_remote[@]}" nc -u -l -n "$port" 2>/dev/null | wc -c)
         printf 'BYTES %s nc\n' "${out:-0}"
         return 0
     fi
@@ -170,11 +205,11 @@ count_udp() { # count_udp <port> <seconds> [iface]
     # Port is taken (or no nc): sniff the wire instead.
     local sniffer
     for sniffer in tshark tcpdump; do
-        have "$sniffer" || continue
+        have_remote "$sniffer" || continue
         case "$sniffer" in
-            tshark)  out=$(timeout $((secs + 5)) tshark -i "$iface" -a "duration:${secs}" \
+            tshark)  out=$(timeout $((secs + 5)) "${lidar_remote[@]}" tshark -i "$iface" -a "duration:${secs}" \
                              -f "udp port ${port}" 2>&1) ;;
-            tcpdump) out=$(timeout $((secs + 3)) tcpdump -nn -q -i "$iface" -c 200 \
+            tcpdump) out=$(timeout $((secs + 3)) "${lidar_remote[@]}" tcpdump -nn -q -i "$iface" -c 200 \
                              "udp port ${port}" 2>&1) ;;
         esac
         if printf '%s' "$out" | grep -qiE 'permission|not permitted|are you root|couldn.t run|no such device'; then
@@ -205,8 +240,8 @@ count_udp() { # count_udp <port> <seconds> [iface]
 # SO_REUSEADDR, so a second bind to a live port succeeds, reads nothing, and
 # would report a healthy sensor as silent.
 port_free_udp() { # port_free_udp <port>
-    have ss || return 0
-    ! ss -uanH 2>/dev/null | awk -v p=":$1\$" '$5 ~ p {found=1} END {exit !found}'
+    have_remote ss || return 0
+    ! "${lidar_remote[@]}" ss -uanH 2>/dev/null | awk -v p=":$1\$" '$5 ~ p {found=1} END {exit !found}'
 }
 
 # Advice printed when a sniffer refused for lack of privileges. Both fixes are
@@ -224,8 +259,8 @@ sniffer_permission_help() { # sniffer_permission_help <tool>
 # Can we open a TCP connection to <host> <port>?
 tcp_open() { # tcp_open <host> <port> [seconds]
     local host="$1" port="$2" secs="${3:-3}"
-    have nc || return 2
-    timeout "$secs" nc -z -w "$secs" "$host" "$port" >/dev/null 2>&1
+    have_remote nc || return 2
+    timeout "$secs" "${lidar_remote[@]}" nc -z -w "$secs" "$host" "$port" >/dev/null 2>&1
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -333,7 +368,7 @@ check_ssh() {
 
 check_lidar() { # check_lidar <name> <sensor ip> <host ip> <port>
     local name="$1" sip="$2" hip="$3" port="$4"
-    section "${name} (${sip})"
+    section "${name} (${sip})$([ "${#lidar_remote[@]}" -gt 0 ] && echo " on ${ORIN_SSH}")"
 
     local iface; iface=$(iface_for_ip "$hip")
     if [ -n "$iface" ]; then
@@ -343,7 +378,7 @@ check_lidar() { # check_lidar <name> <sensor ip> <host ip> <port>
         info "sudo ip addr add ${hip}/24 dev <iface> && sudo ip link set <iface> up"
     fi
 
-    if ping -c 1 -W 1 "$sip" >/dev/null 2>&1; then
+    if "${lidar_remote[@]}" ping -c 1 -W 1 "$sip" >/dev/null 2>&1; then
         ok "${sip} answers ping"
     else
         fail "${sip} does not answer ping"
@@ -380,7 +415,7 @@ check_lidar() { # check_lidar <name> <sensor ip> <host ip> <port>
 check_velodyne() { check_lidar "Velodyne VLP-32C" "$VELODYNE_IP" "$VELODYNE_HOST_IP" "$VELODYNE_PORT"; }
 
 check_seyond() {
-    section "Seyond Falcon (${SEYOND_IP})"
+    section "Seyond Falcon (${SEYOND_IP})$([ "${#lidar_remote[@]}" -gt 0 ] && echo " on ${ORIN_SSH}")"
 
     local iface; iface=$(iface_for_ip "$SEYOND_HOST_IP")
     if [ -n "$iface" ]; then
@@ -390,7 +425,7 @@ check_seyond() {
         info "sudo ip addr add ${SEYOND_HOST_IP}/24 dev <iface> && sudo ip link set <iface> up"
     fi
 
-    if ping -c 1 -W 1 "$SEYOND_IP" >/dev/null 2>&1; then
+    if "${lidar_remote[@]}" ping -c 1 -W 1 "$SEYOND_IP" >/dev/null 2>&1; then
         ok "${SEYOND_IP} answers ping"
     else
         fail "${SEYOND_IP} does not answer ping"
@@ -681,8 +716,8 @@ checks: ${ALL_CHECKS[*]}   (default: all of them, in that order)
 
   deps      the command line tools the checks below need, and capture rights
   ssh       pubkey login to the orin; the remote checks below ride on it
-  velodyne  VLP-32C: host address, ping, UDP packets on ${VELODYNE_PORT}
-  seyond    Falcon:  host address, ping, TCP control ${SEYOND_PORT}, UDP data ${SEYOND_UDP_PORT}
+  velodyne  VLP-32C: host address, ping, UDP packets on ${VELODYNE_PORT} (LIDAR_HOST=${LIDAR_HOST})
+  seyond    Falcon:  host address, ping, TCP control ${SEYOND_PORT}, UDP data ${SEYOND_UDP_PORT} (LIDAR_HOST=${LIDAR_HOST})
   zedx      ZED X on the orin: SDK, ${ZED_DAEMON}, camera enumerated
   otocam    three oToBrite GMSL capture nodes on this host
   can       VCU on ${CAN_IFACE}: link, bitrate, live frames
@@ -708,12 +743,14 @@ for arg in "$@"; do
 done
 [ ${#selected[@]} -eq 0 ] && selected=("${ALL_CHECKS[@]}")
 
-# zedx, and gnss when the receiver is on the orin, both ride on the ssh login.
-# Run it first even when it was not asked for, or they skip for the wrong reason.
+# zedx, gnss when the receiver is on the orin, and velodyne/seyond when
+# LIDAR_HOST=orin all ride on the ssh login. Run it first even when it was not
+# asked for, or they skip for the wrong reason.
 needs_ssh=0
 for c in "${selected[@]}"; do
     [ "$c" = zedx ] && needs_ssh=1
     [ "$c" = gnss ] && [ "$GNSS_HOST" = orin ] && needs_ssh=1
+    { [ "$c" = velodyne ] || [ "$c" = seyond ]; } && [ "$LIDAR_HOST" = orin ] && needs_ssh=1
 done
 case " ${selected[*]} " in *" ssh "*) needs_ssh=0 ;; esac
 

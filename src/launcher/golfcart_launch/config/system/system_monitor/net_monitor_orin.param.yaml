@@ -22,6 +22,13 @@
 #               and carry nothing
 #   docker0     bridge with no containers on it
 #
+# TODO(LIDAR_HOST=orin): if the LiDAR drivers are ever actually moved here
+# (config/sensors.conf, see docs/roadmaps/8-lidar-on-orin.md for why that is
+# not yet possible over the current link), the interfaces they get re-cabled
+# to belong in `devices` below, named from this box's own `ip -br link` at the
+# time - do not guess a name from the master's enP5p4s0/enP5p5s0, which are a
+# different machine's PCIe enumeration and mean nothing here.
+#
 # Compare against `ip -br link` if the hardware changes. An interface that is
 # not listed is simply not monitored, which is a mild and visible failure.
 #

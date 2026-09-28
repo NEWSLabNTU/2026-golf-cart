@@ -160,6 +160,18 @@ Decisions taken for this design:
 | Recording trigger | Launch argument: `just launch-master record:=true` |
 | Time sync | chrony over the AP (PTP has no HW timestamping on WiFi) |
 
+**2026-09 (`chore/lidar-on-orin`) reopens the "Orin payload" row above.** That
+decision reverted a draft test; this branch reintroduces the *option* as a
+config placement knob (`LIDAR_HOST` in `config/sensors.conf`, default still
+`master`, so nothing here actually changes today) rather than another draft
+test, and only for the driver processes - preprocessing and concatenation stay
+on the master unconditionally either way. The reason the original attempt
+didn't stick still applies at the network layer: this design's own WiFi AP has
+even less headroom than the switched 100 Mb/s LAN that replaced it (see
+`docs/multi-machine.md`), and a raw LiDAR at ~30 MB/s does not fit either one.
+See [docs/roadmaps/8-lidar-on-orin.md](../roadmaps/8-lidar-on-orin.md) for the
+accounting and what would have to change before `LIDAR_HOST=orin` is real.
+
 ## 2. Architecture
 
 ```

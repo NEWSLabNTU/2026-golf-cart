@@ -415,3 +415,32 @@ Still to fix, unchanged by this revision:
   units are installed but inactive. Remove in phase 1.
 - Design §3.1's `TimeoutStopSec` comment claims a mechanism Phase 0 showed never
   engages; reword when the unit is rewritten.
+
+## 9. LiDAR-on-orin provisioning (opened by `chore/lidar-on-orin`, not done here)
+
+That branch adds `LIDAR_HOST` (`config/sensors.conf`) as a launch-time
+placement knob for the Velodyne and Falcon drivers, defaulting to `master` so
+provisioning is unaffected today. Actually running `LIDAR_HOST=orin` needs
+provisioning steps this plan does not cover yet - full reasoning and the
+bandwidth precondition in
+[docs/roadmaps/8-lidar-on-orin.md](8-lidar-on-orin.md). TODO, not implemented:
+
+- A `setup/golfcart_setup/registry.py` step (near `hardware-config`,
+  `registry.py:349-380`) that installs the LiDAR NetworkManager profiles on the
+  orin instead of the master - today `hardware-config` always targets this
+  machine's own `scripts/hardware/lidar-network/setup-lidar-network.sh`, with
+  no per-host gating.
+- `linuxptp`'s step installs `setup/files/linuxptp/{ptp4l,phc2sys}.service`
+  unconditionally onto whichever machine runs it; both hardcode `enP5p5s0`
+  (the master's Falcon NIC name) in `ExecStart`. Moving the Falcon needs a
+  second unit pair for the orin's own interface name, not a copy of these
+  with the string swapped, since the master may still need PTP for other
+  reasons.
+- `scripts/hardware/lidar-network/templates/*.nmconnection` are MAC-bound to
+  the master's NICs; the orin needs its own templates once real hardware MACs
+  for its LiDAR-side interfaces are known. Do not fabricate MACs to unblock
+  this - see the TODO comments this branch left in `VLP32.param.yaml`,
+  `seyond.param.yaml` and `seyond_start.py` instead.
+- netplan / NetworkManager on the orin needs a route to the new physical
+  segment(s) at all, which today's `eno1`-only device list
+  (`net_monitor_orin.param.yaml`) does not carry.

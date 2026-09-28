@@ -24,6 +24,15 @@
 #   enP5p5s0  1 Gbit,   Seyond Falcon
 #   enP5p6s0  1 Gbit,   spare
 #
+# TODO(LIDAR_HOST=orin): this list is static and names this MACHINE's
+# interfaces, not "wherever the LiDAR drivers currently run" - config/sensors.
+# conf's LIDAR_HOST does not move enP5p4s0/enP5p5s0 out of it. Do NOT remove
+# them here just because a driver moved to the orin: the physical NICs and
+# cabling stay exactly as described above until someone actually re-cables the
+# sensors (see docs/roadmaps/8-lidar-on-orin.md), at which point this file
+# needs its own edit to match, and net_monitor_orin.param.yaml next door needs
+# the corresponding interfaces added.
+#
 # Deliberately absent: l4tbr0, usb0, usb1, usb2. The usb* devices report
 # "Not Supported" for ioctl(SIOCETHTOOL) rather than ERROR, so they are not the
 # cause, but they carry nothing either. Also absent: enxce9701bbd030, the USB
