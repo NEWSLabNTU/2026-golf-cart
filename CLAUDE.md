@@ -272,7 +272,10 @@ Sensor configurations are in `src/param/autoware_individual_params/individual_pa
 - Main launch uses Autoware's standard launch system
 - Vehicle model: `golfcart_vehicle`
 - Sensor model: `golfcart_sensor_kit`
-- Default map: `./data/COSS-map-planning`. The production map is planned, not present.
+- Default map: `./data/COSS-map-planning`, changed with `map_path:=` (for example
+  `map_path:=./data/basement-indoor`). Until 2026-09-29 that override silently did
+  nothing: `map_path` was a fixed include value, so the loaders always got COSS.
+  The production map is planned, not present.
 
 ### Writing launch XML
 
