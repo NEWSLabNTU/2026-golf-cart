@@ -84,7 +84,12 @@ ros2 service call /control_command_service_node/enable \
 
 ### `trajectory_player` — open-loop trajectory replay
 
-Plays a YAML trajectory of `(t, speed, steering)` tuples.
+Plays a YAML trajectory of `(t, speed, steering)` tuples. Each tick it
+publishes `Control` (with the speed profile's slope as `acceleration`) and a
+`GearCommand` DRIVE on `/control/command/gear_cmd`. The gear matters: the
+vehicle interface starts in Parking, which pins the speed setpoint to 0.
+Acceleration is capped by the interface (`max_accel_mps2` /
+`max_decel_mps2`), so a steep ramp-down in the YAML is a real brake request.
 
 ```bash
 ros2 run control_test trajectory_player --ros-args -p trajectory_file:=straight_10m.yaml

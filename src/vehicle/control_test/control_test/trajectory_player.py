@@ -15,6 +15,7 @@ Subscribed:
 
 Published:
   - /control/command/control_cmd (Control): Velocity commands from trajectory
+  - /control/command/gear_cmd (GearCommand): DRIVE, at the control rate
   - /control_test/status (Float32MultiArrayStamped): Status data for evaluation
 
 PARAMETERS:
@@ -25,7 +26,7 @@ PARAMETERS:
 import rclpy
 from rclpy.node import Node
 from autoware_control_msgs.msg import Control
-from autoware_vehicle_msgs.msg import VelocityReport
+from autoware_vehicle_msgs.msg import GearCommand, VelocityReport
 
 import os
 import sys
@@ -171,6 +172,25 @@ class TrajectoryPlayer:
             steering_angle_deg=wp_before.steering_angle_deg + alpha * (wp_after.steering_angle_deg - wp_before.steering_angle_deg)
         )
 
+    def get_acceleration(self, time: float) -> float:
+        """
+        Slope of the speed profile at `time` (m/s^2), 0 outside it.
+
+        The profile is piecewise linear, so this is exact: it is the
+        acceleration the trajectory itself asks for, which is what a planner
+        would put in Control.longitudinal.acceleration.
+        """
+        if time <= self.waypoints[0].time or time >= self.duration:
+            return 0.0
+        times = [wp.time for wp in self.waypoints]
+        idx = bisect.bisect_left(times, time)
+        wp_before = self.waypoints[idx - 1]
+        wp_after = self.waypoints[idx]
+        dt = wp_after.time - wp_before.time
+        if dt == 0:
+            return 0.0
+        return (wp_after.target_speed - wp_before.target_speed) / dt
+
     def get_duration(self) -> float:
         """Get total trajectory duration in seconds"""
         return self.duration
@@ -250,6 +270,14 @@ class TrajectoryPlayerNode(Node):
             '/control/command/control_cmd',
             10
         )
+        # golfcart_vehicle_interface starts in Parking, and Parking pins the
+        # speed setpoint to 0: without a gear command the cart cannot move.
+        # Every trajectory here drives forward (speed >= 0), so DRIVE.
+        self.gear_pub = self.create_publisher(
+            GearCommand,
+            '/control/command/gear_cmd',
+            10
+        )
 
         # Control timer
         control_period = 1.0 / control_rate
@@ -286,7 +314,18 @@ class TrajectoryPlayerNode(Node):
         control_msg = Control()
         control_msg.stamp = current_time.to_msg()
         control_msg.longitudinal.velocity = target.target_speed
+        # The profile's own slope. The interface caps it (max_accel_mps2 /
+        # max_decel_mps2) and ignores decelerations inside its deadband; a
+        # steep ramp-down in the YAML becomes a real brake request.
+        control_msg.longitudinal.acceleration = self.trajectory.get_acceleration(elapsed)
         control_msg.lateral.steering_tire_angle = steering_angle_rad
+
+        # Same rate as Control, as vehicle_cmd_gate does: the interface keeps
+        # only the latest gear, and a single message can be lost.
+        gear_msg = GearCommand()
+        gear_msg.stamp = control_msg.stamp
+        gear_msg.command = GearCommand.DRIVE
+        self.gear_pub.publish(gear_msg)
 
         self.control_pub.publish(control_msg)
 
