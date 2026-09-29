@@ -1,0 +1,10 @@
+# Diagnostic graph for pose_source:=aruco with launch_perception:=false.
+#
+# autoware-main-aruco.yaml with the perception subtree removed, for the same
+# reason and by the same mechanism as autoware-main-no-perception.yaml; read
+# that file's header. Without this, ArUco runs with perception off could never
+# reach autonomous mode either.
+files:
+  - { path: $(dirname)/autoware-main-aruco.yaml }
+edits:
+  - { type: remove, regex: "/autoware/perception(/.*)?" }

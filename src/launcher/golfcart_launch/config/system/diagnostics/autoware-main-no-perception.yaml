@@ -1,0 +1,26 @@
+# Diagnostic graph for launch_perception:=false (Phase 8, E3).
+#
+# Upstream's autoware-main.yaml, unchanged, with the perception subtree removed
+# through the aggregator's own `edits` mechanism
+# (autoware_diagnostic_graph_aggregator, ConfigLoader::apply_remove_edits):
+# removing a unit also removes every link to it, so the driving modes stop
+# requiring /autoware/perception and nothing else changes.
+#
+# Why: with perception off, nothing publishes
+# /perception/obstacle_segmentation/pointcloud, so that leaf is ERROR by
+# construction and autonomous mode could never be available. Removing it states
+# the truth, "this run has no perception". It does NOT fake a healthy signal the
+# way the planning simulator's dummy_perception_publisher does, which is right
+# for a simulator and wrong on the cart.
+#
+# Consequence: a run with this graph has NO obstacle detection. Objects come
+# from empty_objects_publisher and the obstacle stop sees nothing. Supervised
+# runs only; the driver and the e-stop are the obstacle detector.
+#
+# Selected in golfcart_autoware.launch.xml whenever launch_perception is false;
+# launch_perception:=true goes back to upstream's graph with no other change.
+# An include, not a copy, so it follows upstream across Autoware upgrades.
+files:
+  - { path: $(find-pkg-share autoware_launch)/config/system/diagnostics/autoware-main.yaml }
+edits:
+  - { type: remove, regex: "/autoware/perception(/.*)?" }
