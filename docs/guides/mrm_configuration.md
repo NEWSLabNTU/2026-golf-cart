@@ -1,7 +1,28 @@
 # MRM (Minimum Risk Maneuver) Configuration Guide
 
 **Date**: 2025-12-28
-**Status**: Active Configuration
+**Status**: Historical. Corrected 2026-09-29; read the box below first.
+
+> **What actually runs, as of 2026-09-29** (Phase 8, S6)
+>
+> Most of this guide describes a configuration that no longer exists. The repo's
+> `mrm_handler`, `mrm_*_operator` and diagnostics copies were deleted in the
+> 2026-08-21 config sweep (they were never loaded), and
+> `config/system/diagnostics/localization.yaml` is loaded by nothing.
+>
+> | | In effect |
+> |---|---|
+> | MRM handler and operators | upstream `autoware_launch`: **comfortable stop ON** (-1.0 m/s2), emergency holding off |
+> | Diagnostic graph, perception on | upstream `autoware-main.yaml` |
+> | Diagnostic graph, `launch_perception:=false` | `config/system/diagnostics/autoware-main-no-perception.yaml`: upstream's graph with `/autoware/perception` removed by the aggregator's `edits` |
+> | Diagnostic graph, `pose_source:=aruco` | `config/system/diagnostics/autoware-main-aruco.yaml`, or `autoware-main-aruco-no-perception.yaml` with perception off |
+> | Localization accuracy check (1.5 m ellipse) | **ACTIVE** in all three. "Change 1" below is not in effect. |
+>
+> Two consequences for the cart. The accuracy check can trigger MRM exactly as
+> described under *Problem*; Phase 8 keeps it and measures first (L1). And the
+> ROOTS VCU does not brake below 1.2 m/s2, so the comfortable stop's -1.0 m/s2
+> may coast rather than stop (Phase 8, S3). See
+> [docs/roadmaps/8-autonomous-driving.md](../roadmaps/8-autonomous-driving.md).
 
 ## Overview
 
@@ -75,7 +96,7 @@ NORMAL → EMERGENCY → RECOVERY → NORMAL
 
 ## Golf Cart Configuration Changes
 
-### Change 1: Disable Localization Accuracy Check (IMPLEMENTED)
+### Change 1: Disable Localization Accuracy Check (NOT IN EFFECT: the file is loaded by nothing)
 
 **File**: `src/launcher/golfcart_launch/config/system/diagnostics/localization.yaml`
 

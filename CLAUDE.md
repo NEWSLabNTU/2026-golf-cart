@@ -705,6 +705,26 @@ through `indoor_logging_sim.launch.xml` (`bag` paused, `up`, `rviz`, `resume`,
 no velocity, so the replay proves initialization only. Design and status:
 [docs/roadmaps/7-reflective-board-cold-start.md](docs/roadmaps/7-reflective-board-cold-start.md).
 
+#### Driving autonomously (Phase 8)
+
+```bash
+just launch-drive-basement "tx=on"   # both hosts, basement map, board init, no GNSS, 1.0 m/s planning default
+```
+
+`planning_speed_limit:=<m/s>` is the startup planning speed default (empty keeps
+Autoware's 4.17 m/s). It is a default, not a ceiling; the ceiling is the vehicle
+interface's `max_speed_mps`. **`launch_perception` is the one switch for
+perception, diagnostic graph included.** With it false the graph is the base graph
+(upstream's, or the ArUco one) with the perception subtree removed through the
+aggregator's own `edits: [{type: remove}]`
+(`config/system/diagnostics/*-no-perception.yaml`, four-line overlays, not
+copies). There is then no obstacle detection at all, and autonomy is for a
+supervised run only. With it true, upstream's graph stands unchanged. **The driver presses AUTO on the cart
+before Autoware engages**; the interface cannot switch modes itself. Work items,
+exit criteria and the engage order:
+[docs/roadmaps/8-autonomous-driving.md](docs/roadmaps/8-autonomous-driving.md);
+procedure: [docs/guides/control_testing.md](docs/guides/control_testing.md).
+
 #### System Features
 ```bash
 # Localization
@@ -772,7 +792,7 @@ twist_source:=gyro_odom|eagleye            # Override preset twist source
 | [docs/guides/sensor_configuration.md](docs/guides/sensor_configuration.md) | Sensor suites, NTRIP/RTK, localization |
 | [docs/guides/vehicle_calibration.md](docs/guides/vehicle_calibration.md) | PWM control, PID tuning, testing tools |
 | [docs/guides/lidar_integration.md](docs/guides/lidar_integration.md) | Velodyne VLP-32C, TensorRT |
-| [docs/guides/control_testing.md](docs/guides/control_testing.md) | Control system testing procedures |
+| [docs/guides/control_testing.md](docs/guides/control_testing.md) | First supervised autonomous drive: roles, pre-drive checks, engage order, stopping |
 | [docs/guides/mrm_configuration.md](docs/guides/mrm_configuration.md) | MRM (emergency stop) configuration |
 | [docs/multi-machine.md](docs/multi-machine.md) | Two-machine operation: `just launch-all`, per-host DDS profiles, orin lifecycle, recording |
 | [docs/design/zed_camera_integration.md](docs/design/zed_camera_integration.md) | ZED X launch structure, published topics, TF ownership split between the ZED driver and Autoware, IMU source selection |
@@ -794,7 +814,7 @@ twist_source:=gyro_odom|eagleye            # Override preset twist source
 
 ## Known Issues
 
-- **Steering reversed**: Left/right inverted in manual control
+- **Steering sign fixed in code, not re-tested on the cart**: `invert_steering` (vehicle interface, 2026-08-12) follows the vendor simulator's mapping. Phase 8, V2 checks it on the cart.
 - **Network monitor errors**: AWS Greengrass socket errors (non-critical, ignore)
 - **Isaac ROS GXF libraries**: If `pose_source:=visual` or `pose_source:=isaac` fails with "libgxf_*.so not found", the GXF library paths are not in `LD_LIBRARY_PATH`. Re-source the setup files:
   ```bash
