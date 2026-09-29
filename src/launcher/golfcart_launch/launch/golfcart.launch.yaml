@@ -331,6 +331,11 @@ launch:
     default: "./data/COSS-map-planning"
     description: "Map directory. Example: map_path:=./data/basement-indoor"
 
+- arg:
+    name: planning_speed_limit
+    default: ""
+    description: "Startup planning speed default in m/s, e.g. 1.0 for a first run. Empty keeps Autoware's max_vel."
+
 # Where Autoware's model data lives. NOT the packaged /opt/autoware/<ver>/data:
 # that is root-owned, and TensorRT writes each .engine next to its .onnx, so a
 # read-only tree makes every model fail to cache and rebuild (and fail) on every
@@ -488,6 +493,25 @@ launch:
     -
       name: use_mapless_mode
       value: $(var use_mapless_mode)
+
+# Startup planning speed default (Phase 8, S4), master only because planning is.
+# Empty means Autoware's own max_vel (4.17 m/s) as before. A default, not a
+# ceiling: the route TUI can replace it. The ceiling is the vehicle interface's
+# max_speed_mps. See scripts/planning_speed_limit.py.
+- group:
+    if: $(var is_master)
+    children:
+    - group:
+        if: $(eval "'$(var planning_speed_limit)' != ''")
+        children:
+        - node:
+            pkg: golfcart_launch
+            exec: planning_speed_limit.py
+            name: planning_speed_limit
+            namespace: planning
+            param:
+            - name: max_velocity
+              value: $(var planning_speed_limit)
 
 # Publish empty objects when perception is disabled
 # This unblocks behavior_path_planner which waits for /perception/object_recognition/objects
