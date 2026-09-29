@@ -422,6 +422,24 @@ stop-all:
 logs:
     journalctl --user -u golfcart-launch.service -f
 
+# The planning simulator on the basement map, golf-cart vehicle model (Phase 8, M2).
+# MAP is a map directory; point it at a scratch copy to try a route before
+# writing it into data/basement-indoor. Then, from another terminal:
+#
+#   python3 scripts/testing/sim_route_check.py --start X Y YAW_DEG --goal X Y YAW_DEG
+#
+# which initializes, routes, engages and passes only on arrival, forward along
+# the lane. Keep the goal a few metres short of the lane's end: the goal
+# footprint must fit inside the lanelet.
+sim-drive-basement MAP="./data/basement-indoor":
+    play_launch launch \
+        --container-mode "${GOLFCART_CONTAINER_MODE:-observable}" \
+        --web-addr 0.0.0.0:8081 \
+        autoware_launch planning_simulator.launch.xml \
+        map_path:={{MAP}} \
+        vehicle_model:=golfcart_vehicle \
+        sensor_model:=golfcart_sensor_kit
+
 # Launch Autoware planning simulator with Golf Cart vehicle
 launch-sim-planning:
     play_launch launch \
