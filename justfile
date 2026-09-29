@@ -422,6 +422,19 @@ stop-all:
 logs:
     journalctl --user -u golfcart-launch.service -f
 
+# Both hosts, set up for a supervised drive in the Ming-Da basement (Phase 8, E4):
+# board cold start against the board-anchored map, no GNSS, planning defaulting
+# to 1.0 m/s. Perception stays off, which selects the no-perception diagnostic
+# graph: there is NO obstacle detection, the driver with the e-stop is it.
+# TX is still the caller's explicit choice, as everywhere else:
+#
+#   just launch-drive-basement "tx=on"
+#
+# Anything passed after it wins, e.g. "planning_speed_limit:=0.5".
+# The engage sequence is in docs/roadmaps/8-autonomous-driving.md.
+launch-drive-basement ARGS="":
+    just launch-all "pose_initializer:=board reflective_pose_scenario:=basement map_path:=./data/basement-indoor use_gnss:=false planning_speed_limit:=1.0 {{ARGS}}"
+
 # The planning simulator on the basement map, golf-cart vehicle model (Phase 8, M2).
 # MAP is a map directory; point it at a scratch copy to try a route before
 # writing it into data/basement-indoor. Then, from another terminal:
