@@ -29,6 +29,19 @@ else
     warn "(no board detector; pose_initializer is not board on this run)"
 fi
 
+# The map before the scans. Board detection can fire within a second of
+# playback, while the map loader is still reading the PCD: on 2026-10-02 both
+# early align calls failed with "No map loaded", the map reached the matcher
+# 8.6 s later, and a bag whose cart leaves the board after two detections then
+# never initialized. Latched, so this sees the one-shot publish whenever it
+# happened; the margin after it covers the matcher building its target.
+wait_for 180 "the point cloud map on /map/pointcloud_map" \
+    python3 "${REPO_ROOT}/scripts/rosbag/wait_for_message.py" /map/pointcloud_map \
+        --latched --timeout 5 --quiet \
+    || die "no point cloud map; see ${STACK_LOG}"
+wait_for 30 "the scan matcher's target" sim_matcher_has_map \
+    || warn "(could not confirm the scan matcher built its target; resuming anyway)"
+
 say "resuming playback"
 ros2 service call /rosbag2_player/resume rosbag2_interfaces/srv/Resume >/dev/null 2>&1 \
     || die "could not resume the player"

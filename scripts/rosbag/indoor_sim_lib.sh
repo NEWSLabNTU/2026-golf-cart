@@ -35,6 +35,16 @@ has_data() {
         "$1" --timeout 30 --quiet >/dev/null 2>&1
 }
 
+# Whether cuda_ndt has built its NDT target from the map, read from the node's
+# own log: it is the only signal, and it says exactly that. Autoware's NDT
+# (pose_source:=ndt) never writes this line, so callers treat a timeout as a
+# warning, not a failure.
+sim_matcher_has_map() {
+    local repo_root="${SIM_REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+    grep -q "NDT target updated with map" \
+        "${repo_root}/play_log/latest/node/ndt_scan_matcher/err" 2>/dev/null
+}
+
 # wait_for <timeout_seconds> <label> <predicate...>
 wait_for() {
     local timeout="$1" label="$2"; shift 2

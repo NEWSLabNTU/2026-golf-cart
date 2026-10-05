@@ -22,7 +22,8 @@ import time
 
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
+from rclpy.qos import (QoSDurabilityPolicy, QoSHistoryPolicy, QoSProfile,
+                       QoSReliabilityPolicy)
 from rosidl_runtime_py.utilities import get_message
 
 
@@ -32,6 +33,10 @@ def main() -> int:
     ap.add_argument("--timeout", type=float, default=30.0)
     ap.add_argument("--reliable", action="store_true",
                     help="subscribe RELIABLE instead of BEST_EFFORT")
+    ap.add_argument("--latched", action="store_true",
+                    help="subscribe RELIABLE + TRANSIENT_LOCAL, to receive a "
+                         "message published once before this subscribed, "
+                         "such as /map/pointcloud_map")
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args()
 
@@ -59,8 +64,10 @@ def main() -> int:
     qos = QoSProfile(
         depth=1,
         history=QoSHistoryPolicy.KEEP_LAST,
-        reliability=(QoSReliabilityPolicy.RELIABLE if args.reliable
+        reliability=(QoSReliabilityPolicy.RELIABLE if args.reliable or args.latched
                      else QoSReliabilityPolicy.BEST_EFFORT),
+        durability=(QoSDurabilityPolicy.TRANSIENT_LOCAL if args.latched
+                    else QoSDurabilityPolicy.VOLATILE),
     )
     seen: list[object] = []
     node.create_subscription(get_message(type_name), args.topic,
