@@ -189,8 +189,14 @@ metre grid and the board at the origin. `scripts/map/centerline_to_lanelet.py`
 turns a list of map-frame points into connected road lanelets beside the board
 polygon, and warns when a corner is tighter than the cart's 5.7 m minimum
 radius. Both have tests; the lanelet tests load the output the way Autoware does
-and route over it. **What is left is choosing the route**, which is a human
-decision: which aisle, which direction, where it ends.
+and route over it.
+
+**Route, 2026-10-05: the clockwise aisle ring.** `data/basement-indoor/route_loop_cw.yaml`
+is the NDT-tracked path of the 2026-09-24 clockwise lap (L1), decimated to
+0.5 m, smoothed and closed; `lanelet2_map.osm` is generated from it beside the
+board polygon: 15 one-way lanelets of about 5 m, 2.4 m wide, 4 km/h, the last
+leading into the first, no load errors. It follows a line a person drove, so
+the geometry is drivable by construction; it is not a surveyed lane.
 
 **Found on the way: Autoware loads Local-frame lanelets backwards unless the
 bounds are stored reversed.** `LocalProjector` puts every point at (0, 0) during
@@ -229,8 +235,16 @@ be. Two findings on the way:
 - **The goal's footprint must fit in the lanelet.** A goal 2 m before the lane's
   end was refused ("Goal's footprint exceeds lane").
 
-Still open for M2 proper: the real route (M1), and the golfcart launch's own
-pieces, which the stock planning simulator does not load (E1, E3, S4, S5).
+**2026-10-05, on the real basement map and route:** from the board spot,
+three corners round the ring to the east side, the golf-cart model arrived
+0.07 m from the goal at up to 1.18 m/s. But it got round the corners by
+saturating: steering sat at the 0.349 rad limit for 31% of moving time, and the
+cart ran up to 0.81 m off the centreline (p95 0.61 m), outward at the corners.
+See V3: the corners were driven at 3.3 to 4.1 m radius, and Autoware's model of
+the cart cannot turn tighter than 5.66 m.
+
+Still open for M2 proper: the golfcart launch's own pieces, which the stock
+planning simulator does not load (E1, E3, S4, S5).
 
 ### M3: planning parameters for a slow cart indoors (desk)
 
@@ -258,14 +272,58 @@ pointcloud obstacle stop is disabled upstream. Either `lidar_only` perception
 No recorded run fuses velocity and IMU with NDT. The Phase 7 replay bag had one
 topic.
 
-### L1: analyse the 2026-09-24 indoor loops (desk)
+### L1: analyse the 2026-09-24 indoor loops (desk, done for NDT)
 
-Driven by hand on the vehicle, recorded with the master's and orin's topic lists,
-so they likely hold velocity and the ZED IMU. Only the base_link yaw fix came out
-of them.
+Two hand-driven loops, clockwise (134 s) and counter-clockwise (166 s), on the
+NAS under `dataset/2026-09-24 indoor-experiment/raw_rosbags`. **They carry no
+wheel speed**: `velocity_status`, steering and gear hold 0 messages because the
+VCU was already away. They have both LiDARs, the ZED IMU at about 100 Hz and
+TF. So they measure NDT alone, from the board cold start, through a moving
+drive; EKF fusion still waits on a VCU day.
 
-**Done when:** a replay reports NVTL distribution, EKF ellipse, pose jumps and
-drift at loop closure, and the numbers are written here.
+Replayed 2026-10-02 with `just indoor-test` on the raw VLP-32 cloud only
+(extracted to `rosbags/basement/loop_*`, 2.0 and 2.5 GB), events recorded and
+summarised by `scripts/rosbag/indoor_loop_report.py`:
+
+| | clockwise | counter-clockwise |
+|---|---|---|
+| poses, span, rate | 1305 over 130.5 s, 9.99 Hz | 1617 over 161.8 s, 9.99 Hz |
+| path, median speed | 78.3 m, 0.61 m/s | 84.2 m, 0.54 m/s |
+| implied jumps over 3 m/s | 0 | 0 |
+| NVTL min / p5 / median | 2.28 / 2.34 / 2.45 | 1.87 / 2.31 / 2.43 |
+| below the 1.3 gate | 0 | 0 |
+| iterations median, at the 30 cap | 2, 0 | 2, 2 |
+| execution median / p99 | 1.89 / 4.65 ms | 1.84 / 4.87 ms |
+| gaps over 0.3 s | 3, longest 1.05 s | 3, longest 1.00 s |
+
+The two loops cover the same ring of aisles around the central block,
+independently: each clockwise pose lies a median 0.43 m (p95 1.05 m, max 1.60 m)
+from the counter-clockwise path. That is two drivers' lines, not an error bound,
+but it rules out a drifting or jumping track. **The ring is the route
+candidate for M1**: `log/indoor-test/loop_cw_path.csv`.
+
+Three findings:
+
+- **Cold start races the map (fixed in the replay, open on the cart).** Board
+  detection fires about 1 s after playback; the first run's two align calls
+  failed with `No map loaded`, because the map loader's service did not exist
+  yet and the map reached the matcher 8.6 s later. The cart left the board after
+  two detections, so the loop was never tracked. The replay now waits for the
+  latched map and the matcher's target before resuming. **On the cart the same
+  race happens if the driver is parked at the board while the stack boots**:
+  five detections a second apart all fail and the initializer stops for good.
+  The initializer must not spend its attempt budget before the matcher has a
+  map (new item L8).
+- **A ~1 s localization stall at every dynamic map update (new item L9).** The
+  gaps are not in the bags; they line up exactly with cuda_ndt's map updates,
+  every 20 m travelled (two back to back, then one about 63 s later). The basement
+  map is ONE 4-million-point tile, so each update drops and reloads the whole
+  map (`+1 tiles, -1 tiles, took 217.8ms`) and the executor stalls. With wheel
+  speed the EKF dead-reckons across it; it is still a defect.
+- **Align asked for no tiles.** Before initialization the matcher is
+  deactivated and nothing requested map tiles around the align pose. Align now
+  requests them when it finds no map, so a retry can succeed; it cannot help
+  while the loader service itself is not up.
 
 ### L2: EKF parameters (desk)
 
@@ -292,6 +350,18 @@ L1's data.
 **Done when:** the repo's preprocessing reaches cuda_ndt, and the gate is
 re-derived from L1's distribution on that input.
 
+### L8: the board initializer must wait for the matcher's map (desk)
+
+See L1. **Done when:** a cart parked at the board through boot initializes on
+its own, i.e. failures before the matcher has a map do not consume
+`max_attempts`, checked by a replay that resumes before the map is up.
+
+### L9: split the basement map into tiles (desk)
+
+See L1. Autoware's pointcloud divider, or an equivalent, so a map update loads
+the tiles near the cart instead of the whole map. **Done when:** a loop replay
+shows no pose gap over 0.3 s.
+
 ### L4-L7 (vehicle)
 
 - **L4** ZED IMU corrector: offsets 0, noise copied from the Xsens. A few minutes
@@ -310,7 +380,20 @@ re-derived from L1's distribution on that input.
 - **V2** Steering sign: fixed in code (891e84a) after the vendor simulator, never
   re-tested on the cart.
 - **V3** Measure maximum steer (0.349 rad is inherited from the PWM cart; ROOTS
-  allows 30 deg) and the side overhangs (0.001 placeholders).
+  allows 30 deg) and the side overhangs (0.001 placeholders). **Evidence from
+  2026-10-05:** the hand-driven clockwise lap turned its four corners at 3.3,
+  3.4, 3.7 and 4.0 m radius (base_link path, decimated to 0.5 m). With the
+  2.061 m wheelbase that needs about 30 deg of tire angle, the ROOTS limit,
+  not 20 deg. At 0.349 rad Autoware's minimum radius is 5.66 m, and in the
+  planning simulator the cart saturated and swung 0.8 m wide at those corners.
+  Two places hold the limit and must move together:
+  `vehicle_info.param.yaml` (`max_steer_angle`) and the vehicle interface's
+  steering clamp (`max_tire_angle_rad`). **Both raised to 0.52 rad on
+  2026-10-05**, just inside the VCU's 0.5236. Same route in the simulator: off
+  the centreline p50 0.09 m, p95 0.27 m, max 0.30 m (was 0.15 / 0.61 / 0.81),
+  steering at the old 0.349 for 18% of moving time and at the new limit for 2%.
+  Still to confirm on the cart: that the wheels reach 30 deg and the sign is
+  right (V2).
 - **V4** Steering and longitudinal system identification: the interface's steering
   slew (0.4 / 0.8 rad/s) is slower than MPC's Lexus assumptions (delay 0.24 s,
   time constant 0.27 s). Then MPC and PID tuning.
@@ -349,9 +432,9 @@ and V6 last.
 | trajectory player | **done**: sends DRIVE and the profile's acceleration. `straight_10m.yaml` now ends in a full 4 m/s2 brake instead of a coast |
 | S4 speed cap | **planning default done**: `planning_speed_limit:=` (latched node, 7 tests). Interface ceiling at 1.5 m/s not yet set |
 | S6 MRM guide | **done**: correction box at the top |
-| M1 lanelet | tools done and tested; **route not chosen** |
-| M2 planning sim | **mechanism done**: a test lane drove to 0.09 m of its goal in simulation; the real route waits on M1 |
+| M1 lanelet | **done**: the clockwise aisle ring, from the 2026-09-24 lap |
+| M2 planning sim | **real route drives** to 0.09 m of its goal, within 0.30 m of the centreline with steer at 0.52 rad (V3); our launch's pieces still unexercised |
 | L2 EKF | **done**: upstream values; replay check waits on L1 |
 | L3 NDT input | deliberately not switched; see L3 |
-| L1 | **blocked**: the NAS mount (`~/nas`) returns I/O errors, so the 2026-09-24 bags are unreachable |
+| L1 | **done for NDT** (2026-10-02): both loops tracked end to end from the board, 0 jumps, NVTL never below the gate; the bags have no wheel speed, so EKF fusion waits on the VCU. Found L8 and L9 |
 | everything else | not started |
