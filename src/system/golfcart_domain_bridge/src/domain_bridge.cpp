@@ -17,6 +17,14 @@
 // into the internal side is an ordinary cross-thread publish, which rclcpp
 // permits.
 //
+// Services cannot be generic: Humble has no type-erased service client or
+// server, so each service type the link carries is compiled in (see
+// service_types()). A service is proxied in two halves: the bridge on the
+// callers' host offers it in its internal domain and forwards each request
+// over the link; the bridge on the server's host offers it on the link and
+// forwards to the real server. Responses are deferred, so a request in flight
+// never blocks either executor.
+//
 // Usage:
 //   domain_bridge --role master|orin [--config topics.yaml]
 //                 [--internal-domain 50] [--link-domain 10]
@@ -27,11 +35,14 @@
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
+#include <functional>
+#include <map>
 #include <memory>
 #include <string>
 #include <thread>
 #include <vector>
 
+#include "autoware_vehicle_msgs/srv/control_mode_command.hpp"
 #include "golfcart_domain_bridge/config.hpp"
 #include "rclcpp/rclcpp.hpp"
 
@@ -41,6 +52,7 @@ namespace
 using golfcart_domain_bridge::Durability;
 using golfcart_domain_bridge::HostPlan;
 using golfcart_domain_bridge::Reliability;
+using golfcart_domain_bridge::ServiceSpec;
 using golfcart_domain_bridge::TopicSpec;
 
 struct Args
@@ -201,6 +213,127 @@ void add_lanes(
   }
 }
 
+// One proxied service: the server it offers, the client it forwards through,
+// and the counters `stats` prints.
+struct ServiceLane
+{
+  ServiceSpec spec;
+  std::string direction;  // "out" (offered internally) or "in" (offered on the link)
+  rclcpp::ServiceBase::SharedPtr server;
+  rclcpp::ClientBase::SharedPtr client;
+  std::atomic<uint64_t> forwarded{0};
+  std::atomic<uint64_t> unanswered{0};  // far end not available; the caller times out
+};
+
+// The typed half. server_node offers the service; client_node reaches the real
+// one. A request is forwarded with async_send_request and answered from that
+// response's callback, which runs on the OTHER context's executor thread:
+// send_response from there is a plain rcl call, and nothing waits on a future.
+//
+// When the far end is not available the request is left unanswered rather than
+// answered with a default response. A default-constructed response means
+// different things for different types; not answering is the one reply that
+// cannot be misread, and every caller of a service already handles a timeout.
+template<typename SrvT>
+std::shared_ptr<ServiceLane> make_service_lane(
+  const ServiceSpec & spec, const std::string & direction,
+  const rclcpp::Node::SharedPtr & server_node, const rclcpp::Node::SharedPtr & client_node)
+{
+  auto lane = std::make_shared<ServiceLane>();
+  lane->spec = spec;
+  lane->direction = direction;
+
+  auto client = client_node->create_client<SrvT>(spec.service);
+  // The server's callback needs the server to answer through; it is set right
+  // after creation, before either executor spins.
+  auto self = std::make_shared<std::weak_ptr<rclcpp::Service<SrvT>>>();
+  std::weak_ptr<ServiceLane> weak = lane;
+  auto logger = server_node->get_logger();
+
+  auto server = server_node->create_service<SrvT>(
+    spec.service,
+    [client, self, weak, logger](
+      std::shared_ptr<rmw_request_id_t> header,
+      std::shared_ptr<typename SrvT::Request> request) {
+      auto l = weak.lock();
+      if (!l) {
+        return;
+      }
+      if (!client->service_is_ready()) {
+        l->unanswered.fetch_add(1, std::memory_order_relaxed);
+        RCLCPP_WARN(
+          logger, "%s %s: far end not available, request left unanswered",
+          l->direction.c_str(), l->spec.service.c_str());
+        return;
+      }
+      client->async_send_request(
+        request,
+        [self, header, weak](typename rclcpp::Client<SrvT>::SharedFuture response) {
+          auto srv = self->lock();
+          if (!srv) {
+            return;
+          }
+          srv->send_response(*header, *response.get());
+          if (auto l = weak.lock()) {
+            l->forwarded.fetch_add(1, std::memory_order_relaxed);
+          }
+        });
+    });
+  *self = server;
+
+  lane->server = server;
+  lane->client = client;
+  return lane;
+}
+
+using ServiceFactory = std::function<std::shared_ptr<ServiceLane>(
+      const ServiceSpec &, const std::string &,
+      const rclcpp::Node::SharedPtr &, const rclcpp::Node::SharedPtr &)>;
+
+// Every service type the link can carry. Adding one is a line here, a
+// <depend> in package.xml, and an entry under `services:` in topics.yaml.
+const std::map<std::string, ServiceFactory> & service_types()
+{
+  static const std::map<std::string, ServiceFactory> types = {
+    {"autoware_vehicle_msgs/srv/ControlModeCommand",
+      &make_service_lane<autoware_vehicle_msgs::srv::ControlModeCommand>},
+  };
+  return types;
+}
+
+// "out": offered in the internal domain, answered across the link.
+// "in":  offered on the link, answered by the server in the internal domain.
+void add_service_lanes(
+  const std::vector<ServiceSpec> & specs, const std::string & direction,
+  const rclcpp::Node::SharedPtr & internal_node, const rclcpp::Node::SharedPtr & link_node,
+  std::vector<std::shared_ptr<ServiceLane>> & lanes)
+{
+  const auto & server_node = direction == "out" ? internal_node : link_node;
+  const auto & client_node = direction == "out" ? link_node : internal_node;
+  for (const auto & spec : specs) {
+    const auto it = service_types().find(spec.type);
+    if (it == service_types().end()) {
+      RCLCPP_ERROR(
+        internal_node->get_logger(),
+        "%s service %s (%s): NOT bridged: type not compiled into the bridge "
+        "(service_types() in domain_bridge.cpp)",
+        direction.c_str(), spec.service.c_str(), spec.type.c_str());
+      continue;
+    }
+    try {
+      lanes.push_back(it->second(spec, direction, server_node, client_node));
+    } catch (const std::exception & e) {
+      RCLCPP_ERROR(
+        internal_node->get_logger(), "%s service %s (%s): NOT bridged: %s",
+        direction.c_str(), spec.service.c_str(), spec.type.c_str(), e.what());
+      continue;
+    }
+    RCLCPP_INFO(
+      internal_node->get_logger(), "%s service %s (%s)",
+      direction.c_str(), spec.service.c_str(), spec.type.c_str());
+  }
+}
+
 }  // namespace
 
 int main(int argc, char ** argv)
@@ -258,7 +391,10 @@ int main(int argc, char ** argv)
   std::vector<std::shared_ptr<Lane>> lanes;
   add_lanes(plan.outbound, "out", internal_node, link_node, lanes);
   add_lanes(plan.inbound, "in", link_node, internal_node, lanes);
-  if (lanes.empty()) {
+  std::vector<std::shared_ptr<ServiceLane>> service_lanes;
+  add_service_lanes(plan.services_outbound, "out", internal_node, link_node, service_lanes);
+  add_service_lanes(plan.services_inbound, "in", internal_node, link_node, service_lanes);
+  if (lanes.empty() && service_lanes.empty()) {
     RCLCPP_WARN(
       internal_node->get_logger(),
       "no topic bridged in either direction; staying up so the link domain has a participant");
@@ -267,7 +403,7 @@ int main(int argc, char ** argv)
   // Counters every 10 s on the internal side, where the rest of the stack's
   // logs are. This is what `just link status` and the simulation read.
   auto stats = internal_node->create_wall_timer(
-    std::chrono::seconds(10), [&lanes, internal_node]() {
+    std::chrono::seconds(10), [&lanes, &service_lanes, internal_node]() {
       for (const auto & l : lanes) {
         RCLCPP_INFO(
           internal_node->get_logger(), "%s %s forwarded=%lu throttled=%lu bytes=%lu",
@@ -275,6 +411,13 @@ int main(int argc, char ** argv)
           static_cast<unsigned long>(l->forwarded.load(std::memory_order_relaxed)),
           static_cast<unsigned long>(l->throttled.load(std::memory_order_relaxed)),
           static_cast<unsigned long>(l->bytes.load(std::memory_order_relaxed)));
+      }
+      for (const auto & l : service_lanes) {
+        RCLCPP_INFO(
+          internal_node->get_logger(), "%s service %s forwarded=%lu unanswered=%lu",
+          l->direction.c_str(), l->spec.service.c_str(),
+          static_cast<unsigned long>(l->forwarded.load(std::memory_order_relaxed)),
+          static_cast<unsigned long>(l->unanswered.load(std::memory_order_relaxed)));
       }
     });
 

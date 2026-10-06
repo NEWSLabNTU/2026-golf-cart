@@ -110,6 +110,65 @@ TEST(Config, EmptyDirectionsAreFine)
   EXPECT_TRUE(cfg.master_to_orin.empty());
 }
 
+// A service's direction is that of its requests, and the roles mirror it the
+// same way topics do: the callers' host offers it outbound.
+TEST(Config, ServicesFollowRequestDirection)
+{
+  const auto cfg = parse_link_config(R"(
+orin_to_master: []
+master_to_orin: []
+services:
+  master_to_orin:
+    - service: /control/control_mode_request
+      type: autoware_vehicle_msgs/srv/ControlModeCommand
+)");
+  ASSERT_EQ(cfg.services_master_to_orin.size(), 1u);
+  EXPECT_EQ(cfg.services_master_to_orin[0].service, "/control/control_mode_request");
+  EXPECT_TRUE(cfg.services_orin_to_master.empty());
+
+  const auto master = for_role(cfg, "master");
+  ASSERT_EQ(master.services_outbound.size(), 1u);
+  EXPECT_TRUE(master.services_inbound.empty());
+  const auto orin = for_role(cfg, "orin");
+  ASSERT_EQ(orin.services_inbound.size(), 1u);
+  EXPECT_TRUE(orin.services_outbound.empty());
+}
+
+TEST(Config, RefusesBadServices)
+{
+  // a msg type where a srv type belongs
+  EXPECT_THROW(
+    parse_link_config("services:\n  master_to_orin:\n"
+                      "    - {service: /s, type: std_msgs/msg/String}\n"),
+    std::runtime_error);
+  // relative name
+  EXPECT_THROW(
+    parse_link_config("services:\n  master_to_orin:\n"
+                      "    - {service: s, type: std_srvs/srv/Trigger}\n"),
+    std::runtime_error);
+  // both directions: each bridge would offer it
+  EXPECT_THROW(
+    parse_link_config("services:\n"
+                      "  master_to_orin: [{service: /s, type: std_srvs/srv/Trigger}]\n"
+                      "  orin_to_master: [{service: /s, type: std_srvs/srv/Trigger}]\n"),
+    std::runtime_error);
+  // listed twice in one direction
+  EXPECT_THROW(
+    parse_link_config("services:\n"
+                      "  master_to_orin: [{service: /s, type: std_srvs/srv/Trigger},"
+                      " {service: /s, type: std_srvs/srv/Trigger}]\n"),
+    std::runtime_error);
+  // services must be a map
+  EXPECT_THROW(parse_link_config("services: [1, 2]\n"), std::runtime_error);
+}
+
+TEST(Config, NoServicesSectionIsFine)
+{
+  const auto cfg = parse_link_config("orin_to_master: []\n");
+  EXPECT_TRUE(cfg.services_master_to_orin.empty());
+  EXPECT_TRUE(cfg.services_orin_to_master.empty());
+}
+
 int main(int argc, char ** argv)
 {
   ::testing::InitGoogleTest(&argc, argv);

@@ -104,6 +104,66 @@ std::vector<TopicSpec> parse_list(const YAML::Node & root, const std::string & k
   return out;
 }
 
+// pkg/<kind>/Type: two slashes, three non-empty parts, the middle one `kind`.
+bool is_interface_type(const std::string & type, const std::string & kind)
+{
+  std::size_t a = type.find('/');
+  std::size_t b = (a == std::string::npos) ? a : type.find('/', a + 1);
+  if (a == std::string::npos || b == std::string::npos || a == 0 || b == a + 1 ||
+    b + 1 >= type.size() || type.find('/', b + 1) != std::string::npos)
+  {
+    return false;
+  }
+  return type.substr(a + 1, b - a - 1) == kind;
+}
+
+ServiceSpec parse_service(const YAML::Node & n, const std::string & where)
+{
+  if (!n.IsMap()) {
+    bad(where, "entry is not a map");
+  }
+  ServiceSpec s;
+  if (!n["service"] || !n["service"].IsScalar()) {
+    bad(where, "missing `service`");
+  }
+  s.service = n["service"].as<std::string>();
+  if (s.service.empty() || s.service[0] != '/') {
+    bad(where, "`service` must be absolute (start with /): " + s.service);
+  }
+  if (!n["type"] || !n["type"].IsScalar()) {
+    bad(s.service, "missing `type` (pkg/srv/Type)");
+  }
+  s.type = n["type"].as<std::string>();
+  if (!is_interface_type(s.type, "srv")) {
+    bad(s.service, "`type` must be pkg/srv/Type: " + s.type);
+  }
+  return s;
+}
+
+std::vector<ServiceSpec> parse_service_list(const YAML::Node & services, const std::string & key)
+{
+  std::vector<ServiceSpec> out;
+  if (!services || services.IsNull()) {
+    return out;
+  }
+  const YAML::Node n = services[key];
+  if (!n || n.IsNull()) {
+    return out;
+  }
+  if (!n.IsSequence()) {
+    bad("services." + key, "must be a list");
+  }
+  std::set<std::string> seen;
+  for (std::size_t i = 0; i < n.size(); ++i) {
+    auto s = parse_service(n[i], "services." + key + "[" + std::to_string(i) + "]");
+    if (!seen.insert(s.service).second) {
+      bad("services." + key, "service listed twice: " + s.service);
+    }
+    out.push_back(s);
+  }
+  return out;
+}
+
 void refuse_duplicates(const std::vector<TopicSpec> & list, const std::string & key)
 {
   std::set<std::string> seen;
@@ -127,6 +187,10 @@ LinkConfig parse_link_config(const std::string & yaml_text)
   if (!root.IsMap()) {
     bad("top level", "must be a map with orin_to_master / master_to_orin");
   }
+  const YAML::Node services = root["services"];
+  if (services && !services.IsNull() && !services.IsMap()) {
+    bad("services", "must be a map with orin_to_master / master_to_orin");
+  }
   LinkConfig cfg;
   cfg.orin_to_master = parse_list(root, "orin_to_master");
   cfg.master_to_orin = parse_list(root, "master_to_orin");
@@ -144,6 +208,18 @@ LinkConfig parse_link_config(const std::string & yaml_text)
   for (const auto & t : cfg.master_to_orin) {
     if (o2m.count(t.topic)) {
       bad(t.topic, "listed in BOTH directions; that is an echo loop across the link");
+    }
+  }
+
+  cfg.services_orin_to_master = parse_service_list(services, "orin_to_master");
+  cfg.services_master_to_orin = parse_service_list(services, "master_to_orin");
+  std::set<std::string> s_o2m;
+  for (const auto & s : cfg.services_orin_to_master) {
+    s_o2m.insert(s.service);
+  }
+  for (const auto & s : cfg.services_master_to_orin) {
+    if (s_o2m.count(s.service)) {
+      bad(s.service, "service listed in BOTH directions; each bridge would offer it");
     }
   }
   return cfg;
@@ -166,9 +242,13 @@ HostPlan for_role(const LinkConfig & cfg, const std::string & role)
   if (role == "master") {
     p.outbound = cfg.master_to_orin;
     p.inbound = cfg.orin_to_master;
+    p.services_outbound = cfg.services_master_to_orin;
+    p.services_inbound = cfg.services_orin_to_master;
   } else if (role == "orin") {
     p.outbound = cfg.orin_to_master;
     p.inbound = cfg.master_to_orin;
+    p.services_outbound = cfg.services_orin_to_master;
+    p.services_inbound = cfg.services_master_to_orin;
   } else {
     throw std::runtime_error("role must be master or orin, got: " + role);
   }

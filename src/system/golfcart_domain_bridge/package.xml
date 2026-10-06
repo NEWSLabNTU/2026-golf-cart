@@ -15,6 +15,7 @@
 
   <buildtool_depend>ament_cmake_auto</buildtool_depend>
 
+  <depend>autoware_vehicle_msgs</depend>
   <depend>rclcpp</depend>
   <depend>yaml-cpp</depend>
 
