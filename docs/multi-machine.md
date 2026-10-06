@@ -8,7 +8,7 @@ way, see [design/multi_machine_deployment.md](design/multi_machine_deployment.md
 | | address | interface | runs |
 |---|---|---|---|
 | master | `192.168.125.100` | `enP5p3s0` | the whole Autoware stack, plus the wired sensors (Velodyne, Falcon, GNSS, IMU, USB cameras) |
-| orin | `jetson@192.168.125.101` | `eno1` | the ZED X camera only |
+| orin | `jetson@192.168.125.101` | `eno1` | the ZED X camera, and the CAN vehicle interface on `can0` |
 
 Both sit on the shared 4G LAN, which negotiates **100 Mb/s**. That is the reason
 each host records to its own disk instead of streaming images across.
@@ -21,8 +21,38 @@ Only what `config/link/topics.yaml` lists. Under `host:=master` and
 `ROS_DOMAIN_ID`), so the stack on either machine cannot reach the wire; the
 link domain (10, `GOLFCART_LINK_DOMAIN_ID`) is bound to the LAN address and holds exactly one participant per host, the
 `link_bridge` node from `golfcart_domain_bridge`, which the launch starts. It
-copies the listed topics across in the listed direction: today the orin's IMU,
-`camera_info`, `/diagnostics` and `/tf_static` to the master, and nothing back.
+copies the listed topics across in the listed direction: the orin's IMU,
+`camera_info`, `/diagnostics`, `/tf_static` and the vehicle interface's
+`/vehicle/status/*` to the master; the six vehicle commands
+(`/control/command/*`, `/vehicle/emergency_stop`) and the
+`/control/control_mode_request` service to the orin.
+
+### The vehicle interface is on the orin
+
+The VCU's bus is wired to the orin's header (setup step `orin-can0`), so the
+interface runs there: `golfcart.launch.yaml` has `vehicle_host`, default `orin`.
+The master still runs tier4's `vehicle.launch.xml` for the vehicle description
+and `robot_state_publisher`, just without the interface inside it; the orin
+includes `vehicle_interface.launch.xml` directly. `vehicle_host:=master` puts it
+back on the Advantech with nothing else to edit. Under `host:=all` the one
+machine runs it whatever `vehicle_host` says.
+
+What follows from that:
+
+- **The orin needs `CAX_ADS_CAN.dbc`.** Without it `just build` skips the
+  interface there and the cart has no velocity and cannot engage.
+- **Driving needs the orin.** `launch-all` still treats a missing orin as
+  non-fatal for the master, but with the bus on the orin a master alone has no
+  vehicle interface. `GOLFCART_USE_ORIN=0` is for work that does not move the
+  cart.
+- **A link drop stops the cart.** Commands stop arriving and the interface's
+  `control_timeout_ms` watchdog (500 ms) brakes. The orin's own watchdog stops
+  its units about 42 s later.
+- **Engage crosses the link as a service.** The bridge proxies
+  `/control/control_mode_request`; if the orin side is down the request goes
+  unanswered and Autoware's engage times out.
+- `just check vehicle can` reads the bus on the orin over ssh
+  (`CAN_HOST=orin`, the default; `CAN_HOST=local` on the machine with the bus).
 
 ```bash
 just link topics        # ros2 topic list in the link domain: what is on the wire

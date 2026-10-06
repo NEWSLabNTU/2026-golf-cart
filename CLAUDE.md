@@ -173,6 +173,17 @@ started by `golfcart.launch.yaml`) copies exactly the topics in
 a cross-host topic, add it there — with a `max_hz` if it is an image. Never
 list a topic in both directions; the bridge refuses (echo loop).
 
+The CAN vehicle interface runs on the **orin** (`vehicle_host:=orin`, the
+default; `vehicle_host:=master` puts it back). Its six command topics cross
+master → orin, its seven `/vehicle/status/*` reports cross back, and
+`/control/control_mode_request` — a **service**, which Autoware's engage path
+calls — crosses under `services:`. Services cannot be generic in Humble, so each
+service type is compiled into the bridge (`service_types()` in
+`golfcart_domain_bridge`); an unknown type is logged and skipped. A request
+whose far end is down is left unanswered, so the caller times out rather than
+reading a made-up reply. If the link drops, commands stop and the interface's
+`control_timeout_ms` watchdog (500 ms) brakes.
+
 `ros2 topic list` in a shell that sourced `scripts/env.sh` shows this host's stack domain; `just link topics` shows the wire, `just
 link pressure` measures it. Before the split, one domain on the LAN put every
 participant on the wire, and because the recorder is a second reader of every
@@ -212,8 +223,16 @@ assume.
 `golfcart_vehicle_interface` generates CAN bindings from Turing Drive's
 `CAX_ADS_CAN.dbc` at build time. The file is proprietary and gitignored, so only
 the machine it was copied to has it. `just build` **skips the package** when
-neither `CAX_ADS_DBC` nor a DBC in the crate root exists — the orin has no CAN bus
-and needs neither. Do not "fix" that skip; without it the orin cannot build at all.
+neither `CAX_ADS_DBC` nor a DBC in the crate root exists.
+
+**The DBC belongs on the orin now.** The bus moved to the orin's header pins
+(setup step `orin-can0`) and `golfcart.launch.yaml`'s `vehicle_host` defaults to
+`orin`, so the orin is the machine that must build the interface. A master
+without the DBC skips the package and loses nothing; an orin without it skips
+it too, and then the launch includes a node whose executable does not exist —
+the cart has no velocity and cannot be engaged. Copy the file to the orin's
+crate root. Keep the skip itself: it is what lets either machine build without
+the file.
 
 ### Submodule Pointer Rule
 

@@ -158,10 +158,10 @@ rather than letting it through, but it is still the first thing to set:
 echo master > config/host          echo orin > config/host
 ```
 
-**2. A build on each machine.** `just build`. On the orin
-`golfcart_vehicle_interface` is skipped automatically — it needs the proprietary
-`CAX_ADS_CAN.dbc`, and the orin has no CAN bus. That skip is intentional; do not
-"fix" it.
+**2. A build on each machine.** `just build`. `golfcart_vehicle_interface` is
+built only where the proprietary `CAX_ADS_CAN.dbc` is present and skipped
+elsewhere. The interface runs on the orin, so the orin needs the DBC; the
+master does not.
 
 **3. `ros-humble-rmw-zenoh-cpp`, on both.** `sudo apt install
 ros-humble-rmw-zenoh-cpp`. Without it `scripts/env.sh` falls back to cyclonedds

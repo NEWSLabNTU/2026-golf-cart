@@ -1,7 +1,7 @@
 launch:
 # Multi-machine Host Profile
-# master -> everything except the ZED camera (includes the Falcon LiDAR)
-# orin   -> ZED camera only
+# master -> everything except the ZED camera and the vehicle interface
+# orin   -> ZED camera, and the CAN vehicle interface (can0 is on its header)
 # all    -> single-machine operation (default, unchanged behaviour)
 - arg:
     name: host
@@ -33,6 +33,27 @@ launch:
 - let:
     name: is_orin_host
     value: $(eval "'$(var host)' == 'orin'")
+
+# Which machine the VCU's CAN bus is wired to. The orin since the move to its
+# header pins (setup step orin-can0); `master` puts the interface back on the
+# Advantech, the previous wiring, without editing anything else.
+#
+# Under host:=all there is one machine and the interface runs on it whatever
+# this says. Under host:=master / host:=orin it runs on exactly one of the two,
+# and config/link/topics.yaml carries its commands, reports and the
+# control-mode service across, in both cases: on the host without the
+# interface those lanes simply find no publisher or server.
+- arg:
+    name: vehicle_host
+    default: "orin"
+    description: "Which host runs the CAN vehicle interface under a two-machine profile: orin or master"
+    choice:
+    - value: "orin"
+    - value: "master"
+
+- let:
+    name: vehicle_interface_here
+    value: $(eval "'$(var host)' in ('all', '$(var vehicle_host)')")
 
 # Address of the master, resolved from the environment rather than written here.
 #
@@ -412,9 +433,16 @@ launch:
     -
       name: launch_sensing_driver
       value: $(var launch_sensing_driver)
+    # The master always runs tier4's vehicle.launch.xml - that is the vehicle
+    # description and robot_state_publisher, which Autoware's TF needs here -
+    # but the interface inside it only when the bus is on this machine.
+    #
+    # vehicle_interface_here is itself an $(eval), and the two runners print a
+    # boolean differently: ros2 launch gives `True`, play_launch gives `true`.
+    # Compare against both, or one runner silently never starts the interface.
     -
       name: launch_vehicle_interface
-      value: $(var launch_vehicle_interface)
+      value: $(eval "'$(var launch_vehicle_interface)' in ('true', 'True', '1') and '$(var vehicle_interface_here)' in ('true', 'True')")
     -
       name: launch_localization
       value: "true"
@@ -545,6 +573,22 @@ launch:
         -
           name: camera_model
           value: zedx
+
+# The CAN vehicle interface, on the orin.
+#
+# Included directly, NOT through tier4_vehicle_launch/vehicle.launch.xml: that
+# file also starts robot_state_publisher for the vehicle description, which
+# belongs on the master with the rest of Autoware's TF, and a second copy here
+# would publish the same edges from two machines. vehicle_interface.launch.xml
+# is the interface node and its remaps, nothing else.
+#
+# is_orin_host, not is_orin: under host:=all the master's Autoware include
+# already starts the interface through vehicle.launch.xml.
+- group:
+    if: $(eval "'$(var host)' == 'orin' and '$(var vehicle_host)' == 'orin' and '$(var launch_vehicle_interface)' in ('true', 'True', '1')")
+    children:
+    - include:
+        file: "$(find-pkg-share golfcart_vehicle_launch)/launch/vehicle_interface.launch.xml"
 
 # Autoware's system_monitor for the orin - cpu, mem, net, ntp, process.
 #

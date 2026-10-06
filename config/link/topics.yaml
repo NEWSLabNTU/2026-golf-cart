@@ -37,6 +37,9 @@
 #
 # Never list one topic in both directions. The bridge refuses to start if you
 # do, because the alternative is an echo loop across the link.
+#
+# Services live under `services:`, keyed by the direction of the REQUEST. The
+# same rule holds: never in both directions.
 
 orin_to_master:
   # The vehicle's IMU while IMU_SOURCE=zed (config/sensors.conf). RELIABLE on
@@ -100,7 +103,80 @@ orin_to_master:
   # absent: zed_msgs is not built on a host without the ZED SDK, so the master
   # bridge could not load the type. It is recorded on the orin.
 
-# Nothing needs to go the other way today: the orin runs the ZED driver and its
-# own system monitor, neither of which subscribes to anything from the master.
-# The list is here so the direction exists when something does.
-master_to_orin: []
+  # The vehicle interface runs on the orin (vehicle_host:=orin, golfcart.launch.yaml),
+  # where can0 is. Its reports come back here for the stack: velocity feeds
+  # vehicle_velocity_converter -> gyro_odometer -> EKF, and the rest feed
+  # control, planning and the operation-mode manager. Reliable/volatile depth 10
+  # because that is what the interface publishes with (rclrs default QoS) and
+  # every Autoware consumer subscribes reliable. ~50 Hz each, tens of bytes.
+  - topic: /vehicle/status/velocity_status
+    type: autoware_vehicle_msgs/msg/VelocityReport
+    reliability: reliable
+    depth: 10
+  - topic: /vehicle/status/steering_status
+    type: autoware_vehicle_msgs/msg/SteeringReport
+    reliability: reliable
+    depth: 10
+  - topic: /vehicle/status/gear_status
+    type: autoware_vehicle_msgs/msg/GearReport
+    reliability: reliable
+    depth: 10
+  - topic: /vehicle/status/control_mode
+    type: autoware_vehicle_msgs/msg/ControlModeReport
+    reliability: reliable
+    depth: 10
+  - topic: /vehicle/status/turn_indicators_status
+    type: autoware_vehicle_msgs/msg/TurnIndicatorsReport
+    reliability: reliable
+    depth: 10
+  - topic: /vehicle/status/hazard_lights_status
+    type: autoware_vehicle_msgs/msg/HazardLightsReport
+    reliability: reliable
+    depth: 10
+  - topic: /vehicle/status/actuation_status
+    type: tier4_vehicle_msgs/msg/ActuationStatusStamped
+    reliability: reliable
+    depth: 10
+
+# The vehicle interface's commands, from vehicle_cmd_gate and the e-stop on the
+# master to the interface on the orin. RELIABLE with depth 1 on both ends,
+# because the interface subscribes KeepLast(1) Reliable (node.rs, cmd_qos): a
+# superseded command is worth nothing, a lost one stalls the watchdog. If the
+# link drops, these stop, and the interface's control_timeout_ms watchdog
+# (500 ms) brakes the cart -- the failure is a stop, not a runaway.
+master_to_orin:
+  - topic: /control/command/control_cmd
+    type: autoware_control_msgs/msg/Control
+    reliability: reliable
+    depth: 1
+  - topic: /control/command/gear_cmd
+    type: autoware_vehicle_msgs/msg/GearCommand
+    reliability: reliable
+    depth: 1
+  - topic: /control/command/turn_indicators_cmd
+    type: autoware_vehicle_msgs/msg/TurnIndicatorsCommand
+    reliability: reliable
+    depth: 1
+  - topic: /control/command/hazard_lights_cmd
+    type: autoware_vehicle_msgs/msg/HazardLightsCommand
+    reliability: reliable
+    depth: 1
+  - topic: /control/command/emergency_cmd
+    type: tier4_vehicle_msgs/msg/VehicleEmergencyStamped
+    reliability: reliable
+    depth: 1
+  - topic: /vehicle/emergency_stop
+    type: std_msgs/msg/Bool
+    reliability: reliable
+    depth: 1
+
+# Services cross the link too, by request direction. Each type must be compiled
+# into the bridge (service_types() in golfcart_domain_bridge), because Humble
+# has no generic service. A request whose far end is down is left unanswered,
+# so the caller sees its own timeout rather than a fabricated reply.
+services:
+  # Autoware's engage path (operation_mode_transition_manager) asks the vehicle
+  # interface for AUTONOMOUS here; the interface answers from the VCU's report.
+  master_to_orin:
+    - service: /control/control_mode_request
+      type: autoware_vehicle_msgs/srv/ControlModeCommand

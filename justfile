@@ -354,11 +354,12 @@ launch-all ARGS="":
     # watchdog covers the case where this machine never gets to run it.
     just launch-up {{quote(ARGS)}} || exit 1
     # The orin runs the identical recipe from its own checkout, with the same
-    # arguments. A missing orin must never fail the master, so its status is
-    # reported and discarded.
+    # arguments. A missing orin does not fail the master, so its status is
+    # reported and discarded - but the vehicle interface is on the orin, so
+    # without it the cart has no velocity report and cannot be engaged.
     if [[ "${GOLFCART_USE_ORIN:-1}" == "1" ]]; then
         ./scripts/multi_machine/on_orin.sh just launch-up {{quote(ARGS)}} \
-            || echo "WARNING: could not start the orin - continuing without it" >&2
+            || echo "WARNING: could not start the orin - continuing without it; no vehicle interface, the cart cannot be driven" >&2
     fi
     echo
     echo "web UI: http://localhost:8081    logs: just logs    stop: just stop-all"

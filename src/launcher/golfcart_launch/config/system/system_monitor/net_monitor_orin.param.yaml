@@ -13,8 +13,9 @@
 # Deliberately absent, all currently DOWN:
 #
 #   wlP1p1s0    wifi, unused on the vehicle
-#   can0, can1  the orin has no CAN bus wired; the vehicle interface is the
-#               master's job
+#   can0, can1  CAN, not IP: can0 carries the VCU (the vehicle interface runs
+#               here) but net_monitor's usage and ethtool checks do not apply
+#               to it. just check vehicle can watches the bus instead
 #   l4tbr0      L4T USB device-mode bridge, down unless the board is being used
 #               as a USB device. This is the interface that made Network Usage
 #               ERROR on 100% of reports on the Advantech.

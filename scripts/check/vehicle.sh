@@ -86,6 +86,10 @@ CAN_SAMPLE_SECS="${CAN_SAMPLE_SECS:-2}"
 # is reported as a warning rather than a failure, so a cart with no VCU in it
 # still exits 0 on the checks that do apply. Set to 1 when the unit is back.
 VCU_EXPECTED="${VCU_EXPECTED:-0}"
+# Which machine the VCU's bus is wired to: orin | local. It moved to the orin's
+# header pins (setup step orin-can0), and golfcart.launch.yaml's vehicle_host
+# defaults to orin to match. Set to local on the machine that holds the bus.
+CAN_HOST="${CAN_HOST:-orin}"
 
 # ── u-blox GNSS ────────────────────────────────────────────────────────────
 GNSS_DEV="${GNSS_DEV:-/dev/ttyUSB0}"
@@ -525,21 +529,49 @@ check_otocam() {
     fi
 }
 
+# The CAN probe as one shell snippet, like the GNSS one, so the same code reads
+# the bus on this host or on the orin. Prints KEY=VALUE lines; the sample sleep
+# happens on the far side, between the two counter reads.
+can_probe_src() {
+    cat <<EOF
+i=${CAN_IFACE}
+if [ ! -d /sys/class/net/\$i ]; then echo EXISTS=0; exit 0; fi
+echo EXISTS=1
+echo OPER=\$(cat /sys/class/net/\$i/operstate 2>/dev/null)
+det=\$(ip -details -statistics link show \$i 2>/dev/null)
+echo BITRATE=\$(printf '%s' "\$det" | grep -oE 'bitrate [0-9]+' | head -1 | awk '{print \$2}')
+echo STATE=\$(printf '%s' "\$det" | grep -oE 'state (ERROR-ACTIVE|ERROR-WARNING|ERROR-PASSIVE|BUS-OFF|STOPPED|SLEEPING)' | head -1 | awk '{print \$2}')
+r0=\$(cat /sys/class/net/\$i/statistics/rx_packets 2>/dev/null || echo 0)
+sleep ${CAN_SAMPLE_SECS}
+r1=\$(cat /sys/class/net/\$i/statistics/rx_packets 2>/dev/null || echo 0)
+echo DELTA=\$((r1 - r0))
+EOF
+}
+
 check_can() {
-    section "VCU on ${CAN_IFACE}"
+    section "VCU on ${CAN_IFACE} (${CAN_HOST})"
 
     if [ "$VCU_EXPECTED" != "1" ]; then
         info "VCU_EXPECTED=0: the unit is away for repair, so problems below are warnings"
     fi
 
-    if [ ! -d "/sys/class/net/${CAN_IFACE}" ]; then
-        verdict "$VCU_EXPECTED" "${CAN_IFACE} does not exist" \
-                "no CAN controller on this host, or the mttcan modules are not loaded"
+    local out
+    if [ "$CAN_HOST" = orin ]; then
+        if [ "$orin_reachable" != yes ]; then skip "orin not reachable over ssh"; return; fi
+        out=$(orin_sh "$(can_probe_src)" 2>/dev/null | tr -d '\r')
+    else
+        out=$(bash -c "$(can_probe_src)" 2>/dev/null)
+    fi
+    kv() { printf '%s\n' "$out" | sed -n "s/^$1=//p" | head -1; }
+
+    if [ "$(kv EXISTS)" != 1 ]; then
+        verdict "$VCU_EXPECTED" "${CAN_IFACE} does not exist on ${CAN_HOST}" \
+                "no CAN controller there, the mttcan modules are not loaded, or the bus is on the other host (CAN_HOST=local|orin)"
         return
     fi
     ok "${CAN_IFACE} exists"
 
-    local operstate; operstate=$(cat "/sys/class/net/${CAN_IFACE}/operstate" 2>/dev/null)
+    local operstate; operstate=$(kv OPER)
     if [ "$operstate" = up ]; then
         ok "${CAN_IFACE} is up"
     else
@@ -550,10 +582,9 @@ check_can() {
 
     # Bitrate and controller state come from `ip -details`: it is the only place
     # the CAN-specific fields live.
-    local det bitrate canstate
-    det=$(ip -details -statistics link show "$CAN_IFACE" 2>/dev/null)
-    bitrate=$(printf '%s' "$det" | grep -oE 'bitrate [0-9]+' | head -1 | awk '{print $2}')
-    canstate=$(printf '%s' "$det" | grep -oE 'state (ERROR-ACTIVE|ERROR-WARNING|ERROR-PASSIVE|BUS-OFF|STOPPED|SLEEPING)' | head -1 | awk '{print $2}')
+    local bitrate canstate
+    bitrate=$(kv BITRATE)
+    canstate=$(kv STATE)
 
     if [ -z "$bitrate" ]; then
         warn "${CAN_IFACE} reports no bitrate - is it a real CAN interface? (vcan has none)"
@@ -571,11 +602,7 @@ check_can() {
     esac
 
     # Live traffic, counted straight out of the kernel: no candump, no ROS.
-    local rx0 rx1 delta
-    rx0=$(cat "/sys/class/net/${CAN_IFACE}/statistics/rx_packets" 2>/dev/null || echo 0)
-    sleep "$CAN_SAMPLE_SECS"
-    rx1=$(cat "/sys/class/net/${CAN_IFACE}/statistics/rx_packets" 2>/dev/null || echo 0)
-    delta=$((rx1 - rx0))
+    local delta; delta=$(kv DELTA); delta=${delta:-0}
     if [ "$delta" -gt 0 ]; then
         ok "${delta} frames received in ${CAN_SAMPLE_SECS}s - the VCU is talking"
     else
@@ -685,7 +712,7 @@ checks: ${ALL_CHECKS[*]}   (default: all of them, in that order)
   seyond    Falcon:  host address, ping, TCP control ${SEYOND_PORT}, UDP data ${SEYOND_UDP_PORT}
   zedx      ZED X on the orin: SDK, ${ZED_DAEMON}, camera enumerated
   otocam    three oToBrite GMSL capture nodes on this host
-  can       VCU on ${CAN_IFACE}: link, bitrate, live frames
+  can       VCU on ${CAN_IFACE} (CAN_HOST=${CAN_HOST}): link, bitrate, live frames
   gnss      u-blox on ${GNSS_DEV} (GNSS_HOST=${GNSS_HOST})
 
 Settings are the CONFIGURATION block at the top of this file; each one also
@@ -714,6 +741,7 @@ needs_ssh=0
 for c in "${selected[@]}"; do
     [ "$c" = zedx ] && needs_ssh=1
     [ "$c" = gnss ] && [ "$GNSS_HOST" = orin ] && needs_ssh=1
+    [ "$c" = can ] && [ "$CAN_HOST" = orin ] && needs_ssh=1
 done
 case " ${selected[*]} " in *" ssh "*) needs_ssh=0 ;; esac
 
