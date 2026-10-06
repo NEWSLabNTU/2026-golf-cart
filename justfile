@@ -228,15 +228,15 @@ clean *FLAGS="":
 
 # ============================================================================
 # Launch Commands - Start systems
-# ARGS is one string: an optional `tx=on|off` token plus any golfcart.launch.yaml
-# arguments. tx= is stripped out and turned into an environment variable; see
-# config/vehicle.conf for why it cannot be a launch argument.
+# ARGS is one string of golfcart.launch.yaml arguments.
 #
-# ⚠️  tx=on puts real frames on can0 and the cart can be commanded into motion.
+# There is no CAN TX switch. The vehicle interface always transmits, because
+# the VCU reports velocity and steering only while it hears our rolling
+# counter; the cart's power switch is the master enable.
 #
 # just --list shows only the LAST comment line, so the description goes here, at
 # the bottom. Moving it up silently replaces it with whatever line ends up last.
-# Launch the system, web UI at http://localhost:8081. ARGS: [tx=on|off] [launch args]
+# Launch the system, web UI at http://localhost:8081. ARGS: [launch args]
 launch ARGS="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -248,17 +248,7 @@ launch ARGS="":
     # only discovery path. Both failures are SILENT, which is why this is a gate
     # and not a hint. See scripts/rmw/ensure.sh.
     {{justfile_directory()}}/scripts/rmw/ensure.sh || exit 2
-    # tx= is not a launch argument and cannot be: the installed
-    # tier4_vehicle_launch/vehicle.launch.xml forwards a fixed set of arguments
-    # and drops the rest, so vehicle_interface.launch.xml reads the environment
-    # instead. Strip the token here and export it. See config/vehicle.conf.
-    # Two steps, not `eval "$(...)"`: eval of an empty string succeeds, so a
-    # failing tx_switch would otherwise sail past both `||` and set -e.
-    TX_VARS=$({{justfile_directory()}}/scripts/tx_switch.sh {{ARGS}}) || exit 2
-    eval "${TX_VARS}"
-    if [ "${GOLFCART_TX_SET}" = 1 ]; then
-        export GOLFCART_TX_ENABLED
-    fi
+    GOLFCART_LAUNCH_ARGS={{quote(ARGS)}}
     # host:= comes from the config/host marker, not from the "all" default.
     #
     # `host:=all` puts the is_orin group in scope, and that group includes
@@ -287,11 +277,6 @@ launch ARGS="":
     case " ${GOLFCART_LAUNCH_ARGS} " in
         *" host:="*) HOST_ARG="" ;;
     esac
-    if [ "${GOLFCART_TX_ENABLED:-false}" = true ]; then
-        printf '\033[1;31mCAN TX ENABLED — the cart can move. Ctrl-C to abort.\033[0m\n'
-        for i in 3 2 1; do printf '  starting in %d...\r' "$i"; sleep 1; done
-        printf '                       \n'
-    fi
     if [ -n "${DISPLAY:-}" ]; then
         play_launch launch \
             --container-mode "${GOLFCART_CONTAINER_MODE:-observable}" \
@@ -310,8 +295,7 @@ launch ARGS="":
 # ── This host only. The same recipes exist on both machines; the master drives
 # ── the orin by running them over there, not by reimplementing them here.
 
-# ⚠️  tx=on puts real frames on can0 and the cart can be commanded into motion.
-# Start this host's stack. ARGS: [tx=on|off] [launch args]
+# Start this host's stack. ARGS: [launch args]
 launch-up ARGS="":
     #!/usr/bin/env bash
     set -uo pipefail
@@ -323,30 +307,14 @@ launch-up ARGS="":
     # only discovery path. Both failures are SILENT, which is why this is a gate
     # and not a hint. See scripts/rmw/ensure.sh.
     {{justfile_directory()}}/scripts/rmw/ensure.sh || exit 2
-    # tx= is pulled out first: it is not a launch argument (the installed
-    # tier4_vehicle_launch/vehicle.launch.xml drops unknown ones) but an
-    # environment variable the unit reads. See config/vehicle.conf.
-    # Two steps, not `eval "$(...)"`: eval of an empty string succeeds, so a
-    # failing tx_switch would otherwise sail past the `||`.
-    TX_VARS=$({{justfile_directory()}}/scripts/tx_switch.sh {{ARGS}}) || exit 2
-    eval "${TX_VARS}"
+    GOLFCART_LAUNCH_ARGS={{quote(ARGS)}}
     # Per-invocation launch arguments reach the unit through the user manager's
     # environment. set-environment persists, so launch-down clears it - otherwise
-    # today's flags silently apply to tomorrow's launch. TX is the case where
-    # that would be dangerous rather than merely confusing, so an invocation
-    # that does not say tx= explicitly clears it back to the config default.
+    # today's flags silently apply to tomorrow's launch.
     if [ -n "${GOLFCART_LAUNCH_ARGS}" ]; then
         systemctl --user set-environment GOLFCART_LAUNCH_ARGS="${GOLFCART_LAUNCH_ARGS}"
     else
         systemctl --user unset-environment GOLFCART_LAUNCH_ARGS
-    fi
-    if [ "${GOLFCART_TX_SET}" = 1 ]; then
-        systemctl --user set-environment GOLFCART_TX_ENABLED="${GOLFCART_TX_ENABLED}"
-    else
-        systemctl --user unset-environment GOLFCART_TX_ENABLED
-    fi
-    if [ "${GOLFCART_TX_ENABLED:-false}" = true ]; then
-        printf '\033[1;31m%s: CAN TX ENABLED — the cart can move.\033[0m\n' "$(hostname)"
     fi
     # restart, not start: replaces a stale unit left by a previous run.
     if ! systemctl --user restart golfcart-launch.service; then
@@ -362,12 +330,11 @@ launch-down:
     set -uo pipefail
     systemctl --user stop golfcart-launch.service
     RC=$?
-    systemctl --user unset-environment GOLFCART_LAUNCH_ARGS GOLFCART_TX_ENABLED
+    systemctl --user unset-environment GOLFCART_LAUNCH_ARGS
     echo "$(hostname): launch $(systemctl --user is-active golfcart-launch.service)"
     exit $RC
 
-# ⚠️  tx=on puts real frames on can0 and the cart can be commanded into motion.
-# Start the stack on BOTH hosts; returns immediately. ARGS: [tx=on|off] [launch args]
+# Start the stack on BOTH hosts; returns immediately. ARGS: [launch args]
 launch-all ARGS="":
     #!/usr/bin/env bash
     set -uo pipefail
@@ -385,21 +352,12 @@ launch-all ARGS="":
     # Both hosts run under systemd, so nothing blocks a terminal and no EXIT trap
     # orchestrates the orin: teardown is `just stop-all`, and the orin's
     # watchdog covers the case where this machine never gets to run it.
-    # Split the tx= token off before deciding what each host gets. The master
-    # keeps ARGS whole - its own launch-up re-parses the token.
-    TX_VARS=$({{justfile_directory()}}/scripts/tx_switch.sh {{ARGS}}) || exit 2
-    eval "${TX_VARS}"
-    just launch-up "{{ARGS}}" || exit 1
-    # The orin runs the identical recipe from its own checkout. A missing orin
-    # must never fail the master, so its status is reported and discarded.
-    #
-    # It gets the launch arguments WITHOUT the tx= token. CAN is the master's
-    # alone - the orin has no bus and golfcart.launch.yaml gates the vehicle
-    # group on is_master - so tx there could only ever be noise, and its own
-    # launch-up then explicitly clears GOLFCART_TX_ENABLED rather than leaving a
-    # value from an earlier run in the orin's user manager.
+    just launch-up {{quote(ARGS)}} || exit 1
+    # The orin runs the identical recipe from its own checkout, with the same
+    # arguments. A missing orin must never fail the master, so its status is
+    # reported and discarded.
     if [[ "${GOLFCART_USE_ORIN:-1}" == "1" ]]; then
-        ./scripts/multi_machine/on_orin.sh just launch-up "${GOLFCART_LAUNCH_ARGS}" \
+        ./scripts/multi_machine/on_orin.sh just launch-up {{quote(ARGS)}} \
             || echo "WARNING: could not start the orin - continuing without it" >&2
     fi
     echo
@@ -426,9 +384,6 @@ logs:
 # board cold start against the board-anchored map, no GNSS, planning defaulting
 # to 1.0 m/s. Perception stays off, which selects the no-perception diagnostic
 # graph: there is NO obstacle detection, the driver with the e-stop is it.
-# TX is still the caller's explicit choice, as everywhere else:
-#
-#   just launch-drive-basement "tx=on"
 #
 # Anything passed after it wins, e.g. "planning_speed_limit:=0.5".
 # The engage sequence is in docs/roadmaps/8-autonomous-driving.md.

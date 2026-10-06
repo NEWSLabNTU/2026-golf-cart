@@ -76,9 +76,9 @@ fi
 # argument vector into one space-separated string, so the far side re-splits it
 # on spaces and a single argument that CONTAINS spaces arrives as several:
 #
-#   on_orin.sh just launch-up "tx=on rviz:=false"
-#     $*   -> just launch-up tx=on rviz:=false   # two arguments, just errors out
-#     "$@" -> just launch-up tx\=on\ rviz\:\=false
+#   on_orin.sh just launch-up "use_gnss:=false rviz:=false"
+#     $*   -> just launch-up use_gnss:=false rviz:=false   # two arguments, just errors out
+#     "$@" -> just launch-up use_gnss\:\=false\ rviz\:\=false
 #
 # That is the whole reason `just launch-all "<several args>"` did nothing on the
 # orin while working on the master. No caller passes a shell snippet expecting it

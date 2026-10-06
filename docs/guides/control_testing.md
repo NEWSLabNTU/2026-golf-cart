@@ -25,12 +25,12 @@ the code, and the first run is what checks it.
 4. The planning simulator scenario on that map passes route, engage and MRM stop
    (Phase 8, M2).
 
-## Pre-drive checks, cart stationary, TX off
+## Pre-drive checks, cart stationary
 
 1. Physical e-stop: locate it, press it, confirm the VCU reports it
    (the interface logs the hardware e-stop as a safety brake).
-2. Steering sign (Phase 8, V2): in manual mode with `just vehicle interface
-   tx=on` and the keyboard controller, command left and watch the wheels turn
+2. Steering sign (Phase 8, V2): in manual mode with `just vehicle interface`
+   and the keyboard controller, command left and watch the wheels turn
    left. *Unverified since the 2026-08-12 fix.*
 3. Speed report: push the cart a metre, `ros2 topic echo
    /vehicle/status/velocity_status` shows a positive speed, and a negative one
@@ -39,7 +39,7 @@ the code, and the first run is what checks it.
 ## Bring-up
 
 ```bash
-just launch-drive-basement "tx=on"
+just launch-drive-basement
 ```
 
 This is `launch-all` with the board initializer, the basement map, no GNSS,

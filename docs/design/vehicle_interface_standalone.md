@@ -1,5 +1,12 @@
 # Standalone Vehicle-Interface Testing: One Recipe, One Launch File
 
+> **Superseded in part (2026-10).** The CAN TX switch this design describes —
+> `tx=on|off`, `tx_enabled`, TX off by default — has been removed. The VCU
+> reports velocity and steering only while it hears our rolling counter, so a
+> listen-only interface left `/vehicle/status/*` empty. The interface now
+> always transmits; the cart's power switch is the master enable. The rest of
+> this design (one recipe, `can=`, `converter=`) stands.
+
 **Status**: Design approved (2026-08-12)
 **Scope**: `justfile`, `src/vehicle/golfcart_vehicle_launch/`, `src/vehicle/control_test/`,
 `src/vehicle/external/autoware_manual_control` (submodule)

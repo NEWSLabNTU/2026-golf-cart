@@ -27,7 +27,6 @@ just build              # Build all packages
 just test               # Run tests
 just launch             # Launch system (web UI: http://localhost:8081)
 just launch "..."  # Launch with parameters
-just launch tx=on       # ⚠️ CAN TX live: this can drive the cart
 just clean              # Remove build artifacts
 just checkout           # Update git submodules
 just --list             # Show all available commands
@@ -71,14 +70,13 @@ just tool sphere-demo   # Same display, synthetic sensors, no vehicle
 
 ### Vehicle Interface (standalone, no Autoware)
 ```bash
-just vehicle interface                       # CAN RX only on can0 — cart cannot move
+just vehicle interface                       # real bus, can0
 just vehicle interface can=vcan0             # bench, against mock_vcu
 just vehicle interface converter=on          # + robot_state_publisher + velocity converter
-just vehicle interface tx=on                 # ⚠️ CAN TX live: this can drive the cart
 just vehicle manual-control                          # keyboard teleop — SECOND terminal
 ```
-Options are `KEY=VALUE`, any order: `can=`, `tx=on|off`, `converter=on|off`.
-`tx` defaults to `off` on every path. Keyboard control is a separate recipe
+Options are `KEY=VALUE`, any order: `can=`, `converter=on|off`.
+The interface always transmits — see "No CAN TX switch" below. Keyboard control is a separate recipe
 because it reads a raw tty: it must own a real terminal, so it cannot be a node
 inside a launch file (play_launch does not support `launch-prefix` either).
 
@@ -152,7 +150,6 @@ no script hardcodes any of it. See [config/README.md](config/README.md).
 | `config/host` | which machine this checkout is (`master`/`orin`). **Gitignored** |
 | `config/multi_machine.conf` | the other host's `user@addr`, repo path, ssh key, master IP |
 | `config/sensors.conf` | `IMU_SOURCE`, `CAMERA_MODEL` — env vars, not launch args |
-| `config/vehicle.conf` | `GOLFCART_TX_ENABLED` — CAN TX master enable, same reason |
 | `config/recording/*_topics.txt` | what each host records |
 | `config/cyclonedds/*.xml` | DDS profiles, one per role |
 
@@ -205,9 +202,10 @@ topic says "this device was expected and was silent"; an absent one says nothing
 NDT needs velocity, via `/vehicle/status/velocity_status` →
 `vehicle_velocity_converter` → `gyro_odometer` → `ekf_localizer`, so the vehicle
 interface must run while recording. The VCU does not need autonomous mode:
-`VelocityReport` comes from the decoded MTR frame and is gated on neither
-`tx_enabled` nor the control mode — but it *is* gated on frame freshness, so check
-`ros2 topic hz` rather than assume.
+`VelocityReport` comes from the decoded MTR frame and is not gated on the control
+mode — but the VCU sends that frame only while it hears our rolling counter, and
+the report is gated on frame freshness, so check `ros2 topic hz` rather than
+assume.
 
 ### The vendor CAN DBC
 
@@ -566,7 +564,7 @@ is still the first thing to suspect and `pose_source:=ndt` is still the control
 run that isolates it. See
 [docs/handover/2026-08-30-cuda-pipeline-to-orin.md](docs/handover/2026-08-30-cuda-pipeline-to-orin.md).
 
-**`camera_model`, `imu_source` and `tx_enabled` do NOT work as launch arguments.** They reach
+**`camera_model` and `imu_source` do NOT work as launch arguments.** They reach
 `golfcart_autoware.launch.xml`, but the path onwards runs through
 `tier4_sensing_component.launch.xml` and `tier4_sensing_launch/sensing.launch.xml`
 — installed Autoware files that forward a fixed set of arguments and drop the
@@ -625,19 +623,19 @@ Full reasoning and the measurements behind it:
 [docs/research/sensing/autoware-cuda-pointcloud-chain.md](docs/research/sensing/autoware-cuda-pointcloud-chain.md)
 and [docs/research/sensing/lidar-pipeline-starvation.md](docs/research/sensing/lidar-pipeline-starvation.md).
 
-`tx_enabled` is the same story one branch over: `tier4_vehicle_launch/vehicle.launch.xml`
-forwards only `vehicle_id`, `raw_vehicle_cmd_converter_param_path` and
-`initial_engage_state`. `vehicle_interface.launch.xml` reads
-`$(env GOLFCART_TX_ENABLED false)`; `config/vehicle.conf` holds the resting value,
-and `just launch tx=on` / `just launch-up tx=on` / `just launch-all tx=on` set it
-per invocation (`scripts/tx_switch.sh` strips the token). Not sticky on purpose:
-an invocation without `tx=`, and `just launch-down`, both clear it.
-`just vehicle interface tx=on` is a separate path that bypasses Autoware and
-passes the launch argument for real.
+#### No CAN TX switch
 
-`launch-all` applies TX to the **master only** — it does not forward the token to
-the orin, which has no CAN bus. `just service host-status` / `just service status` print
-the effective value and where it came from (`unit-env` or `config/vehicle.conf`).
+There used to be one — `tx=on|off`, `GOLFCART_TX_ENABLED`, `config/vehicle.conf`,
+the node's `tx_enabled` — and it is gone. With TX off the interface sent no
+frames, and this VCU reports velocity and steering only while it hears the
+rolling counter in our frames, so "listen only" left `/vehicle/status/*` empty
+and the stack blind rather than the cart safe. The vehicle interface always
+transmits; **the cart's power switch is the master enable**, and the
+`control_timeout_ms` watchdog brakes on command silence.
+
+A stale `tx_enabled:=false` somewhere is now **silently ignored** — ROS 2 launch
+drops undeclared arguments — so it does not keep anything off. Use `vcan0`
+(`just vehicle interface can=vcan0`) to exercise the node away from the cart.
 
 #### Localization (pose_source)
 ```bash
@@ -708,7 +706,7 @@ no velocity, so the replay proves initialization only. Design and status:
 #### Driving autonomously (Phase 8)
 
 ```bash
-just launch-drive-basement "tx=on"   # both hosts, basement map, board init, no GNSS, 1.0 m/s planning default
+just launch-drive-basement          # both hosts, basement map, board init, no GNSS, 1.0 m/s planning default
 ```
 
 `planning_speed_limit:=<m/s>` is the startup planning speed default (empty keeps

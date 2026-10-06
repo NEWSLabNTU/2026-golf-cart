@@ -16,40 +16,29 @@ default:
 # Vehicle interface on its own, without Autoware. Bench and bring-up.
 # Options are KEY=VALUE in any order:
 #   can=can0|vcan0     SocketCAN interface                          (default can0)
-#   tx=on|off          CAN TX master enable                         (default off)
 #   converter=on|off   robot_state_publisher + velocity converter   (default off)
-# With tx=off the node only listens: /vehicle/status/* and /diagnostics fill in
-# and the cart cannot be commanded into motion.
+# The node always transmits: the VCU reports only while it hears our rolling
+# counter. Use can=vcan0 to stay off the cart, and its power switch on the bus.
 # For keys, run `just vehicle manual-control` in a second terminal.
-# ⚠️  tx=on puts real frames on the bus and can command motion.
 interface *OPTS="":
     #!/usr/bin/env bash
     set -euo pipefail
     CAN=can0
-    TX=false
     CONVERTER=false
     for opt in {{OPTS}}; do
         case "$opt" in
             can=*)                         CAN="${opt#can=}" ;;
-            tx=on|tx=true)                 TX=true ;;
-            tx=off|tx=false)               TX=false ;;
             converter=on|converter=true)   CONVERTER=true ;;
             converter=off|converter=false) CONVERTER=false ;;
             *)
                 echo "Unknown option '$opt'" >&2
-                echo "Usage: just vehicle interface [can=IFACE] [tx=on|off] [converter=on|off]" >&2
+                echo "Usage: just vehicle interface [can=IFACE] [converter=on|off]" >&2
                 echo "       keyboard control is a separate recipe: just vehicle manual-control" >&2
                 exit 2 ;;
         esac
     done
-    if [[ "$TX" == "true" ]]; then
-        printf '\033[1;31mCAN TX ENABLED on %s — the cart can move. Ctrl-C to abort.\033[0m\n' "$CAN"
-        for i in 3 2 1; do printf '  starting in %d...\r' "$i"; sleep 1; done
-        printf '                       \n'
-    fi
     ros2 launch golfcart_vehicle_launch vehicle_interface_standalone.launch.xml \
         can_interface:="$CAN" \
-        tx_enabled:="$TX" \
         vehicle_description:="$CONVERTER" \
         velocity_converter:="$CONVERTER"
 

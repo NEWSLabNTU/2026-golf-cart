@@ -729,16 +729,6 @@ fi
 export GOLFCART_LINK_DOMAIN_ID="${GOLFCART_LINK_DOMAIN_ID:-10}"
 export GOLFCART_LINK_TOPICS="${GOLFCART_LINK_TOPICS:-${GOLFCART_REPO_ROOT}/config/link/topics.yaml}"
 
-# ── Vehicle interface ────────────────────────────────────────────────────────
-# GOLFCART_TX_ENABLED is an environment variable for the same forced reason:
-# the installed tier4_vehicle_launch/vehicle.launch.xml forwards three arguments
-# to our vehicle_interface.launch.xml and drops the rest. See config/vehicle.conf.
-if [ -f "${GOLFCART_REPO_ROOT}/config/vehicle.conf" ]; then
-    # shellcheck source=/dev/null
-    . "${GOLFCART_REPO_ROOT}/config/vehicle.conf"
-    export GOLFCART_TX_ENABLED
-fi
-
 # RMW_IMPLEMENTATION is resolved below by golfcart_resolve_rmw, together with
 # the matching transport config. It must happen after Autoware's setup.bash,
 # which exports an RMW of its own, and after the profile role is known.

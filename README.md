@@ -233,11 +233,12 @@ signal, which reaches it as
 twist and localization will not converge.
 
 The VCU does **not** need to be in autonomous mode for this. `VelocityReport` is
-published from the decoded MTR frame the VCU broadcasts anyway; it depends on
-neither `tx_enabled` nor the control mode, so RX-only is enough:
+published from the decoded MTR frame and does not depend on the control mode —
+but the VCU sends that frame only while it hears the rolling counter in our
+frames, so the interface has to be transmitting. It always is:
 
 ```bash
-just vehicle interface     # CAN RX only — the cart cannot be commanded to move
+just vehicle interface     # real bus, can0
 ```
 
 Confirm before a long run — the report is gated on frame freshness, so a silent

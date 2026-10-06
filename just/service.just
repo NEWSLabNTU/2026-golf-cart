@@ -41,13 +41,6 @@ host-status:
         [ "$state" = "inactive" ] && ! systemctl --user cat "${u}.service" >/dev/null 2>&1 && continue
         printf '%s: %-18s %s\n' "$(hostname)" "${u#golfcart-}" "$state"
     done
-    # Whether the interface may transmit is the one piece of state that decides
-    # if the cart can move, and no unit name shows it. Report it next to them.
-    #
-    # The user manager's environment is the authority: launch-up either sets it
-    # or unsets it on every invocation, so it matches what a running unit was
-    # started with. With nothing set, the unit would resolve config/vehicle.conf,
-    # so that is what gets reported instead.
     # Which middleware this host is on. Both machines must agree: the two RMWs
     # share no wire protocol, so a mismatched pair does not error - each comes up
     # cleanly and simply never sees the other's topics. That is the single most
@@ -58,17 +51,6 @@ host-status:
         bash -c 'source {{justfile_directory()}}/scripts/env.sh; printf "%s" "${GOLFCART_RMW}"'
     ) || RMW="?"
     printf '%s: %-18s %s\n' "$(hostname)" "middleware" "${RMW}"
-    TX=$(systemctl --user show-environment 2>/dev/null | sed -n 's/^GOLFCART_TX_ENABLED=//p')
-    TX_FROM=unit-env
-    if [ -z "${TX}" ]; then
-        TX=$(unset GOLFCART_TX_ENABLED; . {{justfile_directory()}}/config/vehicle.conf 2>/dev/null; echo "${GOLFCART_TX_ENABLED:-false}")
-        TX_FROM=config/vehicle.conf
-    fi
-    if [ "${TX}" = true ]; then
-        printf '%s: \033[1;31m%-18s %s\033[0m  (%s)\n' "$(hostname)" "can tx" "ENABLED" "${TX_FROM}"
-    else
-        printf '%s: %-18s %s  (%s)\n' "$(hostname)" "can tx" "off" "${TX_FROM}"
-    fi
 
 # ── Both hosts, driven from the master ──────────────────────────────────────
 

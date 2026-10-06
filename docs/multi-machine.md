@@ -75,28 +75,11 @@ nothing occupies a terminal. Closing your ssh session no longer stops the cart;
 
 ### Letting the cart move
 
-`launch-all` starts with CAN TX off: the vehicle interface listens, so
-`/vehicle/status/*` and `/diagnostics` fill in, but nothing it publishes can move
-the cart. Turn TX on with the `tx=` token:
-
-```bash
-just launch-all tx=on     # ⚠️  real frames on can0 — the cart can move
-just service host-status          # shows "can tx  ENABLED" and where that came from
-just service status       # the same, for both hosts
-```
-
-TX applies to the **master only**. `launch-all` strips the token before calling
-the orin's `launch-up`, since the orin has no CAN bus and
-`golfcart.launch.yaml` gates the vehicle group on `is_master`.
-
-It is per invocation, not a setting: a `launch-all` without `tx=` clears it, and
-so does `stop-all`. `config/vehicle.conf` holds the resting default and is the
-place to change it for a machine — see [config/README.md](../config/README.md).
-
-`tx=` is not a launch argument and cannot be one; the installed
-`tier4_vehicle_launch/vehicle.launch.xml` forwards a fixed set of arguments to
-our `vehicle_interface.launch.xml` and drops the rest, so `scripts/tx_switch.sh`
-pulls the token out and the environment carries it the rest of the way.
+There is no software TX switch. The vehicle interface always transmits on `can0`,
+because the VCU reports velocity and steering only while it hears the rolling
+counter in our frames — a listen-only interface left the stack blind. The cart's
+power switch is the master enable, and the interface's `control_timeout_ms`
+watchdog brakes when commands stop arriving.
 
 Single-machine operation is untouched:
 
@@ -494,7 +477,6 @@ Most of these now have a home in a file, and the variable is only an override.
 | `GOLFCART_BAG_DIR` | `/mnt/external/rosbags` if mounted, else `~/rosbags` | where each host writes its bags |
 | `GOLFCART_WORKSPACE` | `~/2026-golf-cart` | workspace the units launch from; set by the installer's drop-in |
 | `GOLFCART_LAUNCH_ARGS` | *(empty)* | extra launch arguments for the launch unit |
-| `GOLFCART_TX_ENABLED` | `false` (`config/vehicle.conf`) | may the vehicle interface transmit on CAN; set per invocation by `just launch-up tx=on`, cleared by `launch-down` |
 
 ## A bag with an empty metadata.yaml
 
