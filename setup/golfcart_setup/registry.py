@@ -372,6 +372,18 @@ STEPS: list[Step] = [
         profiles=_on(*VEHICLE),
     ),
     Step(
+        id="orin-can0",
+        label="can0 on the AGX Orin header (pinmux + bitrate, persistent)",
+        why="Header pins 29/31 ship muxed away from CAN, so can0 comes up and "
+            "hears nothing. Installs golfcart-can0.service, which rewrites the "
+            "pinmux and sets 500 kbit/s every boot. The orin only; the master "
+            "uses hardware-config.",
+        group="System config",
+        run=_BASH(f"sudo bash {HARDWARE_DIR / 'can' / 'setup-orin-can0.sh'}"),
+        requires=Requires(sudo=True, arch=("aarch64",), hardware="can"),
+        profiles=_on(*OPT_IN),                  # one machine; tick it there
+    ),
+    Step(
         id="otocam",
         label="OTOCAM GMSL kernel modules",
         why="IMX390 + MAX9296 kmods and a DTB overlay. Needs the vendor blob and "
