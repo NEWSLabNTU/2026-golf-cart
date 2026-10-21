@@ -200,6 +200,19 @@ consumer's QoS, not the sensor's instinct: the IMU is `reliable` because
 `imu_corrector` subscribes reliable, and the ZED's dynamic `/tf` is listed
 because gyro_odometer needs it.
 
+**The `ros2` CLI daemon keeps the environment it started with.** There is one
+daemon per `ROS_DOMAIN_ID`. The first `ros2 topic|node|service` call on a domain
+starts it, and it keeps that shell's `RMW_IMPLEMENTATION`, `CYCLONEDDS_URI` and
+the rest from then on. Later calls on the same domain query it whatever their own
+shell says. So a daemon started from a shell that never sourced `scripts/env.sh`,
+or under the other host's profile, gives an empty or wrong graph to every shell
+after it. Sometimes it fails outright with
+`xmlrpc.client.Fault: <Fault 1: "<class 'RuntimeError'>:!rclpy.ok()">`, which
+names no cause. A test on a scratch domain id leaves a daemon of its own behind.
+When the CLI output does not match what the stack is doing, restart the daemon
+from a shell that sourced `scripts/env.sh` (`ros2 daemon stop; ros2 daemon start`),
+or pass `--no-daemon`. Scripts and one-off tests should use `--no-daemon`.
+
 ### Recording: first-hand topics only
 
 `config/recording/*_topics.txt` record **driver output**. Topics a node computed
