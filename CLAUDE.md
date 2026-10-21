@@ -49,7 +49,7 @@ Grouped families live in `just/*.just` and are reached as `just <module> <recipe
 | `can` | CAN record, replay, decode |
 | `tool` | RViz, PlotJuggler, TUI, keyboard controller |
 | `diag` | diagnostic graph: QoS checks, leaf listing, fault injection |
-| `gnss` | F9P / RTK: `check` the setup, `test` the receiver against the NTRIP caster |
+| `gnss` | F9P / RTK: `check` the setup, `test` the receiver against the NTRIP caster, `launch` it standalone (`ntrip=off` for driver only) |
 | `link` | the master/orin wire: what crosses it, `pressure`, the two-host `sim` |
 
 `build`, `test`, `clean`, `launch*`, `stop-all` and `logs` stay at the root —

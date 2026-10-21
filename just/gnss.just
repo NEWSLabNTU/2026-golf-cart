@@ -2,6 +2,7 @@
 #
 #   just gnss check      # everything a run needs, before going to the field
 #   just gnss test       # bring the receiver up, measure 60s, say what is wrong
+#   just gnss launch     # run the receiver (and NTRIP) by itself, foreground
 #
 # `check` talks to nothing -- it verifies packages, config, the device node and
 # that the caster's port answers. `test` runs the receiver for real. Run check
@@ -53,6 +54,34 @@ check:
 # Bring the receiver up, measure it, and diagnose the first broken link
 test SECONDS="60" *ARGS="":
     ./scripts/testing/gnss/gnss_test.py --seconds {{SECONDS}} {{ARGS}}
+
+# The receiver by itself, without Autoware: driver, NTRIP client and
+# gnss_poser, on /gnss/* (the full stack has /sensing/gnss/*). Ctrl-C stops it.
+#
+#   just gnss launch             # with NTRIP (the sensor kit's ntrip_client.param.yaml)
+#   just gnss launch ntrip=off   # driver only
+#
+# Not under `just launch`: both open /dev/ublox-gps, and the second one loses.
+# The driver respawns and is orphaned by a launch kill, so the exit trap runs
+# `kill` whatever way this ends; without it the next run cannot open the port.
+# Run the u-blox receiver standalone (Ctrl-C to stop)
+launch *OPTS="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ntrip=true
+    for opt in {{OPTS}}; do
+        case "$opt" in
+            ntrip=on|ntrip=true)   ntrip=true ;;
+            ntrip=off|ntrip=false) ntrip=false ;;
+            *) echo "unknown option '$opt' (expected ntrip=on|off)" >&2; exit 2 ;;
+        esac
+    done
+    if fuser /dev/ublox-gps >/dev/null 2>&1; then
+        echo "/dev/ublox-gps is held (stack running, or an orphan): just gnss kill" >&2
+        exit 1
+    fi
+    trap 'just gnss kill >/dev/null' EXIT
+    ros2 launch golfcart_sensor_kit_launch gnss.launch.xml use_ntrip:=$ntrip
 
 # For a receiver already running under `just launch` or the systemd unit. It
 # autodetects /sensing/gnss there, where the standalone launch is /gnss.
