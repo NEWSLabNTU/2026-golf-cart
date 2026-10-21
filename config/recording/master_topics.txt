@@ -37,7 +37,7 @@
 # ── LiDAR — Falcon (Seyond) ─────────────────────────────────────────────────
 /sensing/lidar/falcon/iv_points
 
-# ── GNSS — u-blox ZED-F9P (ublox_f9p_ws) ────────────────────────────────────
+# ── GNSS — u-blox ZED-F9P (NEWSLabNTU/ublox) ──────────────────────────────────
 #
 # Driver output, checked against a running stack on 2026-09-24. nav_sat_fix is
 # what gnss_poser reads. rxmrtcm is the receiver's own account of which

@@ -141,12 +141,12 @@ launch:
 # false, not true, although the receiver benefits from it: this argument did
 # nothing until 2026-09-19 (it reached golfcart_autoware.launch.xml and stopped
 # there, see the set_env below), so "true" was never exercised. Live, it starts
-# the NTRIP client, which needs an account (config/ntrip.param.yaml, gitignored)
+# the NTRIP client, which needs an account (the sensor kit's gitignored config/ntrip_client.param.yaml)
 # and otherwise exits on start and respawns every 5 s. Opt in per run.
 - arg:
     name: use_ntrip
     default: "false"
-    description: "Launch the NTRIP client and feed RTCM corrections to the u-blox (ublox only; needs config/ntrip.param.yaml)"
+    description: "Launch the NTRIP client and feed RTCM corrections to the u-blox (ublox only; needs the sensor kit's config/ntrip_client.param.yaml)"
 
 - arg:
     name: use_mapless_mode
@@ -237,8 +237,7 @@ launch:
 # use_ntrip crosses the same gap the same way. gnss.launch.xml reads
 # $(env USE_NTRIP false); this is what makes `use_ntrip:=true` on the command
 # line reach it. The caster and credentials file are resolved by the sensor
-# kit from NTRIP_PARAM_FILE, which scripts/env.sh exports when
-# config/ntrip.param.yaml exists.
+# kit from its own gitignored config/ntrip_client.param.yaml.
 - set_env:
     name: USE_NTRIP
     value: "$(var use_ntrip)"

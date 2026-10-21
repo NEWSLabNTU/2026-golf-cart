@@ -95,8 +95,7 @@ launch:
 # use_ntrip crosses the same gap the same way. gnss.launch.xml reads
 # $(env USE_NTRIP false); this is what makes `use_ntrip:=true` on the command
 # line reach it. The caster and credentials file are resolved by the sensor
-# kit from NTRIP_PARAM_FILE, which scripts/env.sh exports when
-# config/ntrip.param.yaml exists.
+# kit from its own gitignored config/ntrip_client.param.yaml.
 - set_env:
     name: USE_NTRIP
     value: "$(var use_ntrip)"

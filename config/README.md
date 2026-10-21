@@ -9,7 +9,7 @@ changing a value here changes it for every consumer on both hosts.
 | `host` | one word (`master` or `orin`) | which machine this checkout is on. Selects the DDS profile. **Gitignored** — it is a property of the machine, not the branch |
 | `multi_machine.conf` | shell assignments | the other host's `user@addr`, its repo path, the ssh key, the master's IP |
 | `sensors.conf` | shell assignments | which IMU and camera driver the sensor kit uses (`IMU_SOURCE`, `CAMERA_MODEL`) |
-| `ntrip.param.yaml` | ROS 2 parameter YAML | the NTRIP caster account for RTK corrections. **Gitignored**, it is a secret; start from `ntrip.param.yaml.example`. Exported as `NTRIP_PARAM_FILE`, read only with `use_ntrip:=true` |
+| `ntrip_credentials.txt` | plain text | the NTRIP caster account, kept to paste from. **Gitignored**, it is a secret. The launch reads the account from the sensor kit's own gitignored `config/ntrip_client.param.yaml`, not from here |
 | `runtime.conf` | shell assignments | how play_launch runs composable nodes (`GOLFCART_CONTAINER_MODE`), which middleware this host uses (`GOLFCART_RMW`), and the three ROS domain ids: master stack 50, orin stack 60, wire 10 |
 | `recording/master_topics.txt`<br>`recording/orin_topics.txt` | one topic per line, `#` comments | what each host records |
 | `link/topics.yaml` | YAML | what crosses the master/orin wire, in which direction, with what QoS. One file, read by both hosts' bridges |

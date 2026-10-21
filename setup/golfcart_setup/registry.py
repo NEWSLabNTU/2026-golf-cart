@@ -20,9 +20,9 @@ Dropped from the previous system, by decision on 2026-09-02:
   `rosdep install --from-paths src` already answers, or that another step
   already installs. `ublox_gps` at the time resolved to `ros-humble-ublox-gps`.
   **Since 2026-09-19 it must not**: the driver is built from source, from the
-  `ublox_f9p_ws` submodule under `src/sensor_component/external`, whose fork
-  of KumarRobotics/ublox takes RTCM as `mavros_msgs/RTCM` (what its vendored
-  `ntrip_client` publishes) where the apt build takes `rtcm_msgs/Message`.
+  NEWSLabNTU/ublox submodule under `src/sensor_component/external`, whose fork
+  of KumarRobotics/ublox subscribes RTCM as `mavros_msgs/RTCM`; the apt 2.3.0
+  build has no RTCM input. `ntrip_client` is apt and resolves through rosdep.
   `rosdep --ignore-src` sees the package in the tree and installs its
   *dependencies* instead -- `ros-humble-mavros-msgs`, `ros-humble-rtcm-msgs`,
   `ros-humble-nmea-msgs`, `ros-humble-diagnostic-updater`, `libasio-dev` --

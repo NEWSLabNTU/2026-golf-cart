@@ -39,9 +39,10 @@ data/autoware_data/
 config/host
 .golfcart-host
 
-# NTRIP caster account (username, password). Start from
-# config/ntrip.param.yaml.example; scripts/env.sh exports the real file as
-# NTRIP_PARAM_FILE when it exists.
+# NTRIP caster account (username, password). A secret: the sensor kit's own
+# config/ntrip_client.param.yaml is where it is used, and that repo ignores it
+# too. This file is only where the account is kept to paste from.
+config/ntrip_credentials.txt
 config/ntrip.param.yaml
 
 # once-only warning stamps dropped by scripts/env.sh

@@ -262,12 +262,12 @@ else
     gnss_ok=false
 fi
 
-# The driver is built from the ublox_f9p_ws submodule, not installed from apt,
+# The driver is built from the NEWSLabNTU/ublox submodule, not installed from apt,
 # so look for the package in the workspace the way the launch does. An apt
 # ros-humble-ublox-gps left over from before 2026-09-19 would shadow nothing
 # (the overlay wins) but is worth removing, and is called out.
 if ros2 pkg list 2>/dev/null | grep -q "^ublox_gps$"; then
-    ok "u-blox ROS driver found (ublox_gps, from src/sensor_component/external/ublox_f9p_ws)"
+    ok "u-blox ROS driver found (ublox_gps, from src/sensor_component/external/ublox)"
 else
     fail "u-blox ROS driver not found: ublox_gps is not built. Run: just checkout && just build"
     gnss_ok=false

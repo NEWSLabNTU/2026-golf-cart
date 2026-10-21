@@ -65,7 +65,7 @@ except ImportError as exc:  # noqa: BLE001
     die(f"{exc}. Source the workspace first (direnv, or `source scripts/env.sh`).")
 
 # These three are not in a bare Autoware install: mavros_msgs comes from apt,
-# ublox_msgs and the driver from the ublox_f9p_ws submodule. Name the fix
+# ublox_msgs and the driver from the NEWSLabNTU/ublox submodule. Name the fix
 # rather than letting the traceback do it.
 try:
     from mavros_msgs.msg import RTCM
@@ -269,7 +269,7 @@ def report(p: Probe, span: float, log: str | None, use_ntrip: bool) -> int:
     print(f"\n  FAIL: no RTCM, though {positioned} GGA carried a position.")
     print(f"  The receiver has a fix, so this is the caster or the account"
           f"{' -- ' + caster if caster else ''}.")
-    print("  Check credentials and mountpoint in config/ntrip.param.yaml;")
+    print("  Check credentials and mountpoint in the sensor kit's config/ntrip_client.param.yaml;")
     print("  scripts/testing/ntrip/check_ntrip_setup.sh verifies both.")
     return 1
 

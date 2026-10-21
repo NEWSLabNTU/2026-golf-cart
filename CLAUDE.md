@@ -7,7 +7,7 @@ This is a golf cart autonomous driving system for 華夏科大 campus deployment
 
 **Key System Configuration:**
 - **LiDAR**: Velodyne VLP-32C only
-- **GNSS**: u-blox ZED-F9P, driver built from the `ublox_f9p_ws` submodule (not apt), RTK over NTRIP optional
+- **GNSS**: u-blox ZED-F9P on the Advantech, driver built from the NEWSLabNTU/ublox submodule (apt has no RTCM input), apt `ntrip_client`, RTK over NTRIP optional
 - **IMU**: Tamagawa IMU (replaces MPU9250)
 - **Cameras**: USB cameras (will upgrade to Tier IV cameras later)
 - **Vehicle Interface**: Turing Drive packages (replaces Golf Cart custom PWM interface)
@@ -137,7 +137,7 @@ Submodules:
 - autoware_manual_control - Keyboard control interface
 - golfcart_sensor_kit_launch - Sensor kit configurations
 - gnss_locator - GNSS positioning
-- ublox_f9p_ws - u-blox ZED-F9P driver and NTRIP client (a workspace with a nested `src/ublox` submodule; needs `--recursive`)
+- ublox - u-blox ZED-F9P driver, NEWSLabNTU fork with RTCM input (NTRIP client is apt)
 - ros2_mpu9250_driver - IMU driver (to be replaced with Tamagawa)
 
 ### config/ is the single source of truth
@@ -998,44 +998,45 @@ The original Golf Cart system used custom PWM control:
 One receiver, a **u-blox ZED-F9P** (HPG 1.12, PROTVER 27.11 as read on
 2026-09-17). Earlier revisions of this file described an F9R "practice" unit
 inherited from an older project; there is none on this vehicle, and the
-`ublox_f9p_ws` bring-up log records the day spent launching an F9R
+bring-up log records the day spent launching an F9R
 sensor-fusion profile at an F9P before the receiver identified itself.
 
-### Driver: the `ublox_f9p_ws` submodule, not apt
-`src/sensor_component/external/ublox_f9p_ws` (NEWSLabNTU/ublox_f9p_ws, `main`)
-is a colcon workspace with three parts:
-- `src/ublox` — a **nested submodule**, NEWSLabNTU/ublox, a fork of
-  KumarRobotics/ublox 2.3.0 (`ublox`, `ublox_gps`, `ublox_msgs`,
-  `ublox_serialization`). Three commits over upstream: the `/rtcm`
-  subscription takes `mavros_msgs/RTCM` instead of `rtcm_msgs/Message`, a
-  product-category fix for HPS devices, and a `zed_f9r.yaml` we do not use.
-  `just checkout` passes `--recursive`; without it the directory is empty and
-  nothing provides `ublox_gps`.
-- `src/ntrip_client` — LORD-MicroStrain's NTRIP client, vendored. Publishes
-  `mavros_msgs/RTCM` on `~/rtcm`, uplinks `nmea_msgs/Sentence` from `~/nmea`.
-- `src/gps_launch` — that workspace's own launch. **Not used here**; it carries
-  a caster account in plain text, which is why credentials are handled the way
-  they are below.
+### Driver: the NEWSLabNTU/ublox submodule; NTRIP client from apt
+- `src/sensor_component/external/ublox` (NEWSLabNTU/ublox, branch `ros2`), a
+  fork of KumarRobotics/ublox 2.3.0 (`ublox`, `ublox_gps`, `ublox_msgs`,
+  `ublox_serialization`). Three commits over upstream: a `/rtcm` subscription
+  taking `mavros_msgs/RTCM`, a product-category fix for HPS devices, and a
+  `zed_f9r.yaml` we do not use. **The apt `ros-humble-ublox-gps` 2.3.0 has no
+  RTCM input at all** (checked 2026-10-21), so with it RTK corrections reach
+  nothing; that is why the driver is source-built.
+- `ntrip_client` is apt, `ros-humble-ntrip-client` (1.4.1), a rosdep key in
+  the sensor kit's `package.xml`. It publishes on `rtcm` and uplinks
+  `nmea_msgs/Sentence` from `nmea`; `rtcm_message_package: mavros_msgs` in its
+  param file is what matches the fork.
 
-The package names are the same as apt `ros-humble-ublox-*`, so the workspace
-build shadows an apt install; **do not install ros-humble-ublox-gps** (remove it
-if a pre-2026-09-19 setup left it: the apt driver and this NTRIP client
-disagree on the RTCM message type). `rosdep --ignore-src` installs the fork's
-dependencies instead: `ros-humble-mavros-msgs`, `ros-humble-rtcm-msgs`,
-`ros-humble-nmea-msgs`, `libasio-dev`.
+Until 2026-10-21 both came from a `ublox_f9p_ws` workspace submodule (driver
+nested, client vendored). It was dropped; its private repo keeps the bring-up
+log, `SETUP_LOG.md`, which records the day spent launching an F9R profile at
+an F9P, and a caster account in plain text in its `gps_launch`.
+
+**Do not install ros-humble-ublox-gps**; the workspace build shadows it anyway,
+but remove it if an older setup left it. `rosdep --ignore-src` installs the
+fork's dependencies instead.
 
 ### Launch and configuration
 - `golfcart_sensor_kit_launch/launch/gnss.launch.xml`: `gnss_receiver`
   (`ublox` | `septentrio` | `none`, env `GNSS_RECEIVER`), `use_ntrip`
-  (env `USE_NTRIP`), `ntrip_param_file` (env `NTRIP_PARAM_FILE`)
+  (env `USE_NTRIP`), `ntrip_param_file`
 - `golfcart_sensor_kit_launch/config/ublox_f9p.yaml`: the receiver, as a rover
   (`tmode3: 0`, `/dev/ublox-gps`, `frame_id: gps`, 1 Hz). The driver's own
   `zed_f9p.yaml` is a base-station survey-in profile; do not copy it.
-- `golfcart_sensor_kit_launch/config/ntrip_client.param.yaml`: the caster
-  (e-GNSS `GNSS_Taiwan`, RTCM 3.2 MSM) with **empty credentials**.
-- `config/ntrip.param.yaml` (gitignored, from `config/ntrip.param.yaml.example`):
-  the same file with the account filled in. `scripts/env.sh` exports it as
-  `NTRIP_PARAM_FILE` when it exists.
+- `golfcart_sensor_kit_launch/config/ntrip_client.param.yaml`: caster (e-GNSS
+  `GNSS_Taiwan`, RTCM 3.2 MSM) **and account**. **Gitignored by the sensor
+  kit, which is a public repo**; made from `ntrip_client.param.yaml.example`
+  beside it, then `just build` once so the symlink install picks it up. Never
+  put the account in the `.example`.
+- `config/ntrip_credentials.txt` (gitignored): the account, kept on the
+  vehicle to paste from. Nothing reads it.
 - **Calibration**: antenna position from base_link in `sensor_kit_calibration.yaml`
 
 Topics under `/sensing/gnss`: `ublox/nav_sat_fix` (what `gnss_poser` reads),
@@ -1046,7 +1047,7 @@ types the RTCM topic as `rtcm_msgs/Message`, which this driver does not use.
 
 ### RTK over NTRIP
 ```bash
-just launch use_ntrip:=true        # needs config/ntrip.param.yaml
+just launch use_ntrip:=true        # needs the sensor kit's config/ntrip_client.param.yaml
 scripts/testing/ntrip/check_ntrip_setup.sh   # everything the line above needs
 ```
 `use_ntrip` is a real launch argument that crosses the sensing-chain gap the
@@ -1057,7 +1058,8 @@ without an account the client exits on start and respawns every 5 s.
 Known from the bring-up log, not yet fixed in the fork: the driver's NMEA
 reassembly drops sentences split across a serial read, and GGA leads each
 epoch so ~95% of GGAs are lost. The VRS still streams on the survivors, but a
-moving rover wants ~1 Hz GGA. See `ublox_f9p_ws/SETUP_LOG.md`, section 9.
+moving rover wants ~1 Hz GGA. See `SETUP_LOG.md` section 9 in the retired
+NEWSLabNTU/ublox_f9p_ws.
 
 ### Integration with Localization
 - GNSS provides initial position for NDT localization
