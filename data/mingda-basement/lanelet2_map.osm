@@ -4,27 +4,27 @@
   <node id="1" lat="" lon="">
     <tag k="local_x" v="4.8594"/>
     <tag k="local_y" v="-3.4038"/>
-    <tag k="ele" v="2.4453"/>
+    <tag k="ele" v="0.0"/>
   </node>
   <node id="2" lat="" lon="">
     <tag k="local_x" v="4.7403"/>
     <tag k="local_y" v="0.428"/>
-    <tag k="ele" v="2.8678"/>
+    <tag k="ele" v="0.0"/>
   </node>
   <node id="3" lat="" lon="">
     <tag k="local_x" v="6.2245"/>
     <tag k="local_y" v="22.5913"/>
-    <tag k="ele" v="2.2485"/>
+    <tag k="ele" v="0.0"/>
   </node>
   <node id="5" lat="" lon="">
     <tag k="local_x" v="2.7448"/>
     <tag k="local_y" v="0.5617"/>
-    <tag k="ele" v="2.6136"/>
+    <tag k="ele" v="0.0"/>
   </node>
   <node id="6" lat="" lon="">
     <tag k="local_x" v="4.229"/>
     <tag k="local_y" v="22.725"/>
-    <tag k="ele" v="2.4357"/>
+    <tag k="ele" v="0.0"/>
   </node>
   <way id="4">
     <nd ref="2"/>
