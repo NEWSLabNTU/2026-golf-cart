@@ -25,6 +25,7 @@ hundred metres from any point it can match. Two checks stop that:
     directory, read from its `pcd_paths_or_directory` parameter.
 
     config/initial_poses/<map>/map.yaml   map_path: data/...   (repo-relative)
+                                          extent: [x0, y0, x1, y1]   (optional)
     config/initial_poses/<map>/<spot>.yaml                     one captured pose
 """
 
@@ -61,7 +62,16 @@ def map_path(name: str) -> str:
 
 
 def extent(name: str):
-    """(min_x, min_y, max_x, max_y) of the map's lanelet nodes, or None."""
+    """(min_x, min_y, max_x, max_y) a pose must fall in, or None.
+
+    From map.yaml's `extent` when given, for a map whose lanelets cover less
+    than the area a start spot can be in; else from the lanelet nodes.
+    """
+    import yaml
+    with open(os.path.join(map_dir(name), "map.yaml"), encoding="utf-8") as f:
+        box = yaml.safe_load(f).get("extent")
+    if box:
+        return tuple(float(v) for v in box)
     osm = os.path.join(map_path(name), "lanelet2_map.osm")
     if not os.path.exists(osm):
         return None

@@ -1,0 +1,19 @@
+# Transform applied to the SLAM output to anchor it to the board.
+# The map frame is defined by this file: origin on the floor below the
+# board centre, +x along the board normal, +z up. A rebuild of the same
+# bag should reproduce it; if it does not, the maps are not comparable.
+source_cloud: /home/jetson/2026-golf-cart/src/localization/reflective_pose_detector/basement_dense.ply
+point_count: 3995308
+board_in_source_frame:
+  centre: [-10.182349, 3.849279, 0.699785]
+  normal: [0.998761, 0.047777, 0.013925]
+floor_tilt_deg: 0.145
+detection:
+  points: 1116
+  extents: [0.660, 0.600]
+  plane_residual_m: 0.0239
+transform_map_cloud:
+    - [ 0.998855008,  0.047775740,  0.002480446,  9.985051883]
+    - [-0.047774606,  0.998858009, -0.000514362, -4.330981068]
+    - [-0.002502187,  0.000395271,  0.999996791,  0.573217232]
+    - [ 0.000000000,  0.000000000,  0.000000000,  1.000000000]

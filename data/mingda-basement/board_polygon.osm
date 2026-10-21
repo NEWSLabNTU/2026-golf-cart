@@ -1,0 +1,36 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<osm version='0.6' generator='golfcart_board_initializer'>
+  <!-- Board polygon in the anchored map frame. Coordinates derive from
+       board dimensions and board_pose_in_map rather than survey. -->
+  <node id='1001' visible='true'>
+    <tag k='local_x' v='0.0000'/>
+    <tag k='local_y' v='0.3000'/>
+    <tag k='ele' v='1.0000'/>
+  </node>
+  <node id='1002' visible='true'>
+    <tag k='local_x' v='0.0000'/>
+    <tag k='local_y' v='-0.3000'/>
+    <tag k='ele' v='1.0000'/>
+  </node>
+  <node id='1003' visible='true'>
+    <tag k='local_x' v='0.0000'/>
+    <tag k='local_y' v='-0.3000'/>
+    <tag k='ele' v='1.6000'/>
+  </node>
+  <node id='1004' visible='true'>
+    <tag k='local_x' v='0.0000'/>
+    <tag k='local_y' v='0.3000'/>
+    <tag k='ele' v='1.6000'/>
+  </node>
+  <way id='2001' visible='true'>
+    <nd ref='1001'/>
+    <nd ref='1002'/>
+    <nd ref='1003'/>
+    <nd ref='1004'/>
+    <nd ref='1001'/>
+    <tag k='type' v='pose_marker'/>
+    <tag k='subtype' v='reflector'/>
+    <tag k='marker_id' v='board_001'/>
+    <tag k='area' v='yes'/>
+  </way>
+</osm>

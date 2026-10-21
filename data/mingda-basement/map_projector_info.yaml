@@ -1,0 +1,5 @@
+# Indoor map: a local metric frame anchored to the reflective board, with no
+# geodetic datum. Copying an outdoor map's TransverseMercator block here places
+# the map in a coordinate system that does not exist indoors, and nothing warns.
+projector_type: Local
+vertical_datum: WGS84

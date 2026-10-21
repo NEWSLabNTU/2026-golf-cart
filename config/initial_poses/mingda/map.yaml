@@ -1,0 +1,7 @@
+# Initial poses captured on the MingDa basement map (Falcon survey,
+# re-anchored; see data/mingda-basement/board_anchor.yaml). One <spot>.yaml per
+# start spot, written by `just pose capture mingda <spot>`.
+map_path: data/mingda-basement
+# Its lanelet map is one 22 m lane in front of the board, far smaller than the
+# basement, so the extent check uses the point cloud's bounds instead.
+extent: [-62, -38, 42, 48]
