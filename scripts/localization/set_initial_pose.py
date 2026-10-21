@@ -13,9 +13,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Re-apply a captured initial pose, so a replay starts without a human.
+"""Re-apply a captured initial pose, so a run starts without a click in RViz.
 
-    python3 scripts/localization/set_initial_pose.py CSIE-1
+    python3 scripts/localization/set_initial_pose.py CSIE-1            # NTU replay
+    python3 scripts/localization/set_initial_pose.py --map ntu-r01 gate # live, per map
+
+With `--map`, the pose is config/initial_poses/<map>/<spot>.yaml and is checked
+against that map before it is sent (see pose_maps.py). Without it, the set is
+read from config/ntu_initial_poses/, which is what the NTU replay uses.
+
+This is the fallback for when RTK is not good enough for the GNSS initializer.
+It works with `pose_initializer:=gnss` too: a request that carries a pose is
+used as given, and the GNSS fix is only consulted for a request without one.
 
 Calls `/localization/initialize`, the same service RViz's 2D Pose Estimate
 reaches through the ADAPI adaptor. Publishing `/initialpose3d` directly does NOT
@@ -44,21 +53,38 @@ DEFAULT_DIR = os.path.join(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("name", help="set name, e.g. CSIE-1")
+    parser.add_argument("name", help="set name, e.g. CSIE-1, or a spot with --map")
+    parser.add_argument("--map", help="map name under config/initial_poses/")
     parser.add_argument("--dir", default=DEFAULT_DIR)
+    parser.add_argument("--clock", choices=("auto", "sim", "wall"), default="auto",
+                        help="auto: sim time if /clock has a publisher (a replay), "
+                             "else wall time (the vehicle)")
     parser.add_argument("--timeout", type=float, default=30.0)
     args = parser.parse_args()
 
+    import pose_maps
+
+    if args.map:
+        if args.map not in pose_maps.known_maps():
+            print(f"unknown map {args.map!r}; known: {', '.join(pose_maps.known_maps())}",
+                  file=sys.stderr)
+            return 1
+        args.dir = pose_maps.map_dir(args.map)
     path = os.path.join(args.dir, f"{args.name}.yaml")
     if not os.path.exists(path):
         print(f"no captured pose at {path}", file=sys.stderr)
-        print("  Place one in RViz, then: "
-              f"python3 scripts/localization/capture_initial_pose.py {args.name}",
-              file=sys.stderr)
+        hint = f"just pose capture {args.map} {args.name}" if args.map else \
+            f"python3 scripts/localization/capture_initial_pose.py {args.name}"
+        print(f"  Place one in RViz, let NDT settle, then: {hint}", file=sys.stderr)
         return 1
 
     import yaml
     pose = yaml.safe_load(open(path, encoding="utf-8"))["initial_pose"]
+    if args.map:
+        problem = pose_maps.check_extent(args.map, float(pose["x"]), float(pose["y"]))
+        if problem:
+            print(problem, file=sys.stderr)
+            return 1
 
     import rclpy
     from rclpy.node import Node
@@ -67,7 +93,17 @@ def main() -> int:
     from autoware_localization_msgs.srv import InitializeLocalization
 
     rclpy.init()
-    # use_sim_time is not optional here, and getting it wrong fails silently.
+
+    use_sim_time = args.clock == "sim"
+    if args.clock == "auto":
+        probe = Node("set_initial_pose_probe")
+        deadline = time.time() + 2.0
+        while time.time() < deadline and not probe.count_publishers("/clock"):
+            rclpy.spin_once(probe, timeout_sec=0.1)
+        use_sim_time = probe.count_publishers("/clock") > 0
+        probe.destroy_node()
+
+    # use_sim_time is not optional on a replay, and getting it wrong fails silently.
     #
     # A replay stack runs on bag time. These recordings are days older than now,
     # so a node stamping with the wall clock hands NDT an initial pose whose
@@ -78,13 +114,30 @@ def main() -> int:
     # IMU and velocity, so the vehicle still moves and nothing looks broken.
     node = Node(
         "set_initial_pose",
-        parameter_overrides=[Parameter("use_sim_time", Parameter.Type.BOOL, True)],
+        parameter_overrides=[Parameter("use_sim_time", Parameter.Type.BOOL, use_sim_time)],
     )
+
+    # The stack on the other end must have loaded the map this pose belongs to;
+    # r01 and r02 share a grid, so the extent check alone cannot tell them apart
+    # where they overlap. A stack whose loader cannot be asked is allowed through
+    # with a warning rather than blocked.
+    if args.map:
+        loaded = pose_maps.loaded_map(node)
+        wanted = os.path.realpath(pose_maps.map_path(args.map))
+        if loaded is None:
+            print("warning: could not read the stack's map path; not checked",
+                  file=sys.stderr)
+        elif loaded != wanted:
+            print(f"the stack loaded {loaded}, but {args.map} is {wanted}", file=sys.stderr)
+            print(f"  just launch map_path:=./{os.path.relpath(wanted, pose_maps.REPO)}",
+                  file=sys.stderr)
+            node.destroy_node(); rclpy.shutdown()
+            return 1
 
     # The clock has to actually arrive before the stamp is read; a fresh sim-time
     # node reports 0 until the first /clock message lands.
     deadline = time.time() + args.timeout
-    while node.get_clock().now().nanoseconds == 0 and time.time() < deadline:
+    while use_sim_time and node.get_clock().now().nanoseconds == 0 and time.time() < deadline:
         rclpy.spin_once(node, timeout_sec=0.1)
     if node.get_clock().now().nanoseconds == 0:
         print("no /clock after waiting — is the bag playing with --clock?", file=sys.stderr)

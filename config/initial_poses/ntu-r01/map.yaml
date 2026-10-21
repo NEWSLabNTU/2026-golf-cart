@@ -1,0 +1,3 @@
+# Initial poses captured on the NTU campus r01 map. One <spot>.yaml per start
+# spot, written by `just pose capture ntu-r01 <spot>`.
+map_path: data/ntu-campus-planning/r01

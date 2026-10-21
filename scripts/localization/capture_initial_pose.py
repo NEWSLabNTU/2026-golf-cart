@@ -15,7 +15,8 @@
 
 """Capture a localization pose so a replay can be re-initialised without a human.
 
-    python3 scripts/localization/capture_initial_pose.py CSIE-1
+    python3 scripts/localization/capture_initial_pose.py CSIE-1             # NTU replay
+    python3 scripts/localization/capture_initial_pose.py --map ntu-r01 gate  # per map
 
 Place the pose once in RViz, wait for NDT to settle, run this, and every
 subsequent replay of that set can start unattended.
@@ -58,13 +59,23 @@ def yaw_of(q) -> float:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("name", help="set name, e.g. CSIE-1")
+    parser.add_argument("name", help="set name, e.g. CSIE-1, or a spot with --map")
+    parser.add_argument("--map", help="map name under config/initial_poses/")
     parser.add_argument("--out-dir", default=DEFAULT_DIR)
     parser.add_argument("--settle", type=float, default=3.0,
                         help="seconds of poses to check for stability (default 3)")
     parser.add_argument("--max-drift", type=float, default=0.5,
                         help="metres the pose may move while settling (default 0.5)")
     args = parser.parse_args()
+
+    import pose_maps
+
+    if args.map:
+        if args.map not in pose_maps.known_maps():
+            print(f"unknown map {args.map!r}; known: {', '.join(pose_maps.known_maps())}",
+                  file=sys.stderr)
+            return 1
+        args.out_dir = pose_maps.map_dir(args.map)
 
     import rclpy
     from rclpy.node import Node
@@ -114,6 +125,13 @@ def main() -> int:
 
     x, y, z, qx, qy, qz, qw = samples[-1]
 
+    if args.map:
+        problem = pose_maps.check_extent(args.map, x, y)
+        if problem:
+            print(problem, file=sys.stderr)
+            print("  Is the stack running a different map?", file=sys.stderr)
+            return 1
+
     # Where the pose came from decides what it is worth, and the two cases are
     # indistinguishable once written to a file. In the planning simulator
     # /localization/kinematic_state is simple_planning_simulator echoing its own
@@ -126,19 +144,24 @@ def main() -> int:
     os.makedirs(args.out_dir, exist_ok=True)
     path = os.path.join(args.out_dir, f"{args.name}.yaml")
     with open(path, "w", encoding="utf-8") as f:
-        f.write(f"# Initial pose for the {args.name} replay.\n")
+        what = f"spot {args.name} on map {args.map}" if args.map else f"the {args.name} replay"
+        f.write(f"# Initial pose for {what}.\n")
         if simulated:
             f.write("#\n# SOURCE: planning simulator -- simple_planning_simulator was\n")
             f.write("# running, so this is the clicked pose echoed back as ground truth,\n")
             f.write("# not a pose NDT matched against the map. Treat it as a seed for\n")
             f.write("# method AUTO. A zero drift and a round yaw are expected here.\n#\n")
         else:
-            f.write("#\n# SOURCE: replay -- captured from /localization/kinematic_state\n")
-            f.write("# with no simulator running, i.e. after NDT converged against the\n")
-            f.write("# point cloud map.\n#\n")
+            f.write("#\n# SOURCE: captured from /localization/kinematic_state with no\n")
+            f.write("# simulator running (a replay or the vehicle), i.e. after NDT\n")
+            f.write("# converged against the point cloud map.\n#\n")
         f.write(f"# {len(samples)} samples, drift {drift:.3f} m while sampling.\n")
         f.write("#\n")
-        f.write("# Frame: map (MGRS 51RUH, matching the merged NTU map).\n")
+        if args.map:
+            rel = os.path.relpath(pose_maps.map_path(args.map), pose_maps.REPO)
+            f.write(f"# Frame: map, of {rel}.\n")
+        else:
+            f.write("# Frame: map (MGRS 51RUH, matching the merged NTU map).\n")
         f.write("initial_pose:\n")
         f.write(f"  x: {x:.4f}\n  y: {y:.4f}\n  z: {z:.4f}\n")
         f.write(f"  qx: {qx:.6f}\n  qy: {qy:.6f}\n  qz: {qz:.6f}\n  qw: {qw:.6f}\n")
@@ -146,7 +169,10 @@ def main() -> int:
 
     print(f"captured -> {path}")
     print(f"  x={x:.2f} y={y:.2f} z={z:.2f}  drift while sampling {drift:.3f} m")
-    print(f"  replay unattended with: just ntu-test init {args.name}")
+    if args.map:
+        print(f"  initialize with: just pose init {args.map} {args.name}")
+    else:
+        print(f"  replay unattended with: just ntu-test init {args.name}")
     return 0
 
 

@@ -41,6 +41,7 @@ Grouped families live in `just/*.just` and are reached as `just <module> <recipe
 |---|---|
 | `ntu-test` | NTU campus NDT replay — run `just ntu-test` for the ordered sequence |
 | `indoor-test` | indoor cold start from the reflective board, init-only replay of the basement bag — `just indoor-test` for the sequence |
+| `pose` | initial pose per map without an RViz click: `capture MAP SPOT` once, then `init MAP SPOT`; `list` |
 | `bag` | rosbag record, play, merge, fetch |
 | `record` | recording lifecycle, independent of the launch |
 | `service` | multi-machine systemd units, `doctor`, `host-status` |
