@@ -19,7 +19,7 @@ nalgebra = "0.33"
 serde = { version = "1", features = ["derive"] }
 
 # ROS 2 dependencies (resolved via ament_index by colcon-cargo-ros2)
-rclrs = "*"
+rclrs = "0.7"
 std_msgs = "*"
 sensor_msgs = "*"
 geometry_msgs = "*"
