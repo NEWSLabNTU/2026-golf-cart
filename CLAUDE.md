@@ -751,8 +751,12 @@ perception, diagnostic graph included.** With it false the graph is the base gra
 aggregator's own `edits: [{type: remove}]`
 (`config/system/diagnostics/*-no-perception.yaml`, four-line overlays, not
 copies). There is then no obstacle detection at all, and autonomy is for a
-supervised run only. With it true, upstream's graph stands unchanged. **The driver presses AUTO on the cart
-before Autoware engages**; the interface cannot switch modes itself. Work items,
+supervised run only. With it true, upstream's graph stands unchanged. **The driver puts the cart in
+AUTO on the dashboard, brake pedal held + AUTO button, before Autoware engages,
+and leaves it the same way.** Nothing over CAN changes the VCU's mode; Autoware
+reads the mode the VCU reports, and the interface's control-mode service only
+acknowledges it, both ways (golfcart_vehicle_launch 960a2be). `just can
+vcu-status` shows, receive only, what the VCU reports and what we send. Work items,
 exit criteria and the engage order:
 [docs/roadmaps/8-autonomous-driving.md](docs/roadmaps/8-autonomous-driving.md);
 procedure: [docs/guides/control_testing.md](docs/guides/control_testing.md).
@@ -846,7 +850,7 @@ twist_source:=gyro_odom|eagleye            # Override preset twist source
 
 ## Known Issues
 
-- **Steering sign fixed in code, not re-tested on the cart**: `invert_steering` (vehicle interface, 2026-08-12) follows the vendor simulator's mapping. Phase 8, V2 checks it on the cart.
+- **Steering sign verified on the cart 2026-10-22** (Phase 8 V2): `invert_steering` (vehicle interface, 2026-08-12) is right; keyboard left (+5 deg) went out as -4.98 deg and turned the wheels left. The VCU's steering *report* is not usable yet (live only in AUTO and only for right turns; vendor), see [Phase 9](docs/roadmaps/9-mingda-autonomous-driving.md).
 - **Network monitor errors**: AWS Greengrass socket errors (non-critical, ignore)
 - **Isaac ROS GXF libraries**: If `pose_source:=visual` or `pose_source:=isaac` fails with "libgxf_*.so not found", the GXF library paths are not in `LD_LIBRARY_PATH`. Re-source the setup files:
   ```bash

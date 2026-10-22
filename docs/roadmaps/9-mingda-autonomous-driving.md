@@ -127,8 +127,11 @@ Who has to move, so nothing waits on the wrong person.
 12. Why the planning sim stops 1.0 m short of the goal on the Ming-Da lane
     (candidate for the workstation, once it has the map).
 13. L8: the board initializer waits for the matcher's map.
-14. Docs: `control_testing.md` and Phase 8's engage sequence still say `tx=on`
-    and "driver presses AUTO"; both should say brake + dashboard button.
+14. ~~Docs: `control_testing.md` and Phase 8's engage sequence still say `tx=on`
+    and "driver presses AUTO"; both should say brake + dashboard button.~~
+    **Done 2026-10-22**: both, plus Phase 8 V1/V2, the standalone vehicle
+    interface design's commands and CLAUDE.md, now say brake + dashboard button
+    and carry no `tx=`.
 
 **On the cart**
 15. Park with the board in view: board detection, then from the lane start
@@ -143,6 +146,7 @@ Who has to move, so nothing waits on the wrong person.
 
 - **2026-10-22** VCU back. V1 pass, V2 pass, V3 partial (right stop 22 deg),
   steering feedback found broken (vendor). Mode-request fix (960a2be),
+  `just can vcu-status` (receive-only VCU readout),
   `just tool board-detector`, check-script fixes, rclrs pins, orin build and
   clock fixed, Ming-Da lane widened to 2.4 m. This tracker started.
 - **2026-10-21** Ming-Da map extracted and verified; lanelet elevation fixed

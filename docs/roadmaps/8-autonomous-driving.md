@@ -36,14 +36,23 @@ Written down here because nothing else does, and two READMEs contradict each
 other on it (`control_test/README.md:136-139` says the control-mode service
 engages; the vehicle interface README says it cannot).
 
-1. `just launch-all "tx=on ..."`. Without TX the VCU sees no heartbeat and
-   refuses AUTO.
+Corrected 2026-10-22, on the cart: the mode is the dashboard's alone, entered
+and left with the brake pedal held and the AUTO button. Nothing over CAN moves
+the VCU either way; Autoware reads the mode the VCU reports.
+
+1. `just launch-drive-mingda` (or `just launch-all ...`). The interface always
+   transmits since fc54edb; there is no `tx=on`. Its frames carry the rolling
+   counter without which the VCU reports all zeros (`just can vcu-status` shows
+   both sides).
 2. Localize (board), set a route.
-3. **Driver presses AUTO on the cart.** The interface's control-mode service only
-   acknowledges; it succeeds once the VCU already reports all four subsystems
-   autonomous. Autoware is still in STOP here, so `stop_hold_acceleration`
-   (-1.5 m/s2) goes out.
+3. **Driver holds the brake and presses the dashboard AUTO button.** The
+   interface's control-mode service only acknowledges, both ways
+   (golfcart_vehicle_launch 960a2be): AUTONOMOUS succeeds once the VCU reports
+   all four subsystems autonomous, MANUAL once it no longer does. Autoware is
+   still in STOP here, so `stop_hold_acceleration` (-1.5 m/s2) goes out.
 4. `/api/operation_mode/change_to_autonomous`.
+5. To finish: `/api/operation_mode/change_to_stop`, then brake + AUTO button on
+   the dashboard to leave AUTO.
 
 Any subsystem switched back to manual breaks unanimity and the interface goes
 idle: that is the driver override.
@@ -376,9 +385,10 @@ shows no pose gap over 0.3 s.
 ## Track V: vehicle days (VCU back)
 
 - **V1** Does the VCU accept command frames with checksum 0? Everything else
-  depends on this.
-- **V2** Steering sign: fixed in code (891e84a) after the vendor simulator, never
-  re-tested on the cart.
+  depends on this. **Yes, 2026-10-22** ([Phase 9](9-mingda-autonomous-driving.md)).
+- **V2** Steering sign: fixed in code (891e84a) after the vendor simulator.
+  **Verified on the cart 2026-10-22**: keyboard left (+5 deg) went out as
+  -4.98 deg and turned the wheels left.
 - **V3** Measure maximum steer (0.349 rad is inherited from the PWM cart; ROOTS
   allows 30 deg) and the side overhangs (0.001 placeholders). **Evidence from
   2026-10-05:** the hand-driven clockwise lap turned its four corners at 3.3,
@@ -428,7 +438,7 @@ AUTO is entered on the dashboard). The table below is the 2026-09-29 desk state.
 | E1 cuda_ndt diagnostic name | **done**: `"<node>: <category>"`, node name as hardware_id; 2 new tests, crate suite 72/72 |
 | E2 `map_path` | **done**: declared argument; dump shows every loader on the basement map with the override, COSS without |
 | E3 diagnostic graph | **done for perception**: `launch_perception` alone selects the graph. False gives the base graph (upstream or ArUco) with `/autoware/perception` removed by the aggregator's `edits`; true gives the base graph unchanged. All four combinations checked by dump; both overlays load in the aggregator's `tree`. Accuracy leaf kept, pending L1 |
-| E4 one command | **done**: `just launch-drive-basement "tx=on"` |
+| E4 one command | **done**: `just launch-drive-basement "tx=on"` (`tx=` removed since, fc54edb: now plain `just launch-drive-basement`) |
 | E5 procedure | **written**: `docs/guides/control_testing.md`; unexercised |
 | S1 e-stop | **done**: independent driver and MRM flags, OR'd; 4 tests; bench-checked on vcan0 (a driver e-stop held 4 s against `emergency=false` at 20 Hz) |
 | S2 deadband | **done**: `decel_deadband_mps2` 0.2, accepted in [0, 1.2); 5 tests. Small decels are not raised to 1.2 (S3) |

@@ -63,9 +63,11 @@ Specific defects:
 
 ### Recipes
 
+As run today (the `tx=` lines of the original design are gone; see the note at
+the top):
+
 ```
-just vehicle interface                  # RX only
-just vehicle interface tx=on            # drives the cart
+just vehicle interface                  # real bus, can0; always transmits
 just vehicle interface can=vcan0        # bench, against mock_vcu
 just vehicle interface converter=on     # + robot_state_publisher + velocity converter
 just vehicle manual-control                     # keyboard teleop, second terminal
@@ -194,9 +196,9 @@ controller can override that.
 
 | Old | New |
 |---|---|
-| `just vehicle interface can0 true` | `just vehicle interface tx=on` |
+| `just vehicle interface can0 true` | `just vehicle interface` (was `tx=on`; TX is now always on) |
 | `just control-vehicle-test vcan0` | `just vehicle interface can=vcan0` |
-| `just control-teleop-real can0` | `just vehicle interface tx=on` + `just vehicle manual-control` |
+| `just control-teleop-real can0` | `just vehicle interface` + `just vehicle manual-control` (was `tx=on`) |
 | `just control-keyboard` / old `just vehicle manual-control` | `just vehicle manual-control` (now parameterized for the cart) |
 | `just control-basic` | `just vehicle interface converter=on` |
 
@@ -227,7 +229,9 @@ Implemented and verified on the bench 2026-08-12 (`vcan0` + `mock_vcu`, isolated
   vehicle's own `ControlModeReport`. Ctrl-C restores the terminal and exits.
 - `can-test` — replay rig still works after the rewire.
 
-Real-bus driving (`can0`, `tx=on`) is field-test work.
+Real-bus driving (`can0`) was field-test work; first done 2026-10-22, with the
+cart put in AUTO on the dashboard (brake held + AUTO button), which nothing on
+CAN can do.
 
 ### History
 
