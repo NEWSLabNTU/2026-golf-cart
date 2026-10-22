@@ -45,12 +45,19 @@ interface *OPTS="":
 # Terminal keyboard controller (autoware_manual_control), commanding /control/command/*.
 # Run in a second terminal next to `just vehicle interface` — keys are read from a
 # raw tty, so this must own a real terminal and cannot live inside a launch file.
-# Keys: x drive, c reverse, v park, u/o speed, j/l steer, i/k zero, s status, z mode.
+# Keys: w/s speed up/down, q speed 0, a/d steer left/right, e steer 0,
+# h park, j reverse, k neutral, l drive.
 # Limits are the cart's: 5 m/s ceiling in 0.25 m/s steps, 0.349 rad in 1° steps.
 # Extra ARGS are appended to --ros-args, e.g. just vehicle manual-control "-p max_speed:=2.0"
+#
+# mode_backend none: the driver switches AUTO and manual on the dashboard
+# (brake held + button) and nothing over the wire moves the VCU, so `m` only
+# says so. The status line shows the vehicle's own mode either way. With
+# control_mode, `m` sent a mode request the interface can only acknowledge,
+# which on 2026-10-22 read as "MANUAL accepted" while the cart stayed in AUTO.
 manual-control *ARGS="":
     ros2 run autoware_manual_control keyboard_control --ros-args \
-        -p mode_backend:=control_mode \
+        -p mode_backend:=none \
         -p control_cmd_topic:=/control/command/control_cmd \
         -p gear_cmd_topic:=/control/command/gear_cmd \
         -p max_speed:=5.0 \
