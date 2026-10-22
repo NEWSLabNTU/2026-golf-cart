@@ -48,13 +48,14 @@ interface *OPTS="":
 # Keys: w/s speed up/down, q speed 0, a/d steer left/right, e steer 0,
 # h park, j reverse, k neutral, l drive.
 # Limits are the cart's: 5 m/s ceiling in 0.25 m/s steps, 0.349 rad in 1° steps.
-# Extra ARGS are appended to --ros-args, e.g. just vehicle manual-control "-p max_speed:=2.0"
 #
 # mode_backend none: the driver switches AUTO and manual on the dashboard
 # (brake held + button) and nothing over the wire moves the VCU, so `m` only
 # says so. The status line shows the vehicle's own mode either way. With
 # control_mode, `m` sent a mode request the interface can only acknowledge,
 # which on 2026-10-22 read as "MANUAL accepted" while the cart stayed in AUTO.
+#
+# Extra ARGS are appended to --ros-args, e.g. just vehicle manual-control "-p max_speed:=2.0"
 manual-control *ARGS="":
     ros2 run autoware_manual_control keyboard_control --ros-args \
         -p mode_backend:=none \
