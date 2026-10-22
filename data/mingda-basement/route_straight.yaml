@@ -2,8 +2,8 @@
 # direction of travel (+x to -x, yaw 180 deg). Drawn by hand on the top-down
 # floor plan on 2026-10-22: a straight 15.0 m run 2.8 m south of the board,
 # measured from the drawing's pixels against the plot frame (24.9 px/m).
-# Lane width 2.0 m. Build with:
+# Lane width 2.4 m (widened from 2.0 on 2026-10-22). Build with:
 #   python3 scripts/map/centerline_to_lanelet.py data/mingda-basement/route_straight.yaml \
-#       --map-dir data/mingda-basement --width 2.0 --ele 0.0 --speed-limit 4 --smoothing 0 --write
+#       --map-dir data/mingda-basement --width 2.4 --ele 0.0 --speed-limit 4 --smoothing 0 --write
 - [17.6, -2.8]
 - [2.6, -2.8]
