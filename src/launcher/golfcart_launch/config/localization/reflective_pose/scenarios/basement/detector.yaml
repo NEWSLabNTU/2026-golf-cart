@@ -92,6 +92,13 @@ detector:
     # as well, 0.87 / 0.6 = 1.45 still passes the upper bound. Not a reason to
     # widen it further.
     extent_tolerance: [0.8, 1.5]
+    # Forgive the lower bound the rings' edge loss: the measured height runs
+    # from the first ring on the board to the last, short by up to one ring
+    # gap at each edge. On the cart at 12.5 m (2026-10-22) rings at 1.08 to
+    # 1.51 m read the 1.0 to 1.6 m board as 0.44 m, under the 0.48 m floor,
+    # in 56 of 56 batches; at 8.0 m it passed 56 of 56. The gap is read from
+    # the elevation table at the cluster's own edges, not the table mean.
+    extent_sampling_slack: true
     planarity_max_thickness: 0.08
     verticality_max_dot: 0.25
     centre_height_tolerance: 0.30
