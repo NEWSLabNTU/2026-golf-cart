@@ -63,6 +63,12 @@ if systemctl is-enabled systemd-timesyncd >/dev/null 2>&1; then
     systemctl disable --now systemd-timesyncd
 fi
 
+# Enable as well as restart: the Jetson image ships chrony disabled, so a restart
+# alone lasts until the next reboot. The orin has no RTC battery and then comes
+# up at 1970-01-01 with nothing to sync it.
+echo "Enabling chrony..."
+systemctl enable chrony
+
 echo "Restarting chrony..."
 systemctl restart chrony
 
