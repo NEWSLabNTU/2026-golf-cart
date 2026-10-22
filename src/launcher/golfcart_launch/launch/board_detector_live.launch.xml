@@ -19,6 +19,10 @@
   the one still in frame `velodyne` with intensity intact. The node is named
   board_detector at the root, not /localization/board_detector, because that is
   what reflective_pose_ros's RViz layout subscribes to.
+
+  lidar:=false use_sim_time:=true is the replay form, used by
+  `just tool board-check source=bag`: everything but the driver, on bag time,
+  with a rosbag of the same raw topic standing in for the VLP-32C.
 -->
 <launch>
   <arg name="reflective_pose_scenario" default="basement"
@@ -27,6 +31,12 @@
   <arg name="sensor_model" default="golfcart_sensor_kit"/>
   <arg name="rviz" default="true"/>
   <arg name="rviz_config" default="$(find-pkg-share reflective_pose_ros)/rviz/board_detector.rviz"/>
+  <arg name="lidar" default="true"
+       description="start the VLP-32C driver; false when a bag publishes the raw cloud"/>
+  <arg name="use_sim_time" default="false"
+       description="true when replaying a bag that publishes /clock"/>
+
+  <set_parameter name="use_sim_time" value="$(var use_sim_time)"/>
 
   <let name="reflective_pose_config_path"
        value="$(find-pkg-share golfcart_launch)/config/localization/reflective_pose"/>
@@ -40,7 +50,7 @@
 
   <!-- The VLP-32C alone, as golfcart_sensor_kit_launch/launch/lidar.launch.xml
        starts it: same namespace, so the raw cloud keeps its stack topic name. -->
-  <group>
+  <group if="$(var lidar)">
     <push-ros-namespace namespace="sensing/lidar/vlp32"/>
     <include file="$(find-pkg-share nebula_ros)/launch/velodyne_launch_all_hw.xml">
       <arg name="sensor_model" value="VLP32"/>

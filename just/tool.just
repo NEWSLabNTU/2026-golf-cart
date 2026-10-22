@@ -75,3 +75,50 @@ board-detector ARGS="":
         exit 1
     fi
     ros2 launch golfcart_launch board_detector_live.launch.xml {{ARGS}}
+
+# The board detector under the production config, watched and judged: PASS
+# needs TF, enough detections, a high enough detection rate, and every pose
+# near the median one (scripts/testing/board_check.py says exactly how much).
+# Options are KEY=VALUE, any order:
+#
+#   just tool board-check                         # live VLP-32C, Ctrl-C ends the run
+#   just tool board-check duration=30             # live, 30 s
+#   just tool board-check source=bag              # replay rosbags/basement/vlp32_1
+#   just tool board-check source=bag rviz=off duration=60
+#   just tool board-check scenario=sim bag=PATH
+#
+# Anything else is passed to the checker: min-detections=, min-rate=,
+# max-xy-m=, max-yaw-deg=, quiet=on. Live, the stack must be down, as for
+# board-detector: two drivers on the VLP-32C's port and the second hears nothing.
+# Run the board detector on the production config and print PASS/FAIL
+board-check *OPTS="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source scripts/_env_guard.sh
+    SOURCE=live SCENARIO=basement RVIZ=true DURATION=0
+    BAG="${GOLFCART_INDOOR_BAG:-$PWD/rosbags/basement/vlp32_1}"
+    CHECK=()
+    for opt in {{OPTS}}; do
+        case "$opt" in
+            source=live|source=bag)    SOURCE="${opt#source=}" ;;
+            scenario=*)                SCENARIO="${opt#scenario=}" ;;
+            rviz=on|rviz=true)         RVIZ=true ;;
+            rviz=off|rviz=false)       RVIZ=false ;;
+            duration=*)                DURATION="${opt#duration=}" ;;
+            bag=*)                     BAG="${opt#bag=}" ;;
+            min-detections=*|min-rate=*|max-xy-m=*|max-yaw-deg=*)
+                                       CHECK+=("--${opt%%=*}" "${opt#*=}") ;;
+            quiet=on|quiet=true)       CHECK+=(--quiet) ;;
+            *)
+                echo "Unknown option '$opt'" >&2
+                echo "Usage: just tool board-check [source=live|bag] [scenario=NAME] [rviz=on|off]" >&2
+                echo "       [duration=S] [bag=PATH] [min-detections=N] [min-rate=R]" >&2
+                echo "       [max-xy-m=M] [max-yaw-deg=D] [quiet=on]" >&2
+                exit 2 ;;
+        esac
+    done
+    if [[ "$SOURCE" == live && "$(systemctl --user is-active golfcart-launch 2>/dev/null)" == "active" ]]; then
+        echo "golfcart-launch.service is running and holds the VLP-32C: just stop-all first" >&2
+        exit 1
+    fi
+    exec scripts/testing/board_check.sh "$SOURCE" "$SCENARIO" "$RVIZ" "$DURATION" "$BAG" "${CHECK[@]}"
