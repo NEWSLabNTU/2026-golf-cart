@@ -97,6 +97,14 @@ build *FLAGS="":
         echo "  (needed only on the machine driving the CAN bus; see README)"
         IGNORE_PKGS+=(golfcart_vehicle_interface)
     fi
+    # The u-blox driver (NEWSLabNTU/ublox fork) takes its RTCM input as
+    # mavros_msgs/RTCM, an apt package. A host without it cannot configure
+    # ublox_gps; only the host the receiver is cabled to needs the driver.
+    if [[ ! -f /opt/ros/humble/share/mavros_msgs/package.xml ]]; then
+        echo "→ mavros_msgs not installed — skipping the u-blox driver"
+        echo "  (needed only on the host with the receiver: apt install ros-humble-mavros-msgs)"
+        IGNORE_PKGS+=(ublox ublox_gps)
+    fi
     IGNORE_ARGS=()
     if [[ ${#IGNORE_PKGS[@]} -gt 0 ]]; then
         IGNORE_ARGS=(--packages-ignore "${IGNORE_PKGS[@]}")
