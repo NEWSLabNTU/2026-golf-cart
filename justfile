@@ -415,6 +415,12 @@ launch-drive-basement ARGS="":
 launch-drive-mingda ARGS="":
     just launch-all "pose_initializer:=board reflective_pose_scenario:=basement map_path:=./data/mingda-basement use_gnss:=false planning_speed_limit:=1.0 {{ARGS}}"
 
+# The same, on the clockwise loop lane (lanelet2_map_loop.osm, from the
+# 2026-09-24 drive carried into this frame; see route_loop_cw.yaml). Its corners
+# are tighter than the vehicle model's 20 deg steer allows.
+launch-drive-mingda-loop ARGS="":
+    just launch-drive-mingda "lanelet2_map_file:=lanelet2_map_loop.osm {{ARGS}}"
+
 # The planning simulator on the basement map, golf-cart vehicle model (Phase 8, M2).
 # MAP is a map directory; point it at a scratch copy to try a route before
 # writing it into data/basement-indoor. Then, from another terminal:

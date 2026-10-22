@@ -351,6 +351,14 @@ launch:
     default: "./data/COSS-map-planning"
     description: "Map directory. Example: map_path:=./data/basement-indoor"
 
+# The lanelet file inside map_path, declared and forwarded for the same reason:
+# lets one map directory hold more than one lane layout over the same point
+# cloud (data/mingda-basement: the straight lane and the clockwise loop).
+- arg:
+    name: lanelet2_map_file
+    default: "lanelet2_map.osm"
+    description: "Lanelet2 file in map_path. Example: lanelet2_map_file:=lanelet2_map_loop.osm"
+
 - arg:
     name: planning_speed_limit
     default: ""
@@ -414,6 +422,9 @@ launch:
     -
       name: map_path
       value: $(var map_path)
+    -
+      name: lanelet2_map_file
+      value: $(var lanelet2_map_file)
     -
       name: data_path
       value: $(var data_path)
