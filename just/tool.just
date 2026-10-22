@@ -122,3 +122,38 @@ board-check *OPTS="":
         exit 1
     fi
     exec scripts/testing/board_check.sh "$SOURCE" "$SCENARIO" "$RVIZ" "$DURATION" "$BAG" "${CHECK[@]}"
+
+# ============================================================================
+# Ming-Da rehearsal (docs/handover/2026-10-22-mingda-rehearsal.md). All three run
+# on the MASTER, in a terminal, with `just launch-drive-mingda` up; none engages.
+
+# Where does the planning chain stop? Sets the route to the Ming-Da goal
+# (allow_goal_modification false), counts every stage down to control_cmd, and
+# lists the nodes' recent "waiting for" lines. `just tool plan-probe --no-route`
+# only observes; any scripts/testing/mingda/plan_probe.py flag passes through.
+# Set the Ming-Da route and report the first silent planning stage
+plan-probe *ARGS="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source scripts/_env_guard.sh
+    python3 scripts/testing/mingda/plan_probe.py {{ARGS}}
+
+# Record localization, the speed chain and the raw VLP-32C while the driver
+# creeps ~1 m forward in manual. Ctrl-C to stop; the bag lands in
+# $GOLFCART_BAG_DIR/NAME. Then `just tool creep-report <that path>`.
+# Record a manual creep for the localization-loss diagnosis
+creep-record NAME="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source scripts/_env_guard.sh
+    exec scripts/testing/mingda/creep_record.sh {{NAME}}
+
+# Summarize a creep bag: speed sources integrated to distance, pose sources'
+# displacement and largest jump, NDT scores, a 0.5 s timeline, and whether the
+# VCU's distance matches the board's.
+# Summarize a creep bag (speed chain vs board vs NDT)
+creep-report BAG:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source scripts/_env_guard.sh
+    python3 scripts/testing/mingda/creep_report.py {{BAG}}
