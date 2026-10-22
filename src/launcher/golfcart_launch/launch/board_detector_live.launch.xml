@@ -1,0 +1,60 @@
+<?xml version="1.0"?>
+<!--
+  The reflective board detector by itself on the live cart, to see what it sees:
+  the VLP-32C driver, the vehicle's TF tree from its calibration, the detector
+  with exactly the configuration the stack gives it under pose_initializer:=board,
+  and RViz on the detector's own layout.
+
+  Nothing here calls /localization/initialize. The detector publishes
+  /board_detector/board_pose and its debug topics, and that is all; no map, no
+  NDT, no Autoware.
+
+  Run it INSTEAD of the stack, not beside it: both open the VLP-32C's UDP port,
+  and the second driver receives nothing. `just tool board-detector` refuses to
+  start while golfcart-launch.service is active.
+
+  Same detector, same config files as golfcart_autoware.launch.xml: the scenario's
+  detector.yaml for the board and gates, board_detector.param.yaml for this
+  vehicle's frames and stacking, and the VLP-32C's raw cloud as input, which is
+  the one still in frame `velodyne` with intensity intact. The node is named
+  board_detector at the root, not /localization/board_detector, because that is
+  what reflective_pose_ros's RViz layout subscribes to.
+-->
+<launch>
+  <arg name="reflective_pose_scenario" default="basement"
+       description="scenarios/NAME/detector.yaml under config/localization/reflective_pose"/>
+  <arg name="vehicle_model" default="golfcart_vehicle"/>
+  <arg name="sensor_model" default="golfcart_sensor_kit"/>
+  <arg name="rviz" default="true"/>
+  <arg name="rviz_config" default="$(find-pkg-share reflective_pose_ros)/rviz/board_detector.rviz"/>
+
+  <let name="reflective_pose_config_path"
+       value="$(find-pkg-share golfcart_launch)/config/localization/reflective_pose"/>
+
+  <!-- base_link to velodyne from the vehicle and sensor kit calibration, the same
+       tree the stack publishes, not indoor-test's hand-typed fake-tf. -->
+  <node name="robot_state_publisher" pkg="robot_state_publisher" exec="robot_state_publisher">
+    <param name="robot_description"
+           value="$(command 'xacro $(find-pkg-share tier4_vehicle_launch)/urdf/vehicle.xacro vehicle_model:=$(var vehicle_model) sensor_model:=$(var sensor_model)' 'warn')"/>
+  </node>
+
+  <!-- The VLP-32C alone, as golfcart_sensor_kit_launch/launch/lidar.launch.xml
+       starts it: same namespace, so the raw cloud keeps its stack topic name. -->
+  <group>
+    <push-ros-namespace namespace="sensing/lidar/vlp32"/>
+    <include file="$(find-pkg-share nebula_ros)/launch/velodyne_launch_all_hw.xml">
+      <arg name="sensor_model" value="VLP32"/>
+      <arg name="launch_hw" value="true"/>
+      <arg name="config_file" value="$(find-pkg-share golfcart_sensor_kit_launch)/config/VLP32.param.yaml"/>
+    </include>
+  </group>
+
+  <include file="$(find-pkg-share reflective_pose_ros)/launch/board_detector.launch.xml">
+    <arg name="config_file" value="$(var reflective_pose_config_path)/scenarios/$(var reflective_pose_scenario)/detector.yaml"/>
+    <arg name="params_file" value="$(var reflective_pose_config_path)/board_detector.param.yaml"/>
+    <arg name="input_topic" value="/sensing/lidar/vlp32/velodyne_points"/>
+    <arg name="node_name" value="board_detector"/>
+  </include>
+
+  <node pkg="rviz2" exec="rviz2" name="board_detector_rviz" args="-d $(var rviz_config)" if="$(var rviz)"/>
+</launch>

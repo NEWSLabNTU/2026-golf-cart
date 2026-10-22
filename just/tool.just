@@ -55,3 +55,23 @@ tui:
 # Launch manual keyboard control
 controller:
     ros2 run control_test keyboard_control
+
+# The reflective board detector alone on the live cart, with its RViz layout:
+# VLP-32C driver, the vehicle's calibrated TF, and the detector with the stack's
+# own config (board_detector_live.launch.xml). Nothing initializes localization.
+#
+#   just tool board-detector                                  # basement scenario
+#   just tool board-detector "reflective_pose_scenario:=sim rviz:=false"
+#
+# It opens the VLP-32C's UDP port, so the stack must be down: on a shared port
+# the second driver hears nothing and the detector looks blind for no reason.
+# Inspect the reflective board detector live, without the stack (needs the stack stopped)
+board-detector ARGS="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source scripts/_env_guard.sh
+    if [[ "$(systemctl --user is-active golfcart-launch 2>/dev/null)" == "active" ]]; then
+        echo "golfcart-launch.service is running and holds the VLP-32C: just stop-all first" >&2
+        exit 1
+    fi
+    ros2 launch golfcart_launch board_detector_live.launch.xml {{ARGS}}
