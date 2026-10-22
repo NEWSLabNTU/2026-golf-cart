@@ -740,6 +740,7 @@ no velocity, so the replay proves initialization only. Design and status:
 
 ```bash
 just launch-drive-basement          # both hosts, basement map, board init, no GNSS, 1.0 m/s planning default
+just launch-drive-mingda            # same, on the re-anchored Ming-Da map (data/mingda-basement)
 ```
 
 `planning_speed_limit:=<m/s>` is the startup planning speed default (empty keeps

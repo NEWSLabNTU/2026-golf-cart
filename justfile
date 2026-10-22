@@ -393,6 +393,20 @@ logs:
 launch-drive-basement ARGS="":
     just launch-all "pose_initializer:=board reflective_pose_scenario:=basement map_path:=./data/basement-indoor use_gnss:=false planning_speed_limit:=1.0 {{ARGS}}"
 
+# The same drive on the re-anchored MingDa map (data/mingda-basement): the Falcon
+# cloud is on this map, and its anchor is 3.46 deg of yaw away from
+# basement-indoor's, so nothing traced in the old frame (the lanelet ring,
+# route_loop_cw.yaml, poses captured there) carries over. Its lanelet map is
+# whatever data/mingda-basement/lanelet2_map.osm holds when this runs.
+#
+# Same scenario, `basement`, on purpose: a scenario is the site's board and the
+# VLP-32C's gates, not the anchor. Both anchors define the map frame as the
+# board at the origin facing +x, so the runtime board.pose_in_map is the same
+# [0, 0, 1.3, 0, 0, 0] in either; what changed is which way the survey cloud
+# was turned to put it there. A copy would be a second place to tune the gates.
+launch-drive-mingda ARGS="":
+    just launch-all "pose_initializer:=board reflective_pose_scenario:=basement map_path:=./data/mingda-basement use_gnss:=false planning_speed_limit:=1.0 {{ARGS}}"
+
 # The planning simulator on the basement map, golf-cart vehicle model (Phase 8, M2).
 # MAP is a map directory; point it at a scratch copy to try a route before
 # writing it into data/basement-indoor. Then, from another terminal:
