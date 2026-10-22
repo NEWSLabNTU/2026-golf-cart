@@ -1,9 +1,17 @@
 # First-drive centreline on the Ming-Da basement map, map frame, in the
-# direction of travel (+x to -x, yaw 180 deg). Drawn by hand on the top-down
-# floor plan on 2026-10-22: a straight 15.0 m run 2.8 m south of the board,
-# measured from the drawing's pixels against the plot frame (24.9 px/m).
-# Lane width 2.4 m (widened from 2.0 on 2026-10-22). Build with:
+# direction of travel (+x to -x, yaw 180 deg).
+#
+# Redrawn on 2026-10-22 from the cart, not the floor plan. The first version
+# (y -2.8, traced from a hand drawing) ran over a curb that is neither on the
+# drawing nor resolvable in the PCD (too few floor points): with the cart's
+# right wheel 5 cm from the curb, board and NDT both put base_link at
+# y -3.94, so the curb is at y ~ -3.2. A live scan at heights 0.35-1.9 m shows
+# pillars at y -0.44..-0.51 (right) and -8.27..-8.44 (left), at x 6-7 and
+# 14-15, and nothing else along x 1-19. Centre y -4.9 with width 2.4 puts the
+# right edge 0.5 m inside the curb and the left edge 2.2 m from the pillars.
+# The curb was located at x ~11 only; it is assumed parallel to the lane.
+# Build with:
 #   python3 scripts/map/centerline_to_lanelet.py data/mingda-basement/route_straight.yaml \
 #       --map-dir data/mingda-basement --width 2.4 --ele 0.0 --speed-limit 4 --smoothing 0 --write
-- [17.6, -2.8]
-- [2.6, -2.8]
+- [17.6, -4.9]
+- [2.6, -4.9]

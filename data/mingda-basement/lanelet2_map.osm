@@ -34,162 +34,162 @@
   </way>
   <node id="100000" visible="true">
     <tag k="local_x" v="17.6000" />
-    <tag k="local_y" v="-4.0000" />
+    <tag k="local_y" v="-6.1000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100001" visible="true">
     <tag k="local_x" v="17.6000" />
-    <tag k="local_y" v="-1.6000" />
+    <tag k="local_y" v="-3.7000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100002" visible="true">
     <tag k="local_x" v="16.6000" />
-    <tag k="local_y" v="-4.0000" />
+    <tag k="local_y" v="-6.1000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100003" visible="true">
     <tag k="local_x" v="16.6000" />
-    <tag k="local_y" v="-1.6000" />
+    <tag k="local_y" v="-3.7000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100004" visible="true">
     <tag k="local_x" v="15.6000" />
-    <tag k="local_y" v="-4.0000" />
+    <tag k="local_y" v="-6.1000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100005" visible="true">
     <tag k="local_x" v="15.6000" />
-    <tag k="local_y" v="-1.6000" />
+    <tag k="local_y" v="-3.7000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100006" visible="true">
     <tag k="local_x" v="14.6000" />
-    <tag k="local_y" v="-4.0000" />
+    <tag k="local_y" v="-6.1000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100007" visible="true">
     <tag k="local_x" v="14.6000" />
-    <tag k="local_y" v="-1.6000" />
+    <tag k="local_y" v="-3.7000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100008" visible="true">
     <tag k="local_x" v="13.6000" />
-    <tag k="local_y" v="-4.0000" />
+    <tag k="local_y" v="-6.1000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100009" visible="true">
     <tag k="local_x" v="13.6000" />
-    <tag k="local_y" v="-1.6000" />
+    <tag k="local_y" v="-3.7000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100010" visible="true">
     <tag k="local_x" v="12.6000" />
-    <tag k="local_y" v="-4.0000" />
+    <tag k="local_y" v="-6.1000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100011" visible="true">
     <tag k="local_x" v="12.6000" />
-    <tag k="local_y" v="-1.6000" />
+    <tag k="local_y" v="-3.7000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100012" visible="true">
     <tag k="local_x" v="11.6000" />
-    <tag k="local_y" v="-4.0000" />
+    <tag k="local_y" v="-6.1000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100013" visible="true">
     <tag k="local_x" v="11.6000" />
-    <tag k="local_y" v="-1.6000" />
+    <tag k="local_y" v="-3.7000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100014" visible="true">
     <tag k="local_x" v="10.6000" />
-    <tag k="local_y" v="-4.0000" />
+    <tag k="local_y" v="-6.1000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100015" visible="true">
     <tag k="local_x" v="10.6000" />
-    <tag k="local_y" v="-1.6000" />
+    <tag k="local_y" v="-3.7000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100016" visible="true">
     <tag k="local_x" v="9.6000" />
-    <tag k="local_y" v="-4.0000" />
+    <tag k="local_y" v="-6.1000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100017" visible="true">
     <tag k="local_x" v="9.6000" />
-    <tag k="local_y" v="-1.6000" />
+    <tag k="local_y" v="-3.7000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100018" visible="true">
     <tag k="local_x" v="8.6000" />
-    <tag k="local_y" v="-4.0000" />
+    <tag k="local_y" v="-6.1000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100019" visible="true">
     <tag k="local_x" v="8.6000" />
-    <tag k="local_y" v="-1.6000" />
+    <tag k="local_y" v="-3.7000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100020" visible="true">
     <tag k="local_x" v="7.6000" />
-    <tag k="local_y" v="-4.0000" />
+    <tag k="local_y" v="-6.1000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100021" visible="true">
     <tag k="local_x" v="7.6000" />
-    <tag k="local_y" v="-1.6000" />
+    <tag k="local_y" v="-3.7000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100022" visible="true">
     <tag k="local_x" v="6.6000" />
-    <tag k="local_y" v="-4.0000" />
+    <tag k="local_y" v="-6.1000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100023" visible="true">
     <tag k="local_x" v="6.6000" />
-    <tag k="local_y" v="-1.6000" />
+    <tag k="local_y" v="-3.7000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100024" visible="true">
     <tag k="local_x" v="5.6000" />
-    <tag k="local_y" v="-4.0000" />
+    <tag k="local_y" v="-6.1000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100025" visible="true">
     <tag k="local_x" v="5.6000" />
-    <tag k="local_y" v="-1.6000" />
+    <tag k="local_y" v="-3.7000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100026" visible="true">
     <tag k="local_x" v="4.6000" />
-    <tag k="local_y" v="-4.0000" />
+    <tag k="local_y" v="-6.1000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100027" visible="true">
     <tag k="local_x" v="4.6000" />
-    <tag k="local_y" v="-1.6000" />
+    <tag k="local_y" v="-3.7000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100028" visible="true">
     <tag k="local_x" v="3.6000" />
-    <tag k="local_y" v="-4.0000" />
+    <tag k="local_y" v="-6.1000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100029" visible="true">
     <tag k="local_x" v="3.6000" />
-    <tag k="local_y" v="-1.6000" />
+    <tag k="local_y" v="-3.7000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100030" visible="true">
     <tag k="local_x" v="2.6000" />
-    <tag k="local_y" v="-4.0000" />
+    <tag k="local_y" v="-6.1000" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100031" visible="true">
     <tag k="local_x" v="2.6000" />
-    <tag k="local_y" v="-1.6000" />
+    <tag k="local_y" v="-3.7000" />
     <tag k="ele" v="0.0000" />
   </node>
   <way id="200000" visible="true">
