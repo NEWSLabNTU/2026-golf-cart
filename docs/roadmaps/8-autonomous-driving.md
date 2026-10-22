@@ -417,6 +417,10 @@ and V6 last.
 
 ## Status
 
+**Current progress is tracked in [Phase 9](9-mingda-autonomous-driving.md)**
+(from 2026-10-22: the VCU is back, the map is now `data/mingda-basement/`, and
+AUTO is entered on the dashboard). The table below is the 2026-09-29 desk state.
+
 2026-09-29, desk only (VCU still at the vendor). Committed and pushed the same day.
 
 | Item | State |
