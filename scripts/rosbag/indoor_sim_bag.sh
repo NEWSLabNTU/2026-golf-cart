@@ -50,4 +50,11 @@ echo
 #
 # 200 messages is 20 s of lead at 10 Hz and about 310 MB, which is what the
 # raised value was reaching for in the first place.
-exec ros2 bag play "${BAG}" --clock --start-paused --read-ahead-queue-size 200 "$@"
+#
+# GOLFCART_INDOOR_BAG_RATE slows the replay, e.g. 0.25. On a shared machine
+# whose GPU is busy with someone else's jobs, cuda_ndt at 1x falls behind and
+# loses track for reasons that have nothing to do with what is being tested;
+# 2026-10-22, one GPU at 100 %, even the full basement map lost track at 1x and
+# held at 0.25. A slow replay tests the map and the matcher, not the timing.
+exec ros2 bag play "${BAG}" --clock --start-paused --read-ahead-queue-size 200 \
+    --rate "${GOLFCART_INDOOR_BAG_RATE:-1.0}" "$@"
