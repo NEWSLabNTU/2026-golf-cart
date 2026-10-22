@@ -26,6 +26,9 @@
 *.pb
 *.pcd
 *.ply
+# The Ming-Da map is small enough to track: 0.30 m voxels, 1.0 MB, and NDT
+# tracks on it (scripts/map/downsample_pcd.py has the numbers).
+!/mingda-basement/pointcloud_map.pcd
 
 # Temporary files
 *.tmp
