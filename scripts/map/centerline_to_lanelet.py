@@ -15,6 +15,15 @@ direction of travel. Repeat the first point last for a closed loop.
     - [14.0, 0.0]
     - [20.0, 6.0]
 
+A point may instead be a mapping that carries its own lane width, for an aisle
+that narrows; points without one take --width, and the width varies linearly
+along the lane between points. A mapping may also set speed_limit (km/h),
+which holds from that point until the next point that sets one; --speed-limit
+holds before the first. Lanelets are split where it changes, so a slow zone is
+exactly its own lanelets.
+
+    - {x: 14.0, y: 0.0, width: 1.9, speed_limit: 2}
+
 What it guarantees, and the tests check:
 
 - **Local frame.** Every node carries local_x, local_y and ele, and no lat/lon.
@@ -40,6 +49,7 @@ import math
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from typing import Sequence
 
 Point = tuple[float, float]
 
@@ -105,26 +115,87 @@ def _tangents(pts: list[Point], closed: bool) -> list[Point]:
     return tans
 
 
-def offset_bounds(center: list[Point], width: float,
+def offset_bounds(center: list[Point], width: float | Sequence[float],
                   closed: bool = False) -> tuple[list[Point], list[Point]]:
-    """Left and right boundaries, `width / 2` either side, left being left of travel."""
-    if not width > 0:
-        raise ValueError(f'width must be positive, got {width}')
-    h = width / 2.0
+    """Left and right boundaries, `width / 2` either side, left being left of travel.
+
+    `width` is one value for the whole lane or one per centre point."""
+    widths = [width] * len(center) if isinstance(width, (int, float)) else list(width)
+    if len(widths) != len(center):
+        raise ValueError(f'{len(widths)} widths for {len(center)} centre points')
+    if not all(w > 0 for w in widths):
+        raise ValueError(f'width must be positive, got {min(widths)}')
     left, right = [], []
-    for (x, y), (tx, ty) in zip(center, _tangents(center, closed)):
+    for (x, y), (tx, ty), w in zip(center, _tangents(center, closed), widths):
         nx, ny = -ty, tx
+        h = w / 2.0
         left.append((x + h * nx, y + h * ny))
         right.append((x - h * nx, y - h * ny))
     return left, right
 
 
-def split_segments(n_points: int, points_per_segment: float) -> list[tuple[int, int]]:
-    """Index ranges [start, end] covering 0..n-1, consecutive ranges sharing an end."""
+def _arc_fractions(pts: list[Point]) -> list[float]:
+    s = [0.0]
+    for a, b in zip(pts, pts[1:]):
+        s.append(s[-1] + math.dist(a, b))
+    return [v / s[-1] for v in s]
+
+
+def widths_along(route: list[Point], widths: Sequence[float], samples: list[Point]) -> list[float]:
+    """Per-route-point widths carried onto `samples`, linear in arc-length fraction.
+
+    Exact for a resampled route, whose samples keep the route's vertices; after
+    smoothing it is the same fraction of the way round, which is close."""
+    f, g = _arc_fractions(route), _arc_fractions(samples)
+    out, i = [], 0
+    for t in g:
+        while i < len(f) - 2 and f[i + 1] < t:
+            i += 1
+        span = f[i + 1] - f[i]
+        u = 0.0 if span <= 0 else min(max((t - f[i]) / span, 0.0), 1.0)
+        out.append(widths[i] + u * (widths[i + 1] - widths[i]))
+    return out
+
+
+def speeds_along(route: list[Point], speeds: Sequence[float], samples: list[Point]) -> list[float]:
+    """Each sample takes the speed of the last route point at or before it (arc fraction)."""
+    f, g = _arc_fractions(route), _arc_fractions(samples)
+    out, i = [], 0
+    for t in g:
+        while i < len(f) - 1 and f[i + 1] <= t + 1e-9:
+            i += 1
+        out.append(speeds[min(i, len(speeds) - 1)])
+    return out
+
+
+def parse_route(items, default_width: float,
+                default_speed: float = 4.0) -> tuple[list[Point], list[float], list[float]]:
+    """Route-file items, [x, y], [x, y, z] or {x, y, width, speed_limit}, as points,
+    widths and speeds. A speed holds until the next point that sets one."""
+    pts, widths, speeds = [], [], []
+    speed = default_speed
+    for item in items:
+        if isinstance(item, dict):
+            pts.append((float(item['x']), float(item['y'])))
+            widths.append(float(item.get('width', default_width)))
+            speed = float(item.get('speed_limit', speed))
+        else:
+            pts.append((float(item[0]), float(item[1])))
+            widths.append(default_width)
+        speeds.append(speed)
+    return pts, widths, speeds
+
+
+def split_segments(n_points: int, points_per_segment: float,
+                   breaks: Sequence[int] = ()) -> list[tuple[int, int]]:
+    """Index ranges [start, end] covering 0..n-1, consecutive ranges sharing an end.
+
+    Every index in `breaks` is also a range boundary."""
     k = max(1, round(points_per_segment))
     bounds = list(range(0, n_points - 1, k)) + [n_points - 1]
     if len(bounds) > 2 and bounds[-1] - bounds[-2] < k / 2:
         bounds.pop(-2)  # fold a stub tail into the previous lanelet
+    bounds = sorted(set(bounds) | {b for b in breaks if 0 < b < n_points - 1})
     return list(zip(bounds, bounds[1:]))
 
 
@@ -145,17 +216,30 @@ def _node(parent, nid, x, y, z):
         ET.SubElement(el, 'tag', k=k, v=f'{v:.4f}')
 
 
-def build_osm(centerline, *, width: float, ele: float, segment_length: float,
-              speed_limit_kmh: float, base_osm: str | None, step: float = 1.0,
+def build_osm(centerline, *, width: float | Sequence[float], ele: float, segment_length: float,
+              speed_limit_kmh: float | Sequence[float], base_osm: str | None, step: float = 1.0,
               smoothing: int = 0) -> str:
-    """The full lanelet2 OSM document, base elements first."""
-    pts2 = [(float(p[0]), float(p[1])) for p in centerline]
-    closed = len(pts2) > 2 and math.dist(pts2[0], pts2[-1]) < 1e-6
-    if smoothing:
-        pts2 = smooth(pts2, smoothing, closed)
+    """The full lanelet2 OSM document, base elements first.
+
+    `width` and `speed_limit_kmh` are one value, or one per centreline point;
+    a per-point speed holds from its point to the next."""
+    route = [(float(p[0]), float(p[1])) for p in centerline]
+    closed = len(route) > 2 and math.dist(route[0], route[-1]) < 1e-6
+    pts2 = smooth(route, smoothing, closed) if smoothing else route
     center = resample(pts2, step)
     if closed:
         center[-1] = center[0]
+    if not isinstance(width, (int, float)):
+        if len(width) != len(route):
+            raise ValueError(f'{len(width)} widths for {len(route)} route points')
+        width = widths_along(route, width, center)
+    if isinstance(speed_limit_kmh, (int, float)):
+        speeds = [float(speed_limit_kmh)] * len(center)
+    else:
+        if len(speed_limit_kmh) != len(route):
+            raise ValueError(f'{len(speed_limit_kmh)} speeds for {len(route)} route points')
+        speeds = speeds_along(route, speed_limit_kmh, center)
+    breaks = [i for i in range(1, len(speeds)) if speeds[i] != speeds[i - 1]]
     left, right = offset_bounds(center, width, closed)
 
     if base_osm:
@@ -186,7 +270,7 @@ def build_osm(centerline, *, width: float, ele: float, segment_length: float,
         right_ids.append(nid)
         nid += 1
 
-    for s0, s1 in split_segments(n, segment_length / step):
+    for s0, s1 in split_segments(n, segment_length / step, breaks):
         way_ids = []
         for ids in (left_ids, right_ids):
             way = ET.SubElement(root, 'way', id=str(wid), visible='true')
@@ -212,7 +296,7 @@ def build_osm(centerline, *, width: float, ele: float, segment_length: float,
         ET.SubElement(rel, 'member', type='way', ref=str(way_ids[1]), role='right')
         for k, v in (('type', 'lanelet'), ('subtype', 'road'), ('location', 'urban'),
                      ('one_way', 'yes'), ('participant:vehicle', 'yes'),
-                     ('speed_limit', f'{speed_limit_kmh:g}')):
+                     ('speed_limit', f'{speeds[s0]:g}')):
             ET.SubElement(rel, 'tag', k=k, v=v)
         rid += 1
 
@@ -240,14 +324,16 @@ def main(argv=None) -> int:
                     help='write --map-dir/lanelet2_map.osm; otherwise print to stdout')
     args = ap.parse_args(argv)
 
-    points = yaml.safe_load(args.route.read_text())
+    points, widths, speeds = parse_route(yaml.safe_load(args.route.read_text()),
+                                         args.width, args.speed_limit)
     base = args.map_dir / args.base
-    osm = build_osm(points, width=args.width, ele=args.ele,
-                    segment_length=args.segment_length, speed_limit_kmh=args.speed_limit,
+    osm = build_osm(points, width=widths if len(set(widths)) > 1 else args.width, ele=args.ele,
+                    segment_length=args.segment_length,
+                    speed_limit_kmh=speeds if len(set(speeds)) > 1 else args.speed_limit,
                     base_osm=base.read_text() if base.exists() else None,
                     smoothing=args.smoothing)
 
-    pts2 = [(float(p[0]), float(p[1])) for p in points]
+    pts2 = points
     closed = len(pts2) > 2 and math.dist(pts2[0], pts2[-1]) < 1e-6
     shaped = resample(smooth(pts2, args.smoothing, closed) if args.smoothing else pts2, 1.0)
     r, r_min = min_radius(shaped), min_turning_radius()

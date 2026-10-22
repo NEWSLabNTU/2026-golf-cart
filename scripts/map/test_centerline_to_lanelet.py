@@ -148,3 +148,100 @@ def test_closed_loop_last_lanelet_leads_into_the_first(tmp_path):
     lls = sorted(lmap.laneletLayer, key=lambda ll: ll.id)
     following = [f.id for f in _graph(lanelet2, lmap).following(lls[-1])]
     assert following == [lls[0].id]
+
+
+def _half_widths_by_x(osm):
+    """|local_y| of every lane node, keyed by local_x, for a lane along y = 0."""
+    out = {}
+    for node in ET.fromstring(osm).findall('node'):
+        tags = {t.get('k'): float(t.get('v')) for t in node.findall('tag')}
+        out.setdefault(round(tags['local_x'], 3), set()).add(round(abs(tags['local_y']), 3))
+    return out
+
+
+def test_bounds_follow_a_per_point_width():
+    center = c2l.resample(STRAIGHT, 1.0)
+    widths = [2.0 if p[0] < 15.0 else 1.0 for p in center]
+    left, right = c2l.offset_bounds(center, widths)
+    for p, w, lp, rp in zip(center, widths, left, right):
+        assert lp[1] == pytest.approx(w / 2) and rp[1] == pytest.approx(-w / 2), p
+
+
+def test_rejects_a_non_positive_per_point_width():
+    center = c2l.resample(STRAIGHT, 1.0)
+    with pytest.raises(ValueError):
+        c2l.offset_bounds(center, [2.0] * (len(center) - 1) + [0.0])
+    with pytest.raises(ValueError):
+        c2l.offset_bounds(center, [2.0] * (len(center) - 1))  # one short
+
+
+def test_route_widths_are_interpolated_along_the_lane():
+    """A narrowing at the middle point reaches the 1 m samples linearly."""
+    route = [(0.0, 0.0), (15.0, 0.0), (30.0, 0.0)]
+    osm = c2l.build_osm(route, width=[2.5, 1.5, 2.5], ele=0.0, segment_length=10.0,
+                        speed_limit_kmh=4.0, base_osm=None)
+    half = _half_widths_by_x(osm)
+    assert half[0.0] == {1.25}
+    assert half[15.0] == {0.75}
+    assert half[7.0] == {round(1.25 - 0.5 * 7.0 / 15.0, 3)}
+    assert half[30.0] == {1.25}
+
+
+def test_route_file_points_may_carry_their_own_width(tmp_path):
+    route = tmp_path / 'route.yaml'
+    route.write_text('- {x: 0.0, y: 0.0}\n- {x: 15.0, y: 0.0, width: 1.5}\n- [30.0, 0.0]\n')
+    out = tmp_path / 'map'
+    out.mkdir()
+    assert c2l.main([str(route), '--map-dir', str(out), '--width', '2.5',
+                     '--smoothing', '0', '--write']) == 0
+    half = _half_widths_by_x((out / 'lanelet2_map.osm').read_text())
+    assert half[0.0] == {1.25} and half[15.0] == {0.75} and half[30.0] == {1.25}
+
+
+def _lanelet_speeds_by_x(osm):
+    """(min local_x, max local_x, speed_limit) per lanelet, for a lane along +x."""
+    root = ET.fromstring(osm)
+    xs = {n.get('id'): float(n.find("tag[@k='local_x']").get('v')) for n in root.findall('node')}
+    ways = {w.get('id'): [xs[nd.get('ref')] for nd in w.findall('nd')] for w in root.findall('way')}
+    out = []
+    for rel in root.findall('relation'):
+        tags = {t.get('k'): t.get('v') for t in rel.findall('tag')}
+        if tags.get('type') != 'lanelet':
+            continue
+        x = [v for m in rel.findall('member') for v in ways[m.get('ref')]]
+        out.append((min(x), max(x), float(tags['speed_limit'])))
+    return sorted(out)
+
+
+def test_split_segments_breaks_where_asked():
+    segs = c2l.split_segments(31, 10.0, breaks=[12, 17])
+    bounds = sorted({i for seg in segs for i in seg})
+    assert 12 in bounds and 17 in bounds
+    for (a0, a1), (b0, b1) in zip(segs, segs[1:]):
+        assert a1 == b0
+    assert segs[0][0] == 0 and segs[-1][1] == 30
+
+
+def test_a_route_speed_applies_from_its_point_to_the_next_one_that_sets_it():
+    route = [(0.0, 0.0), (10.0, 0.0), (20.0, 0.0), (30.0, 0.0)]
+    osm = c2l.build_osm(route, width=2.5, ele=0.0, segment_length=10.0,
+                        speed_limit_kmh=[4.0, 2.0, 4.0, 4.0], base_osm=None)
+    for x0, x1, v in _lanelet_speeds_by_x(osm):
+        expected = 2.0 if x0 >= 10.0 - 1e-6 and x1 <= 20.0 + 1e-6 else 4.0
+        assert v == expected, (x0, x1, v)
+    spans = _lanelet_speeds_by_x(osm)
+    assert any(abs(x0 - 10.0) < 1e-6 for x0, _, _ in spans), 'no lanelet starts where the slow zone does'
+    assert any(abs(x1 - 20.0) < 1e-6 for _, x1, _ in spans), 'no lanelet ends where the slow zone does'
+
+
+def test_route_file_points_may_carry_a_speed_limit(tmp_path):
+    route = tmp_path / 'route.yaml'
+    route.write_text('- [0.0, 0.0]\n- {x: 10.0, y: 0.0, speed_limit: 2}\n'
+                     '- {x: 20.0, y: 0.0, speed_limit: 4}\n- [30.0, 0.0]\n')
+    out = tmp_path / 'map'
+    out.mkdir()
+    assert c2l.main([str(route), '--map-dir', str(out), '--speed-limit', '4',
+                     '--smoothing', '0', '--write']) == 0
+    speeds = _lanelet_speeds_by_x((out / 'lanelet2_map.osm').read_text())
+    assert {v for x0, x1, v in speeds if x0 >= 10.0 - 1e-6 and x1 <= 20.0 + 1e-6} == {2.0}
+    assert {v for x0, x1, v in speeds if x1 <= 10.0 + 1e-6 or x0 >= 20.0 - 1e-6} == {4.0}
