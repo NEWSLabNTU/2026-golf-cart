@@ -82,17 +82,21 @@ OTOCAM_STREAM_TEST="${OTOCAM_STREAM_TEST:-0}"             # 1 = also grab one fr
 CAN_IFACE="${CAN_IFACE:-can0}"
 CAN_BITRATE="${CAN_BITRATE:-500000}"
 CAN_SAMPLE_SECS="${CAN_SAMPLE_SECS:-2}"
-# The VCU is AT THE VENDOR FOR REPAIR. With this at 0, a missing or silent bus
-# is reported as a warning rather than a failure, so a cart with no VCU in it
-# still exits 0 on the checks that do apply. Set to 1 when the unit is back.
-VCU_EXPECTED="${VCU_EXPECTED:-0}"
+# The VCU is back in the cart (talking on the orin's can0, 2026-10-22). A
+# silent bus is a failure again. It only talks while the cart is switched on,
+# so for a check with the cart off run VCU_EXPECTED=0, which reports a missing
+# or silent bus as a warning instead.
+VCU_EXPECTED="${VCU_EXPECTED:-1}"
 # Which machine the VCU's bus is wired to: orin | local. It moved to the orin's
 # header pins (setup step orin-can0), and golfcart.launch.yaml's vehicle_host
 # defaults to orin to match. Set to local on the machine that holds the bus.
 CAN_HOST="${CAN_HOST:-orin}"
 
 # ── u-blox GNSS ────────────────────────────────────────────────────────────
-GNSS_DEV="${GNSS_DEV:-/dev/ttyUSB0}"
+# The udev name from setup/files/99-ublox-gps.rules, which is what the driver
+# opens (golfcart_sensor_kit_launch/config/ublox_f9p.yaml). The ZED-F9P is USB
+# CDC, so the kernel node behind it is /dev/ttyACM*, never /dev/ttyUSB*.
+GNSS_DEV="${GNSS_DEV:-/dev/ublox-gps}"
 GNSS_BAUD="${GNSS_BAUD:-38400}"
 GNSS_READ_SECS="${GNSS_READ_SECS:-3}"
 # Which machine the receiver is cabled to: local | orin. It moved to the orin
