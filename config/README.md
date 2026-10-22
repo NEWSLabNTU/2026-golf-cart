@@ -8,7 +8,6 @@ changing a value here changes it for every consumer on both hosts.
 |---|---|---|
 | `host` | one word (`master` or `orin`) | which machine this checkout is on. Selects the DDS profile. **Gitignored** — it is a property of the machine, not the branch |
 | `multi_machine.conf` | shell assignments | the other host's `user@addr`, its repo path, the ssh key, the master's IP |
-| `build.conf` | shell assignments | which workspace packages `just build` builds on this host: the orin builds what its launch uses and skips the master's sensor drivers; no entry builds everything |
 | `sensors.conf` | shell assignments | which IMU and camera driver the sensor kit uses (`IMU_SOURCE`, `CAMERA_MODEL`) |
 | `ntrip_credentials.txt` | plain text | the NTRIP caster account, kept to paste from. **Gitignored**, it is a secret. The launch reads the account from the sensor kit's own gitignored `config/ntrip_client.param.yaml`, not from here |
 | `runtime.conf` | shell assignments | how play_launch runs composable nodes (`GOLFCART_CONTAINER_MODE`), which middleware this host uses (`GOLFCART_RMW`), and the three ROS domain ids: master stack 50, orin stack 60, wire 10 |

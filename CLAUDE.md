@@ -151,7 +151,6 @@ no script hardcodes any of it. See [config/README.md](config/README.md).
 | `config/host` | which machine this checkout is (`master`/`orin`). **Gitignored** |
 | `config/multi_machine.conf` | the other host's `user@addr`, repo path, ssh key, master IP |
 | `config/sensors.conf` | `IMU_SOURCE`, `CAMERA_MODEL` — env vars, not launch args |
-| `config/build.conf` | what `just build` builds per host: the orin only what its launch uses (`--all` for everything) |
 | `config/recording/*_topics.txt` | what each host records |
 | `config/cyclonedds/*.xml` | DDS profiles, one per role |
 
