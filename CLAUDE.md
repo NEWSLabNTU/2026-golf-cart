@@ -46,7 +46,7 @@ Grouped families live in `just/*.just` and are reached as `just <module> <recipe
 | `record` | recording lifecycle, independent of the launch |
 | `service` | multi-machine systemd units, `doctor`, `host-status` |
 | `vehicle` | vehicle interface bring-up, manual control, control tests |
-| `can` | CAN record, replay, decode |
+| `can` | CAN record, replay, decode; `vcu-status` is a receive-only live readout of the VCU and our commands |
 | `tool` | RViz, PlotJuggler, TUI, keyboard controller |
 | `diag` | diagnostic graph: QoS checks, leaf listing, fault injection |
 | `gnss` | F9P / RTK: `check` the setup, `test` the receiver against the NTRIP caster, `launch` it standalone (`ntrip=off` for driver only) |

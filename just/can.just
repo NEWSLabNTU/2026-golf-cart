@@ -51,6 +51,13 @@ test LOG="" LOOP="1":
       "ros2 launch golfcart_vehicle_launch vehicle_interface_standalone.launch.xml can_interface:=vcan0" \
       "sleep 3 && ./scripts/can/replay_can.sh $LOOP_FLAG \"$F\" vcan0"
 
+# Listens with candump on the orin over ssh (CAN_HOST=local: python-can here);
+# never sends a frame. ARGS: --once | --seconds N for one snapshot, else ~2 Hz
+# until Ctrl-C. Needs the vendor DBC (CAX_ADS_DBC or the crate root).
+# Live VCU readout, receive only: VCU states, our commands, rates, can0 errors
+vcu-status *ARGS:
+    ./scripts/can/vcu_status.py {{ARGS}}
+
 # ============================================================================
 # Simulation Commands - Full simulation scenarios
 
