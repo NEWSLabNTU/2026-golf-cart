@@ -20,7 +20,25 @@
 # Selected in golfcart_autoware.launch.xml whenever launch_perception is false;
 # launch_perception:=true goes back to upstream's graph with no other change.
 # An include, not a copy, so it follows upstream across Autoware upgrades.
+#
+# Remove ONLY the and-unit, by exact path. Never remove a `type: diag` unit.
+# Until 2026-10-22 this said `regex: "/autoware/perception(/.*)?"`, which also
+# matched the two topic_rate_check leaves, and the aggregator (0.48.0) died of
+# SIGSEGV seconds after start on the cart: no /diagnostics_graph, so no
+# /system/command_mode/availability, no /system/operation_mode/availability,
+# and autonomous could not be requested at all. Bisected standalone: the
+# subtree regex and "/autoware/perception/.*" crash; the exact path runs.
+#
+# The cause is in the aggregator. A `type: diag` unit is a NodeUnit whose port
+# owns a separate DiagUnit (keyed "node: name"). apply_remove_edits drops the
+# NodeUnit and its port but leaves the DiagUnit in diags_ with no parent, and
+# DiagUnit::create_struct does parent_units().front() on the empty vector when
+# the struct topic is published. Upstream bug; any removal of a diag leaf hits it.
+#
+# Left behind: the two leaves become parentless roots. They read ERROR or STALE
+# with perception off, which is the truth, and nothing links to them, so no
+# mode depends on them; /autoware/modes/* compute without perception.
 files:
   - { path: $(find-pkg-share autoware_launch)/config/system/diagnostics/autoware-main.yaml }
 edits:
-  - { type: remove, regex: "/autoware/perception(/.*)?" }
+  - { type: remove, path: /autoware/perception }
