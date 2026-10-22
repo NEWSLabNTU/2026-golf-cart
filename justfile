@@ -61,7 +61,7 @@ checkout:
 setup:
     ./setup.sh
 
-# Build this project. Pass --clean to wipe caches first. ROS / Autoware env via .envrc.
+# Build this project: --clean wipes caches first, --all ignores config/build.conf's per-host scope.
 build *FLAGS="":
     #!/usr/bin/env bash
     set -e
@@ -97,6 +97,23 @@ build *FLAGS="":
         echo "  (needed only on the machine driving the CAN bus; see README)"
         IGNORE_PKGS+=(golfcart_vehicle_interface)
     fi
+    # What this host builds at all: config/build.conf, keyed on GOLFCART_HOST.
+    # The orin builds what its launch uses and nothing else; a host without an
+    # entry builds everything. `--all` overrides it for one run.
+    SELECT_ARGS=()
+    BUILD_UP_TO="" BUILD_IGNORE=""
+    if [[ "{{FLAGS}}" != *"--all"* && -f "{{justfile_directory()}}/config/build.conf" ]]; then
+        source "{{justfile_directory()}}/config/build.conf"
+    fi
+    if [[ -n "${BUILD_UP_TO}" ]]; then
+        read -ra up_to <<< "${BUILD_UP_TO}"
+        SELECT_ARGS=(--packages-up-to "${up_to[@]}")
+        echo "→ ${GOLFCART_HOST} builds ${#up_to[@]} packages and their dependencies (config/build.conf; just build --all for everything)"
+    fi
+    if [[ -n "${BUILD_IGNORE}" ]]; then
+        read -ra build_ignore <<< "${BUILD_IGNORE}"
+        IGNORE_PKGS+=("${build_ignore[@]}")
+    fi
     IGNORE_ARGS=()
     if [[ ${#IGNORE_PKGS[@]} -gt 0 ]]; then
         IGNORE_ARGS=(--packages-ignore "${IGNORE_PKGS[@]}")
@@ -106,6 +123,7 @@ build *FLAGS="":
         --symlink-install \
         --cmake-args -DCMAKE_BUILD_TYPE=Release \
         --cargo-args --release \
+        "${SELECT_ARGS[@]}" \
         "${IGNORE_ARGS[@]}"
 
 # Symlink the packaged Autoware models into a writable tree so TensorRT can
