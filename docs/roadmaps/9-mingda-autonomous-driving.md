@@ -65,13 +65,13 @@ Legend: ✅ done and evidenced · 🟡 partly done or done on the desk only ·
 | Entering AUTO | ✅ | Dashboard: brake + button. All four subsystems reported Autonomous; `Veh_Auto_En` claimed |
 | V2 steering sign | ✅ | Keyboard left (+5 deg) turned wheels and steering wheel CCW (left); interface sends -4.98 deg to the VCU, so `invert_steering` is right |
 | V3 steering range | 🟡 | Left: wheels kept turning to the 0.52 rad command (>= 29.8 deg). **Right: mechanical stop at ~22 deg** (VCU report plateaus 22.1-22.7 deg, wheels stop at the 23rd 1-deg step). `max_steer_angle` is still 0.52, which the right side cannot reach |
-| Steering angle feedback | ❌ | VCU `0x102 Vcu_Ads_Tire_Angle` is live **only in AUTO and only for right turns**: left reads 0.000, manual steering reads a frozen +0.210 deg over a full sweep. Autoware's lateral controller has no usable feedback. **Vendor** |
+| Steering angle feedback | ❌ | VCU `0x102 Vcu_Ads_Tire_Angle` is live **only in AUTO and only for right turns**: left reads 0.000, manual steering reads a frozen +0.210 deg over a full sweep. Autoware's lateral controller has no usable feedback. **Vendor**. Decided 2026-10-22: no change for the straight lane, where the command stays under `converged_steer_rad` (0.1 rad) so the convergence hold clears against a 0 report; see open issue 4a before any left turn |
 | VCU state after leaving AUTO | ⏸ | `Driving_State` (and earlier `Brake_State`) read `Invalid`, not `Manual`, after the first AUTO session. The interface treats it as hands off. **Vendor question** |
 | Mode request honesty | ✅ | golfcart_vehicle_launch 960a2be: MANUAL now refused while the VCU is still Autonomous (was answered success). Live: MANUAL accepted / AUTONOMOUS refused with the cart in manual; the AUTO-side refusal is unit-tested only |
 | Steering slew | ✅ | Command ramps at the interface limit (1 deg per ~0.7 s per key; -29.6 -> 0 deg in 1.29 s); right-side report returns 22.7 -> 0 deg in ~3 s (~7-8 deg/s at the wheels) |
 | V4 steering / longitudinal system ID | ❌ | Not started; MPC still carries Lexus delay and time constant |
 | S3 braking below 1.2 m/s2 | ❌ | VCU does not brake below 1.2 m/s2; gentle stops may coast |
-| S4 interface speed ceiling 1.5 m/s | ❌ | `max_speed_mps` still the 5.0 default; only the 1.0 m/s planning default exists |
+| S4 interface speed ceiling 1.5 m/s | 🟡 | `max_speed_mps: 1.5`, unit-tested (golfcart_vehicle_launch 9ff59ac). **The orin still runs the old binary**: needs `just checkout && just build` there and an interface restart |
 | S5 MRM reaches the VCU | ❌ | Wired (emergency_cmd bridged, SafetyBrake path) but never run end to end |
 | Physical e-stop reported | ⏸ | Not tested on the cart today |
 
@@ -79,11 +79,11 @@ Legend: ✅ done and evidenced · 🟡 partly done or done on the desk only ·
 
 | Item | State | Evidence / note |
 |---|---|---|
-| Route on the Ming-Da lane (planning sim) | 🟡 | `sim_route_check.py --start 17.6 -2.8 180 --goal 5.5 -2.8 180`: engaged, forward along the lane at 1.18 m/s, zero lateral deviation. Stops at x = 6.5, **1.0 m short**; PASS at 1.00 m once, FAIL at 1.02 m twice (tolerance 1.0 m). Cause not found |
+| Route on the Ming-Da lane (planning sim) | 🟡 | `sim_route_check.py --start 17.6 -2.8 180 --goal 5.5 -2.8 180`: engaged, forward along the lane at 1.18 m/s, zero lateral deviation. Stops at x = 6.5, **1.0 m short**. **Cause found 2026-10-22**: behavior_path_planner extends the drivable area 3.29 m past the goal; the lane ends at x = 2.6 and truncates it, and path_optimizer stops the path where it leaves the drivable area. Goals at x >= 5.9 avoid it; extending the lane end is open issue 4b |
 | Goal placement | ✅ | `base_link` is the rear axle, nose 2.47 m ahead: the furthest valid goal on this lane is x = 5.1 (`Goal's footprint exceeds lane!` otherwise) |
-| Two-host stack bring-up | 🟡 | Both hosts start; master failed once on a stale install (fixed by `just build`). Full sensors + link + map + localization never brought up together on the cart yet |
+| Two-host stack bring-up | 🟡 | Both hosts start; master failed once on a stale install (fixed by `just build`). Two launch faults fixed 2026-10-22: the diagnostic aggregator SIGSEGV with `launch_perception:=false` (488d093: remove the perception and-unit by path; upstream's remove edit orphans diag leaves and `DiagUnit::create_struct` crashes on any removed leaf) and the concatenated cloud's frame left as the literal `$(var base_frame)` (sensor kit c5a7d8e). Full sensors + link + map + localization never brought up together on the cart yet |
 | Engage path through the link | 🟡 | All command and status lanes present in `config/link/topics.yaml`, control-mode service bridged; never exercised end to end with Autoware |
-| Software e-stop | ❌ | `teleop_gui.py` publishes its own `control_cmd` (speed 0) continuously; used beside Autoware the two interleave. Needs an e-stop-only mode |
+| Software e-stop | 🟡 | `teleop_gui.py` `estop_only` mode publishes only `/vehicle/emergency_stop` (golfcart_vehicle_launch 59dfd2c). Not yet run beside Autoware on the cart |
 | M3 slow-cart planning / control tuning | ❌ | Stock autoware_launch tuning; side overhangs 0.001 placeholders |
 | M4 obstacle detection | ⏸ | Perception off: no obstacle stop; the driver is the only obstacle detector |
 
@@ -92,9 +92,9 @@ Legend: ✅ done and evidenced · 🟡 partly done or done on the desk only ·
 | Item | State | Evidence / note |
 |---|---|---|
 | Orin build | ✅ | Plain `just build`, 40 packages, offline (crates from the master's registry cache); u-blox driver skipped while mavros_msgs is absent |
-| Orin clock | ✅ | chrony following the master, offset ~1 us |
+| Orin clock | 🟡 | chrony was following the master (offset ~1 us), but after the 13:39 reboot the clock read 1970: the setup step restarted chrony without enabling it. Fixed in 690dd2f; confirm `systemctl is-enabled chrony` on the orin after `./setup.sh --rerun chrony-orin` |
 | `local` bare repos | ✅ | Fast-forwarded to GitHub; the orin pulls from them |
-| rclrs pinned to 0.7 | 🟡 | vehicle interface (da78dc5) and aruco detector (8b158d5) pushed. **cuda_ndt_matcher d2e43e9 rejected by GitHub** (no write access). aruco still resolves rclrs 0.8 for `rclrs_image_transport` on a fresh lock (workstation, 2026-10-22) |
+| rclrs pinned to 0.7 | 🟡 | vehicle interface (da78dc5), aruco detector (8b158d5) and cuda_ndt_matcher (d2e43e9, after the repo's ACL was fixed) pushed. aruco still resolves rclrs 0.8 for `rclrs_image_transport` on a fresh lock (workstation, 2026-10-22) |
 | Sharing large files with the workstation | ❌ | `~/nas` not mounted on the cart; the repo is public, so the Falcon PCD is not on GitHub |
 
 ## Open issues
@@ -111,21 +111,34 @@ Who has to move, so nothing waits on the wrong person.
 **Decisions for the team**
 4. `max_steer_angle` 0.52 -> 0.38 rad (vehicle model, keyboard recipe, lane tool),
    until the right side is fixed.
+4a. **Decided 2026-10-22, steering feedback vs the controller.** The straight-lane
+   drive keeps stock settings. Before any left turn: set `keep_steer_control_until_converged`
+   (MPC) and `enable_keep_stopped_until_steer_convergence` (PID) to false, since a
+   left command over 0.1 rad never "converges" against the 0 report and the cart
+   would never leave a stop; and either `use_steer_prediction: true` with a
+   steering lag measured on this cart (V4; the stock 0.27 s is a Lexus value, the
+   cart slews at ~7-8 deg/s) or the vendor's fixed report. `use_steer_prediction`
+   alone does not clear the hold: it replaces only the MPC's initial steer state
+   (universe 0.48.0 `mpc.cpp:347`), while `isSteerConverged` always compares the
+   command with the measured angle (`mpc_lateral_controller.cpp:348`).
 5. Transfer of `data/mingda-basement/pointcloud_map.pcd` to the workstation: NAS
    mount on the master, a private repo, or the public repo.
-6. Write access for `NEWSLabNTU/cuda_ndt_matcher` (or someone pushes d2e43e9).
+4b. Lane end: extend `route_straight.yaml` from x = 2.6 to 1.6 (needs the floor
+   confirmed clear there), or keep the lane and use goals at x >= 5.9.
+6. ~~Write access for `NEWSLabNTU/cuda_ndt_matcher`.~~ **Done 2026-10-22**: ACL
+   fixed, d2e43e9 pushed.
 7. golfcart_aruco_detector on a fresh clone: track its Cargo.lock, and/or bump
    `rclrs_image_transport` to a rev that pins rclrs 0.7.
 8. cuda_ndt_matcher's tracked Cargo.lock churns on every build (0.0.0 vs real
    binding versions), as gmslcam's did before ec7a3ea.
 
 **Desk work, ready to hand out once approved**
-9. Teleop GUI e-stop-only mode (no `control_cmd`).
-10. S4: `max_speed_mps: 1.5` in the interface params.
-11. Interface rate warning: "30.3 Hz below 10.0 Hz" when the input has stopped;
-    say "no control input for X s".
-12. Why the planning sim stops 1.0 m short of the goal on the Ming-Da lane
-    (candidate for the workstation, once it has the map).
+9. ~~Teleop GUI e-stop-only mode.~~ **Done** (59dfd2c).
+10. ~~S4: `max_speed_mps: 1.5`.~~ **Done** (9ff59ac); orin rebuild pending.
+11. ~~Interface rate warning.~~ **Done** (e8ef6e3): now "No control input for
+    X.X s (needs >= 10.0 Hz)".
+12. ~~Why the planning sim stops 1.0 m short.~~ **Root cause found**, see the
+    planning table; the remedy is decision 4b.
 13. L8: the board initializer waits for the matcher's map.
 14. ~~Docs: `control_testing.md` and Phase 8's engage sequence still say `tx=on`
     and "driver presses AUTO"; both should say brake + dashboard button.~~
@@ -144,6 +157,9 @@ Who has to move, so nothing waits on the wrong person.
 
 ## Log
 
+- **2026-10-22 (later)** Interface speed cap, rate warning and e-stop-only GUI;
+  diagnostic aggregator crash without perception fixed; concatenator frame fixed;
+  1 m short root cause found; chrony enable fix; steering-feedback decision (4a).
 - **2026-10-22** VCU back. V1 pass, V2 pass, V3 partial (right stop 22 deg),
   steering feedback found broken (vendor). Mode-request fix (960a2be),
   `just can vcu-status` (receive-only VCU readout),
