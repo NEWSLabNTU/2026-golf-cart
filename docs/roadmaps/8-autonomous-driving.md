@@ -272,9 +272,66 @@ pointcloud obstacle stop is disabled upstream. Either `lidar_only` perception
 
 **Done when:** a box placed in the aisle of a replay stops the planned trajectory.
 
+**Decided 2026-10-23: CenterPoint tiny only.** `lidar_only` now sets
+`lidar_detection_model:=centerpoint/centerpoint_tiny` and turns off clustering
+and the analytics publisher (our perception launch copy; see the preset
+README). In lidar mode the tracker never read clustering anyway. So objects are
+CenterPoint's road classes and a box is not one: the done-when above becomes a
+person (or a car) in the aisle, and boxes stay with the driver.
+
 ### M5: basement poses for the route TUI (desk, after M1)
 
 `scripts/testing/drive/poses.json` holds COSS-era poses.
+
+### M6: drive a closed loop as chained goals (desk)
+
+One route round the Ming-Da loop fails: with the goal just behind the start,
+behavior_path_planner's drivable area collapses (left bound cut to 2 points) and
+path_optimizer stops the cart "outside drivable area". The planning sim drove
+two laps as three goals a lap, sent by a scratch script (`loop_legs.py`: next
+goal when the previous one reports ARRIVED). Goals at a lanelet boundary or in
+the 1.5 m stretch past the hanging board are refused ("Goal's footprint exceeds
+lane!"), so the goal poses are part of the map, not free choices.
+
+**Done when:** the loop's goal poses live beside the map
+(`data/mingda-basement/`), a tested script or `just` recipe drives N laps
+through the AD API in the planning sim, and the route TUI or the procedure in
+`control_testing.md` uses the same goals on the cart.
+
+### M7: the loop-lane fit as repo tooling (desk)
+
+The 2026-10-23 refit of `route_loop_cw.yaml` (6a35f04) came from scratch
+scripts: an obstacle grid from the PCD (0.1 m cells, >= 3 points, band
+0.25-2.13 m), a bounded least-squares corridor fit (lateral offsets along the
+normals, curvature penalty reweighted to a >= 3.8 m radius, per-stretch widths
+and margins, a body band at the board), and a clearance check of the built
+lanelets against the grid. Every number in the YAML header comes from them; 4d
+(the cart's real width and height) will need the fit rerun.
+
+**Done when:** the three live under `scripts/map/` with tests beside
+`test_centerline_to_lanelet.py`, take the vehicle dimensions from
+`vehicle_info.param.yaml` as the lanelet builder now does, and reproduce the
+committed lane and its header numbers.
+
+### M8: planning sim with realistic localization error (desk)
+
+The planning sim localizes perfectly, so its 0.11 m minimum clearance on the
+loop assumes a perfect pose. The replays measured NDT scatter (8.8 cm p95
+against the full map on the 0.30 m map) but nothing injects it.
+
+**Done when:** the loop is driven in the planning sim with pose noise and lag
+drawn from the replay's distribution (and the 22 deg steering cap, V3), and the
+minimum clearance and goal error are reported against the noise-free run.
+
+### M9: steering limits and controller settings for the cart we have (desk, after decision)
+
+Phase 9 decisions 4 and 4a: `max_steer_angle` 0.52 -> 0.38 rad in
+`vehicle_info.param.yaml`, the simulator model, the keyboard recipe and the
+interface clamp together; and before any left turn, the MPC/PID
+steer-convergence holds off, since the left report reads 0.
+
+**Done when:** the team has decided, all four places hold the same limit (a test
+reads them), and the loop sim reruns clean on the result.
 
 ## Track L: localization under the cart's own motion
 
@@ -371,6 +428,25 @@ See L1. Autoware's pointcloud divider, or an equivalent, so a map update loads
 the tiles near the cart instead of the whole map. **Done when:** a loop replay
 shows no pose gap over 0.3 s.
 
+### L10: board detection range, from the bags (desk)
+
+The board was detected at 12 m in the 2026-09-10 replay. The Ming-Da straight
+lane starts 17.8 m from it, and the loop passes it at several ranges. The
+2026-09-24 loop bags see the board from every distance the cart drives.
+
+**Done when:** the detector is replayed over both loop bags and the detection
+rate is reported against range and bearing, so the start pose can be chosen
+inside the range that works (on the cart, Phase 9 item 15 confirms it).
+
+### L6 design (desk)
+
+L6 below needs a design before the cart: what declares NDT diverged (NVTL,
+iteration cap, EKF innovation), what the stack does then (MRM stop), and whether
+the board initializer may run again, and from how far.
+
+**Done when:** the design is written here and the stop half is shown in a
+replay with an injected divergence.
+
 ### L4-L7 (vehicle)
 
 - **L4** ZED IMU corrector: offsets 0, noise copied from the Xsens. A few minutes
@@ -406,7 +482,9 @@ shows no pose gap over 0.3 s.
   right (V2).
 - **V4** Steering and longitudinal system identification: the interface's steering
   slew (0.4 / 0.8 rad/s) is slower than MPC's Lexus assumptions (delay 0.24 s,
-  time constant 0.27 s). Then MPC and PID tuning.
+  time constant 0.27 s). Then MPC and PID tuning. **Desk half:** a script that
+  takes a CAN recording of steering and speed steps and fits delay, time
+  constant and rate limit, so a vehicle day only has to record.
 - **V5** S3's braking measurement.
 - **V6** The crawl run: exit criteria 1-5.
 
@@ -424,6 +502,10 @@ shows no pose gap over 0.3 s.
 Desk now: E1, S1, S2, E2, then M1 and M2 as the proving ground for E3, S4, S5,
 M3; L1 to L3 in parallel. Vehicle, in order: V1, V2, V3, then L4, L5, L7, S3, V4,
 and V6 last.
+
+From 2026-10-23 the desk queue is ordered in
+[Phase 9, open issues](9-mingda-autonomous-driving.md#open-issues): L8, S5, M6,
+M9, M3, M8, L10, L6 design, M7, V4 desk half, M4, L9.
 
 ## Status
 

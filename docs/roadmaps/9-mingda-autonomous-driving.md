@@ -89,7 +89,7 @@ Legend: ✅ done and evidenced · 🟡 partly done or done on the desk only ·
 | M3 slow-cart planning / control tuning | ❌ | Stock autoware_launch tuning; side overhangs 0.001 placeholders |
 | Loop route (planning sim) | 🟡 | One route round the whole loop **fails**: with the goal just behind the start, behavior_path_planner's drivable area collapses (left bound cut to 2 points) and path_optimizer stops the cart ("outside drivable area"). Driven as chained routes instead (3 goals a lap, scratch `loop_legs.py`): two laps, every leg ARRIVED within 0.11 m, 1.18 m/s, steering <= 28.7 deg (2026-10-23). The route TUI / procedure must chain goals for a loop. Goals at a lanelet boundary or in the 1.5 m stretch are refused ("Goal's footprint exceeds lane!") |
 | Vehicle footprint dimensions | ❌ | `left_overhang` / `right_overhang` are 0.001 placeholders (footprint 1.215 m, the wheel tread) and `vehicle_height` 2.005 m is unmeasured. The loop's top aisle leaves the modelled cart 0.28 m each side and the board hangs at 2.15 m: mirrors, the roof or the LiDAR mount sticking out would eat that. Measure width at its widest and height to the top of the LiDAR |
-| M4 obstacle detection | ⏸ | Perception off: no obstacle stop; the driver is the only obstacle detector |
+| M4 obstacle detection | ⏸ | Perception off by default: no obstacle stop; the driver is the only obstacle detector. **2026-10-23, desk:** `launch_perception:=true` with `lidar_only` now runs CenterPoint tiny alone, nothing else: clustering (whose output the lidar-mode tracker never read), traffic lights and the analytics publisher are off, through our copy of the perception launch (`use_lidar_rule_detector`). Resolved launch 156 nodes (perception off 147, unchanged); no TensorRT engine built on the master yet (`just build-engines`), never run. Only CenterPoint's road classes become objects: a box in the aisle does not |
 
 ### Build, tooling, infrastructure
 
@@ -149,19 +149,40 @@ Who has to move, so nothing waits on the wrong person.
 8. cuda_ndt_matcher's tracked Cargo.lock churns on every build (0.0.0 vs real
    binding versions), as gmslcam's did before ec7a3ea.
 
-**Desk work, ready to hand out once approved**
-9. ~~Teleop GUI e-stop-only mode.~~ **Done** (59dfd2c).
-10. ~~S4: `max_speed_mps: 1.5`.~~ **Done** (9ff59ac); orin rebuild pending.
-11. ~~Interface rate warning.~~ **Done** (e8ef6e3): now "No control input for
-    X.X s (needs >= 10.0 Hz)".
-12. ~~Why the planning sim stops 1.0 m short.~~ **Root cause found**, see the
-    planning table; the remedy is decision 4b.
-13. L8: the board initializer waits for the matcher's map.
-14. ~~Docs: `control_testing.md` and Phase 8's engage sequence still say `tx=on`
-    and "driver presses AUTO"; both should say brake + dashboard button.~~
-    **Done 2026-10-22**: both, plus Phase 8 V1/V2, the standalone vehicle
-    interface design's commands and CLAUDE.md, now say brake + dashboard button
-    and carry no `tx=`.
+**Desk work, in order** (arranged 2026-10-23; each ID is a
+[Phase 8](8-autonomous-driving.md) item with its "done when")
+13. **L8** the board initializer waits for the matcher's map. Blocks the
+    stationary rehearsal (16): a cart parked at the board through boot otherwise
+    spends its five attempts and never initializes.
+13a. **S5** MRM in the planning sim: injected fault -> MRM_OPERATING -> emergency
+    stop at the interface. Exit criterion 4, desk half.
+13b. **M6** the loop as chained goals: goal poses beside the map, a tested
+    recipe for N laps. Nothing drives the loop without it.
+13c. **M9** steering limits (decisions 4, 4a) applied in all four places, loop
+    sim rerun. Waits on the team's decision; the sim says 0.38 rad costs nothing.
+13d. **M3** a slow-cart planning preset (stock `stop_margin` 5.0 m, lane change,
+    crosswalk, intersection modules), exercised on both lanes in the sim.
+13e. **M8** loop sim with replay-measured pose noise and the 22 deg cap: does
+    0.11 m clearance survive a real pose.
+13f. **L10** board detection rate against range, from the 2026-09-24 loop bags;
+    chooses a start pose inside the working range before item 15.
+13g. **L6 design** NDT divergence: detect, stop, re-initialize or not.
+13h. **M7** the loop-lane fit as `scripts/map/` tooling, so 4d's measurements
+    can be refitted.
+13i. **V4 desk half** a fit script for steering and speed step responses, so the
+    vehicle day only records.
+13j. **M4** an obstacle source. Perception is CenterPoint tiny only (decided
+    2026-10-23, wired, unrun): build the engine on the master, replay a bag with
+    a person walking the aisle, measure the master's load. Boxes and trolleys
+    are not detected by design; the driver covers them.
+13k. **L9** map tiling: re-check first, the 0.30 m map is one 1 MB tile and its
+    reload may no longer stall.
+13l. Housekeeping: issues 7 and 8 (aruco and cuda_ndt_matcher Cargo.lock).
+
+Done: 9 teleop e-stop-only mode (59dfd2c); 10 S4 `max_speed_mps: 1.5`
+(9ff59ac, orin rebuild pending); 11 interface rate warning (e8ef6e3); 12 why the
+sim stopped 1.0 m short (root cause found, remedy 4b); 14 `tx=` and "driver
+presses AUTO" removed from the docs (2026-10-22).
 
 **On the cart**
 15. Park with the board in view: board detection, then from the lane start
