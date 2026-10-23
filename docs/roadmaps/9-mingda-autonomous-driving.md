@@ -53,6 +53,8 @@ Legend: ✅ done and evidenced · 🟡 partly done or done on the desk only ·
 | L8 board init vs map load race | ❌ | Initializer can spend its 5 attempts before the matcher has the map (Phase 8 L8) |
 | cuda_ndt on the Orin | ⏸ | Align-service deadline issue no longer reproduces on the workstation; not re-measured on the Orin (CLAUDE.md) |
 | L6 re-initialization after NDT divergence | ⏸ | Nothing re-initializes; the board initializer is one-shot |
+| Loop lanelet (clockwise, `lanelet2_map_loop.osm`) | 🟡 | Refitted 2026-10-23 (6a35f04). The top aisle's "parked car" was an object present only on the survey day (no live VLP-32C hit on the 2026-09-24 drive, open floor on the left camera); the real constraint is a **board hanging from the ceiling** over the north half of the aisle, x 12.35-12.6, lowest edge 2.15 m, which the old 0.25-2.0 m obstacle band missed. Obstacle band now up to 2.13 m (the hand drive passed under nothing lower than 2.14 m), adding a duct at 2.11 m (north-west corner) and an item at 2.04 m (16.15, -6.95). Lane 1.5 m and 2 km/h past the board, centre y 22.70: the 1.215 m cart 0.29 m off the box wall, 0.28 m off the board. No obstacle cell inside the built lanelets, tightest radius 3.8 m. Curb extent on the bottom straight still assumed |
+| 0.30 m point cloud map | ✅ | `pointcloud_map.pcd` tracked at 0.30 m voxels, 1.0 MB (8f3bbe4). Replay of the clockwise bag on it: 1319/1319 poses, NVTL >= 2.57, <= 3 iterations, 8.8 cm p95 from the full-map run. The full 64 MB cloud on the cart must be moved aside before `git pull` |
 | Manual pose seed | ✅ | `just pose init mingda SPOT` works against a running stack (planning sim test 2026-10-21); no Ming-Da spots captured yet |
 | L5 wheel speed scale and reverse sign | ❌ | Needs the cart pushed or driven with the VCU on |
 
@@ -64,7 +66,7 @@ Legend: ✅ done and evidenced · 🟡 partly done or done on the desk only ·
 | V1 VCU accepts our frames (checksum 0) | ✅ | VCU states went Invalid -> Manual once our frames ran; bus error counters tx 109 -> 0; `/vehicle/status/*` all at 50 Hz, control mode MANUAL, gear NEUTRAL |
 | Entering AUTO | ✅ | Dashboard: brake + button. All four subsystems reported Autonomous; `Veh_Auto_En` claimed |
 | V2 steering sign | ✅ | Keyboard left (+5 deg) turned wheels and steering wheel CCW (left); interface sends -4.98 deg to the VCU, so `invert_steering` is right |
-| V3 steering range | 🟡 | Left: wheels kept turning to the 0.52 rad command (>= 29.8 deg). **Right: mechanical stop at ~22 deg** (VCU report plateaus 22.1-22.7 deg, wheels stop at the 23rd 1-deg step). `max_steer_angle` is still 0.52, which the right side cannot reach |
+| V3 steering range | 🟡 | Left: wheels kept turning to the 0.52 rad command (>= 29.8 deg). **Right: mechanical stop at ~22 deg** (VCU report plateaus 22.1-22.7 deg, wheels stop at the 23rd 1-deg step). `max_steer_angle` is still 0.52, which the right side cannot reach. **The clockwise loop is all right turns.** Planning sim 2026-10-23, one lap per case on the refitted loop: with 0.52 rad, steering peaked at -28.7 deg (NE corner) but only transiently; capped at 0.384 rad (22 deg), and again with the wheels slewing at the cart's ~0.13 rad/s, every leg arrived and the footprint stayed >= 0.11 m from every obstacle cell, the same as uncapped (0.12 m). The planner uses the lane width for wider arcs. **But steering sat at 22 deg for 14% of moving time (NW and NE corners): no reserve**, and the simulator's steering feedback is perfect |
 | Steering angle feedback | ❌ | VCU `0x102 Vcu_Ads_Tire_Angle` is live **only in AUTO and only for right turns**: left reads 0.000, manual steering reads a frozen +0.210 deg over a full sweep. Autoware's lateral controller has no usable feedback. **Vendor**. Decided 2026-10-22: no change for the straight lane, where the command stays under `converged_steer_rad` (0.1 rad) so the convergence hold clears against a 0 report; see open issue 4a before any left turn |
 | VCU state after leaving AUTO | ⏸ | `Driving_State` (and earlier `Brake_State`) read `Invalid`, not `Manual`, after the first AUTO session. The interface treats it as hands off. **Vendor question** |
 | Mode request honesty | ✅ | golfcart_vehicle_launch 960a2be: MANUAL now refused while the VCU is still Autonomous (was answered success). Live: MANUAL accepted / AUTONOMOUS refused with the cart in manual; the AUTO-side refusal is unit-tested only |
@@ -85,6 +87,8 @@ Legend: ✅ done and evidenced · 🟡 partly done or done on the desk only ·
 | Engage path through the link | 🟡 | All command and status lanes present in `config/link/topics.yaml`, control-mode service bridged; never exercised end to end with Autoware |
 | Software e-stop | 🟡 | `teleop_gui.py` `estop_only` mode publishes only `/vehicle/emergency_stop` (golfcart_vehicle_launch 59dfd2c). Not yet run beside Autoware on the cart |
 | M3 slow-cart planning / control tuning | ❌ | Stock autoware_launch tuning; side overhangs 0.001 placeholders |
+| Loop route (planning sim) | 🟡 | One route round the whole loop **fails**: with the goal just behind the start, behavior_path_planner's drivable area collapses (left bound cut to 2 points) and path_optimizer stops the cart ("outside drivable area"). Driven as chained routes instead (3 goals a lap, scratch `loop_legs.py`): two laps, every leg ARRIVED within 0.11 m, 1.18 m/s, steering <= 28.7 deg (2026-10-23). The route TUI / procedure must chain goals for a loop. Goals at a lanelet boundary or in the 1.5 m stretch are refused ("Goal's footprint exceeds lane!") |
+| Vehicle footprint dimensions | ❌ | `left_overhang` / `right_overhang` are 0.001 placeholders (footprint 1.215 m, the wheel tread) and `vehicle_height` 2.005 m is unmeasured. The loop's top aisle leaves the modelled cart 0.28 m each side and the board hangs at 2.15 m: mirrors, the roof or the LiDAR mount sticking out would eat that. Measure width at its widest and height to the top of the LiDAR |
 | M4 obstacle detection | ⏸ | Perception off: no obstacle stop; the driver is the only obstacle detector |
 
 ### Build, tooling, infrastructure
@@ -110,7 +114,20 @@ Who has to move, so nothing waits on the wrong person.
 
 **Decisions for the team**
 4. `max_steer_angle` 0.52 -> 0.38 rad (vehicle model, keyboard recipe, lane tool),
-   until the right side is fixed.
+   until the right side is fixed. **New evidence 2026-10-23**: the clockwise loop
+   still drives in the planning sim at 0.384 rad (and at the cart's slew rate),
+   so the lower limit costs the loop nothing in simulation, but leaves the
+   steering saturated in two corners for 14% of the lap.
+4c. **Loop direction vs the two steering faults.** Clockwise is all right turns:
+   right feedback works in AUTO, but the right stop is ~22 deg (sim above: drives,
+   saturated). Counter-clockwise is all left turns: range is fine, but left
+   feedback reads 0, so issue 4a's convergence hold applies on every corner.
+   Until the vendor fixes either, clockwise at 0.38 rad is the candidate.
+   Note the clockwise lap still commands up to +7 deg of left steer briefly (over
+   the 0.1 rad `converged_steer_rad`).
+4d. Measure the cart's width at its widest (mirrors, roof) and height to the top
+   of the LiDAR, then set the overhangs and `vehicle_height` and refit the loop
+   if they differ: the top aisle has 0.28 m a side for the modelled cart.
 4a. **Decided 2026-10-22, steering feedback vs the controller.** The straight-lane
    drive keeps stock settings. Before any left turn: set `keep_steer_control_until_converged`
    (MPC) and `enable_keep_stopped_until_steer_convergence` (PID) to false, since a
@@ -154,8 +171,19 @@ Who has to move, so nothing waits on the wrong person.
 17. L5 speed report (push the cart a metre, forward and reverse), physical e-stop,
     S3 braking, V4 system identification.
 18. The crawl run (Phase 8 V6), after 1, 4, 9, 10, 13, 15 and 16.
+19. Walk the loop with a tape: the curb on the bottom straight (y -3.2, extent
+    x 7.5-16.0 assumed), the hanging board's height, and the ceiling items at
+    2.04 m (16.15, -6.95) and 2.11 m (3, 20) against the cart's height (4d).
 
 ## Log
+
+- **2026-10-23** 0.30 m Ming-Da point cloud tracked (8f3bbe4), NDT replay proof
+  recorded. Planning sim on the loop: one route round the loop fails (drivable
+  area collapses), chained goals drive it. Top aisle refitted (6a35f04): the
+  "parked car" was a survey-day object, the real pinch is a board hanging at
+  2.15 m; obstacle band raised to 2.13 m; lane 1.5 m past the board. Lanelet
+  builder now reads the steering limit from the vehicle description. Loop drives
+  in sim at 22 deg and at the cart's steering slew, saturated 14% of the lap.
 
 - **2026-10-22 (later)** Interface speed cap, rate warning and e-stop-only GUI;
   diagnostic aggregator crash without perception fixed; concatenator frame fixed;
