@@ -13,6 +13,19 @@ Default preset for Golf Cart. Uses only LiDAR for perception.
 - `use_detection_by_tracker`: `false`
 - `use_image_segmentation_based_filter`: `false`
 - `use_pointcloud_map`: `true`
+- `lidar_detection_model`: `centerpoint/centerpoint_tiny`
+- `use_lidar_rule_detector`: `false`
+- `use_perception_analytics_publisher`: `false`
+
+**Detection is CenterPoint tiny and nothing else.** In lidar mode the tracker
+(multi-channel merger) reads only CenterPoint's validated objects, so the
+clustering detector Autoware also starts was computed and discarded. Upstream
+has no switch for it; `use_lidar_rule_detector` exists only in our copies of the
+perception launch (`launch/components/tier4_perception_component.launch.xml`,
+`launch/components/perception/`), which `test_perception_copies.py` holds to
+upstream. Consequence: only CenterPoint's classes (car, truck, bus, bicycle,
+motorcycle, pedestrian) become objects. A box or a trolley in the aisle is not
+one.
 
 **Use cases**:
 - Standard outdoor operation with LiDAR
@@ -35,6 +48,8 @@ Uses both camera and LiDAR for enhanced perception. Enables camera-based feature
 - `use_detection_by_tracker`: `true`
 - `use_image_segmentation_based_filter`: `true`
 - `use_pointcloud_map`: `true`
+- `lidar_detection_model`, `use_lidar_rule_detector`,
+  `use_perception_analytics_publisher`: Autoware's defaults
 
 **Use cases**:
 - Urban environments with traffic lights

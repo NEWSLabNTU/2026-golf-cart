@@ -25,3 +25,20 @@ launch:
   - arg:
       name: use_pointcloud_map
       default: "false"
+
+  # Detection: CenterPoint tiny and nothing else. In lidar mode the tracker
+  # reads only CenterPoint (multi-channel merger), so the clustering detector
+  # Autoware also starts would be computed and discarded; it is switched off
+  # through our copy of the perception launch (use_lidar_rule_detector).
+  - arg:
+      name: lidar_detection_model
+      default: "centerpoint/centerpoint_tiny"
+
+  - arg:
+      name: use_lidar_rule_detector
+      default: "false"
+
+  # Statistics publisher, nothing consumes it
+  - arg:
+      name: use_perception_analytics_publisher
+      default: "false"
