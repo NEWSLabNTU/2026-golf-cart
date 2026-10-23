@@ -46,6 +46,7 @@ default:
 #   just indoor-test run                    # with RViz
 #   just indoor-test run rviz=off
 #   just indoor-test run on "pose_source:=cuda_ndt"
+#   INDOOR_SIM_MAP_WAIT=off just indoor-test run   # resume before the map (L8)
 # Run the whole indoor cold-start replay end to end (bag, stack, RViz, resume)
 run RVIZ="on" ARGS="":
     ./scripts/rosbag/indoor_sim_run.sh {{RVIZ}} {{ARGS}}

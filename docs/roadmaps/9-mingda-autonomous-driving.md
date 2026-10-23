@@ -50,7 +50,7 @@ Legend: ✅ done and evidenced · 🟡 partly done or done on the desk only ·
 | `just launch-drive-mingda` | ✅ | Dump of the master launch: 147 nodes, `pose_initializer` with `gnss_enabled: false`, no `automatic_pose_initializer`, board detector + board initializer, `fallback_to_user_defined_pose: false` |
 | Board detector, live | 🟡 | `just tool board-detector` runs on the cart: VLP-32C at 9.95 Hz, calibrated TF, detector at 1 Hz. **Not yet seen detecting the board on the cart**; the cart has not been parked with the board in view |
 | Board detection range | ❌ | Detected at 12 m in the 2026-09-10 replay. The lane start (17.6, -2.8) is 17.8 m from the board: untested |
-| L8 board init vs map load race | ❌ | Initializer can spend its 5 attempts before the matcher has the map (Phase 8 L8) |
+| L8 board init vs map load race | ✅ desk | Failures before the matcher has a map no longer count (a83b3f8); the cart check is item 16 |
 | cuda_ndt on the Orin | ⏸ | Align-service deadline issue no longer reproduces on the workstation; not re-measured on the Orin (CLAUDE.md) |
 | L6 re-initialization after NDT divergence | ⏸ | Nothing re-initializes; the board initializer is one-shot |
 | Loop lanelet (clockwise, `lanelet2_map_loop.osm`) | 🟡 | Refitted 2026-10-23 (6a35f04). The top aisle's "parked car" was an object present only on the survey day (no live VLP-32C hit on the 2026-09-24 drive, open floor on the left camera); the real constraint is a **board hanging from the ceiling** over the north half of the aisle, x 12.35-12.6, lowest edge 2.15 m, which the old 0.25-2.0 m obstacle band missed. Obstacle band now up to 2.13 m (the hand drive passed under nothing lower than 2.14 m), adding a duct at 2.11 m (north-west corner) and an item at 2.04 m (16.15, -6.95). Lane 1.5 m and 2 km/h past the board, centre y 22.70: the 1.215 m cart 0.29 m off the box wall, 0.28 m off the board. No obstacle cell inside the built lanelets, tightest radius 3.8 m. Curb extent on the bottom straight still assumed |
@@ -151,9 +151,8 @@ Who has to move, so nothing waits on the wrong person.
 
 **Desk work, in order** (arranged 2026-10-23; each ID is a
 [Phase 8](8-autonomous-driving.md) item with its "done when")
-13. **L8** the board initializer waits for the matcher's map. Blocks the
-    stationary rehearsal (16): a cart parked at the board through boot otherwise
-    spends its five attempts and never initializes.
+13. ~~**L8** the board initializer waits for the matcher's map.~~ Done
+    2026-10-23, see Done below.
 13a. **S5** MRM in the planning sim: injected fault -> MRM_OPERATING -> emergency
     stop at the interface. Exit criterion 4, desk half.
 13b. **M6** the loop as chained goals: goal poses beside the map, a tested
@@ -182,7 +181,9 @@ Who has to move, so nothing waits on the wrong person.
 Done: 9 teleop e-stop-only mode (59dfd2c); 10 S4 `max_speed_mps: 1.5`
 (9ff59ac, orin rebuild pending); 11 interface rate warning (e8ef6e3); 12 why the
 sim stopped 1.0 m short (root cause found, remedy 4b); 14 `tx=` and "driver
-presses AUTO" removed from the docs (2026-10-22).
+presses AUTO" removed from the docs (2026-10-22); 13 L8, failed aligns before the
+scan matcher has a map no longer spend the board initializer's budget
+(reflective_pose_detector a83b3f8, 2026-10-23; item 16 checks it on the cart).
 
 **On the cart**
 15. Park with the board in view: board detection, then from the lane start

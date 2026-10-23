@@ -422,6 +422,25 @@ See L1. **Done when:** a cart parked at the board through boot initializes on
 its own, i.e. failures before the matcher has a map do not consume
 `max_attempts`, checked by a replay that resumes before the map is up.
 
+**Done at the desk 2026-10-23** (reflective_pose_detector a83b3f8). The
+initializer watches the matcher's `debug/loaded_pointcloud_map` and counts a
+failed attempt only if that map had been seen when the call went out
+(`ignore_failures_before_map`, default on). The aligns still go out, since
+cuda_ndt's align is what requests the tiles.
+
+The replay check as written could not show the race on the workstation. With
+`INDOOR_SIM_MAP_WAIT=off` the conductor resumes as soon as
+`/localization/initialize` exists, but the map reached the matcher 0.5 s after
+start (3,995,308 points; 63,115 on the Ming-Da map) and the service ~30 s
+later, so there was no window. On 2026-10-02 the map arrived 8.6 s after
+playback. Both replays initialized on attempt 1/5. They also showed that the
+new subscription connects to cuda_ndt's real (volatile) publisher. The race
+itself is replayed over real ROS transport in the submodule's
+`test_initializer_boot_race.py`: poses at 5 Hz, a service that fails until the
+map is out at 2 s. With the fix it initializes after 10 free failures; the
+control with counting on fails for good at 5/5. On the cart, the stationary
+rehearsal (Phase 9 item 16) is the remaining check.
+
 ### L9: split the basement map into tiles (desk)
 
 See L1. Autoware's pointcloud divider, or an equivalent, so a map update loads
@@ -505,7 +524,7 @@ and V6 last.
 
 From 2026-10-23 the desk queue is ordered in
 [Phase 9, open issues](9-mingda-autonomous-driving.md#open-issues): L8, S5, M6,
-M9, M3, M8, L10, L6 design, M7, V4 desk half, M4, L9.
+M9, M3, M8, L10, L6 design, M7, V4 desk half, M4, L9 (L8 done 2026-10-23).
 
 ## Status
 
@@ -532,5 +551,6 @@ AUTO is entered on the dashboard). The table below is the 2026-09-29 desk state.
 | M2 planning sim | **real route drives** to 0.09 m of its goal, within 0.30 m of the centreline with steer at 0.52 rad (V3); our launch's pieces still unexercised |
 | L2 EKF | **done**: upstream values; replay check waits on L1 |
 | L3 NDT input | deliberately not switched; see L3 |
+| L8 board init vs map | **done at the desk** (2026-10-23): failures before the matcher's map are free; boot race tested over ROS transport; cart check is Phase 9 item 16 |
 | L1 | **done for NDT** (2026-10-02): both loops tracked end to end from the board, 0 jumps, NVTL never below the gate; the bags have no wheel speed, so EKF fusion waits on the VCU. Found L8 and L9 |
 | everything else | not started |

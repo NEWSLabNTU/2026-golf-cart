@@ -35,12 +35,21 @@ fi
 # 8.6 s later, and a bag whose cart leaves the board after two detections then
 # never initialized. Latched, so this sees the one-shot publish whenever it
 # happened; the margin after it covers the matcher building its target.
-wait_for 180 "the point cloud map on /map/pointcloud_map" \
-    python3 "${REPO_ROOT}/scripts/rosbag/wait_for_message.py" /map/pointcloud_map \
-        --latched --timeout 5 --quiet \
-    || die "no point cloud map; see ${STACK_LOG}"
-wait_for 30 "the scan matcher's target" sim_matcher_has_map \
-    || warn "(could not confirm the scan matcher built its target; resuming anyway)"
+#
+# INDOOR_SIM_MAP_WAIT=off skips this and resumes as soon as the service is up,
+# which is what a cart parked at the board through boot sees. Phase 8 L8 is
+# checked that way: the initializer must not spend its attempts on aligns that
+# failed only because the map had not arrived yet.
+if [ "${INDOOR_SIM_MAP_WAIT:-on}" = off ]; then
+    warn "(INDOOR_SIM_MAP_WAIT=off: resuming before the map is up)"
+else
+    wait_for 180 "the point cloud map on /map/pointcloud_map" \
+        python3 "${REPO_ROOT}/scripts/rosbag/wait_for_message.py" /map/pointcloud_map \
+            --latched --timeout 5 --quiet \
+        || die "no point cloud map; see ${STACK_LOG}"
+    wait_for 30 "the scan matcher's target" sim_matcher_has_map \
+        || warn "(could not confirm the scan matcher built its target; resuming anyway)"
+fi
 
 say "resuming playback"
 ros2 service call /rosbag2_player/resume rosbag2_interfaces/srv/Resume >/dev/null 2>&1 \
