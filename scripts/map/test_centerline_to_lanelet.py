@@ -245,3 +245,15 @@ def test_route_file_points_may_carry_a_speed_limit(tmp_path):
     speeds = _lanelet_speeds_by_x((out / 'lanelet2_map.osm').read_text())
     assert {v for x0, x1, v in speeds if x0 >= 10.0 - 1e-6 and x1 <= 20.0 + 1e-6} == {2.0}
     assert {v for x0, x1, v in speeds if x1 <= 10.0 + 1e-6 or x0 >= 20.0 - 1e-6} == {4.0}
+
+
+def test_turning_radius_comes_from_the_vehicle_description():
+    # The builder's corner warning must use the cart's current steering limit,
+    # not a copy that goes stale when vehicle_info.param.yaml changes (it did:
+    # 0.349 rad stayed here after the vehicle moved to 0.52).
+    import yaml
+    info = (Path(__file__).resolve().parents[2] / 'src/vehicle/golfcart_vehicle_launch'
+            / 'golfcart_vehicle_description/config/vehicle_info.param.yaml')
+    p = yaml.safe_load(info.read_text())['/**']['ros__parameters']
+    want = p['wheel_base'] / math.tan(p['max_steer_angle'])
+    assert c2l.min_turning_radius() == pytest.approx(want)

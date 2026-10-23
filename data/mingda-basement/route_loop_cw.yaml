@@ -13,11 +13,10 @@
 # Fitted 2026-10-22 against the point cloud (the basement-indoor PCD in this
 # frame, the same SLAM cloud). Obstacles: 0.1 m cells with >= 3 points at
 # 0.25-2.0 m above the floor (the map has no floor; ducts start at 2.2 m).
-# Sparse cells stay in: a car parked on the north side of the top aisle is one
-# LiDAR ring's contour at z 1.0-1.3, reaching y 23.75 at x 14.5-15.8. Removed:
-# 70 points floating at z 1.0-1.67 on the driven path at (4, 2), which the cart
-# drove through. Added: the curb the cloud cannot resolve, y -3.2, located from
-# the cart at x ~ 11 (dd58eb4); its extent x 7.5-16.0 is ASSUMED.
+# Sparse cells stay in. Removed: 70 points floating at z 1.0-1.67 on the driven
+# path at (4, 2), which the cart drove through. Added: the curb the cloud cannot
+# resolve, y -3.2, located from the cart at x ~ 11 (dd58eb4); its extent
+# x 7.5-16.0 is ASSUMED.
 #
 # Centre: shifted along the normal to equalise the edges' clearance, rays capped
 # at 3.5 m, weighted by 1 / span^4 so a narrow gap holds its neighbours, 6 m
@@ -25,13 +24,51 @@
 # under 3.5 m. Width: min(2.5, free span - 0.4) over a 6 m running minimum,
 # floor 1.5.
 #
-# Result: no obstacle cell inside the lane. 2.5 m everywhere except the top
-# aisle, x 7.0 -> 18.3 (13.5 m), which narrows to 1.55 m at x 14.5-15.8, where
-# the gap between the box wall and the parked car is 2.0 m: the lane edges are
-# 0.05 m off both, the 1.215 m cart about 0.4 m when centred. That stretch
-# plus 2 m either side is 2 km/h, the rest 4. Tightest corner radius 3.6 m,
-# wider than the 3.3 m driven by hand, under the 5.7 m the vehicle model's
-# 0.349 rad steer allows, so the builder warns.
+# Reworked 2026-10-23 on two stretches: the west side from y 14 round the top
+# aisle to the east side at y 10, and the east side below y 2 round the
+# south-east corner to x 12 on the bottom straight. The rest is the 2026-10-22
+# fit, unchanged. Two corrections to the obstacles:
+#
+# - Removed: what the fit above took for a car parked on the north side of the
+#   top aisle, a contour at z 0.8-1.7 m, x 10.5-16.2, y 23.5-25.2. It is in the
+#   survey cloud only: no live VLP-32C scan of the 2026-09-24 clockwise drive
+#   hits it, and the left camera shows open floor there. Something present
+#   while the map was surveyed.
+# - Added: the board hanging from the ceiling over the north half of the top
+#   aisle, x 12.35-12.6, y 23.6-24.65, lowest edge 2.15 m. The 0.25-2.0 m band
+#   never saw it. The driver steers right to avoid it, so it is an obstacle for
+#   the whole cart. The band's top is now 2.13 m: the hand drive passed directly
+#   under ceiling items as low as 2.14 m and under nothing lower, so 2.14 m is
+#   the clearance proven on the cart.
+#
+# The board leaves 1.8 m between itself and the box wall (y 21.8). Width there
+# is 1.5 m, held while any part of the cart (base_link -0.82 .. +2.47 m) is
+# beside the board and on round the right turn past the box wall's end
+# (x 15.8), then eased back to 2.5 m over 3 m.
+#
+# The centre is the 2026-10-22 line moved along its normals, by bounded least
+# squares: the gentlest bends (second differences, reweighted until no radius
+# over 0.5 m chords is under 3.8 m) subject to both lane edges keeping a margin
+# off every obstacle cell, re-solved from its own result until it settles.
+# Free space is measured along each normal in a strip 0.5 m wide, so a thin row
+# of cells cannot slip between points 0.5 m apart (a duct at 2.11 m at (3, 20)
+# did). Margins: 0.25 m; 0.3 m round the north-east turn, where the simulated
+# cart cut 0.16 m inside the line toward the wall's end, and on the bottom
+# stretch, which moves at most 0.46 m north off a ceiling item 2.04 m up at
+# (16.15, -6.95); 0.15 m beside the board, where 1.5 m of lane fills the gap.
+# Beside the board the centre is also held between y 22.56 and 22.84 for every
+# point at which any part of the cart is level with it: it runs at y 22.70, the
+# 1.215 m cart 0.29 m off the wall and 0.28 m off the board.
+#
+# Result, measured on the built lanelets: no obstacle cell inside the lane, the
+# nearest cell face 0.13 m outside an edge (the board). 2.5 m except x 8.0 on
+# the top aisle round to y 20.8 on the east side (11 m), 1.5 m at the
+# narrowest; that stretch plus 2 m either side is 2 km/h, the rest 4. Tightest
+# radius 3.8 m by the builder's 1 m check, against the 3.6 m the vehicle
+# description's 0.52 rad steer allows. Planning simulator, two laps: every leg
+# arrived; footprint never within 0.12 m of an obstacle cell (the front-left
+# corner at the board, the cart 7 deg nose-up coming out of the north-west
+# corner); 0.19 m at the wall's end; steering peaked at 28.7 of 29.8 deg.
 #
 # Built into lanelet2_map_loop.osm beside lanelet2_map.osm (the straight lane),
 # selected with lanelet2_map_file:=lanelet2_map_loop.osm. Not --write, which
@@ -95,64 +132,64 @@
 - {x: 3.638, y: 14.334, width: 2.50}
 - {x: 3.681, y: 14.833, width: 2.50}
 - {x: 3.727, y: 15.331, width: 2.50}
-- {x: 3.776, y: 15.829, width: 2.50}
-- {x: 3.828, y: 16.327, width: 2.50}
-- {x: 3.885, y: 16.824, width: 2.50}
-- {x: 3.955, y: 17.320, width: 2.50}
-- {x: 4.043, y: 17.813, width: 2.50}
-- {x: 4.149, y: 18.302, width: 2.50}
-- {x: 4.272, y: 18.787, width: 2.50}
-- {x: 4.418, y: 19.266, width: 2.50}
-- {x: 4.596, y: 19.733, width: 2.50}
-- {x: 4.818, y: 20.182, width: 2.50}
-- {x: 5.091, y: 20.601, width: 2.50}
-- {x: 5.415, y: 20.983, width: 2.50, speed_limit: 2}
-- {x: 5.779, y: 21.325, width: 2.50}
-- {x: 6.177, y: 21.629, width: 2.50}
-- {x: 6.601, y: 21.894, width: 2.50}
-- {x: 7.041, y: 22.134, width: 2.49}
-- {x: 7.486, y: 22.363, width: 2.48}
-- {x: 7.938, y: 22.577, width: 2.48}
-- {x: 8.397, y: 22.776, width: 2.45}
-- {x: 8.866, y: 22.950, width: 2.45}
-- {x: 9.345, y: 23.095, width: 2.44}
-- {x: 9.833, y: 23.209, width: 2.34}
-- {x: 10.330, y: 23.263, width: 2.23}
-- {x: 10.830, y: 23.283, width: 2.09}
-- {x: 11.331, y: 23.279, width: 1.80}
-- {x: 11.831, y: 23.256, width: 1.60}
-- {x: 12.330, y: 23.218, width: 1.55}
-- {x: 12.828, y: 23.172, width: 1.55}
-- {x: 13.326, y: 23.124, width: 1.55}
-- {x: 13.824, y: 23.069, width: 1.55}
-- {x: 14.318, y: 22.992, width: 1.55}
-- {x: 14.807, y: 22.886, width: 1.55}
-- {x: 15.288, y: 22.745, width: 1.55}
-- {x: 15.755, y: 22.566, width: 1.55}
-- {x: 16.205, y: 22.348, width: 1.55}
-- {x: 16.623, y: 22.072, width: 1.55}
-- {x: 17.033, y: 21.786, width: 1.55}
-- {x: 17.400, y: 21.446, width: 1.55}
-- {x: 17.719, y: 21.060, width: 1.55}
-- {x: 17.982, y: 20.635, width: 2.08}
-- {x: 18.197, y: 20.183, width: 2.22}
-- {x: 18.349, y: 19.706, width: 2.37}
-- {x: 18.448, y: 19.216, width: 2.50}
-- {x: 18.506, y: 18.719, width: 2.50}
-- {x: 18.581, y: 18.224, width: 2.50}
-- {x: 18.650, y: 17.728, width: 2.50}
-- {x: 18.717, y: 17.232, width: 2.50, speed_limit: 4}
-- {x: 18.785, y: 16.736, width: 2.50}
-- {x: 18.855, y: 16.241, width: 2.50}
-- {x: 18.933, y: 15.746, width: 2.50}
-- {x: 19.017, y: 15.253, width: 2.50}
-- {x: 19.106, y: 14.761, width: 2.50}
-- {x: 19.198, y: 14.268, width: 2.50}
-- {x: 19.285, y: 13.776, width: 2.50}
-- {x: 19.365, y: 13.281, width: 2.50}
-- {x: 19.427, y: 12.785, width: 2.50}
-- {x: 19.472, y: 12.286, width: 2.50}
-- {x: 19.512, y: 11.787, width: 2.50}
+- {x: 3.783, y: 15.828, width: 2.50}
+- {x: 3.850, y: 16.325, width: 2.50}
+- {x: 3.930, y: 16.818, width: 2.50}
+- {x: 4.027, y: 17.309, width: 2.50}
+- {x: 4.141, y: 17.794, width: 2.50}
+- {x: 4.275, y: 18.275, width: 2.50}
+- {x: 4.430, y: 18.745, width: 2.50}
+- {x: 4.610, y: 19.201, width: 2.50}
+- {x: 4.813, y: 19.638, width: 2.50}
+- {x: 5.045, y: 20.054, width: 2.50}
+- {x: 5.306, y: 20.446, width: 2.50}
+- {x: 5.600, y: 20.815, width: 2.50}
+- {x: 5.930, y: 21.161, width: 2.50}
+- {x: 6.294, y: 21.479, width: 2.50, speed_limit: 2}
+- {x: 6.687, y: 21.765, width: 2.50}
+- {x: 7.106, y: 22.015, width: 2.45}
+- {x: 7.546, y: 22.226, width: 2.16}
+- {x: 8.002, y: 22.398, width: 1.92}
+- {x: 8.473, y: 22.532, width: 1.73}
+- {x: 8.948, y: 22.630, width: 1.60}
+- {x: 9.429, y: 22.694, width: 1.52}
+- {x: 9.898, y: 22.729, width: 1.50}
+- {x: 10.359, y: 22.740, width: 1.50}
+- {x: 10.833, y: 22.734, width: 1.50}
+- {x: 11.314, y: 22.719, width: 1.50}
+- {x: 11.798, y: 22.703, width: 1.50}
+- {x: 12.289, y: 22.695, width: 1.50}
+- {x: 12.793, y: 22.740, width: 1.50}
+- {x: 13.301, y: 22.821, width: 1.50}
+- {x: 13.812, y: 22.904, width: 1.50}
+- {x: 14.321, y: 22.958, width: 1.50}
+- {x: 14.833, y: 22.965, width: 1.50}
+- {x: 15.349, y: 22.912, width: 1.50}
+- {x: 15.857, y: 22.794, width: 1.50}
+- {x: 16.354, y: 22.603, width: 1.50}
+- {x: 16.818, y: 22.357, width: 1.50}
+- {x: 17.247, y: 22.051, width: 1.50}
+- {x: 17.647, y: 21.677, width: 1.53}
+- {x: 17.988, y: 21.252, width: 1.63}
+- {x: 18.272, y: 20.793, width: 1.79}
+- {x: 18.503, y: 20.303, width: 2.03}
+- {x: 18.687, y: 19.792, width: 2.32}
+- {x: 18.828, y: 19.276, width: 2.50}
+- {x: 18.929, y: 18.773, width: 2.50}
+- {x: 18.999, y: 18.274, width: 2.50, speed_limit: 4}
+- {x: 19.046, y: 17.767, width: 2.50}
+- {x: 19.078, y: 17.264, width: 2.50}
+- {x: 19.102, y: 16.764, width: 2.50}
+- {x: 19.122, y: 16.267, width: 2.50}
+- {x: 19.144, y: 15.768, width: 2.50}
+- {x: 19.170, y: 15.271, width: 2.50}
+- {x: 19.202, y: 14.772, width: 2.50}
+- {x: 19.241, y: 14.272, width: 2.50}
+- {x: 19.286, y: 13.774, width: 2.50}
+- {x: 19.337, y: 13.276, width: 2.50}
+- {x: 19.390, y: 12.780, width: 2.50}
+- {x: 19.445, y: 12.285, width: 2.50}
+- {x: 19.499, y: 11.786, width: 2.50}
 - {x: 19.551, y: 11.288, width: 2.50}
 - {x: 19.597, y: 10.790, width: 2.50}
 - {x: 19.653, y: 10.293, width: 2.50}
@@ -175,27 +212,27 @@
 - {x: 20.210, y: 1.935, width: 2.50}
 - {x: 20.112, y: 1.444, width: 2.50}
 - {x: 20.023, y: 0.951, width: 2.50}
-- {x: 19.934, y: 0.459, width: 2.50}
-- {x: 19.841, y: -0.033, width: 2.50}
-- {x: 19.739, y: -0.523, width: 2.50}
-- {x: 19.633, y: -1.012, width: 2.50}
-- {x: 19.525, y: -1.501, width: 2.50}
-- {x: 19.412, y: -1.989, width: 2.50}
-- {x: 19.289, y: -2.474, width: 2.50}
-- {x: 19.145, y: -2.953, width: 2.50}
-- {x: 18.969, y: -3.422, width: 2.50}
-- {x: 18.747, y: -3.870, width: 2.50}
-- {x: 18.465, y: -4.283, width: 2.50}
-- {x: 18.129, y: -4.653, width: 2.50}
-- {x: 17.746, y: -4.976, width: 2.50}
-- {x: 17.327, y: -5.249, width: 2.50}
-- {x: 16.881, y: -5.476, width: 2.50}
-- {x: 16.417, y: -5.664, width: 2.50}
-- {x: 15.943, y: -5.823, width: 2.50}
-- {x: 15.460, y: -5.956, width: 2.50}
-- {x: 14.970, y: -6.058, width: 2.50}
-- {x: 14.476, y: -6.135, width: 2.50}
-- {x: 13.978, y: -6.190, width: 2.50}
+- {x: 19.942, y: 0.458, width: 2.50}
+- {x: 19.862, y: -0.037, width: 2.50}
+- {x: 19.778, y: -0.531, width: 2.50}
+- {x: 19.685, y: -1.023, width: 2.50}
+- {x: 19.577, y: -1.513, width: 2.50}
+- {x: 19.445, y: -1.997, width: 2.50}
+- {x: 19.281, y: -2.472, width: 2.50}
+- {x: 19.078, y: -2.930, width: 2.50}
+- {x: 18.829, y: -3.361, width: 2.50}
+- {x: 18.542, y: -3.750, width: 2.50}
+- {x: 18.224, y: -4.093, width: 2.50}
+- {x: 17.880, y: -4.394, width: 2.50}
+- {x: 17.508, y: -4.656, width: 2.50}
+- {x: 17.114, y: -4.880, width: 2.50}
+- {x: 16.695, y: -5.068, width: 2.50}
+- {x: 16.257, y: -5.232, width: 2.50}
+- {x: 15.812, y: -5.393, width: 2.50}
+- {x: 15.372, y: -5.592, width: 2.50}
+- {x: 14.922, y: -5.796, width: 2.50}
+- {x: 14.455, y: -5.980, width: 2.50}
+- {x: 13.972, y: -6.130, width: 2.50}
 - {x: 13.479, y: -6.229, width: 2.50}
 - {x: 12.980, y: -6.262, width: 2.50}
 - {x: 12.480, y: -6.285, width: 2.50}

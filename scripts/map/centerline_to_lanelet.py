@@ -54,13 +54,28 @@ from typing import Sequence
 Point = tuple[float, float]
 
 NODE_ID0, WAY_ID0, REL_ID0 = 100000, 200000, 300000
-WHEEL_BASE_M = 2.061        # golfcart_vehicle_description vehicle_info.param.yaml
-MAX_STEER_RAD = 0.349       # same file; inherited from the PWM cart (Phase 8, V3)
+VEHICLE_INFO = (Path(__file__).resolve().parents[2] / 'src/vehicle/golfcart_vehicle_launch'
+                / 'golfcart_vehicle_description/config/vehicle_info.param.yaml')
 
 
-def min_turning_radius(wheel_base: float = WHEEL_BASE_M,
-                       max_steer: float = MAX_STEER_RAD) -> float:
+def vehicle_geometry() -> tuple[float, float]:
+    """(wheel_base, max_steer_angle) from the vehicle description, read each call.
+
+    A copy here went stale once: it kept 0.349 rad after the cart moved to 0.52,
+    and warned about a 5.7 m minimum radius that no longer held.
+    """
+    import yaml
+    p = yaml.safe_load(VEHICLE_INFO.read_text())['/**']['ros__parameters']
+    return float(p['wheel_base']), float(p['max_steer_angle'])
+
+
+def min_turning_radius(wheel_base: float | None = None,
+                       max_steer: float | None = None) -> float:
     """Bicycle-model minimum radius at the rear axle."""
+    if wheel_base is None or max_steer is None:
+        wb, ms = vehicle_geometry()
+        wheel_base = wb if wheel_base is None else wheel_base
+        max_steer = ms if max_steer is None else max_steer
     return wheel_base / math.tan(max_steer)
 
 
@@ -336,11 +351,12 @@ def main(argv=None) -> int:
     pts2 = points
     closed = len(pts2) > 2 and math.dist(pts2[0], pts2[-1]) < 1e-6
     shaped = resample(smooth(pts2, args.smoothing, closed) if args.smoothing else pts2, 1.0)
-    r, r_min = min_radius(shaped), min_turning_radius()
+    wheel_base, max_steer = vehicle_geometry()
+    r, r_min = min_radius(shaped), min_turning_radius(wheel_base, max_steer)
     if r < r_min:
         print(f'WARNING: tightest corner radius {r:.1f} m is below the cart\'s '
-              f'{r_min:.1f} m minimum (wheel base {WHEEL_BASE_M} m, max steer '
-              f'{MAX_STEER_RAD} rad). The controller cannot follow it; widen the '
+              f'{r_min:.1f} m minimum (wheel base {wheel_base} m, max steer '
+              f'{max_steer} rad). The controller cannot follow it; widen the '
               f'corner or raise --smoothing.', file=sys.stderr)
 
     if args.write:
