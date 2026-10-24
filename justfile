@@ -440,6 +440,15 @@ sim-drive-basement MAP="./data/basement-indoor":
         vehicle_model:=golfcart_vehicle \
         sensor_model:=golfcart_sensor_kit
 
+# Phase 8 S5, desk half of exit criterion 4: with `just sim-drive-basement
+# ./data/mingda-basement` up, drive the Ming-Da lane, fault NDT's leaf at
+# 0.8 m/s, and follow the MRM to the vehicle interface's CAN frames (real
+# interface on vcan0, mock_vcu in AUTO). ARGS go to the script, e.g.
+# `--leaf 'topic_state_monitor_obstacle_segmentation_pointcloud: perception_topic_status'`
+# or `--no-can` on a machine without vcan0 or the vendor DBC.
+sim-mrm-check *ARGS:
+    python3 scripts/testing/sim_mrm_check.py --start 17.6 -4.9 180 --goal 6.5 -4.9 180 {{ARGS}}
+
 # Launch Autoware planning simulator with Golf Cart vehicle
 launch-sim-planning:
     play_launch launch \

@@ -170,6 +170,56 @@ Wired by topic name (`emergency_cmd` into the interface's safety brake at
 MRM_OPERATING and the command reaching the interface is an emergency stop; then
 the same on the cart (exit criterion 4).
 
+**Desk half done 2026-10-24: `just sim-mrm-check`** (`scripts/testing/sim_mrm_check.py`),
+against `just sim-drive-basement ./data/mingda-basement`. It runs the real
+vehicle interface on vcan0 with `mock_vcu --auto`, inputs wired as on the cart
+and reports kept private (the simulator owns `/vehicle/status/*`), drives the
+straight lane, and at 0.8 m/s sets `ndt_scan_matcher: scan_matching_status` to
+Error through the simulator's `dummy_diag_publisher`. Timeline, from the
+injection, consistent over seven runs:
+
+| +s | |
+|---|---|
+| 0.13-0.18 | `mrm_state` MRM_OPERATING, behaviour EMERGENCY_STOP |
+| 0.15-0.20 | `/control/command/emergency_cmd` true; interface logs "MRM emergency_cmd ENGAGED" |
+| 0.15-0.21 | CAN 0x68 `Target_Deceleration` 3.0 m/s2 and 0x43F `Veh_Estop` 1 |
+| 1.82-1.86 | `control_cmd` acceleration reaches -2.0 |
+| 1.90-1.95 | simulated cart stopped; MRM_SUCCEEDED |
+
+Setting the leaf back to OK clears `emergency_cmd` and `Veh_Estop` within
+0.24 s. The perception pointcloud leaf gives the same timeline. Control run:
+with the interface's `emergency_cmd` input unwired, every ROS link passes and
+the check fails at the CAN link, so it does see a broken chain.
+
+What it showed:
+
+- **A faulted leaf gives EMERGENCY_STOP, not the comfortable stop**, although
+  `mrm_handler` has `use_comfortable_stop: true`. Upstream's
+  `/autoware/modes/comfortable_stop` needs the same subtrees as autonomous, so
+  a leaf fault takes both down; only an external `/adapi/mrm_request` would
+  pick the comfortable stop. That matters here: `vehicle_cmd_gate` raises
+  `emergency_cmd` only for EMERGENCY_STOP, and a comfortable stop would reach
+  the cart only as a -1.0 m/s2 planner deceleration, which the VCU does not
+  brake for (S3). The check fails on any other behaviour.
+- **On the cart the interface's brake leads, not Autoware's.** The emergency
+  operator ramps with jerk -1.5 m/s3 and is at -2.0 only after 1.8 s; the
+  interface sends its fixed 3.0 m/s2 (VCU stage 2.8) and `Veh_Estop` within
+  about 0.05 s of `emergency_cmd`. The simulated stop (1.9 s from 0.8 m/s)
+  follows Autoware's ramp, so it overstates the cart's stopping time.
+- **The cart drives on by itself once the fault clears.** With
+  `use_emergency_holding: false` (upstream default) the MRM returns to NORMAL,
+  the operation mode is still AUTONOMOUS with the route set, and the simulated
+  cart resumed towards the goal. Whether a transient fault should instead hold
+  the cart until the driver re-engages is a decision for the first runs, not
+  changed here.
+
+Not covered: the master/orin link (`emergency_cmd` crosses it on the cart; a
+dropped link brakes through `control_timeout_ms` instead), the VCU itself, and
+the golfcart launch's own graph (the simulator loads upstream
+`autoware-main.yaml`; with `launch_perception:=false` the perception subtree
+is removed from autonomous and comfortable stop alike, so the conclusion
+holds).
+
 ### S6: the MRM guide describes a config that does not run (desk)
 
 `docs/guides/mrm_configuration.md` points at deleted repo configs and says the
@@ -524,7 +574,8 @@ and V6 last.
 
 From 2026-10-23 the desk queue is ordered in
 [Phase 9, open issues](9-mingda-autonomous-driving.md#open-issues): L8, S5, M6,
-M9, M3, M8, L10, L6 design, M7, V4 desk half, M4, L9 (L8 done 2026-10-23).
+M9, M3, M8, L10, L6 design, M7, V4 desk half, M4, L9 (L8 done 2026-10-23,
+S5 desk half 2026-10-24).
 
 ## Status
 
@@ -551,6 +602,7 @@ AUTO is entered on the dashboard). The table below is the 2026-09-29 desk state.
 | M2 planning sim | **real route drives** to 0.09 m of its goal, within 0.30 m of the centreline with steer at 0.52 rad (V3); our launch's pieces still unexercised |
 | L2 EKF | **done**: upstream values; replay check waits on L1 |
 | L3 NDT input | deliberately not switched; see L3 |
+| S5 MRM to the interface | **desk half done** (2026-10-24): `just sim-mrm-check`, injected leaf -> EMERGENCY_STOP -> safety brake and Veh_Estop on vcan0 within 0.21 s; cart half is exit criterion 4 in the crawl run (Phase 9 item 18) |
 | L8 board init vs map | **done at the desk** (2026-10-23): failures before the matcher's map are free; boot race tested over ROS transport; cart check is Phase 9 item 16 |
 | L1 | **done for NDT** (2026-10-02): both loops tracked end to end from the board, 0 jumps, NVTL never below the gate; the bags have no wheel speed, so EKF fusion waits on the VCU. Found L8 and L9 |
 | everything else | not started |

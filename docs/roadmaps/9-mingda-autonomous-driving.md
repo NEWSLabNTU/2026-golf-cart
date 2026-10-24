@@ -74,7 +74,7 @@ Legend: ✅ done and evidenced · 🟡 partly done or done on the desk only ·
 | V4 steering / longitudinal system ID | ❌ | Not started; MPC still carries Lexus delay and time constant |
 | S3 braking below 1.2 m/s2 | ❌ | VCU does not brake below 1.2 m/s2; gentle stops may coast |
 | S4 interface speed ceiling 1.5 m/s | 🟡 | `max_speed_mps: 1.5`, unit-tested (golfcart_vehicle_launch 9ff59ac). **The orin still runs the old binary**: needs `just checkout && just build` there and an interface restart |
-| S5 MRM reaches the VCU | ❌ | Wired (emergency_cmd bridged, SafetyBrake path) but never run end to end |
+| S5 MRM reaches the VCU | 🟡 desk | `just sim-mrm-check` (2026-10-24): NDT leaf forced to ERROR at 0.8 m/s in the planning sim -> EMERGENCY_STOP at +0.15 s, the real interface on vcan0 sends the 3.0 m/s2 safety brake and Veh_Estop at +0.2 s, stopped and MRM_SUCCEEDED at +1.9 s, released 0.2 s after the leaf clears; 7/7 runs plus a control. Not covered: the master/orin bridge hop and the VCU. Cart half: exit criterion 4 in the crawl run, item 18 |
 | Physical e-stop reported | ⏸ | Not tested on the cart today |
 
 ### Planning and control integration
@@ -153,8 +153,9 @@ Who has to move, so nothing waits on the wrong person.
 [Phase 8](8-autonomous-driving.md) item with its "done when")
 13. ~~**L8** the board initializer waits for the matcher's map.~~ Done
     2026-10-23, see Done below.
-13a. **S5** MRM in the planning sim: injected fault -> MRM_OPERATING -> emergency
-    stop at the interface. Exit criterion 4, desk half.
+13a. ~~**S5** MRM in the planning sim: injected fault -> MRM_OPERATING -> emergency
+    stop at the interface. Exit criterion 4, desk half.~~ Done 2026-10-24, see
+    Done below.
 13b. **M6** the loop as chained goals: goal poses beside the map, a tested
     recipe for N laps. Nothing drives the loop without it.
 13c. **M9** steering limits (decisions 4, 4a) applied in all four places, loop
@@ -183,7 +184,9 @@ Done: 9 teleop e-stop-only mode (59dfd2c); 10 S4 `max_speed_mps: 1.5`
 sim stopped 1.0 m short (root cause found, remedy 4b); 14 `tx=` and "driver
 presses AUTO" removed from the docs (2026-10-22); 13 L8, failed aligns before the
 scan matcher has a map no longer spend the board initializer's budget
-(reflective_pose_detector a83b3f8, 2026-10-23; item 16 checks it on the cart).
+(reflective_pose_detector a83b3f8, 2026-10-23; item 16 checks it on the cart);
+13a S5 desk half, `just sim-mrm-check` follows an injected fault down to the
+interface's CAN frames (2026-10-24; findings in Phase 8 S5).
 
 **On the cart**
 15. Park with the board in view: board detection, then from the lane start
