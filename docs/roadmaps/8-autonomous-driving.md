@@ -571,6 +571,22 @@ See L1. Autoware's pointcloud divider, or an equivalent, so a map update loads
 the tiles near the cart instead of the whole map. **Done when:** a loop replay
 shows no pose gap over 0.3 s.
 
+**Not needed (2026-10-24).** The L1 gaps do not reproduce with cuda_ndt as
+built now. 1x replays:
+
+| map | loop | NDT poses | longest gap | gaps > 0.3 s | NVTL min / median |
+|---|---|---|---|---|---|
+| basement-indoor, 4.0 M points | cw | 1296 over 129.6 s | 0.20 s | 0 | 1.84 / 2.45 |
+| basement-indoor, 4.0 M points | ccw | 1613 over 161.2 s | 0.12 s | 0 | 2.21 / 2.43 |
+| mingda-basement, 63 k points | cw | 1297 over 129.6 s | 0.12 s | 0 | 2.57 / 2.79 |
+| mingda-basement, 63 k points | ccw | 1609 over 160.8 s | 0.12 s | 0 | 2.62 / 2.77 |
+
+`/localization/kinematic_state` has no gap over 0.04 s. The map update still
+swaps the one tile every 20 m, now in 14-16 ms on 4 M points and 0.2 ms on
+Ming-Da (217.8 ms on 2026-10-02), and cuda_ndt skips the rebuild ("target
+already built", a392db8). Revisit only if a map grows past one tile or
+`map_radius` (150 m).
+
 ### L10: board detection range, from the bags (desk)
 
 The board was detected at 12 m in the 2026-09-10 replay. The Ming-Da straight
@@ -581,6 +597,41 @@ lane starts 17.8 m from it, and the loop passes it at several ranges. The
 rate is reported against range and bearing, so the start pose can be chosen
 inside the range that works (on the cart, Phase 9 item 15 confirms it).
 
+**Done at the desk 2026-10-24.** `scripts/localization/board_range_report.py`
+runs the production detector (basement scenario, `accumulate_scans` 10) over
+every 10-scan batch of both loop bags and scores each against the board's
+position from a 1x Ming-Da NDT replay (board centre error 0.1-0.25 m). `raw`
+stacking, what the node does, fails almost everywhere while moving (smeared
+stack: `bad_width`, `not_planar`); `deskew` moves the scans through the NDT
+poses first and stands in for a parked cart, which is what decides a start
+pose. Both bags, deskewed, board within 60 deg of heading and aspect within
+35 deg:
+
+| range | batches | detected |
+|---|---|---|
+| 3-6 m | 5 | 100 % |
+| 6-12 m | 20 | 100 % |
+| 12-15 m | 21 | 100 % |
+| 15-18 m | 25 | 100 % |
+| 18-20 m | 23 | 0 %, all `out_of_range` (the 18 m gate) |
+
+Oblique views fail: above 35 deg aspect, 46 % at 9-12 m, 7 % at 12-15 m, 0 from
+15 m (too few retro points for `cluster_min_points`). Within 6 m and over 60 deg
+of bearing, 32 % (`not_vertical`).
+
+**The lane start (17.6, -4.9) is 17.84 m from the board, 0.16 m inside the
+range gate.** Recommended start: **(16.0, -4.9, 180 deg)**, 16.3 m, bearing
+-17 deg, aspect -17.5 deg. Do not raise `range_max`: at 30 m a second false
+target appears (19.3 m, at Ming-Da (22.5, 37.8)).
+
+**A false board.** A reflector at Ming-Da (15.23, 21.65, z 1.6), at the end of
+the box wall on the top aisle, passes every gate at 3-5 m range (3 of 5
+deskewed batches, confidence 0.62-0.86), and the live stack published it in
+every clockwise replay, 19.5 m from the truth. The one-shot initializer had
+finished, so nothing used it; any re-initialization must gate on it (L6).
+On basement-indoor (about 3.5 deg of yaw off the board) board and NDT disagree
+by 0.6-1.2 m at 12 m; on Ming-Da by 0.08-0.22 m.
+
 ### L6 design (desk)
 
 L6 below needs a design before the cart: what declares NDT diverged (NVTL,
@@ -589,6 +640,64 @@ the board initializer may run again, and from how far.
 
 **Done when:** the design is written here and the stop half is shown in a
 replay with an injected divergence.
+
+**Design and replay, 2026-10-24.** Clockwise bag on the Ming-Da map, EKF fed a
+perfect-odometry twist from an earlier NDT track (the bags have no wheel
+speed, so the recovery times below are optimistic), reset through
+`/initialpose3d` at t = 40 s on the west straight at 0.75 m/s:
+
+| injection | NDT | what flagged it |
+|---|---|---|
+| 1 m lateral | back in one scan; EKF within 0.3 m after 0.74 s | nothing needed |
+| 15 deg yaw | back in 0.5 s | nothing needed |
+| 3 m lateral | NVTL 2.7-2.85, every scan at the 30-iteration cap, nothing published; recovered alone after 55 s | EKF "pose is not updated": WARN +1.4 s, ERROR +2.6 s, `/autoware/localization` ERROR. `scan_matching_status` stayed **OK** |
+| 5 m along the aisle | settled 2.5-4 m off for the remaining 90 s, NVTL 2.0-2.76 (median 2.31), above the 1.3 gate; EKF accepted it | **nothing** but one ERROR blip of ~1.3 s. Only the board, passed 85 s later, disagreed, by 4.2 m |
+
+Why it is missed today: cuda_ndt's `scan_matching_status` goes ERROR only on a
+failed sensor transform, never on skips, NVTL or the iteration cap; the 1.3
+NVTL gate came from NTU on another input (L3), while healthy Ming-Da NVTL never
+drops below 2.57; and the error monitor and EKF see only covariance growth,
+not a confident wrong fit.
+
+**Diverged** is any of, held ERROR until a re-initialization:
+
+1. Iteration cap or skips: `skipping_publish_num` >= 5 consecutive scans
+   (~0.5 s). Catches the 3 m case.
+2. NVTL window: median of the last 10 scans below a per-map, per-input gate;
+   2.5 for Ming-Da with today's input. On the recordings it flags the 5 m case
+   at +1.1 s (94 % of its 1 s windows) and never fires on two healthy loops.
+   Re-derive after L3 and from a cart run with people in view.
+3. EKF Mahalanobis rejections or "pose is not updated": already ERROR after
+   2 s through `sensor_fusion_status`.
+4. Board consistency: a board pose inside the start zone (below) that
+   disagrees with the EKF by more than 1.0 m.
+
+**Response:** the leaf drives `/autoware/localization` ERROR, then
+EMERGENCY_STOP, which S5 measured at 0.13-0.18 s to MRM and 0.15-0.21 s to
+`Veh_Estop`. Either cuda_ndt's `scan_matching_status` goes ERROR on 1 and 2
+(keeping the leaf name E1 fixed) or a small monitor adds a leaf. Because
+`use_emergency_holding` is false and the cart drives on once a leaf clears
+(S5), a localization leaf must latch until a successful re-initialization.
+
+**Re-initialization from the board:** only stopped and on the operator's
+request, never automatic; only from the zone L10 measured (board ahead within
+60 deg of heading, aspect within 35 deg, 4-17 m), gating each detection on its
+own range, bearing and aspect, which rejects the false board (seen at 58-62
+deg aspect). Elsewhere recovery is the driver's: `just pose init`, or drive
+back into the zone.
+
+**Shown:** the stop half for the iteration-cap case, in replay
+(`/autoware/localization` ERROR at +2.6 s; S5 covers the rest of the chain).
+**Not done:** detector 2 (so wrong convergence reaches ERROR; offline only),
+the latch, the initializer's aspect gate. A live wrong-convergence run needs a
+different `ndt_param_file`, which `tier4_localization_component.launch.xml`
+hard-wires.
+
+**Check on the cart (item 16):** in every sim-time replay the
+`/adapi/node/localization: state` leaf goes STALE for 0.1 s every 1-3 s (it is
+published at 1 Hz against a 1.0 s timeout), and each blip turns
+`/autoware/localization` ERROR. Possibly a bag-clock artifact; on a wall-clock
+stack it would be a spurious MRM.
 
 ### L4-L7 (vehicle)
 

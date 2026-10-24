@@ -166,9 +166,15 @@ Who has to move, so nothing waits on the wrong person.
     (Phase 8 M3).
 13e. **M8** loop sim with replay-measured pose noise and the 22 deg cap: does
     0.11 m clearance survive a real pose.
-13f. **L10** board detection rate against range, from the 2026-09-24 loop bags;
-    chooses a start pose inside the working range before item 15.
-13g. **L6 design** NDT divergence: detect, stop, re-initialize or not.
+13f. ~~**L10** board detection rate against range, from the 2026-09-24 loop bags;
+    chooses a start pose inside the working range before item 15.~~ Done
+    2026-10-24: 100 % to the 18 m gate when facing the board; the lane start
+    at 17.84 m is 0.16 m inside it, so start at **(16.0, -4.9, 180)**. A false
+    board at (15.2, 21.7) on the top aisle (Phase 8 L10).
+13g. ~~**L6 design** NDT divergence: detect, stop, re-initialize or not.~~
+    Designed 2026-10-24 (Phase 8 L6). A 5 m wrong convergence goes unflagged
+    today; the NVTL-window detector, the leaf latch and the initializer's
+    aspect gate are code still to write.
 13h. ~~**M7** the loop-lane fit as `scripts/map/` tooling, so 4d's measurements
     can be refitted.~~ Done 2026-10-24: reproduces the committed lane byte for
     byte from the full cloud (Phase 8 M7).
@@ -181,8 +187,9 @@ Who has to move, so nothing waits on the wrong person.
     2026-10-24** (Phase 8 M4): engine builds and runs; the bags have no person;
     cars seen only beyond 7.4 m; a dummy pedestrian stops the sim cart. Needs a
     recording with a person in the aisle and the master's load, on the cart.
-13k. **L9** map tiling: re-check first, the 0.30 m map is one 1 MB tile and its
-    reload may no longer stall.
+13k. ~~**L9** map tiling: re-check first, the 0.30 m map is one 1 MB tile and its
+    reload may no longer stall.~~ Not needed (2026-10-24): no pose gap over
+    0.3 s in four 1x loop replays.
 13l. Housekeeping: issues 7 and 8 (aruco and cuda_ndt_matcher Cargo.lock).
 
 Done: 9 teleop e-stop-only mode (59dfd2c); 10 S4 `max_speed_mps: 1.5`
@@ -195,8 +202,12 @@ scan matcher has a map no longer spend the board initializer's budget
 interface's CAN frames (2026-10-24; findings in Phase 8 S5).
 
 **On the cart**
-15. Park with the board in view: board detection, then from the lane start
-    (17.8 m).
+15. Park with the board in view: board detection, then from the lane start.
+    L10 puts the start at (16.0, -4.9, 180), 16.3 m; 17.8 m is at the edge of
+    the 18 m gate.
+16a. In item 16, watch `/adapi/node/localization: state` for STALE blips
+    (Phase 8 L6): seen every 1-3 s in sim-time replays, each one an
+    `/autoware/localization` ERROR.
 16. Stationary rehearsal: `just launch-drive-mingda`, board init, NDT lock, route
     on the lane, no engage.
 17. L5 speed report (push the cart a metre, forward and reverse), physical e-stop,
