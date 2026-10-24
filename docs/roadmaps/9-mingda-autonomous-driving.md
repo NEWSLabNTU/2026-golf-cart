@@ -148,8 +148,11 @@ Who has to move, so nothing waits on the wrong person.
    fixed, d2e43e9 pushed.
 7. golfcart_aruco_detector on a fresh clone: track its Cargo.lock, and/or bump
    `rclrs_image_transport` to a rev that pins rclrs 0.7.
-8. cuda_ndt_matcher's tracked Cargo.lock churns on every build (0.0.0 vs real
-   binding versions), as gmslcam's did before ec7a3ea.
+8. ~~cuda_ndt_matcher's tracked Cargo.lock churns on every build (0.0.0 vs real
+   binding versions), as gmslcam's did before ec7a3ea.~~ Done 2026-10-24
+   (cuda_ndt_matcher 6d9faef): colcon-cargo-ros2 stamps generated crates 0.0.0
+   unless some package pins one by version, which only gmslcam did; the 0.0.0
+   lock is now committed and stable. Keep every interface requirement `*`.
 
 **Desk work, in order** (arranged 2026-10-23; each ID is a
 [Phase 8](8-autonomous-driving.md) item with its "done when")
@@ -197,7 +200,9 @@ Who has to move, so nothing waits on the wrong person.
 13k. ~~**L9** map tiling: re-check first, the 0.30 m map is one 1 MB tile and its
     reload may no longer stall.~~ Not needed (2026-10-24): no pose gap over
     0.3 s in four 1x loop replays.
-13l. Housekeeping: issues 7 and 8 (aruco and cuda_ndt_matcher Cargo.lock).
+13l. ~~Housekeeping: issues 7 and 8 (aruco and cuda_ndt_matcher Cargo.lock).~~
+    Done 2026-10-24: aruco tracks its lock (rclrs 0.7); cuda_ndt_matcher's
+    0.0.0 lock committed.
 
 Done: 9 teleop e-stop-only mode (59dfd2c); 10 S4 `max_speed_mps: 1.5`
 (9ff59ac, orin rebuild pending); 11 interface rate warning (e8ef6e3); 12 why the
