@@ -52,6 +52,25 @@ detector:
   azimuth_step_rad: 0.0035          # 0.2 deg at 600 rpm / 10 Hz
   min_confidence: 0.6
 
+  # Phase 8 L6: a detection seeds localization only from the zone L10
+  # measured, each judged on its own range, bearing (board centre from
+  # base_link, 0 ahead) and aspect (sensor seen from the board, 0 on its
+  # normal), as scripts/localization/board_range_report.py defines them.
+  # Deskewed over both 2026-09-24 loop bags, the board inside this zone was
+  # detected in every batch from 3 to 18 m; above 35 deg of aspect, 46 % at
+  # 9-12 m and none from 15 m. What it is for: a reflector at Ming-Da
+  # (15.23, 21.65, z 1.6), the end of the box wall on the top aisle, passes
+  # every shape gate at 3-5 m with confidence 0.62-0.86, seen at 58-62 deg of
+  # aspect; taken for the board it puts the cart 19.5 m off. The range band
+  # sits inside range_max (18 m) and range_min (3 m) on purpose: those decide
+  # which points are clustered, this decides which detections are acted on.
+  # Do not raise range_max to widen it; at 30 m a second false target appears.
+  seed_zone:
+    range_min: 4.0
+    range_max: 17.0
+    bearing_max_deg: 60.0
+    aspect_max_deg: 35.0
+
   runtime:
     # VLP-32C geometry. Below 3 m the board falls into the sparse lower
     # elevation band, where the 9.4 deg gap between the -25.0 and -15.6 deg
