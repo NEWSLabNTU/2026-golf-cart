@@ -11,7 +11,10 @@
   <arg name="data_path" default="$(env HOME)/autoware_data" description="packages data and artifacts directory path"/>
 
   <!-- launch module preset -->
-  <arg name="planning_module_preset" default="default" description="planning module preset"/>
+  <!-- Resolved in golfcart_launch/config/planning/preset/, not autoware_launch's:
+       planning goes through our copy of tier4_planning_component, whose presets
+       may also choose parameter files. default is stock Autoware. -->
+  <arg name="planning_module_preset" default="default" description="planning preset: default, slow_indoor"/>
   <arg name="control_module_preset" default="default" description="control module preset"/>
 
   <!-- Optional parameters -->
@@ -273,7 +276,7 @@
 
   <!-- Planning -->
   <group if="$(var launch_planning)">
-    <include file="$(find-pkg-share autoware_launch)/launch/components/tier4_planning_component.launch.xml">
+    <include file="$(find-pkg-share golfcart_launch)/launch/components/tier4_planning_component.launch.xml">
       <arg name="module_preset" value="$(var planning_module_preset)"/>
       <arg name="enable_all_modules_auto_mode" value="$(var enable_all_modules_auto_mode)"/>
       <arg name="is_simulation" value="$(var is_simulation)"/>

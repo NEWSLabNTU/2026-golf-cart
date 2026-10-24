@@ -160,8 +160,10 @@ Who has to move, so nothing waits on the wrong person.
     recipe for N laps. Nothing drives the loop without it.
 13c. **M9** steering limits (decisions 4, 4a) applied in all four places, loop
     sim rerun. Waits on the team's decision; the sim says 0.38 rad costs nothing.
-13d. **M3** a slow-cart planning preset (stock `stop_margin` 5.0 m, lane change,
-    crosswalk, intersection modules), exercised on both lanes in the sim.
+13d. ~~**M3** a slow-cart planning preset (stock `stop_margin` 5.0 m, lane change,
+    crosswalk, intersection modules), exercised on both lanes in the sim.~~
+    Done 2026-10-24: `planning_preset:=slow_indoor`, used by the drive recipes
+    (Phase 8 M3).
 13e. **M8** loop sim with replay-measured pose noise and the 22 deg cap: does
     0.11 m clearance survive a real pose.
 13f. **L10** board detection rate against range, from the 2026-09-24 loop bags;

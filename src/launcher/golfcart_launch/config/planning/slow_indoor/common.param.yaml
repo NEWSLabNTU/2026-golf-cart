@@ -1,0 +1,24 @@
+# Copy of autoware_launch 1.5.0 config/planning/scenario_planning/common/common.param.yaml, for the slow_indoor planning
+# preset. Changed values carry a "golfcart:" comment; everything else must
+# stay upstream (test_planning_preset.py compares every leaf).
+/**:
+  ros__parameters:
+    # golfcart: 4.17 -> 1.5, the vehicle interface's max_speed_mps (S4). Above
+    # it the interface clamps the command and the controller tracks a speed
+    # profile the cart will not follow. A ceiling; planning_speed_limit is the
+    # startup default under it.
+    max_vel: 1.5            # max velocity limit [m/s]
+
+    # constraints param for normal driving
+    normal:
+      min_acc: -1.0         # min deceleration [m/ss]
+      max_acc: 1.0          # max acceleration [m/ss]
+      min_jerk: -1.0        # min jerk [m/sss]
+      max_jerk: 1.0         # max jerk [m/sss]
+
+    # constraints to be observed
+    limit:
+      min_acc: -2.5         # min deceleration limit [m/ss]
+      max_acc: 1.0          # max acceleration limit [m/ss]
+      min_jerk: -1.5        # min jerk limit [m/sss]
+      max_jerk: 1.5         # max jerk limit [m/sss]

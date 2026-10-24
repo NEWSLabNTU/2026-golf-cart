@@ -1,0 +1,9 @@
+# Stock Autoware planning: autoware_launch 1.5.0's own default preset, unchanged.
+#
+# Exists because our copy of tier4_planning_component.launch.xml resolves
+# module_preset here rather than in autoware_launch, and "default" must keep
+# meaning what it means upstream. The parameter files stay upstream's too: the
+# golfcart_*_param_path arguments default to them in that copy.
+launch:
+  - include:
+      file: "$(find-pkg-share autoware_launch)/config/planning/preset/default_preset.yaml"

@@ -399,7 +399,7 @@ logs:
 # Anything passed after it wins, e.g. "planning_speed_limit:=0.5".
 # The engage sequence is in docs/roadmaps/8-autonomous-driving.md.
 launch-drive-basement ARGS="":
-    just launch-all "pose_initializer:=board reflective_pose_scenario:=basement map_path:=./data/basement-indoor use_gnss:=false planning_speed_limit:=1.0 {{ARGS}}"
+    just launch-all "pose_initializer:=board reflective_pose_scenario:=basement map_path:=./data/basement-indoor use_gnss:=false planning_speed_limit:=1.0 planning_preset:=slow_indoor {{ARGS}}"
 
 # The same drive on the re-anchored MingDa map (data/mingda-basement): the Falcon
 # cloud is on this map, and its anchor is 3.46 deg of yaw away from
@@ -413,7 +413,7 @@ launch-drive-basement ARGS="":
 # [0, 0, 1.3, 0, 0, 0] in either; what changed is which way the survey cloud
 # was turned to put it there. A copy would be a second place to tune the gates.
 launch-drive-mingda ARGS="":
-    just launch-all "pose_initializer:=board reflective_pose_scenario:=basement map_path:=./data/mingda-basement use_gnss:=false planning_speed_limit:=1.0 {{ARGS}}"
+    just launch-all "pose_initializer:=board reflective_pose_scenario:=basement map_path:=./data/mingda-basement use_gnss:=false planning_speed_limit:=1.0 planning_preset:=slow_indoor {{ARGS}}"
 
 # The same, on the clockwise loop lane (lanelet2_map_loop.osm, from the
 # 2026-09-24 drive carried into this frame; see route_loop_cw.yaml). Narrows to
@@ -431,14 +431,18 @@ launch-drive-mingda-loop ARGS="":
 # which initializes, routes, engages and passes only on arrival, forward along
 # the lane. Keep the goal a few metres short of the lane's end: the goal
 # footprint must fit inside the lanelet.
-sim-drive-basement MAP="./data/basement-indoor":
+#
+# PRESET is the planning preset (M3): slow_indoor, as the drive recipes use,
+# or default for stock autoware_launch. planning_sim.launch.xml is upstream's
+# planning simulator with our planning component in place of upstream's.
+sim-drive-basement MAP="./data/basement-indoor" PRESET="slow_indoor" LANELET="lanelet2_map.osm":
     play_launch launch \
         --container-mode "${GOLFCART_CONTAINER_MODE:-observable}" \
         --web-addr 0.0.0.0:8081 \
-        autoware_launch planning_simulator.launch.xml \
+        golfcart_launch planning_sim.launch.xml \
         map_path:={{MAP}} \
-        vehicle_model:=golfcart_vehicle \
-        sensor_model:=golfcart_sensor_kit
+        lanelet2_map_file:={{LANELET}} \
+        planning_preset:={{PRESET}}
 
 # Phase 8 S5, desk half of exit criterion 4: with `just sim-drive-basement
 # ./data/mingda-basement` up, drive the Ming-Da lane, fault NDT's leaf at

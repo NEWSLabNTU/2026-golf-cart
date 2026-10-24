@@ -15,6 +15,10 @@ if(BUILD_TESTING)
     test/test_planning_speed_limit.py
   )
   ament_add_pytest_test(
+    test_planning_preset
+    test/test_planning_preset.py
+  )
+  ament_add_pytest_test(
     test_steering_limit_agrees
     test/test_steering_limit_agrees.py
   )

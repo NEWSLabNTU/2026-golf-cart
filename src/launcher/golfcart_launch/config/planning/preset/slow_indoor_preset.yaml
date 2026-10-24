@@ -1,0 +1,89 @@
+# A 1 m/s golf cart on hand-drawn indoor lanelets (Phase 8, M3).
+#
+#   just launch "planning_preset:=slow_indoor ..."
+#
+# What it assumes about the map: one-way lanelets with no neighbours and no
+# regulatory elements (the Ming-Da straight lane and loop have none: no
+# crosswalk, traffic light, stop line, intersection turn_direction or road
+# border). What it assumes about the cart: 1.5 m/s at most, supervised, stops
+# for obstacles and never steers round them.
+#
+# Every value here is a launch-argument default, as upstream's presets are: an
+# explicit `name:=value` still wins. Anything not named here falls through to
+# upstream's default preset, included at the end. The three parameter files
+# are copies of upstream's with the changed values marked; see
+# config/planning/slow_indoor/ and test/test_planning_preset.py.
+#
+# Not for outdoors: crosswalk and traffic-light handling are off.
+launch:
+  # Behaviour path.
+  #
+  # Static obstacle avoidance targets parked vehicles beside the lane, which in
+  # a garage line every aisle, and answers them by shifting the path toward the
+  # lane bound. The loop's top aisle leaves the cart 0.28 m a side: the cart
+  # should stop for an obstacle (obstacle_stop, road_user_stop) and the driver
+  # decide, not swerve through a gap nobody measured.
+  - arg:
+      name: launch_static_obstacle_avoidance
+      default: "false"
+  # Lane change needs an adjacent same-direction lanelet; every indoor lanelet
+  # here is a single one-way lane. Off so that a later two-lane aisle does not
+  # bring lane changes, a road manoeuvre across parking bays, in by accident.
+  # Avoidance by lane change is a lane change.
+  - arg:
+      name: launch_lane_change_right_module
+      default: "false"
+  - arg:
+      name: launch_lane_change_left_module
+      default: "false"
+  - arg:
+      name: launch_avoidance_by_lane_change_module
+      default: "false"
+
+  # Behaviour velocity. Each of these acts only on a map element the indoor
+  # maps do not have; off so a map edit cannot switch on road behaviour
+  # unreviewed. Two would be wrong, not just idle: traffic_light stops at an
+  # UNKNOWN signal and every golfcart perception preset but camera_lidar_fusion
+  # has traffic-light recognition off, so a light-regulated lanelet would be a
+  # permanent stop; crosswalk yields to, and slows for occlusion near, a
+  # crosswalk the cart cannot see into. stop_line stays on: a hand-placed stop
+  # line (a fire door, a ramp) is the one element worth adding indoors.
+  - arg:
+      name: launch_crosswalk_module
+      default: "false"
+  - arg:
+      name: launch_walkway_module
+      default: "false"
+  - arg:
+      name: launch_traffic_light_module
+      default: "false"
+  - arg:
+      name: launch_virtual_traffic_light_module
+      default: "false"
+  - arg:
+      name: launch_intersection_module
+      default: "false"
+  - arg:
+      name: launch_blind_spot_module
+      default: "false"
+  - arg:
+      name: launch_detection_area_module
+      default: "false"
+  - arg:
+      name: launch_no_stopping_area_module
+      default: "false"
+
+  # Parameter files, read by our copy of tier4_planning_component.launch.xml.
+  - arg:
+      name: golfcart_common_param_path
+      default: "$(find-pkg-share golfcart_launch)/config/planning/slow_indoor/common.param.yaml"
+  - arg:
+      name: golfcart_obstacle_stop_param_path
+      default: "$(find-pkg-share golfcart_launch)/config/planning/slow_indoor/obstacle_stop.param.yaml"
+  - arg:
+      name: golfcart_road_user_stop_param_path
+      default: "$(find-pkg-share golfcart_launch)/config/planning/slow_indoor/road_user_stop.param.yaml"
+
+  # Everything else: upstream's default preset.
+  - include:
+      file: "$(find-pkg-share golfcart_launch)/config/planning/preset/default_preset.yaml"

@@ -314,6 +314,34 @@ all on.
 **Done when:** a golfcart planning preset exists with the reasons for each change,
 exercised in M2.
 
+**Done on the desk 2026-10-24: `planning_preset:=slow_indoor`**
+(golfcart_launch `config/planning/preset/`, read by our copy of
+`tier4_planning_component.launch.xml`, pinned by `test_planning_preset.py`;
+each change carries its reason in the files). Upstream's component can choose
+modules by preset but hardcodes every parameter path, hence the copy.
+
+- Off: static obstacle avoidance (it swerves round parked cars, and the top
+  aisle leaves 0.28 m a side), lane change both ways, avoidance by lane change,
+  and the crosswalk, walkway, traffic light, virtual traffic light,
+  intersection, blind spot, detection area and no-stopping-area modules (the
+  maps have none of their elements; traffic light would stop for an UNKNOWN
+  light with recognition off). `stop_line` stays.
+- obstacle_stop and road_user_stop margins 5.0/3.0/3.0 -> 2.0/1.5/1.5 m;
+  `max_vel` 4.17 -> 1.5 m/s, the interface's ceiling (S4).
+
+The drive recipes and `just sim-drive-basement` use it; the planning simulator
+goes through `planning_sim.launch.xml` (upstream's, with our planning
+component). Planning sim on the Ming-Da map, stock vs slow_indoor: the straight
+lane and two loop laps arrive alike (0.07-0.10 m, 1.19 m/s, 214 vs 215 s). In
+the lane, a box stops the cart 4.25 -> 1.86 m short, a pedestrian 5.06 ->
+2.08 m; a car 0.4 m into the lane went from "never starts" to "stops 1.85 m
+short, no swerve"; a car 0.1 m outside the lane causes no stop under either.
+`just sim-mrm-check` passes under it. The 2.0 m margin assumes the cart's
+coasting through decelerations below 1.2 m/s2 (S3); re-check on the cart. Not
+in the preset, deliberately: obstacle_stop's raw-pointcloud check
+(`obstacle_filtering.check_inside.pointcloud: false`), which would stop for the
+boxes CenterPoint misses (M4) at the risk of phantom stops.
+
 ### M4: an obstacle source (desk, then vehicle)
 
 With perception off there is none: objects are an empty publisher and the
