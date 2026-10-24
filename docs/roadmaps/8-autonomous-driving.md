@@ -329,6 +329,34 @@ README). In lidar mode the tracker never read clustering anyway. So objects are
 CenterPoint's road classes and a box is not one: the done-when above becomes a
 person (or a car) in the aisle, and boxes stay with the driver.
 
+**Desk half done 2026-10-24 (workstation).** The CenterPoint tiny engine builds
+in 51 s on the RTX 5090 (`build_only:=true model_name:=centerpoint_tiny`) and
+loads. Both 2026-09-24 loops replayed on the Ming-Da map with
+`launch_perception:=true` and the lidar_only values:
+`/perception/object_recognition/objects` at 9.4-9.7 Hz. CenterPoint saw only
+CARs parked in the bays beside the ring, in 10-15 % of frames; **closest
+detection 7.4 m (median 15 m), and cars 3-4 m off the lane were never
+detected**. The obstacle-pointcloud validator drops about half, because a car
+that is in the survey map has lost its points to compare-map. **Neither bag has
+a person**: no PEDESTRIAN class, and no person-sized cluster in the
+map-filtered cloud moved 1.5 m. Pipeline latency, scan stamp to tracked
+objects, 218 ms mean (p95 245, including the 50 ms concatenator wait for the
+absent Falcon).
+
+Stop half, planning simulator: a dummy pedestrian placed 9 m ahead of the cart
+at 1 m/s stops it through obstacle_stop, at rest 7.5 m from the object centre
+with stock margins (`stop_margin` 5.0); deleting it lets the route finish. With
+the pedestrian there before engage, the cart does not start.
+
+Workstation load, reference only: perception about 25-30 % of one core,
++4 GB RSS (mostly the TensorRT/CUDA runtime in pointcloud_container), +1.2 GB
+GPU memory; that memory matters on the Orin's shared RAM.
+
+Open, on the cart: build the engine on the master; record a person walking the
+aisle and standing in the lane at 3, 5, 8 and 12 m; measure pedestrian recall
+against range, watching for the under-7 m blind spot seen on cars; the master's
+load; rerun the stop check under M3's preset.
+
 ### M5: basement poses for the route TUI (desk, after M1)
 
 `scripts/testing/drive/poses.json` holds COSS-era poses.

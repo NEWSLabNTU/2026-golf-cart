@@ -175,7 +175,10 @@ Who has to move, so nothing waits on the wrong person.
 13j. **M4** an obstacle source. Perception is CenterPoint tiny only (decided
     2026-10-23, wired, unrun): build the engine on the master, replay a bag with
     a person walking the aisle, measure the master's load. Boxes and trolleys
-    are not detected by design; the driver covers them.
+    are not detected by design; the driver covers them. **Desk half done
+    2026-10-24** (Phase 8 M4): engine builds and runs; the bags have no person;
+    cars seen only beyond 7.4 m; a dummy pedestrian stops the sim cart. Needs a
+    recording with a person in the aisle and the master's load, on the cart.
 13k. **L9** map tiling: re-check first, the 0.30 m map is one 1 MB tile and its
     reload may no longer stall.
 13l. Housekeeping: issues 7 and 8 (aruco and cuda_ndt_matcher Cargo.lock).
