@@ -167,8 +167,9 @@ Who has to move, so nothing waits on the wrong person.
 13f. **L10** board detection rate against range, from the 2026-09-24 loop bags;
     chooses a start pose inside the working range before item 15.
 13g. **L6 design** NDT divergence: detect, stop, re-initialize or not.
-13h. **M7** the loop-lane fit as `scripts/map/` tooling, so 4d's measurements
-    can be refitted.
+13h. ~~**M7** the loop-lane fit as `scripts/map/` tooling, so 4d's measurements
+    can be refitted.~~ Done 2026-10-24: reproduces the committed lane byte for
+    byte from the full cloud (Phase 8 M7).
 13i. **V4 desk half** a fit script for steering and speed step responses, so the
     vehicle day only records.
 13j. **M4** an obstacle source. Perception is CenterPoint tiny only (decided

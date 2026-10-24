@@ -69,6 +69,18 @@ def vehicle_geometry() -> tuple[float, float]:
     return float(p['wheel_base']), float(p['max_steer_angle'])
 
 
+def vehicle_body() -> tuple[float, float, float]:
+    """(rear, front, half_width) of the body about base_link (the rear axle), m.
+
+    rear = rear_overhang, front = wheel_base + front_overhang, half_width =
+    (wheel_tread + left_overhang + right_overhang) / 2; from the same file."""
+    import yaml
+    p = yaml.safe_load(VEHICLE_INFO.read_text())['/**']['ros__parameters']
+    width = float(p['wheel_tread']) + float(p['left_overhang']) + float(p['right_overhang'])
+    return (float(p['rear_overhang']), float(p['wheel_base']) + float(p['front_overhang']),
+            width / 2.0)
+
+
 def min_turning_radius(wheel_base: float | None = None,
                        max_steer: float | None = None) -> float:
     """Bicycle-model minimum radius at the rear axle."""

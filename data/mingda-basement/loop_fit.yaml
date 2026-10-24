@@ -1,0 +1,54 @@
+# How route_loop_cw.yaml was refitted on 2026-10-23: the FIT.yaml of
+#
+#   python3 scripts/map/fit_lane_corridor.py refine obstacles.npz ROUTE.yaml \
+#       data/mingda-basement/loop_fit.yaml OUT.yaml --slow-below 2.0
+#
+# with obstacles.npz from obstacle_edits.yaml beside this file and ROUTE.yaml
+# the 2026-10-22 lane (git show 6a35f04^:data/mingda-basement/route_loop_cw.yaml).
+# The cart's length and width are not here: they come from
+# vehicle_info.param.yaml, so a change there (Phase 8, 4d) is a rerun.
+#
+# A `where` is a list of boxes, {x: [lo, hi], y: [lo, hi]} in the map frame,
+# null for open, strict; a point inside any of them is selected.
+
+width: 2.5          # m, the lane where nothing narrows it
+min_width: 1.5      # m, never narrower
+min_radius: 3.8     # m, over consecutive points (0.5 m chords, finer than the builder's 1 m)
+reach: 3.5          # m, free space is not looked for further out
+strip: 0.25         # m either side along the path that each normal's free space covers
+pull: 0.02          # weight of the pull toward the input line
+pin: 3              # points held fixed at each end of a stretch, to join the rest
+
+# Solved in order; the rest of the loop is the input, unchanged. Each stretch is
+# re-solved from its own result `passes` times (the normals and free space are
+# re-cast from the moved line each time).
+stretches:
+  - name: top       # west side from y 14, round the top aisle, east side down to y 10
+    where: [{y: [14, null]}, {x: [17, null], y: [10, null]}]
+    margin: 0.25
+    passes: 3
+  - name: bottom    # east side below y 2, the south-east corner, the bottom straight east of x 12
+    where: [{x: [17, null], y: [null, 2]}, {x: [12, null], y: [null, -3]}]
+    # It moves at most 0.46 m north off a ceiling item 2.04 m up at (16.15, -6.95).
+    margin: 0.3
+    passes: 1
+
+margins:
+  # Round the north-east turn the simulated cart cut 0.16 m inside the line,
+  # toward the end of the box wall.
+  - where: [{x: [14.5, null], y: [19, null]}]
+    at_least: 0.3
+
+# The board hanging over the north half of the top aisle (obstacle_edits.yaml).
+# It leaves 1.8 m between itself and the box wall (y 21.8).
+pinch:
+  aisle: {y: [21, null]}   # stations in the top aisle
+  x: [12.30, 12.65]        # the board's extent along the aisle
+  pad: 0.3                 # m beyond the cart's ends (base_link -rear .. +front) that still counts as level
+  width: 1.5               # held while any part of the cart is level with the board
+  hold: [{x: [12.30, 17.6], y: [20.5, null]}]   # and on round the right turn past the wall's end (x 15.8)
+  ease: 3.0                # m, back to `width` by (distance / ease)^2
+  edge_margin: 0.15        # 1.5 m of lane plus 0.15 m a side fills the gap exactly
+  # The whole body, not just the lane edges: the cart's sides `margin` off the
+  # wall face and the board's edge while level with it.
+  body: {y: [21.80, 23.60], margin: 0.15}

@@ -1,0 +1,57 @@
+# Obstacle grid for fitting lanes on the Ming-Da basement map: grid parameters
+# and the hand edits to the point cloud, in this directory's map frame. Read by
+# scripts/map/obstacle_grid.py (its docstring has the format); the grid it
+# makes is what route_loop_cw.yaml was fitted against on 2026-10-23.
+#
+# The cloud is the FULL SLAM cloud, data/basement-indoor/pointcloud_map.pcd
+# (3,995,308 points, gitignored, on the cart and the workstation), moved into
+# this frame by the two board anchors. pointcloud_map.pcd here is the same
+# scan downsampled to 0.30 m, too thin for min_points 3 in 0.1 m cells:
+#
+#   python3 scripts/map/obstacle_grid.py data/basement-indoor/pointcloud_map.pcd \
+#       data/mingda-basement/obstacle_edits.yaml -o obstacles.npz \
+#       --from-anchor data/basement-indoor/board_anchor.yaml \
+#       --to-anchor data/mingda-basement/board_anchor.yaml
+#
+# The map is ground-removed and anchored with z = 0 on the floor. Sparse cells
+# stay obstacles: away from the mapping drive an object can be one ring's
+# contour, a few points per cell.
+cell: 0.1
+min_points: 3
+# Top: the 2026-09-24 hand drive passed directly under ceiling items as low as
+# 2.14 m and under nothing lower, so 2.14 m is the clearance proven on the
+# cart. Anything hanging below that is an obstacle. It was 2.0 m until
+# 2026-10-23; 2.13 adds a duct at 2.11 m in the north-west corner (3, 20) and
+# an item at 2.04 m over the bottom straight (16.15, -6.95).
+band: [0.25, 2.13]
+floor: 0.0
+origin: [-6.0, -12.0]
+size: [34.0, 40.0]
+remove:
+  - why: >-
+      70 points floating at z 1.0-1.67 m with nothing below, on the 2026-09-24
+      driven path, which the cart drove through (someone walking during mapping)
+    x: [3.5, 4.45]
+    y: [1.7, 2.3]
+  - why: >-
+      a contour at z 0.8-1.7 m on the north side of the top aisle, taken on
+      2026-10-22 for a parked car. It is in the survey cloud only: no live
+      VLP-32C scan of the 2026-09-24 clockwise drive hits it, and the left
+      camera shows open floor there. Something present while the map was
+      surveyed
+    x: [10.5, 16.2]
+    y: [23.5, 25.2]
+    z: [null, 1.7]
+add:
+  - why: >-
+      the board hanging from the ceiling over the north half of the top aisle,
+      x 12.35-12.6, y 23.6-24.65, lowest edge 2.15 m. The band never sees it,
+      but the driver steers right to avoid it, so it is an obstacle for the
+      whole cart. Its points at any height
+    cloud: {x: [12.3, 12.65], y: [23.5, 24.75], z: [2.0, 2.4]}
+  - why: >-
+      the curb the cloud cannot resolve (too few floor points), y -3.2, located
+      from the cart at x ~ 11 (dd58eb4). Its extent x 7.5-16.0 is ASSUMED: the
+      inner block's pillars are at 7 and 15.5, and the 2026-09-24 drive crossed
+      y -3.2 at x 5.3 and 20.2, so it ends before those
+    line: [[7.5, -3.2], [16.0, -3.2]]

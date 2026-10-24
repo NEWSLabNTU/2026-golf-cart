@@ -363,6 +363,24 @@ lanelets against the grid. Every number in the YAML header comes from them; 4d
 `vehicle_info.param.yaml` as the lanelet builder now does, and reproduce the
 committed lane and its header numbers.
 
+**Done 2026-10-24.** `scripts/map/obstacle_grid.py` (PCD plus
+`data/mingda-basement/obstacle_edits.yaml`: band, removals and additions, each
+with its reason), `fit_lane_corridor.py` (`centre`, the 2026-10-22 fit;
+`refine`, the 2026-10-23 bounded least squares, configured by
+`data/mingda-basement/loop_fit.yaml`) and `check_lane_clearance.py` (cells
+inside the lane, exact edge-to-cell distance, narrow stretch, speed zones,
+radius against the vehicle), 28 tests on synthetic aisles. The body comes from
+`vehicle_info.param.yaml` (`vehicle_body()` beside `vehicle_geometry()`), so 4d
+is a rerun. From the full SLAM cloud moved by the two anchors, `refine` on the
+2026-10-22 lane reproduces `route_loop_cw.yaml` and `lanelet2_map_loop.osm`
+byte for byte; the check gives 0 cells inside, nearest 0.124 m to the board's
+cell (the header's 0.13 m was centre distance minus half a cell), 1.5 m
+narrowest over 11.1 m, radius 3.80 against 3.60 m. **It needs the full cloud**:
+the tracked 0.30 m one has about one point per 0.1 m cell, and its grid (582
+cells against 12,917) lets a refit put a cell inside the lane. `refine` needs
+`python3 -s` on the workstation (user-site numpy 2 breaks apt's scipy). The
+planning-simulator numbers in the header still need the simulator.
+
 ### M8: planning sim with realistic localization error (desk)
 
 The planning sim localizes perfectly, so its 0.11 m minimum clearance on the
