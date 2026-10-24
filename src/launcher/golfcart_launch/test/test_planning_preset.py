@@ -68,6 +68,10 @@ PARAM_COPIES = [
      {'obstacle_stop.stop_planning.stop_margin': (5.0, 2.0),
       'obstacle_stop.stop_planning.terminal_stop_margin': (3.0, 1.5),
       'obstacle_stop.stop_planning.min_behavior_stop_margin': (3.0, 1.5)}),
+    ('config/planning/scenario_planning/lane_driving/behavior_planning/'
+     'behavior_path_planner/drivable_area_expansion.param.yaml',
+     SLOW / 'drivable_area_expansion.param.yaml',
+     {'dynamic_expansion.ego.extra_width': (0.0, 0.1)}),
     (MOTION + 'road_user_stop.param.yaml',
      SLOW / 'road_user_stop.param.yaml',
      {'road_user_stop.stop_planning.longitudinal_margin.default_margin': (5.0, 2.0),
@@ -79,6 +83,7 @@ PATH_ARGS = {
     'golfcart_common_param_path': 'common.param.yaml',
     'golfcart_obstacle_stop_param_path': 'obstacle_stop.param.yaml',
     'golfcart_road_user_stop_param_path': 'road_user_stop.param.yaml',
+    'golfcart_drivable_area_expansion_param_path': 'drivable_area_expansion.param.yaml',
 }
 
 
@@ -121,12 +126,13 @@ def test_component_copy_differs_from_upstream_only_in_marked_lines():
     removed = [d[1:] for d in diff if d.startswith('-') and not d.startswith('---')]
 
     assert [a for a in added if not re.search(r'golfcart_', a)] == []
-    assert len(removed) == 4, removed
+    assert len(removed) == 5, removed
     assert any('find-pkg-share autoware_launch)/config/planning/preset/' in r
                for r in removed)
-    # The three values the golfcart_ path arguments replace, and only those.
+    # The four values the golfcart_ path arguments replace, and only those.
     for name in ('common_param_path', 'obstacle_stop_module_param_path',
-                 'road_user_stop_module_param_path'):
+                 'road_user_stop_module_param_path',
+                 'drivable_area_expansion_param_path'):
         assert any(f'{name}" value="$(var golfcart_' in a for a in added), name
 
 

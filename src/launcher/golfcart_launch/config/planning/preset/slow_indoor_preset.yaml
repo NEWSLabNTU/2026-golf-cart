@@ -10,7 +10,7 @@
 #
 # Every value here is a launch-argument default, as upstream's presets are: an
 # explicit `name:=value` still wins. Anything not named here falls through to
-# upstream's default preset, included at the end. The three parameter files
+# upstream's default preset, included at the end. The four parameter files
 # are copies of upstream's with the changed values marked; see
 # config/planning/slow_indoor/ and test/test_planning_preset.py.
 #
@@ -83,6 +83,9 @@ launch:
   - arg:
       name: golfcart_road_user_stop_param_path
       default: "$(find-pkg-share golfcart_launch)/config/planning/slow_indoor/road_user_stop.param.yaml"
+  - arg:
+      name: golfcart_drivable_area_expansion_param_path
+      default: "$(find-pkg-share golfcart_launch)/config/planning/slow_indoor/drivable_area_expansion.param.yaml"
 
   # Everything else: upstream's default preset.
   - include:

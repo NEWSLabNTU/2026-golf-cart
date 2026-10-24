@@ -125,10 +125,12 @@ the operator's `A`.
 The loop is all right turns, against the cart's ~22 deg right steering stop
 (Phase 9, decisions 4 and 4c); in the simulator capped at 22 deg the steering
 sits at the cap for 14% of a lap. Past the hanging board the lane is 1.5 m wide
-and 2 km/h, with 0.28 m each side of the modelled cart. Expect a hesitation
-there: in every simulated lap the planned speed drops to zero for about a
-second near (14, 22.8), just past the board, and the cart halts for up to half
-a second before going on (cause not yet found; no velocity factor names it).
+and 2 km/h, with 0.28 m each side of the modelled cart. Under the stock
+planning preset expect a hesitation there: the planned speed drops to zero for
+about a second near (14, 22.8), just past the board, because path_optimizer's
+footprint pokes a few cm past the drivable area (no velocity factor names it).
+`planning_preset:=slow_indoor` widens the bound on curves by 0.1 m
+(`extra_width`) and drives through.
 
 ## Stopping
 

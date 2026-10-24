@@ -52,7 +52,7 @@ Legend: ✅ done and evidenced · 🟡 partly done or done on the desk only ·
 | Board detection range | 🟡 desk | L10 (2026-10-24, both loop bags): 100 % to the 18 m gate when facing the board, failing above 35 deg aspect. The lane start (17.6, -4.9) is 17.84 m, at the edge: start at (16.0, -4.9, 180). A false board at (15.2, 21.7) on the top aisle. Item 15 confirms on the cart |
 | L8 board init vs map load race | ✅ desk | Failures before the matcher has a map no longer count (a83b3f8); the cart check is item 16 |
 | cuda_ndt on the Orin | ⏸ | Align-service deadline issue no longer reproduces on the workstation; not re-measured on the Orin (CLAUDE.md) |
-| L6 NDT divergence | ⏸ | Designed 2026-10-24 (Phase 8 L6). A 5 m wrong convergence goes unflagged today; to write: an NVTL-window detector, a latched leaf, the initializer's aspect gate. Nothing re-initializes; the board initializer is one-shot |
+| L6 NDT divergence | ✅ desk | 2026-10-24 (Phase 8 L6): cuda_ndt latches `scan_matching_status` ERROR on 5 unpublished scans or a median NVTL below 2.5 (Ming-Da) until `ndt_align` succeeds; the board detector seeds only from 4-17 m, bearing 60, aspect 35 deg. Re-init stays operator-requested. Open: a replay against the new code, board consistency |
 | Loop lanelet (clockwise, `lanelet2_map_loop.osm`) | 🟡 | Refitted 2026-10-23 (6a35f04). The top aisle's "parked car" was an object present only on the survey day (no live VLP-32C hit on the 2026-09-24 drive, open floor on the left camera); the real constraint is a **board hanging from the ceiling** over the north half of the aisle, x 12.35-12.6, lowest edge 2.15 m, which the old 0.25-2.0 m obstacle band missed. Obstacle band now up to 2.13 m (the hand drive passed under nothing lower than 2.14 m), adding a duct at 2.11 m (north-west corner) and an item at 2.04 m (16.15, -6.95). Lane 1.5 m and 2 km/h past the board, centre y 22.70: the 1.215 m cart 0.29 m off the box wall, 0.28 m off the board. No obstacle cell inside the built lanelets, tightest radius 3.8 m. Curb extent on the bottom straight still assumed |
 | 0.30 m point cloud map | ✅ | `pointcloud_map.pcd` tracked at 0.30 m voxels, 1.0 MB (8f3bbe4). Replay of the clockwise bag on it: 1319/1319 poses, NVTL >= 2.57, <= 3 iterations, 8.8 cm p95 from the full-map run. The full 64 MB cloud on the cart must be moved aside before `git pull` |
 | Manual pose seed | ✅ | `just pose init mingda SPOT` works against a running stack (planning sim test 2026-10-21); no Ming-Da spots captured yet |
@@ -87,7 +87,7 @@ Legend: ✅ done and evidenced · 🟡 partly done or done on the desk only ·
 | Engage path through the link | 🟡 | All command and status lanes present in `config/link/topics.yaml`, control-mode service bridged; never exercised end to end with Autoware |
 | Software e-stop | 🟡 | `teleop_gui.py` `estop_only` mode publishes only `/vehicle/emergency_stop` (golfcart_vehicle_launch 59dfd2c). Not yet run beside Autoware on the cart |
 | M3 slow-cart planning / control tuning | 🟡 | Planning done on the desk 2026-10-24: `planning_preset:=slow_indoor` (no avoidance or regulatory modules, 2.0 m stop margins, `max_vel` 1.5), used by the drive recipes. Control tuning waits on V4; side overhangs still 0.001 placeholders |
-| Loop route (planning sim) | ✅ desk | M6 2026-10-24: `loop_goals_cw.yaml` + `just sim-loop-drive`, 2 laps, 6/6 legs within 0.10 m (one route round the whole loop still fails, hence chained goals). M8: replay-level pose noise + 22 deg cap, min clearance 0.110 -> 0.088 m. Open: a ~1 s planned stop near (14, 22.8) every lap, cause unknown |
+| Loop route (planning sim) | ✅ desk | M6 2026-10-24: `loop_goals_cw.yaml` + `just sim-loop-drive`, 2 laps, 6/6 legs within 0.10 m (one route round the whole loop still fails, hence chained goals). M8: replay-level pose noise + 22 deg cap, min clearance 0.110 -> 0.088 m. The ~1 s stop near (14, 22.8) was path_optimizer's outside-drivable-area check; slow_indoor `extra_width` 0.1 removes it (3 laps, 0 stops). Lane geometry is the real fix (M7 after 4d) |
 | Vehicle footprint dimensions | ❌ | `left_overhang` / `right_overhang` are 0.001 placeholders (footprint 1.215 m, the wheel tread) and `vehicle_height` 2.005 m is unmeasured. The loop's top aisle leaves the modelled cart 0.28 m each side and the board hangs at 2.15 m: mirrors, the roof or the LiDAR mount sticking out would eat that. Measure width at its widest and height to the top of the LiDAR |
 | M4 obstacle detection | ⏸ | Perception off by default: no obstacle stop; the driver is the only obstacle detector. **2026-10-23, desk:** `launch_perception:=true` with `lidar_only` now runs CenterPoint tiny alone, nothing else: clustering (whose output the lidar-mode tracker never read), traffic lights and the analytics publisher are off, through our copy of the perception launch (`use_lidar_rule_detector`). Resolved launch 156 nodes (perception off 147, unchanged); no TensorRT engine built on the master yet (`just build-engines`), never run. Only CenterPoint's road classes become objects: a box in the aisle does not |
 
@@ -181,9 +181,9 @@ Who has to move, so nothing waits on the wrong person.
     at 17.84 m is 0.16 m inside it, so start at **(16.0, -4.9, 180)**. A false
     board at (15.2, 21.7) on the top aisle (Phase 8 L10).
 13g. ~~**L6 design** NDT divergence: detect, stop, re-initialize or not.~~
-    Designed 2026-10-24 (Phase 8 L6). A 5 m wrong convergence goes unflagged
-    today; the NVTL-window detector, the leaf latch and the initializer's
-    aspect gate are code still to write.
+    Designed 2026-10-24 (Phase 8 L6); detectors, latch and the board seed
+    zone written the same day (cuda_ndt_matcher 97637fe,
+    reflective_pose_detector fbf85c6).
 13h. ~~**M7** the loop-lane fit as `scripts/map/` tooling, so 4d's measurements
     can be refitted.~~ Done 2026-10-24: reproduces the committed lane byte for
     byte from the full cloud (Phase 8 M7).

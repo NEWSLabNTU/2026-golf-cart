@@ -416,11 +416,37 @@ The route TUI reads the same file (`just tool tui --poses
 data/mingda-basement/loop_goals_cw.yaml`, goal modification off) and
 `control_testing.md` has the per-leg procedure.
 
-**Open: a pause in the top aisle.** Every lap, stock or slow_indoor, noise or
-none, the planned speed drops to 0 for about 1 s near (14, 22.8), the start of
-the 2 km/h stretch, and the cart halts for up to 0.6 s. The zero is already in
-the scenario selector's output, so it comes from behavior or motion planning,
-not the smoother; no velocity factor names it.
+**The pause in the top aisle, found 2026-10-24.** Every lap, stock or
+slow_indoor, noise or none, the planned speed dropped to 0 for about 1 s near
+(14, 22.8) and the cart halted for up to 0.6 s. It is path_optimizer's
+outside-drivable-area check (`insertZeroVelocityOutsideDrivableArea`), which
+publishes no planning or velocity factor and logs nothing; its only trace is
+the "outside drivable area" virtual wall. The zero is absent from
+`path_smoother/path` and first appears in `path_optimizer/trajectory`. The MPT
+point nearest ego (0.36 m behind it) had its rear-left corner 3.3 cm past the
+left bound beside the hanging board, and `vehicle_stop_margin_outside_drivable_area`
+is 0.0, so v = 0 lands at ego; the optimizer clears it in ~0.3 s and the
+smoother re-accelerates from 0. The simulated cart itself stays 0.095 m
+inside there. Root: 1.5 m of lane for a 1.215 m cart through the S-bend after
+the board, where the elastic band (clearance 0.1) sits 0.08-0.20 m off centre.
+The same check briefly stops it at (16.2-16.7, 22.2-22.4), the turn onto the
+east side.
+
+Fix, slow_indoor only: BPP `dynamic_expansion.ego.extra_width` 0.0 -> 0.1
+(`config/planning/slow_indoor/drivable_area_expansion.param.yaml`), which widens
+the bound only where the footprint meets it on a curve (+0.05 m beside the
+board). Fresh launch, 3 laps: 0 stops at ego (baseline 19 per 2 laps), leg-2
+minimum 0.42 m/s (the slow-down into the 2 km/h zone), 9/9 legs within
+0.10 m. Footprint to the nearest obstacle cell 0.078 m (baseline 0.067-0.077;
+`extra_width` 0.2 also fixes it but gives 0.039 m, hence 0.1). Did not work:
+MPT `soft_collision_free_weight` x100; elastic-band clearance 0.05 or 0.02
+(deadlocks at (16.1, 22.5): the turn works only because the band cuts the
+corner); BPP bound offsets. Caveats: the front-left corner overshoots the map
+lane at the east turn (x 16.1) by 0.25-0.30 m (baseline 0.15-0.22; no obstacle
+within 0.2 m); the stock preset still pauses; and the board clearance by this
+method is ~0.07 m, below the 0.12 m in `route_loop_cw.yaml`'s header. The real
+fix is lane geometry (M7 refit, widening the north edge past the board) after
+4d's tape walk.
 
 ### M7: the loop-lane fit as repo tooling (desk)
 
@@ -728,10 +754,33 @@ back into the zone.
 
 **Shown:** the stop half for the iteration-cap case, in replay
 (`/autoware/localization` ERROR at +2.6 s; S5 covers the rest of the chain).
-**Not done:** detector 2 (so wrong convergence reaches ERROR; offline only),
-the latch, the initializer's aspect gate. A live wrong-convergence run needs a
-different `ndt_param_file`, which `tier4_localization_component.launch.xml`
-hard-wires.
+**Written 2026-10-24** (cuda_ndt_matcher 97637fe, reflective_pose_detector
+fbf85c6):
+
+- Detectors 1 and 2 and the latch are in cuda_ndt's `scan_matching_status`, so
+  the leaf name is unchanged. Detector 1 is `validation.skipping_publish_num`
+  (5, always on). Detector 2 is `divergence.nvtl_median_gate` over
+  `divergence.nvtl_window_size` (10); the parent's launch argument
+  `ndt_divergence_nvtl_median_gate` defaults to 0.0 (off), and
+  `just launch-drive-mingda` passes 2.5. Only a successful `ndt_align` clears
+  the latch; a bare `/initialpose3d` does not. New diagnostic keys:
+  `divergence_latched`, `nvtl_window_median`, `nvtl_window_median_gate`.
+- The seed zone is in the board **detector**, not the initializer, which has
+  neither the board's normal nor the sensor TF: `detector.seed_zone` in
+  `scenarios/basement/detector.yaml`, 4-17 m, bearing 60 deg, aspect 35 deg,
+  as `board_range_report.py` defines them. Outside it nothing is published and
+  the WARN names the bound. Offline over the three local bags every real-board
+  detection from a parked cart passes; the false board was rejected at +84 deg
+  aspect by the detector's own fit (58-62 above is survey geometry); three
+  counter-clockwise detections at 10-12 m and ~+69 deg, the real board seen
+  obliquely, are rejected by design.
+
+**Not done:** a replay with an injected divergence against the new code (the
+roadmap's injection setup is not scripted); detector 2 is off in the logging
+sims unless the argument is passed; with `batch.enabled` cuda_ndt publishes no
+`scan_matching_status` at all; the latch clears on `ndt_align` success even if
+the initializer's later EKF step fails. Board consistency (item 4) is not
+written.
 
 **Check on the cart (item 16):** in every sim-time replay the
 `/adapi/node/localization: state` leaf goes STALE for 0.1 s every 1-3 s (it is
