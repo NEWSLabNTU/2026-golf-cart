@@ -12,6 +12,10 @@
   <arg name="input_pointcloud" default="/sensing/lidar/concatenated/pointcloud" description="The topic will be used in the localization util module"/>
   <arg name="localization_pointcloud_container_name" default="/pointcloud_container" description="The target container to which pointcloud preprocessing nodes in localization be attached"/>
   <arg name="localization_pointcloud_backend" default="cpu" description="cpu or cuda: which hardware runs the NDT input preprocessing chain (crop box, voxel grid, random downsample)"/>
+  <!-- cuda_ndt only: scan_matching_status latches ERROR when the median NVTL
+       of the last 10 scans is below this (Phase 8, L6). Per map and per input;
+       0.0 disables. -->
+  <arg name="ndt_divergence_nvtl_median_gate" default="0.0"/>
   <arg name="initial_pose" default="[]" description="initial pose (x, y, z, quat_x, quat_y, quat_z, quat_w)"/>
 
   <!--
@@ -75,6 +79,7 @@
       <arg name="regularization_pose_topic" value="$(var regularization_pose_topic)"/>
       <!-- Use Golf Cart-tuned NDT parameters -->
       <arg name="ndt_param_file" value="$(var loc_config_path)/ndt_scan_matcher/ndt_scan_matcher.param.yaml"/>
+      <arg name="divergence_nvtl_median_gate" value="$(var ndt_divergence_nvtl_median_gate)"/>
     </include>
   </group>
 

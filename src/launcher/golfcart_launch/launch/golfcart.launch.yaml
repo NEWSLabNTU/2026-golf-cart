@@ -369,6 +369,16 @@ launch:
     default: "default"
     description: "Planning preset: default (stock Autoware), slow_indoor"
 
+# Median-NVTL divergence gate for cuda_ndt (Phase 8, L6): scan_matching_status
+# latches ERROR when the median NVTL of the last 10 scans falls below it, until
+# a re-initialization. Per map and per input, so 0.0 (off) here and set by the
+# map's drive recipe: 2.5 for Ming-Da (just launch-drive-mingda). Write a float.
+# Detector 1 (5 consecutive unpublished scans) is always on and needs no value.
+- arg:
+    name: ndt_divergence_nvtl_median_gate
+    default: "0.0"
+    description: "cuda_ndt median-NVTL divergence gate, per map; 0.0 disables. Ming-Da: 2.5"
+
 - arg:
     name: planning_speed_limit
     default: ""
@@ -514,6 +524,9 @@ launch:
     -
       name: pose_source
       value: $(var pose_source)
+    -
+      name: ndt_divergence_nvtl_median_gate
+      value: $(var ndt_divergence_nvtl_median_gate)
     -
       name: aruco_tag_map_path
       value: $(var aruco_tag_map_path)

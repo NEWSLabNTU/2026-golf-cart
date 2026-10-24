@@ -412,8 +412,11 @@ launch-drive-basement ARGS="":
 # board at the origin facing +x, so the runtime board.pose_in_map is the same
 # [0, 0, 1.3, 0, 0, 0] in either; what changed is which way the survey cloud
 # was turned to put it there. A copy would be a second place to tune the gates.
+#
+# ndt_divergence_nvtl_median_gate:=2.5 is this map's NVTL divergence gate
+# (Phase 8, L6): healthy Ming-Da NVTL never drops below 2.57 with today's input.
 launch-drive-mingda ARGS="":
-    just launch-all "pose_initializer:=board reflective_pose_scenario:=basement map_path:=./data/mingda-basement use_gnss:=false planning_speed_limit:=1.0 planning_preset:=slow_indoor {{ARGS}}"
+    just launch-all "pose_initializer:=board reflective_pose_scenario:=basement map_path:=./data/mingda-basement use_gnss:=false planning_speed_limit:=1.0 planning_preset:=slow_indoor ndt_divergence_nvtl_median_gate:=2.5 {{ARGS}}"
 
 # The same, on the clockwise loop lane (lanelet2_map_loop.osm, from the
 # 2026-09-24 drive carried into this frame; see route_loop_cw.yaml). Narrows to

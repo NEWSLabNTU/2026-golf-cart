@@ -173,6 +173,8 @@
     like output. The Autoware sample bag starts at
     [89571.0, 42301.0, -3.3, 0.0, 0.0, 0.28, 0.96].
   -->
+  <!-- cuda_ndt median-NVTL divergence gate (Phase 8, L6); per map, 0.0 disables. -->
+  <arg name="ndt_divergence_nvtl_median_gate" default="0.0"/>
   <arg name="initial_pose" default="[]"
        description="x, y, z, qx, qy, qz, qw. A 7-element list seeds the pose; anything else is ignored"/>
 
@@ -232,6 +234,7 @@
   <group if="$(var launch_localization)">
     <include file="$(find-pkg-share golfcart_launch)/launch/components/tier4_localization_component.launch.xml">
       <arg name="initial_pose" value="$(var initial_pose)"/>
+      <arg name="ndt_divergence_nvtl_median_gate" value="$(var ndt_divergence_nvtl_median_gate)"/>
       <arg name="gnss_enabled" value="$(var gnss_enabled)"/>
     </include>
 
