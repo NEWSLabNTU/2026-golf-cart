@@ -26,8 +26,21 @@ Example: Press "I", then "2" to initialize with the 2nd initial pose.
 
 IMPORTANT: The initial and goal poses MUST be on connected lanes in the lanelet2 map.
 Use RViz's "2D Pose Estimate" and "2D Goal Pose" to verify poses are valid.
+
+Poses come from poses.json beside this script, or from --poses FILE: another
+file in that JSON format, or a loop goal file such as
+data/mingda-basement/loop_goals_cw.yaml (Phase 8, M6). A loop goal file gives
+one initial pose (its start) and its goals in driving order: [C], [R]+1, [A],
+wait for ARRIVED, then [C], [R]+2, [A], ... drives one lap (Autoware drops to
+STOP on ARRIVED, so each leg is engaged again). It also carries
+allow_goal_modification (false for the basement), which this TUI otherwise
+sets true:
+
+    python3 scripts/testing/drive/run.py --poses data/mingda-basement/loop_goals_cw.yaml
 """
 
+import argparse
+import importlib.util
 import json
 import math
 import time
@@ -93,12 +106,50 @@ class Config:
     MIN_HEIGHT = 20
 
 
-def load_poses():
-    """Load poses from JSON file in the same directory as this script."""
-    poses_path = Path(__file__).parent / "poses.json"
+def _pose_entry(goal):
+    """A sim_loop_drive.Goal as a poses.json entry."""
+    return {
+        "name": goal.name,
+        "pose": {
+            "position": {"x": goal.x, "y": goal.y, "z": 0.0},
+            "orientation": {"x": 0.0, "y": 0.0,
+                            "z": math.sin(goal.yaw / 2.0), "w": math.cos(goal.yaw / 2.0)},
+        },
+    }
+
+
+def load_loop_goals(path):
+    """A loop goal file (YAML, read by sim_loop_drive.py) in poses.json form."""
+    script = Path(__file__).resolve().parents[1] / "sim_loop_drive.py"
+    spec = importlib.util.spec_from_file_location("sim_loop_drive", script)
+    sld = importlib.util.module_from_spec(spec)
+    sys.modules["sim_loop_drive"] = sld
+    spec.loader.exec_module(sld)
+    plan = sld.load_goals(path)
+    return {
+        "initial_poses": [_pose_entry(plan.start)],
+        "goal_poses": [_pose_entry(g) for g in plan.goals],
+        "allow_goal_modification": plan.allow_goal_modification,
+    }
+
+
+def load_poses(poses_path=None):
+    """Load poses from poses.json beside this script, or from poses_path (.json or loop .yaml)."""
+    if poses_path is not None and Path(poses_path).suffix in (".yaml", ".yml"):
+        try:
+            poses_data = load_loop_goals(poses_path)
+        except (OSError, ValueError) as e:
+            print(f"Error: {poses_path}: {e}", file=sys.stderr)
+            sys.exit(1)
+        print(f"  Loaded loop goals: 1 initial pose, {len(poses_data['goal_poses'])} goals, "
+              f"allow_goal_modification {poses_data['allow_goal_modification']}")
+        return poses_data
+    if poses_path is None:
+        poses_path = Path(__file__).parent / "poses.json"
+    poses_path = Path(poses_path)
 
     if not poses_path.exists():
-        print(f"Error: poses.json not found at {poses_path}", file=sys.stderr)
+        print(f"Error: {poses_path.name} not found at {poses_path}", file=sys.stderr)
         print(
             "Please run read_poses.py first to capture initial and goal poses",
             file=sys.stderr,
@@ -509,7 +560,8 @@ class AutowareDriveNode(Node):
         goal.orientation.w = goal_pose["orientation"]["w"]
 
         request.goal = goal
-        request.option.allow_goal_modification = True
+        request.option.allow_goal_modification = self.poses_data.get(
+            "allow_goal_modification", True)
 
         success, _ = self.call_service(
             self.set_route_client,
@@ -1420,8 +1472,13 @@ class AutowareTUI:
 
 def main():
     """Main entry point."""
+    ap = argparse.ArgumentParser(description="Route TUI for Autoware through the AD API.")
+    ap.add_argument("--poses", help="poses JSON, or a loop goal YAML "
+                    "(e.g. data/mingda-basement/loop_goals_cw.yaml); default poses.json here")
+    args = ap.parse_args()
+
     # Load poses data
-    poses_data = load_poses()
+    poses_data = load_poses(args.poses)
 
     # Use first pose as default (can be changed via combo keys in TUI)
     init_idx = 0

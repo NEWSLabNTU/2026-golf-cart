@@ -444,6 +444,17 @@ sim-drive-basement MAP="./data/basement-indoor" PRESET="slow_indoor" LANELET="la
         lanelet2_map_file:={{LANELET}} \
         planning_preset:={{PRESET}}
 
+# The planning simulator on the Ming-Da clockwise loop lane (Phase 8, M6), for
+# `just sim-loop-drive` from another terminal.
+sim-drive-mingda-loop PRESET="slow_indoor":
+    just sim-drive-basement ./data/mingda-basement {{PRESET}} lanelet2_map_loop.osm
+
+# With sim-drive-mingda-loop up: N laps as chained goals from
+# data/mingda-basement/loop_goals_cw.yaml (`--laps 2`; `--check-only` checks
+# an edited goal file against the lane without ROS).
+sim-loop-drive *ARGS:
+    python3 scripts/testing/sim_loop_drive.py {{ARGS}}
+
 # Phase 8 S5, desk half of exit criterion 4: with `just sim-drive-basement
 # ./data/mingda-basement` up, drive the Ming-Da lane, fault NDT's leaf at
 # 0.8 m/s, and follow the MRM to the vehicle interface's CAN frames (real

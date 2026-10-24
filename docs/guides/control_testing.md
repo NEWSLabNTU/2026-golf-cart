@@ -88,6 +88,48 @@ subsystems report Autonomous, MANUAL only once they no longer do. The order is:
 2. **Operator engages:** the RViz *AUTO* button in the operation mode panel, or
    the TUI, which calls `/api/operation_mode/change_to_autonomous`.
 
+## The clockwise loop (after the straight lane)
+
+One route cannot go round the loop: with the goal just behind the start the
+drivable area collapses and the planner stops the cart. A lap is three routes,
+to the goals in `data/mingda-basement/loop_goals_cw.yaml`; that file says why
+each pose is where it is, and Autoware refuses goals moved onto a lanelet seam or
+into the narrow stretch under the hanging board. Do not improvise goals on the
+cart: `python3 scripts/testing/sim_loop_drive.py --check-only` checks an edited
+file against the lane offline.
+
+On the desk first, every time the lane or the goals change (Phase 8, M6):
+
+```bash
+just sim-drive-mingda-loop             # planning sim, loop lane, slow_indoor preset
+just sim-loop-drive --laps 2           # another terminal
+```
+
+On the cart, `just launch-drive-mingda-loop`, then the route TUI on the same
+file:
+
+```bash
+just tool tui --poses data/mingda-basement/loop_goals_cw.yaml
+```
+
+It loads the file's start as initial pose 1 and its goals as goal poses 1-3,
+and sets routes with goal modification off, as the file says. The board
+initializer seeds localization; `I`+1 is only for a manual seed at the start
+pose. Per leg: `C` (clear the previous route), `R`+N, `A`; wait for ARRIVED,
+then the next goal. **On ARRIVED Autoware drops to STOP by itself** (planning
+simulator, 2026-10-24: 0.1 s after ARRIVED), so every leg needs its own engage,
+while the cart stays in AUTO on the dashboard and holds on Autoware's stop. The
+driver does not need to leave AUTO between legs; the cart moves again only on
+the operator's `A`.
+
+The loop is all right turns, against the cart's ~22 deg right steering stop
+(Phase 9, decisions 4 and 4c); in the simulator capped at 22 deg the steering
+sits at the cap for 14% of a lap. Past the hanging board the lane is 1.5 m wide
+and 2 km/h, with 0.28 m each side of the modelled cart. Expect a hesitation
+there: in every simulated lap the planned speed drops to zero for about a
+second near (14, 22.8), just past the board, and the cart halts for up to half
+a second before going on (cause not yet found; no velocity factor names it).
+
 ## Stopping
 
 | Situation | Action |

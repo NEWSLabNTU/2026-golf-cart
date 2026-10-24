@@ -404,6 +404,24 @@ lane!"), so the goal poses are part of the map, not free choices.
 through the AD API in the planning sim, and the route TUI or the procedure in
 `control_testing.md` uses the same goals on the cart.
 
+**Done on the desk 2026-10-24.** Goals in `data/mingda-basement/loop_goals_cw.yaml`
+(start plus three goals at s = 1.0 / 22.5 / 57.1 / 77.3 m of the 79.3 m loop:
+on the centreline, at least 1 m from a lanelet seam, the whole cart on 2.5 m of
+lane). `scripts/testing/sim_loop_drive.py` (`just sim-drive-mingda-loop`, then
+`just sim-loop-drive --laps 2`) checks them against the lane offline, then
+drives N laps through the AD API, 33 tests. Two laps, stock limits: 6/6 legs
+ARRIVED within 0.10 m, 1.19 m/s, footprint at least 0.117 m from every obstacle
+cell. **Autoware drops to STOP on every ARRIVED**, so each leg is engaged again.
+The route TUI reads the same file (`just tool tui --poses
+data/mingda-basement/loop_goals_cw.yaml`, goal modification off) and
+`control_testing.md` has the per-leg procedure.
+
+**Open: a pause in the top aisle.** Every lap, stock or slow_indoor, noise or
+none, the planned speed drops to 0 for about 1 s near (14, 22.8), the start of
+the 2 km/h stretch, and the cart halts for up to 0.6 s. The zero is already in
+the scenario selector's output, so it comes from behavior or motion planning,
+not the smoother; no velocity factor names it.
+
 ### M7: the loop-lane fit as repo tooling (desk)
 
 The 2026-10-23 refit of `route_loop_cw.yaml` (6a35f04) came from scratch
@@ -446,6 +464,28 @@ against the full map on the 0.30 m map) but nothing injects it.
 **Done when:** the loop is driven in the planning sim with pose noise and lag
 drawn from the replay's distribution (and the 22 deg steering cap, V3), and the
 minimum clearance and goal error are reported against the noise-free run.
+
+**Done on the desk 2026-10-24 (tooling in scratch, not the repo).** The
+simulator's pose is moved aside and `localization_sim_mode:=pose_twist_estimator`
+runs the real gyro_odometer and EKF, fed by a 10 Hz NDT stand-in that replays
+the 0.30 m replay's body-frame error against the full map (8.8 cm p95, along
+1.0 +- 2.8 cm, lateral -2.4 +- 2.2 cm, correlated over 8-9 s) with its 0.10 s
+lag. Steering capped at 0.384 rad and 0.13 rad/s in a scratch overlay; committed
+limits untouched. Two laps each:
+
+| run | arrival error max | min clearance |
+|---|---|---|
+| perfect pose, stock limits | 0.099 m | 0.117 m |
+| perfect pose, 22 deg cap | 0.106 m | 0.110 m |
+| cap, EKF, replay noise, three draws | 0.083 / 0.074 / 0.059 m | 0.088 / 0.097 / 0.110 m |
+| stress: twice the noise, 0.3 s lag, 1 s pose dropout every 20 m | 0.153 m | 0.092 m |
+
+Every leg ARRIVED. The EKF pose was 7.7-9.5 cm p95 from the truth (lateral
+4.8-6.6 cm). The pinch is always the front-left corner at the hanging board;
+the draws cost at most 2.2 cm of it, but a lateral error at p95 lined up with
+the pinch would leave about 4 cm. Not modelled: the left steering report of 0,
+wheel-speed scale error, the Orin's latency; the "error" is the difference of
+two NDT runs, not ground truth.
 
 ### M9: steering limits and controller settings for the cart we have (desk, after decision)
 

@@ -46,8 +46,8 @@ plotjuggler:
     ros2 run plotjuggler plotjuggler
 
 # Launch drive monitor TUI (shows pose, speed, component states)
-tui:
-    python3 ./scripts/testing/drive/run.py
+tui *ARGS:
+    python3 ./scripts/testing/drive/run.py {{ARGS}}
 
 # ============================================================================
 # Vehicle Interface - standalone bring-up and bench testing

@@ -1,0 +1,51 @@
+# Goal poses for driving the clockwise Ming-Da loop as chained routes
+# (Phase 8, M6). data/mingda-basement map frame; yaw in degrees, CCW from +x.
+# Lanelet map: lanelet2_map_loop.osm (built from route_loop_cw.yaml).
+#
+# Why chained goals: one route round the whole loop, goal just behind the
+# start, fails. behavior_path_planner's drivable area collapses (left bound cut
+# to 2 points) and path_optimizer stops the cart "outside drivable area". So a
+# lap is three routes: set a route to the next goal, engage, wait for ARRIVED,
+# repeat. After `start`, every lap visits `goals` in order; the first leg of
+# lap 2 starts from the last goal of lap 1.
+#
+# How they were chosen. A goal is part of the map, not a free choice: Autoware
+# refuses a route whose goal is badly placed ("Goal's footprint exceeds
+# lane!"), and refused both of these on 2026-10-23:
+#   - a goal at a lanelet boundary;
+#   - a goal in the 1.5 m stretch past the board hanging over the top aisle
+#     (centreline arc length s 35.8 to 47.0 is under 2 m wide).
+# So every pose below is ON the route_loop_cw.yaml centreline (within 3 mm),
+# heading along its tangent, with base_link at least 1.0 m from a lanelet
+# boundary and the whole cart (base_link is the rear axle: -0.82 m to +2.47 m)
+# where the lane is 2.5 m wide. Arc lengths are from the centreline's first
+# point (11.979, -6.288), lap length 79.3 m:
+#
+#   start            s =  1.0   bottom straight, leaving westward (-x)
+#   west             s = 22.5   west side, heading north      leg 21.5 m
+#   east             s = 57.1   east side, heading south      leg 34.6 m (top aisle, board)
+#   bottom           s = 77.3   bottom straight, heading west leg 20.2 m, 3 m short of start
+#
+# Legs are 20 to 35 m so the cart reaches cruise speed between stops, and no
+# leg ends in a corner, where the goal's heading would fight the turn.
+# scripts/testing/test_sim_loop_drive.py checks every rule above against
+# route_loop_cw.yaml and lanelet2_map_loop.osm, so a refit of the lane that
+# moves the centreline fails the test until these are moved with it.
+#
+# Proven in the planning simulator: scripts/testing/sim_loop_drive.py, two laps,
+# every leg ARRIVED (see Phase 8 M6 / Phase 9 "Loop route" for the numbers).
+# The route TUI reads this file: scripts/testing/drive/run.py --poses <this>.
+
+frame_id: map
+lanelet2_map_file: lanelet2_map_loop.osm
+centreline: route_loop_cw.yaml
+# Off in the basement: with it on, the goal planner searches for a pull-over
+# spot, finds no shoulder and holds the cart at distance 0 forever (Phase 8 M2).
+allow_goal_modification: false
+
+start: {name: start (bottom straight), x: 10.98, y: -6.27, yaw_deg: 178.2}
+
+goals:
+  - {name: west side, x: 3.36, y: 10.84, yaw_deg: 87.3}
+  - {name: east side, x: 19.60, y: 10.79, yaw_deg: -84.1}
+  - {name: bottom straight, x: 13.97, y: -6.13, yaw_deg: -165.7}

@@ -158,16 +158,20 @@ Who has to move, so nothing waits on the wrong person.
 13a. ~~**S5** MRM in the planning sim: injected fault -> MRM_OPERATING -> emergency
     stop at the interface. Exit criterion 4, desk half.~~ Done 2026-10-24, see
     Done below.
-13b. **M6** the loop as chained goals: goal poses beside the map, a tested
-    recipe for N laps. Nothing drives the loop without it.
+13b. ~~**M6** the loop as chained goals: goal poses beside the map, a tested
+    recipe for N laps. Nothing drives the loop without it.~~ Done 2026-10-24:
+    `loop_goals_cw.yaml`, `just sim-loop-drive`, 2 laps PASS; the TUI reads
+    the same goals.
 13c. **M9** steering limits (decisions 4, 4a) applied in all four places, loop
     sim rerun. Waits on the team's decision; the sim says 0.38 rad costs nothing.
 13d. ~~**M3** a slow-cart planning preset (stock `stop_margin` 5.0 m, lane change,
     crosswalk, intersection modules), exercised on both lanes in the sim.~~
     Done 2026-10-24: `planning_preset:=slow_indoor`, used by the drive recipes
     (Phase 8 M3).
-13e. **M8** loop sim with replay-measured pose noise and the 22 deg cap: does
-    0.11 m clearance survive a real pose.
+13e. ~~**M8** loop sim with replay-measured pose noise and the 22 deg cap: does
+    0.11 m clearance survive a real pose.~~ Done 2026-10-24: yes, at least
+    0.088 m over three draws (0.092 m at twice the noise); p95 lateral error
+    could leave ~4 cm at the board.
 13f. ~~**L10** board detection rate against range, from the 2026-09-24 loop bags;
     chooses a start pose inside the working range before item 15.~~ Done
     2026-10-24: 100 % to the 18 m gate when facing the board; the lane start
