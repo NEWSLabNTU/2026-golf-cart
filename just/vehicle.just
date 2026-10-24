@@ -79,3 +79,19 @@ control-straight:
 # Needs the vehicle stack up: just vehicle interface converter=on
 control-circle:
     ros2 run control_test trajectory_player --ros-args -p trajectory_file:=circle.yaml
+
+# Phase 8 V4 system identification, run on the orin WITHOUT the stack (the
+# stack's vehicle_cmd_gate would also publish control_cmd). Procedure in
+# scripts/testing/sysid/sysid_record.sh's header and docs/roadmaps/8.
+
+# Record a sysid bag plus candump. CAN_HOST: auto | local | orin | none
+sysid-record NAME CAN_HOST="auto":
+    scripts/testing/sysid/sysid_record.sh {{NAME}} {{CAN_HOST}}
+
+# Publish a step profile: steer-standstill | steer-crawl | speed | brake (cart in AUTO)
+sysid-steps PROFILE *ARGS:
+    python3 scripts/testing/sysid/sysid_steps.py {{PROFILE}} {{ARGS}}
+
+# Fit delay, time constant and rate limit; prints MPC, PID and simulator values
+sysid-fit BAG *ARGS:
+    python3 scripts/testing/sysid/sysid_fit.py {{BAG}} {{ARGS}}

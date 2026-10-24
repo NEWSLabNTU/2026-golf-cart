@@ -737,6 +737,29 @@ stack it would be a spurious MRM.
   time constant 0.27 s). Then MPC and PID tuning. **Desk half:** a script that
   takes a CAN recording of steering and speed steps and fits delay, time
   constant and rate limit, so a vehicle day only has to record.
+
+  **Desk half done 2026-10-24** (`scripts/testing/sysid/`, `just vehicle
+  sysid-record|sysid-steps|sysid-fit`). `sysid_steps.py` publishes steering
+  (standstill, and crawl doublets at 0.5 m/s), speed and brake step profiles,
+  only in AUTO and refusing beside any other `control_cmd` publisher, so it runs
+  on the orin without the stack; every profile fits in the 17.8 m lane, right
+  steps capped at 20 deg. `sysid_record.sh` records a small bag plus candump.
+  `sysid_fit.py` fits delay, time constant and rate limit in both the
+  simulator's (lag rate-clipped) and MPC's (rate limit, then lag) form, since
+  the wrong form trades delay for ramp, and prints `input_delay`,
+  `vehicle_model_steer_tau`, `steer_rate_lim_dps_*`, `delay_compensation_time`
+  and the `simulator_model.param.yaml` values; brakes are reported model-free
+  per VCU stage (V5). Checked against simple_planning_simulator with known
+  values (steering 0.30 s / 0.40 s / 0.13 rad/s fitted 0.288 / 0.384 / 0.130;
+  velocity 0.25 s / 0.5 s / 0.6 m/s2 fitted 0.241 / 0.499 / 0.600) and against
+  the real interface on vcan0 with mock_vcu (its 0.4 rad/s slew and the mock's
+  0.2 s lag recovered). 23 tests. **Left steering cannot come from the report**
+  (it reads 0, on CAN too); only from yaw rate at crawl, `steer_yaw`, checked
+  in the simulator. No cart data exists yet, so no cart numbers. Found: the
+  interface sends `Ads_Vcu_Target_Tire_Ang_Speed` as 0, so the cart's 7-8 deg/s
+  may be the VCU's default for 0 (vendor question, or one vehicle-day test).
+  Applying the numbers needs a golfcart control override (M9's 4a patch has the
+  copies).
 - **V5** S3's braking measurement.
 - **V6** The crawl run: exit criteria 1-5.
 

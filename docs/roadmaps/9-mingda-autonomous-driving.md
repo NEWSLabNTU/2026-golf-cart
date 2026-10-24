@@ -111,6 +111,8 @@ Who has to move, so nothing waits on the wrong person.
 2. Right steering stops mechanically at ~22 deg against the 30 deg spec; left
    reaches the 29.8 deg command.
 3. `Driving_State` reads `Invalid` in manual after an AUTO session.
+3a. We send `Ads_Vcu_Target_Tire_Ang_Speed` (0x065) as 0. Is the cart's 7-8 deg/s
+    steering rate the VCU's default for 0, and what does a set value do?
 
 **Decisions for the team**
 4. `max_steer_angle` 0.52 -> 0.38 rad (vehicle model, keyboard recipe, lane tool),
@@ -178,8 +180,9 @@ Who has to move, so nothing waits on the wrong person.
 13h. ~~**M7** the loop-lane fit as `scripts/map/` tooling, so 4d's measurements
     can be refitted.~~ Done 2026-10-24: reproduces the committed lane byte for
     byte from the full cloud (Phase 8 M7).
-13i. **V4 desk half** a fit script for steering and speed step responses, so the
-    vehicle day only records.
+13i. ~~**V4 desk half** a fit script for steering and speed step responses, so the
+    vehicle day only records.~~ Done 2026-10-24: `scripts/testing/sysid/`,
+    `just vehicle sysid-*` (Phase 8 V4).
 13j. **M4** an obstacle source. Perception is CenterPoint tiny only (decided
     2026-10-23, wired, unrun): build the engine on the master, replay a bag with
     a person walking the aisle, measure the master's load. Boxes and trolleys
@@ -211,7 +214,8 @@ interface's CAN frames (2026-10-24; findings in Phase 8 S5).
 16. Stationary rehearsal: `just launch-drive-mingda`, board init, NDT lock, route
     on the lane, no engage.
 17. L5 speed report (push the cart a metre, forward and reverse), physical e-stop,
-    S3 braking, V4 system identification.
+    S3 braking, V4 system identification: the four `sysid-steps` profiles on the
+    orin without the stack, recorded by `just vehicle sysid-record`.
 18. The crawl run (Phase 8 V6), after 1, 4, 9, 10, 13, 15 and 16.
 19. Walk the loop with a tape: the curb on the bottom straight (y -3.2, extent
     x 7.5-16.0 assumed), the hanging board's height, and the ceiling items at
