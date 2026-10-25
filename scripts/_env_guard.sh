@@ -20,7 +20,20 @@ _golfcart_env_guard() {
     # AMENT_PREFIX_PATH is set by any ROS setup file, so its absence means no
     # environment at all. Re-sourcing when it is already set would be harmless
     # but noisy, and would re-print env.sh's banners on every build.
-    if [ -z "${AMENT_PREFIX_PATH:-}" ] && [ -f "${root}/scripts/env.sh" ]; then
+    #
+    # Its presence does NOT mean Autoware is in it, though. A login shell that
+    # sources /opt/ros/humble/setup.bash itself (a common ~/.bashrc line) sets
+    # it to just /opt/ros/humble, and skipping env.sh then builds against bare
+    # ROS: every package fails on a missing autoware_cmake, autoware_*_msgs or
+    # cuda_blackboard, none of which says "the environment was half sourced".
+    local need_env=0
+    if [ -z "${AMENT_PREFIX_PATH:-}" ]; then
+        need_env=1
+    elif [ -f /opt/autoware/1.5.0/setup.bash ] \
+         && [[ ":${AMENT_PREFIX_PATH}:" != *":/opt/autoware/1.5.0:"* ]]; then
+        need_env=1
+    fi
+    if [ "$need_env" = 1 ] && [ -f "${root}/scripts/env.sh" ]; then
         # env.sh is written to be sourced into interactive shells and does not
         # expect -e/-u; recipes run under `set -e`.
         local saved="$-"
