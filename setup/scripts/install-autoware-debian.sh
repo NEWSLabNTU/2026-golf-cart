@@ -158,6 +158,40 @@ LOCALREPO_VERSION=$(dpkg-deb -f "$TEMP_DEB" Version)
 INSTALLED_LOCALREPO_VERSION=$(dpkg-query -W -f='${Version}' \
     "$LOCALREPO_PACKAGE" 2>/dev/null || true)
 
+# newslab-ros-config (the lab's machine-image package) and autoware-config-1-5-0
+# both ship /etc/sysctl.d/10-cyclone-max.conf and
+# /etc/systemd/system/multicast-lo.service. dpkg refuses the second owner, so on
+# a lab machine the whole install stops at
+#
+#     trying to overwrite '/etc/sysctl.d/10-cyclone-max.conf', which is also in
+#     package newslab-ros-config 1.0.0-1
+#
+# with every other package unpacked and unconfigured. The two copies set the
+# same three sysctls and run the same `ip route add` on lo, so letting Autoware's
+# copy win changes nothing that matters. Localrepo 1.5.0-2 renamed both files
+# (`-1-5-0` suffix) and would not collide; this script installs 1.5.0-1.
+#
+# The override is scoped to that one known collision: on any other machine a
+# file conflict is still an error worth stopping for.
+APT_OVERWRITE=()
+if dpkg-query -W -f='${Status}' newslab-ros-config 2>/dev/null | grep -q 'ok installed'; then
+    echo "  newslab-ros-config is installed; letting autoware-config-1-5-0 overwrite"
+    echo "  its 10-cyclone-max.conf and multicast-lo.service (same settings)."
+    APT_OVERWRITE=(-o Dpkg::Options::=--force-overwrite)
+fi
+
+# A run that died at that collision leaves ~450 packages unpacked but not
+# configured, and from then on EVERY apt install on the machine -- including
+# the `apt-get install curl ...` at the top of setup-prerequisites.sh, before
+# this script reaches its own -- first tries to finish the broken set and hits
+# the same conflict again. So re-running the step could never get past it.
+# Finish the interrupted install here, with the same override, before anything
+# else calls apt.
+if [ -n "$(sudo dpkg --audit 2>/dev/null)" ]; then
+    echo "  dpkg reports an interrupted install; completing it first..."
+    sudo apt-get install -f -y "${APT_OVERWRITE[@]}"
+fi
+
 # A newer localrepo can already be installed on a machine provisioned from a
 # newer release. Apt refuses to downgrade it when -y is used, and there is no
 # reason to replace a newer repository package with this older asset.
@@ -173,7 +207,9 @@ fi
 # Left to itself this script asks its own questions partway through ours, which
 # is a second interactive session arriving after the user thought they had
 # answered everything. What it will and will not accept as flags decides how
-# much of that can be avoided, and the answer is narrower than it looks:
+# much of that can be avoided, and the answer is narrower than it looks. What
+# follows is the amd64 (ubuntu2204) script; the arm64 one is a different script
+# with different flags, handled in its own branch below.
 #
 #   --no-ros / --install-ros    answer the ROS question. Fine.
 #   --all-nvidia / --no-nvidia  answer the NVIDIA question AND set
@@ -223,21 +259,41 @@ if [ -f /usr/share/autoware/setup-prerequisites.sh ]; then
         fi
         PREREQ_ARGS+=(--no-ros)
     fi
-    if [ -n "${AUTOWARE_PREREQ_NVIDIA:-}" ]; then
-        nvidia_wanted="$AUTOWARE_PREREQ_NVIDIA"
-    elif command -v nvcc >/dev/null 2>&1 && \
-         ls /usr/lib/*-linux-gnu/libnvinfer.so* >/dev/null 2>&1; then
-        echo "  CUDA and TensorRT are already installed; skipping the NVIDIA step."
-        nvidia_wanted=n
+    if [[ "$ARCH" == "aarch64" ]]; then
+        # The jetpack62 localrepo ships a DIFFERENT setup-prerequisites.sh. It
+        # assumes JetPack already provides CUDA, cuDNN and TensorRT, so it has
+        # no NVIDIA question at all, and its flags are the inverse of the amd64
+        # script's: --spconv / --no-spconv exist, --all-nvidia / --no-nvidia do
+        # not, and passing either is "[ERROR] Unknown option" -- the step died
+        # there on every arm64 machine, the Orin included.
+        #
+        # SpConv is not optional here: autoware_tensorrt_plugins links
+        # libspconv.so, and autoware-full pulls that package in. The Jetson
+        # build it installs carries sm_80 kernels as well as sm_87, so it also
+        # serves an SBSA arm64 server (A100). Override with
+        # AUTOWARE_PREREQ_SPCONV=n.
+        if [ "${AUTOWARE_PREREQ_SPCONV:-y}" = "y" ]; then
+            PREREQ_ARGS+=(--spconv)
+        else
+            PREREQ_ARGS+=(--no-spconv)
+        fi
     else
-        echo "  CUDA or TensorRT missing; installing the full NVIDIA set."
-        nvidia_wanted=y
-    fi
+        if [ -n "${AUTOWARE_PREREQ_NVIDIA:-}" ]; then
+            nvidia_wanted="$AUTOWARE_PREREQ_NVIDIA"
+        elif command -v nvcc >/dev/null 2>&1 && \
+             ls /usr/lib/*-linux-gnu/libnvinfer.so* >/dev/null 2>&1; then
+            echo "  CUDA and TensorRT are already installed; skipping the NVIDIA step."
+            nvidia_wanted=n
+        else
+            echo "  CUDA or TensorRT missing; installing the full NVIDIA set."
+            nvidia_wanted=y
+        fi
 
-    if [ "$nvidia_wanted" = "y" ]; then
-        PREREQ_ARGS+=(--all-nvidia)
-    else
-        PREREQ_ARGS+=(--no-nvidia)
+        if [ "$nvidia_wanted" = "y" ]; then
+            PREREQ_ARGS+=(--all-nvidia)
+        else
+            PREREQ_ARGS+=(--no-nvidia)
+        fi
     fi
 
     echo "  Running /usr/share/autoware/setup-prerequisites.sh ${PREREQ_ARGS[*]}..."
@@ -259,6 +315,6 @@ if ! apt-cache search --names-only '^time-daemon$' | grep -q 'time-daemon'; then
 fi
 
 echo "  Installing autoware-full-1-5-0..."
-sudo apt install -y autoware-full-1-5-0
+sudo apt install -y "${APT_OVERWRITE[@]}" autoware-full-1-5-0
 
 echo "✓ Autoware Localrepo 1.5.0-1 and Autoware Full 1.5.0 installed successfully."
