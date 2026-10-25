@@ -19,6 +19,13 @@
        default="$(find-pkg-share golfcart_launch)/config/localization/rigloc/rigloc.param.yaml"
        description="twist_source:=rigloc: overlay on rigloc_launch's rigloc.param.yaml"/>
   <arg name="rigloc_out_dir" default="" description="twist_source:=rigloc: the localizer's run logs; empty: none"/>
+  <!-- The EKF's parameters. twist_source:=rigloc has its own tuning
+       (config/localization/rigloc/ekf_localizer.param.yaml: lower process
+       noise for a 10 Hz twist 0.27 s late); every other twist source keeps
+       config/localization/ekf_localizer.param.yaml. -->
+  <arg name="ekf_param_file"
+       default="$(var loc_config_path)/$(eval '\'rigloc/\' if \'$(var twist_source)\' == \'rigloc\' else \'\'')ekf_localizer.param.yaml"
+       description="ekf_localizer parameters; default by twist_source"/>
   <!-- Overridable so a tuning run can swap NDT parameters without editing the
        shipped file. Defaults to it, so nothing changes unless asked. -->
   <arg name="ndt_param_file"
@@ -95,6 +102,7 @@
       <arg name="ndt_param_file" value="$(var loc_config_path)/ndt_scan_matcher/ndt_scan_matcher.param.yaml"/>
       <arg name="divergence_nvtl_median_gate" value="$(var ndt_divergence_nvtl_median_gate)"/>
       <arg name="twist_source" value="$(var twist_source)"/>
+      <arg name="ekf_localizer_param_path" value="$(var ekf_param_file)"/>
     </include>
   </group>
 
@@ -126,6 +134,7 @@
       <arg name="voxel_grid_downsample_filter_param_path" value="$(var loc_config_path)/ndt_scan_matcher/pointcloud_preprocessor/voxel_grid_filter.param.yaml"/>
       <arg name="random_downsample_filter_param_path" value="$(var loc_config_path)/ndt_scan_matcher/pointcloud_preprocessor/random_downsample_filter.param.yaml"/>
       <arg name="twist_source" value="$(var twist_source)"/>
+      <arg name="ekf_localizer_param_path" value="$(var ekf_param_file)"/>
     </include>
   </group>
 
@@ -142,7 +151,7 @@
 
       <!-- parameter paths for common -->
       <arg name="localization_error_monitor_param_path" value="$(var loc_config_path)/localization_error_monitor.param.yaml"/>
-      <arg name="ekf_localizer_param_path" value="$(var loc_config_path)/ekf_localizer.param.yaml"/>
+      <arg name="ekf_localizer_param_path" value="$(var ekf_param_file)"/>
       <arg name="stop_filter_param_path" value="$(var loc_config_path)/stop_filter.param.yaml"/>
       <arg name="pose_instability_detector_param_path" value="$(var loc_config_path)/pose_instability_detector.param.yaml"/>
       <arg name="pose_initializer_param_path" value="$(var loc_config_path)/pose_initializer.param.yaml"/>

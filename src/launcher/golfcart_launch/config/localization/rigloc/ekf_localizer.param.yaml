@@ -1,0 +1,78 @@
+# EKF localizer for twist_source:=rigloc (localization_preset:=rigloc).
+#
+# ../ekf_localizer.param.yaml (autoware_launch's values) except the two process
+# noise values marked below; keep the rest in step with it.
+# tier4_localization_component picks this file by twist_source.
+#
+# Why: rigloc's twist arrives at 10 Hz and 0.27 s late (gyro_odometer: 40 Hz,
+# no delay). The EKF applies it at the delayed step and adds process noise up
+# to now, ~20 steps at 50 Hz; at upstream's wz 5.0 / vx 10.0 that holds the
+# EKF's yaw-rate sd at ~0.45 rad/s (gyro_odom: 0.003) even with NDT on, the
+# yaw and then the lateral variance follow, and within 1-4 s of an NDT dropout
+# the lateral-ellipse diagnostic reaches ERROR (gyro_odom: after ~76 s).
+#
+# Measured 2026-10-25 (rig-odom-sim results 014, clockwise recording, live
+# cuda_ndt + EKF, three NDT outages of 10/20/20 s, n=3 per setting):
+#   wz / vx      first lateral ERROR   long-axis ERRORs   xy RMS with NDT
+#   5.0 / 10.0   31-34 s               741                0.023 m
+#   0.5 / 5.0    75 s                  0                  0.037 m   <- this file
+#   0.5 / 2.0    113 s                 0                  0.056 m
+#   1.0 / 2.0    40-73 s               0                  0.057 m
+#   1.0 / 5.0    31-40 s               256                0.040 m
+#   gyro_odom    76-77 s               0                  0.041-0.049 m
+# 0.5 / 5.0 puts the alarm where gyro_odom has it with no long-axis ERRORs,
+# outage drift ties gyro_odom's (end errors 0.15/0.38/0.21 m against
+# 0.28/0.26/0.39), recovery matches it (0.027 m 5 s after), and accuracy with
+# NDT stays better than gyro_odom's. The cost: the EKF follows a real change
+# of speed or turn rate more slowly, and its error with NDT rises from 0.023 m.
+# Not yet on the vehicle. A faster, fresher rigloc twist would let this file go.
+/**:
+  ros__parameters:
+    node:
+      show_debug_info: false
+      enable_yaw_bias_estimation: true
+      predict_frequency: 50.0
+      tf_rate: 50.0
+      extend_state_step: 50
+
+    pose_measurement:
+      # for Pose measurement
+      pose_additional_delay: 0.0
+      pose_measure_uncertainty_time: 0.01
+      pose_smoothing_steps: 5
+      pose_gate_dist: 49.5 # corresponds to significance level = 10^-10
+
+    twist_measurement:
+      # for twist measurement
+      twist_additional_delay: 0.0
+      twist_smoothing_steps: 2
+      twist_gate_dist: 46.1 # corresponds to significance level = 10^-10
+
+    process_noise:
+      # for process model
+      proc_stddev_yaw_c: 0.005
+      proc_stddev_vx_c: 5.0 # rigloc: upstream 10.0 (header)
+      proc_stddev_wz_c: 0.5 # rigloc: upstream 5.0 (header)
+
+    simple_1d_filter_parameters:
+      #Simple1DFilter parameters
+      z_filter_proc_dev: 5.0
+      roll_filter_proc_dev: 0.1
+      pitch_filter_proc_dev: 0.1
+
+    diagnostics:
+      # for diagnostics
+      pose_no_update_count_threshold_warn: 50
+      pose_no_update_count_threshold_error: 100
+      twist_no_update_count_threshold_warn: 50
+      twist_no_update_count_threshold_error: 100
+      ellipse_scale: 3.0
+      error_ellipse_size: 1.5
+      warn_ellipse_size: 1.2
+      error_ellipse_size_lateral_direction: 0.3
+      warn_ellipse_size_lateral_direction: 0.25
+
+    misc:
+      # for velocity measurement limitation (Set 0.0 if you want to ignore)
+      threshold_observable_velocity_mps: 0.0 # [m/s]
+      pose_frame_id: "map"
