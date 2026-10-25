@@ -86,6 +86,17 @@ build *FLAGS="":
        && ! compgen -G "/usr/local/zed/lib/libsl_zed*" > /dev/null; then
         echo "→ ZED SDK not found at /usr/local/zed — skipping ZED packages"
         IGNORE_PKGS+=(zed_components zed_wrapper zed_ros2 zed_debug)
+    else
+        # The wrapper submodule targets SDK 5.x (its README says v5.2) and uses
+        # API that 4.x lacks: sl::MODEL::ZED_XONE_HDR, getSensorsDataBatch, the
+        # custom-detector tracking fields. A 4.x SDK therefore fails mid-build,
+        # dozens of errors deep, rather than being skipped.
+        ZED_HDR=/usr/local/zed/include/sl/Camera.hpp
+        ZED_MAJOR=$(sed -n 's/^#define ZED_SDK_MAJOR_VERSION \([0-9]*\).*/\1/p' "$ZED_HDR" 2>/dev/null)
+        if [[ -n "$ZED_MAJOR" && "$ZED_MAJOR" -lt 5 ]]; then
+            echo "→ ZED SDK ${ZED_MAJOR}.x at /usr/local/zed is older than the wrapper needs (5.x) — skipping ZED packages"
+            IGNORE_PKGS+=(zed_components zed_wrapper zed_ros2 zed_debug)
+        fi
     fi
     # golfcart_vehicle_interface generates its CAN bindings from the vendor DBC at
     # build time, and that file is proprietary and gitignored. Only the machine
