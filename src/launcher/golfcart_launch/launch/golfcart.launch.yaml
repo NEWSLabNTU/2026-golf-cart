@@ -256,7 +256,7 @@ launch:
     name: localization_preset
     default: "default"
     description: >-
-      Localization preset: default, eagleye, aruco.
+      Localization preset: default, eagleye, aruco, rigloc (NDT pose + rig_localization twist).
       aruco sets pose_source and additionally requires aruco_tag_map_path.
 
 # Include localization preset (defines twist_source)
@@ -542,6 +542,11 @@ launch:
     -
       name: twist_source
       value: $(var twist_source)
+    # twist_source:=rigloc: the localizer runs with the localization component
+    # only on one machine; under host:=master it is the orin's (below).
+    -
+      name: launch_rigloc
+      value: $(eval "'$(var host)' == 'all'")
     -
       name: lidar_model
       value: $(var lidar_model)
@@ -618,6 +623,25 @@ launch:
         -
           name: camera_model
           value: zedx
+
+# rig_localization's twist estimator (localization_preset:=rigloc), on the orin.
+#
+# Under host:=master / host:=orin the localizer runs here, beside its inputs:
+# the ZED's image and IMU and the vehicle interface's velocity report are all
+# local, and the 30 Hz image would take half the link
+# (config/link/topics.yaml). Only its twist crosses to the master's EKF. The
+# file also republishes the vehicle description on an orin-local topic, since
+# base_link -> zed_camera_link is the master's. Under host:=all the
+# localization component starts it instead.
+- group:
+    if: $(eval "'$(var host)' == 'orin' and '$(var twist_source)' == 'rigloc'")
+    children:
+    - include:
+        file: "$(find-pkg-share golfcart_launch)/launch/components/rigloc_twist.launch.xml"
+        arg:
+        -
+          name: vehicle_description
+          value: "true"
 
 # The CAN vehicle interface, on the orin.
 #

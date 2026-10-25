@@ -2,21 +2,29 @@
 #
 # An overlay on rigloc_launch's config/rigloc.param.yaml (every parameter, documented, at the
 # node's default): only what this vehicle changes. tier4_localization_component.launch.xml loads
-# it through rigloc_launch's rigloc.launch.xml, under /localization/twist_estimator.
+# it through rigloc_launch's rigloc.launch.xml, under /localization/twist_estimator
+# (components/rigloc_twist.launch.xml).
 /**:
   ros__parameters:
     # The EKF's twist input, absolute: what gyro_odometer publishes when twist_source:=gyro_odom.
     twist_topic: /localization/twist_estimator/twist_with_covariance
     # ekf_localizer owns map -> odom -> base_link.
     publish_tf: false
+    # On the orin (host:=orin) the vehicle description, base_link -> zed_camera_link, comes from
+    # rigloc_twist.launch.xml's robot_state_publisher on this orin-local topic; /tf_static there
+    # holds only the ZED's own subtree. Under host:=all nothing publishes it and /tf_static has all.
+    extra_tf_static_topics: ["/rigloc/tf_static_vehicle"]
     # The vehicle interface's VelocityReport; it pins the metric scale. With nothing published
     # on it the node runs on camera + IMU alone.
     wheel_topic: /vehicle/status/velocity_status
     # The ZED X's IMU as its node publishes it (frame zed_imu_link), not imu_corrector's output:
     # the localizer takes its extrinsic from the message's frame and /tf_static.
     imu_topic: /sensing/camera/zed/imu/data
-    # The ZED node publishes the rectified left image under rgb/color/rect; the three GMSL
-    # cameras keep rigloc's default topics.
+    # The ZED alone. The estimate uses only the ZED (+ IMU + wheel) while fuse_gmsl is false, the
+    # default, and the GMSL cameras are the master's: on the orin, where the localizer runs under
+    # host:=master/orin, the node would wait for their camera_info forever.
+    cams: ["zed"]
+    # The ZED node publishes the rectified left image under rgb/color/rect.
     topics:
       zed:
         image: /sensing/camera/zed/rgb/color/rect/image/compressed

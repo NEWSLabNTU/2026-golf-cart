@@ -139,6 +139,9 @@ Submodules:
 - golfcart_sensor_kit_launch - Sensor kit configurations
 - gnss_locator - GNSS positioning
 - ublox - u-blox ZED-F9P driver, NEWSLabNTU fork with RTCM input (NTRIP client is apt)
+- rig_localization - camera + IMU + wheel twist estimator (`localization_preset:=rigloc`); runs on
+  the orin under a two-machine profile; links cuVSLAM (`./setup.sh --only cuvslam`), and
+  `just build` skips it without
 - ros2_mpu9250_driver - IMU driver (to be replaced with Tamagawa)
 
 ### config/ is the single source of truth
@@ -535,6 +538,7 @@ perception_preset:=minimal              # Minimal features for development
 # Localization presets (controls twist estimation)
 localization_preset:=default            # Default: gyro_odom
 localization_preset:=eagleye            # GNSS-based odometry (requires GNSS)
+localization_preset:=rigloc             # NDT pose + rig_localization twist (ZED + IMU + wheel)
 
 # Example: Use camera-lidar fusion
 just launch perception_preset:=camera_lidar_fusion
@@ -785,7 +789,7 @@ use_traffic_light_recognition:=true        # Override preset setting
 use_detection_by_tracker:=false            # Override preset setting
 use_image_segmentation_based_filter:=false # Override preset setting
 use_pointcloud_map:=true                   # Override preset setting
-twist_source:=gyro_odom|eagleye            # Override preset twist source
+twist_source:=gyro_odom|eagleye|rigloc     # Override preset twist source
 ```
 
 ### Vehicle Interface (Quick Ref)

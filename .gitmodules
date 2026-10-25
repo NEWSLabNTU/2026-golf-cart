@@ -68,3 +68,7 @@
 	path = src/sensor_component/external/ublox
 	url = https://github.com/NEWSLabNTU/ublox.git
 	branch = ros2
+[submodule "src/localization/rig_localization"]
+	path = src/localization/rig_localization
+	url = https://github.com/NEWSLabNTU/rig_localization.git
+	branch = main

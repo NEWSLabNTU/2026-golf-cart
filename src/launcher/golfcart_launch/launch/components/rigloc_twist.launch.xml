@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  rig_localization as the EKF's twist estimator (twist_source:=rigloc): the
+  ZED's camera + IMU + the vehicle's wheel speed, on
+  /localization/twist_estimator/twist_with_covariance (rigloc.param.yaml).
+  NDT stays the pose source; this replaces gyro_odometer only.
+
+  One file, two callers:
+    - tier4_localization_component.launch.xml, under host:=all (one machine:
+      the vehicle description is already on /tf_static);
+    - golfcart.launch.yaml on the orin under host:=orin, with
+      vehicle_description:=true. The localizer runs there, beside the ZED, the
+      IMU and the vehicle interface, so no image crosses the link; only the
+      twist does (config/link/topics.yaml). The vehicle description
+      (base_link -> zed_camera_link) is the master's, and the orin's /tf_static
+      crosses to the master, so a second robot_state_publisher here publishes
+      it on the orin-local /rigloc/tf_static_vehicle instead, which the
+      localizer reads beside /tf_static (extra_tf_static_topics).
+
+  The rigloc packages build only where cuVSLAM is installed (setup step
+  cuvslam; `just build` skips them otherwise).
+-->
+<launch>
+  <arg name="rigloc_param_file"
+       default="$(find-pkg-share golfcart_launch)/config/localization/rigloc/rigloc.param.yaml"
+       description="overlay on rigloc_launch's rigloc.param.yaml"/>
+  <arg name="rigloc_out_dir" default="" description="the localizer's run logs; empty: none"/>
+  <arg name="vehicle_description" default="false"
+       description="also publish the vehicle description on /rigloc/tf_static_vehicle (the orin)"/>
+  <arg name="vehicle_model" default="golfcart_vehicle"/>
+  <arg name="sensor_model" default="golfcart_sensor_kit"/>
+  <arg name="vehicle_id" default="$(env VEHICLE_ID default)"/>
+
+  <group if="$(var vehicle_description)">
+    <push-ros-namespace namespace="/localization/twist_estimator/rigloc"/>
+    <node name="vehicle_description" pkg="robot_state_publisher" exec="robot_state_publisher">
+      <!-- The same description, xacro arguments and calibration directory as
+           tier4_vehicle_launch's vehicle.launch.xml on the master. -->
+      <param name="robot_description"
+             value="$(command 'xacro $(find-pkg-share tier4_vehicle_launch)/urdf/vehicle.xacro vehicle_model:=$(var vehicle_model) sensor_model:=$(var sensor_model) config_dir:=$(find-pkg-share individual_params)/config/$(var vehicle_id)/$(var sensor_model)' 'warn')"/>
+      <remap from="/tf_static" to="/rigloc/tf_static_vehicle"/>
+      <remap from="/tf" to="/rigloc/tf_vehicle"/>
+    </node>
+  </group>
+
+  <group>
+    <push-ros-namespace namespace="/localization/twist_estimator"/>
+    <include file="$(find-pkg-share rigloc_launch)/launch/rigloc.launch.xml">
+      <arg name="overlay_file" value="$(var rigloc_param_file)"/>
+      <arg name="out_dir" value="$(var rigloc_out_dir)"/>
+    </include>
+  </group>
+</launch>

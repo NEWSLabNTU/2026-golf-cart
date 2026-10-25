@@ -117,7 +117,7 @@ launch:
 - arg:
     name: localization_preset
     default: "default"
-    description: "Localization preset: default, eagleye"
+    description: "Localization preset: default, eagleye, rigloc"
 
 # Include perception preset (defines perception_mode, use_traffic_light_recognition, etc.)
 # Autoware model/artifact directory. NOT the packaged /opt/autoware/<ver>/data:

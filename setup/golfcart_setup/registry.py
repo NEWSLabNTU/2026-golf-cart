@@ -307,6 +307,24 @@ STEPS: list[Step] = [
         profiles=_on(*EVERY),
     ),
 
+    Step(
+        id="cuvslam",
+        label="cuVSLAM 17.0.0 for rig_localization",
+        why="NVIDIA's cuVSLAM C++ package (Orin: JetPack 6; x86_64: Ubuntu 22.04, "
+            "CUDA 12), sha256 and headers checked, into the rig_localization "
+            "submodule's git-ignored third_party/cuvslam/. Without it `just build` "
+            "skips the rigloc packages and localization_preset:=rigloc cannot "
+            "start; only the host that runs the localizer needs it (the orin "
+            "under a two-machine profile).",
+        group="Autoware",
+        run=_BASH(
+            f"test -x {REPO_ROOT}/src/localization/rig_localization/scripts/fetch_cuvslam.sh "
+            "|| { echo 'rig_localization submodule not checked out: just checkout' >&2; exit 1; }\n"
+            f"{REPO_ROOT}/src/localization/rig_localization/scripts/fetch_cuvslam.sh"
+        ),
+        profiles=_on(*DEV),
+    ),
+
     # ---- Networking, required to run ROS at all --------------------------
     Step(
         id="cyclonedds-sysctl",

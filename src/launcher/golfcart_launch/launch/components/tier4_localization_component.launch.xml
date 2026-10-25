@@ -7,11 +7,14 @@
   <arg name="twist_source" default="gyro_odom" description="select twist_estimator: gyro_odom, eagleye, rigloc"/>
   <!--
     twist_source:=rigloc: rig_localization's camera + IMU (+ wheel speed) twist
-    estimator replaces gyro_odometer on the EKF's twist input. Nothing of
-    rig_localization is a dependency of this package: source its install as
-    an overlay before launching with it. Every branch below starts no
-    gyro_odometer for it; the node is launched at the end of this file.
+    estimator replaces gyro_odometer on the EKF's twist input; NDT stays the
+    pose source. Every branch below starts no gyro_odometer for it. The node
+    itself is components/rigloc_twist.launch.xml, included at the end of this
+    file when launch_rigloc (one machine); under host:=master it runs on the
+    orin instead (golfcart.launch.yaml) and only its twist crosses the link.
   -->
+  <arg name="launch_rigloc" default="true"
+       description="twist_source:=rigloc: start the localizer here (false: another host runs it)"/>
   <arg name="rigloc_param_file"
        default="$(find-pkg-share golfcart_launch)/config/localization/rigloc/rigloc.param.yaml"
        description="twist_source:=rigloc: overlay on rigloc_launch's rigloc.param.yaml"/>
@@ -187,13 +190,11 @@
     </include>
   </group>
 
-  <!-- rig_localization as the twist estimator: publishes the EKF's twist input
-       (rigloc.param.yaml), respawned while the cameras and /tf_static come up. -->
-  <group if="$(eval '\'$(var twist_source)\' == \'rigloc\'')">
-    <push-ros-namespace namespace="/localization/twist_estimator"/>
-    <include file="$(find-pkg-share rigloc_launch)/launch/rigloc.launch.xml">
-      <arg name="overlay_file" value="$(var rigloc_param_file)"/>
-      <arg name="out_dir" value="$(var rigloc_out_dir)"/>
+  <!-- rig_localization as the twist estimator, on this machine. -->
+  <group if="$(eval '\'$(var twist_source)\' == \'rigloc\' and \'$(var launch_rigloc)\' in (\'true\', \'True\', \'1\')')">
+    <include file="$(find-pkg-share golfcart_launch)/launch/components/rigloc_twist.launch.xml">
+      <arg name="rigloc_param_file" value="$(var rigloc_param_file)"/>
+      <arg name="rigloc_out_dir" value="$(var rigloc_out_dir)"/>
     </include>
   </group>
 </launch>

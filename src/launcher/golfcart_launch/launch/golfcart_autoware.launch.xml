@@ -178,9 +178,11 @@
   <arg name="initial_pose" default="[]"
        description="x, y, z, qx, qy, qz, qw. A 7-element list seeds the pose; anything else is ignored"/>
   <!-- What feeds the EKF's twist input: gyro_odom (gyro_odometer, wheel speed
-       + IMU) or rigloc (rig_localization's camera + IMU + wheel speed; its
-       install sourced as an overlay). See the localization component. -->
+       + IMU) or rigloc (rig_localization's camera + IMU + wheel speed). NDT is
+       the pose source either way. See the localization component. -->
   <arg name="twist_source" default="gyro_odom" description="gyro_odom | rigloc"/>
+  <arg name="launch_rigloc" default="true"
+       description="twist_source:=rigloc: run the localizer on this machine (false under host:=master: the orin runs it)"/>
   <arg name="rigloc_out_dir" default="" description="twist_source:=rigloc: the localizer's run logs; empty: none"/>
 
   <!--
@@ -242,6 +244,7 @@
       <arg name="ndt_divergence_nvtl_median_gate" value="$(var ndt_divergence_nvtl_median_gate)"/>
       <arg name="gnss_enabled" value="$(var gnss_enabled)"/>
       <arg name="twist_source" value="$(var twist_source)"/>
+      <arg name="launch_rigloc" value="$(var launch_rigloc)"/>
       <arg name="rigloc_out_dir" value="$(var rigloc_out_dir)"/>
     </include>
 

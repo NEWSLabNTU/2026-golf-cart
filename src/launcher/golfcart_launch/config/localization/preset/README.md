@@ -47,6 +47,42 @@ Uses Eagleye for twist estimation. Eagleye provides GNSS-based odometry.
 just launch "localization_preset:=eagleye use_gnss:=true gnss_receiver:=ublox"
 ```
 
+### `rigloc`
+NDT stays the pose source (`pose_source`, `cuda_ndt` by default); the EKF's twist comes from
+[rig_localization](https://github.com/NEWSLabNTU/rig_localization) (submodule
+`src/localization/rig_localization`) instead of `gyro_odometer`: the ZED X's left image tracked by
+cuVSLAM, the ZED's IMU and the vehicle's wheel speed (`/vehicle/status/velocity_status`), fused in
+a smoother.
+
+**Configuration**:
+- `twist_source`: `rigloc`
+- the localizer's parameters: `config/localization/rigloc/rigloc.param.yaml` (an overlay on
+  rig_localization's documented `rigloc_launch/config/rigloc.param.yaml`)
+
+**Where it runs**: `launch/components/rigloc_twist.launch.xml`. Under `host:=all` with the
+localization component; under `host:=master` / `host:=orin` on the **orin**, beside the ZED, its
+IMU and the vehicle interface, so no image crosses the link. Only its twist does
+(`config/link/topics.yaml`). The orin also republishes the vehicle description on the orin-local
+`/rigloc/tf_static_vehicle`, because `base_link -> zed_camera_link` is the master's.
+
+**Requirements**:
+- cuVSLAM on the host that runs it: `./setup.sh --only cuvslam`, then `just build`. Without it
+  `just build` skips the rigloc packages.
+- ZED X, its IMU, the vehicle interface's velocity report
+- No twist for the first ~10-25 s while the localizer initialises: the EKF reports ERROR until
+  the first one.
+
+**Measured** (rig-odom-sim results 014, the clockwise recording replayed into the live NDT + EKF,
+n=3, wheel stand-in): EKF xy RMS 0.026 m against `gyro_odom`'s 0.041 m. Over 10-20 s NDT outages
+the drift ties `gyro_odom`, but the EKF's lateral-ellipse diagnostic reaches ERROR within 1-4 s
+of losing NDT (77 s with `gyro_odom`): the EKF's process noise against a 10 Hz twist 0.27 s late.
+Not yet run on the vehicle.
+
+**Launch**:
+```bash
+just launch "localization_preset:=rigloc"
+```
+
 ## Usage
 
 Specify the preset when launching Golf Cart:
@@ -65,6 +101,7 @@ ros2 launch golfcart_launch logging_simulation.launch.yaml localization_preset:=
 |--------------|---------------|----------|---------|----------|
 | `gyro_odom` | IMU | Medium | Low | Standard operation |
 | `eagleye` | GNSS + IMU | High (outdoor) | Medium | GNSS-based odometry |
+| `rigloc` | ZED camera + IMU + wheel speed | High (measured offline) | ~0.27 s, 10 Hz | Camera-aided odometry |
 
 ## Creating Custom Presets
 
@@ -80,7 +117,7 @@ To create a custom preset:
 
 | Parameter | Type | Options | Description |
 |-----------|------|---------|-------------|
-| `twist_source` | string | `gyro_odom`, `eagleye` | Twist (velocity + angular rate) estimation source |
+| `twist_source` | string | `gyro_odom`, `eagleye`, `rigloc` | Twist (velocity + angular rate) estimation source |
 
 ## Relationship with Other Parameters
 

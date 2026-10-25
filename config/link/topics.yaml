@@ -138,6 +138,16 @@ orin_to_master:
     reliability: reliable
     depth: 10
 
+  # rig_localization's twist (localization_preset:=rigloc), from the localizer
+  # on the orin to the master's ekf_localizer. 10 Hz, ~400 bytes. Reliable
+  # depth 10: the localizer publishes QoS(10) and the EKF subscribes reliable.
+  # Under gyro_odom nothing on the orin publishes it, and the master's
+  # gyro_odometer publishes it in the master's own domain, never onto the link.
+  - topic: /localization/twist_estimator/twist_with_covariance
+    type: geometry_msgs/msg/TwistWithCovarianceStamped
+    reliability: reliable
+    depth: 10
+
 # The vehicle interface's commands, from vehicle_cmd_gate and the e-stop on the
 # master to the interface on the orin. RELIABLE with depth 1 on both ends,
 # because the interface subscribes KeepLast(1) Reliable (node.rs, cmd_qos): a

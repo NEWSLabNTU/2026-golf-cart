@@ -1,0 +1,10 @@
+launch:
+  # rig_localization Localization Preset
+  # NDT (pose_source, cuda_ndt by default) stays the pose source; the EKF's
+  # twist comes from rig_localization (ZED camera + IMU + wheel speed) instead
+  # of gyro_odometer. Needs the rigloc packages built (setup step cuvslam),
+  # and runs on the orin under host:=master / host:=orin.
+
+  - arg:
+      name: twist_source
+      default: "rigloc"

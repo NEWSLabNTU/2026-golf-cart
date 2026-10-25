@@ -105,6 +105,20 @@ build *FLAGS="":
         echo "  (needed only on the host with the receiver: apt install ros-humble-mavros-msgs)"
         IGNORE_PKGS+=(ublox ublox_gps)
     fi
+    # rig_localization (localization_preset:=rigloc) links NVIDIA's cuVSLAM, a
+    # binary fetched per architecture by the setup step `cuvslam` into the
+    # submodule's git-ignored third_party/cuvslam/<orin|x86_64>/. Only the host
+    # that runs the localizer needs it: the orin under host:=master/orin (it
+    # sits beside the ZED), the one machine under host:=all. CUVSLAM_ROOT in the
+    # environment points the build at another copy.
+    RIGLOC=src/localization/rig_localization
+    case "$(uname -m)" in aarch64) CUVSLAM_DIR=orin ;; *) CUVSLAM_DIR=x86_64 ;; esac
+    if [[ -d "{{justfile_directory()}}/${RIGLOC}/src" ]] \
+       && [[ ! -f "${CUVSLAM_ROOT:-{{justfile_directory()}}/${RIGLOC}/third_party/cuvslam/${CUVSLAM_DIR}/bin}/libcuvslam.so" ]]; then
+        echo "→ cuVSLAM not fetched — skipping rig_localization (localization_preset:=rigloc)"
+        echo "  (needed only on the host that runs it: ./setup.sh --only cuvslam)"
+        IGNORE_PKGS+=(rigloc_core rigloc_pipeline rigloc_localizer rigloc_launch rigloc_replay)
+    fi
     IGNORE_ARGS=()
     if [[ ${#IGNORE_PKGS[@]} -gt 0 ]]; then
         IGNORE_ARGS=(--packages-ignore "${IGNORE_PKGS[@]}")
