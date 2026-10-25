@@ -80,6 +80,10 @@
        is the correct behaviour for a default that is about the vehicle rather
        than about the test. -->
   <arg name="pose_initializer" default="gnss" description="gnss | board | none"/>
+  <!-- gyro_odom as on the cart today; rigloc puts rig_localization's twist
+       estimator on the EKF instead (golfcart_autoware.launch.xml). -->
+  <arg name="twist_source" default="gyro_odom" description="gyro_odom | rigloc"/>
+  <arg name="rigloc_out_dir" default="" description="twist_source:=rigloc: the localizer's run logs"/>
   <arg name="reflective_pose_scenario" default="basement"/>
 
   <!-- The one topic the bag has. Both consumers read it: see the header. -->
@@ -119,7 +123,8 @@
     <arg name="launch_dummy_diag_publisher" value="false"/>
 
     <arg name="pose_source" value="$(var pose_source)"/>
-    <arg name="twist_source" value="gyro_odom"/>
+    <arg name="twist_source" value="$(var twist_source)"/>
+    <arg name="rigloc_out_dir" value="$(var rigloc_out_dir)"/>
     <arg name="imu_source" value="zed"/>
 
     <arg name="pose_initializer" value="$(var pose_initializer)"/>

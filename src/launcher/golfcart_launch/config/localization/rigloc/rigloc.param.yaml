@@ -1,0 +1,23 @@
+# rig_localization's twist estimator on the golf cart (twist_source:=rigloc).
+#
+# An overlay on rigloc_launch's config/rigloc.param.yaml (every parameter, documented, at the
+# node's default): only what this vehicle changes. tier4_localization_component.launch.xml loads
+# it through rigloc_launch's rigloc.launch.xml, under /localization/twist_estimator.
+/**:
+  ros__parameters:
+    # The EKF's twist input, absolute: what gyro_odometer publishes when twist_source:=gyro_odom.
+    twist_topic: /localization/twist_estimator/twist_with_covariance
+    # ekf_localizer owns map -> odom -> base_link.
+    publish_tf: false
+    # The vehicle interface's VelocityReport; it pins the metric scale. With nothing published
+    # on it the node runs on camera + IMU alone.
+    wheel_topic: /vehicle/status/velocity_status
+    # The ZED X's IMU as its node publishes it (frame zed_imu_link), not imu_corrector's output:
+    # the localizer takes its extrinsic from the message's frame and /tf_static.
+    imu_topic: /sensing/camera/zed/imu/data
+    # The ZED node publishes the rectified left image under rgb/color/rect; the three GMSL
+    # cameras keep rigloc's default topics.
+    topics:
+      zed:
+        image: /sensing/camera/zed/rgb/color/rect/image/compressed
+        info: /sensing/camera/zed/rgb/color/rect/camera_info

@@ -177,6 +177,11 @@
   <arg name="ndt_divergence_nvtl_median_gate" default="0.0"/>
   <arg name="initial_pose" default="[]"
        description="x, y, z, qx, qy, qz, qw. A 7-element list seeds the pose; anything else is ignored"/>
+  <!-- What feeds the EKF's twist input: gyro_odom (gyro_odometer, wheel speed
+       + IMU) or rigloc (rig_localization's camera + IMU + wheel speed; its
+       install sourced as an overlay). See the localization component. -->
+  <arg name="twist_source" default="gyro_odom" description="gyro_odom | rigloc"/>
+  <arg name="rigloc_out_dir" default="" description="twist_source:=rigloc: the localizer's run logs; empty: none"/>
 
   <!--
     Which node seeds /localization/initialize. Orthogonal to pose_source, which
@@ -236,6 +241,8 @@
       <arg name="initial_pose" value="$(var initial_pose)"/>
       <arg name="ndt_divergence_nvtl_median_gate" value="$(var ndt_divergence_nvtl_median_gate)"/>
       <arg name="gnss_enabled" value="$(var gnss_enabled)"/>
+      <arg name="twist_source" value="$(var twist_source)"/>
+      <arg name="rigloc_out_dir" value="$(var rigloc_out_dir)"/>
     </include>
 
     <!-- Board cold start, beside the localization component rather than
