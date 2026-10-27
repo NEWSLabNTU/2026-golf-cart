@@ -27,6 +27,8 @@ units:
     type: diag
     node: /adapi/node/localization
     name: state
+    # 1 Hz AD API heartbeat; same timeout and reason as localization.yaml.
+    timeout: 3.0
 
   - path: /autoware/localization/topic_rate_check/transform
     type: diag

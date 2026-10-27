@@ -1,0 +1,108 @@
+# Diagnostic graph for the cart: upstream's autoware-main.yaml with longer
+# staleness timeouts on the three AD API heartbeat leaves.
+#
+# Why: /autoware/localization/state, /autoware/planning/routing/state and
+# /adapi/mrm_request/delegate are published by the /adapi/node/* nodes once a
+# second, and a diag leaf's default timeout is 1.0 s (TimeoutLevel in
+# autoware_diagnostic_graph_aggregator, levels.cpp). Any publish that lands a
+# little late, or an aggregator tick that falls on the same instant, reads the
+# leaf STALE for one 10 Hz tick. Each such tick turns its subtree ERROR, drops
+# autonomous availability, and the MRM handler stops the cart; with
+# use_emergency_holding false that is a hard brake per blip (Phase 8 S5).
+# Observed in every sim-time replay here: /adapi/node/localization: state STALE
+# for 0.1 s every 1-3 s (Phase 8 L6, Phase 9 item 16a). Same remedy as
+# upstream's autoware-carla.yaml and AutoSDV (8d585112, 5d500152).
+#
+# The localization and planning subtrees come from the copies beside this file,
+# which differ from upstream ONLY by that timeout line; every other subtree is
+# upstream's, unchanged. The only change in this file is the delegate's timeout.
+# Real checks are untouched: a dead AD API node still goes STALE, after 3-5 s.
+#
+# Keep them copies: after an Autoware upgrade, re-copy autoware-main.yaml,
+# localization.yaml and planning.yaml from autoware_launch and re-apply the
+# commented lines. test_diagnostic_graph.py pins the timeouts and checks that
+# every graph golfcart_autoware.launch.xml can select includes these copies.
+files:
+  - { path: $(find-pkg-share autoware_launch)/config/system/diagnostics/control.yaml }
+  - { path: $(dirname)/localization.yaml }
+  - { path: $(find-pkg-share autoware_launch)/config/system/diagnostics/map.yaml }
+  - { path: $(find-pkg-share autoware_launch)/config/system/diagnostics/perception.yaml }
+  - { path: $(dirname)/planning.yaml }
+  - { path: $(find-pkg-share autoware_launch)/config/system/diagnostics/system.yaml }
+  - { path: $(find-pkg-share autoware_launch)/config/system/diagnostics/vehicle.yaml }
+
+units:
+  - path: /autoware/modes/local
+    type: and
+    list:
+      - { type: link, link: /autoware/vehicle }
+      - { type: link, link: /autoware/system }
+      - { type: link, link: /autoware/control/local }
+      - { type: link, link: /adapi/mrm_request/delegate }
+
+  - path: /autoware/modes/remote
+    type: and
+    list:
+      - { type: link, link: /autoware/vehicle }
+      - { type: link, link: /autoware/system }
+      - { type: link, link: /autoware/control/remote }
+      - { type: link, link: /adapi/mrm_request/delegate }
+
+  - path: /autoware/modes/stop
+    type: and
+    list:
+      - { type: link, link: /adapi/mrm_request/delegate }
+
+  - path: /autoware/modes/autonomous
+    type: and
+    list:
+      - { type: link, link: /autoware/map }
+      - { type: link, link: /autoware/localization }
+      - { type: link, link: /autoware/planning }
+      - { type: link, link: /autoware/perception }
+      - { type: link, link: /autoware/control }
+      - { type: link, link: /autoware/vehicle }
+      - { type: link, link: /autoware/system }
+      - { type: link, link: /adapi/mrm_request/delegate }
+
+  - path: /autoware/modes/pull_over
+    type: and
+    list:
+      - { type: link, link: /autoware/map }
+      - { type: link, link: /autoware/localization }
+      - { type: link, link: /autoware/planning }
+      - { type: link, link: /autoware/perception }
+      - { type: link, link: /autoware/control }
+      - { type: link, link: /autoware/vehicle }
+      - { type: link, link: /autoware/system }
+
+  - path: /autoware/modes/comfortable_stop
+    type: and
+    list:
+      - { type: link, link: /autoware/map }
+      - { type: link, link: /autoware/localization }
+      - { type: link, link: /autoware/planning }
+      - { type: link, link: /autoware/perception }
+      - { type: link, link: /autoware/control }
+      - { type: link, link: /autoware/vehicle }
+      - { type: link, link: /autoware/system }
+
+  - path: /autoware/modes/emergency_stop
+    type: and
+    list:
+      - { type: link, link: /autoware/vehicle }
+      - { type: link, link: /autoware/system }
+
+  - path: /autoware/debug/tools
+    type: and
+    list:
+      - { type: link, link: /autoware/system/service_log_checker }
+
+  - path: /adapi/mrm_request/delegate
+    type: diag
+    node: /adapi/node/mrm_request
+    name: delegate
+    # Golf cart: 1 Hz AD API heartbeat; the 1.0 s default reads it STALE for a
+    # tick when one publish is late, which makes every mode ERROR and raises an
+    # MRM. 5.0 s, as AutoSDV 5d500152, still catches a dead AD API node.
+    timeout: 5.0

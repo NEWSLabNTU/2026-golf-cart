@@ -7,13 +7,16 @@
 >
 > Most of this guide describes a configuration that no longer exists. The repo's
 > `mrm_handler`, `mrm_*_operator` and diagnostics copies were deleted in the
-> 2026-08-21 config sweep (they were never loaded), and
-> `config/system/diagnostics/localization.yaml` is loaded by nothing.
+> 2026-08-21 config sweep (they were never loaded). Since 2026-10-27
+> `config/system/diagnostics/localization.yaml` is live again, but as a fresh
+> copy of upstream's with one change (a 3.0 s timeout on the 1 Hz
+> `/autoware/localization/state` heartbeat); the accuracy-check disable below
+> was not carried into it.
 >
 > | | In effect |
 > |---|---|
 > | MRM handler and operators | upstream `autoware_launch`: **comfortable stop ON** (-1.0 m/s2), emergency holding off |
-> | Diagnostic graph, perception on | upstream `autoware-main.yaml` |
+> | Diagnostic graph, perception on | `config/system/diagnostics/autoware-main.yaml`: upstream's, with 3.0 s timeouts on `/autoware/localization/state` and `/autoware/planning/routing/state` and 5.0 s on `/adapi/mrm_request/delegate` (1 Hz AD API heartbeats that read STALE for a tick under the 1.0 s default); every variant below builds on it |
 > | Diagnostic graph, `launch_perception:=false` | `config/system/diagnostics/autoware-main-no-perception.yaml`: upstream's graph with `/autoware/perception` removed by the aggregator's `edits` |
 > | Diagnostic graph, `pose_source:=aruco` | `config/system/diagnostics/autoware-main-aruco.yaml`, or `autoware-main-aruco-no-perception.yaml` with perception off |
 > | Localization accuracy check (1.5 m ellipse) | **ACTIVE** in all three. "Change 1" below is not in effect. |
@@ -96,7 +99,7 @@ NORMAL → EMERGENCY → RECOVERY → NORMAL
 
 ## Golf Cart Configuration Changes
 
-### Change 1: Disable Localization Accuracy Check (NOT IN EFFECT: the file is loaded by nothing)
+### Change 1: Disable Localization Accuracy Check (NOT IN EFFECT: never loaded, and not carried into the 2026-10-27 copy)
 
 **File**: `src/launcher/golfcart_launch/config/system/diagnostics/localization.yaml`
 

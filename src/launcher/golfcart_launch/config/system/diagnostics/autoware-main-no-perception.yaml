@@ -1,6 +1,7 @@
 # Diagnostic graph for launch_perception:=false (Phase 8, E3).
 #
-# Upstream's autoware-main.yaml, unchanged, with the perception subtree removed
+# autoware-main.yaml from this directory (upstream's, with the AD API heartbeat
+# timeouts), unchanged, with the perception subtree removed
 # through the aggregator's own `edits` mechanism
 # (autoware_diagnostic_graph_aggregator, ConfigLoader::apply_remove_edits):
 # removing a unit also removes every link to it, so the driving modes stop
@@ -18,8 +19,8 @@
 # runs only; the driver and the e-stop are the obstacle detector.
 #
 # Selected in golfcart_autoware.launch.xml whenever launch_perception is false;
-# launch_perception:=true goes back to upstream's graph with no other change.
-# An include, not a copy, so it follows upstream across Autoware upgrades.
+# launch_perception:=true goes back to autoware-main.yaml with no other change.
+# An include, not a copy, so it follows that file.
 #
 # Remove ONLY the and-unit, by exact path. Never remove a `type: diag` unit.
 # Until 2026-10-22 this said `regex: "/autoware/perception(/.*)?"`, which also
@@ -39,6 +40,6 @@
 # with perception off, which is the truth, and nothing links to them, so no
 # mode depends on them; /autoware/modes/* compute without perception.
 files:
-  - { path: $(find-pkg-share autoware_launch)/config/system/diagnostics/autoware-main.yaml }
+  - { path: $(dirname)/autoware-main.yaml }
 edits:
   - { type: remove, path: /autoware/perception }

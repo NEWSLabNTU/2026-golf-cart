@@ -1,24 +1,17 @@
-# NOT LOADED BY ANYTHING. Kept because the edit below is real work.
+# Upstream's localization.yaml (autoware_launch, Autoware 1.5.0), copied for
+# ONE change: the timeout on /autoware/localization/state. Loaded through
+# autoware-main.yaml beside it; see that file's header for why.
 #
-# The aggregator's graph path is `autoware-main.yaml` from autoware_launch on
-# every path except `pose_source:=aruco`, which loads `autoware-main-aruco.yaml`
-# from this directory. That file pulls its localization subtree from
-# `localization-aruco.yaml`, its sibling, and every other subtree from
-# autoware_launch. Nothing reaches this file.
-#
-# It survived the 2026-08-21 sweep that removed 145 config files inherited
-# verbatim from the 2025-12-28 bulk copy of autoware_launch/config and never
-# touched since. This one WAS touched: the accuracy-check link below was
-# deliberately removed. Deleting it would have discarded that decision, so it
-# stays until someone confirms the same change is or is not wanted in
-# `localization-aruco.yaml`, which is the file that actually runs.
-#
-# Do not wire this in without re-reading it against upstream first. It is a
-# December snapshot, and upstream's localization.yaml has moved since.
-
+# This replaces a December 2025 snapshot of the same name that nothing ever
+# loaded (c98a492, kept through 4717a34). Its one edit, removing the
+# /autoware/localization/accuracy link from the gate, was therefore never in
+# effect, and it is NOT carried over here: the accuracy check gates exactly as
+# it has on every run so far. Whether to drop it is Phase 8 L1's decision, to be
+# made from measured ellipse sizes, not as a side effect of this copy. See
+# docs/guides/mrm_configuration.md, "Change 1".
 units:
   - path: /autoware/localization
-    type: short-circuit-and
+    type: and
     list:
       - type: link
         link: /autoware/localization/state
@@ -27,16 +20,17 @@ units:
           - { type: link, link: /autoware/localization/topic_rate_check/transform }
           - { type: link, link: /autoware/localization/topic_rate_check/pose_twist_fusion }
           - { type: link, link: /autoware/localization/scan_matching_status }
-          # Golf Cart: Disabled accuracy check to prevent false MRM emergency stops
-          # The error ellipse thresholds (1.5m/0.3m) are too strict for VLP-32C
-          # Localization quality is still monitored via scan_matching_status
-          # - { type: link, link: /autoware/localization/accuracy }
+          - { type: link, link: /autoware/localization/accuracy }
           - { type: link, link: /autoware/localization/sensor_fusion_status }
 
   - path: /autoware/localization/state
     type: diag
-    node: component_state_diagnostics
-    name: localization_state
+    node: /adapi/node/localization
+    name: state
+    # Golf cart: published at 1 Hz; with the 1.0 s default it went STALE for
+    # 0.1 s every 1-3 s in replays and each blip made /autoware/localization
+    # ERROR (Phase 8 L6). 3.0 s, as upstream's CARLA graph and AutoSDV 8d585112.
+    timeout: 3.0
 
   - path: /autoware/localization/topic_rate_check/transform
     type: diag

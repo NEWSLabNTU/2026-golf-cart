@@ -22,6 +22,14 @@ if(BUILD_TESTING)
     test_steering_limit_agrees
     test/test_steering_limit_agrees.py
   )
+  ament_add_pytest_test(
+    test_diagnostic_graph
+    test/test_diagnostic_graph.py
+  )
+  ament_add_pytest_test(
+    test_duplicated_node_checker
+    test/test_duplicated_node_checker.py
+  )
 
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()

@@ -1,0 +1,18 @@
+# Copy of autoware_launch's duplicated_node_checker.param.yaml (1.5.0) with
+# /rosbag2_recorder added to nodes_to_ignore.
+#
+# Every `ros2 bag record` registers as /rosbag2_recorder, and Humble's CLI has
+# no way to rename it (rosbag2_py starts the node itself, no --ros-args). This
+# master can run two at once: golfcart-record.service beside a script recorder
+# (scripts/testing/sysid/sysid_record.sh, just bag record, creep_record.sh).
+# Two nodes of one name make this checker ERROR under /autoware/system, which
+# blocks autonomous mode (seen in AutoSDV, 7b3b2f83). A recorder only
+# subscribes, so a duplicate is harmless to the stack.
+/**:
+  ros__parameters:
+    update_rate: 10.0
+    add_duplicated_node_names_to_msg: true # if true, duplicated node names are added to msg
+    nodes_to_ignore:  # List of nodes to ignore when checking for duplicates
+      - /rviz2
+      - /simulation/getParameter
+      - /rosbag2_recorder
