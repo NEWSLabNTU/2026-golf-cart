@@ -50,3 +50,32 @@ def test_falcon_map_detector_config_loads_with_its_effective_aabb():
     assert config.detector.map.board_centre_height == pytest.approx(1.0)
     assert config.detector.map.aabb.minimum == (-20.0, -20.0, 0.5)
     assert config.detector.map.aabb.maximum == (20.0, 20.0, 1.1)
+
+
+POLICY_ROOT = SCENARIO_ROOT.parent
+
+
+def _policy(name):
+    yaml = pytest.importorskip('yaml')
+    with open(POLICY_ROOT / name) as f:
+        return yaml.safe_load(f)['/**']['ros__parameters']
+
+
+def test_vehicle_policy_waits_for_the_stack_to_take_a_pose():
+    policy = _policy('board_pose_initializer.param.yaml')
+
+    assert policy['require_velocity'] is True
+    assert policy['stopped_for'] >= 3.0
+    assert policy['ready_pointcloud_topic'] == (
+        '/localization/util/downsample/pointcloud'
+    )
+
+
+def test_no_velocity_policy_differs_only_in_require_velocity():
+    vehicle = _policy('board_pose_initializer.param.yaml')
+    replay = _policy('board_pose_initializer.no_velocity.param.yaml')
+
+    assert replay['require_velocity'] is False
+    assert {k: v for k, v in replay.items() if k != 'require_velocity'} == {
+        k: v for k, v in vehicle.items() if k != 'require_velocity'
+    }

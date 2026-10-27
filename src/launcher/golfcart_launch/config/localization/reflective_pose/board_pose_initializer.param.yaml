@@ -39,3 +39,23 @@
     # and the initializer stopped for good. With this on, failures before the
     # matcher publishes its loaded map are retried without being counted.
     ignore_failures_before_map: true
+
+    # Readiness (reflective_pose_detector 6431966, ported from AutoSDV): act on
+    # a board pose only when Autoware's pose initializer can take one. A cold
+    # start sees the board within a second or two, before the initializer has
+    # stop_check_duration (3 s) of stopped twists ("The vehicle is not
+    # stopped") and before NDT has a scan ("align server failed"); each refusal
+    # spent an attempt, and five ran out in 7 s. A pose that arrives early is
+    # ignored, not counted.
+    #
+    # require_velocity needs /vehicle/status/velocity_status. No bag here has
+    # wheel speed, so the logging sims load
+    # board_pose_initializer.no_velocity.param.yaml instead (the same file with
+    # require_velocity false; test_reflective_pose_configs.py pins that).
+    require_velocity: true
+    # VelocityReports must have reported a stop this long, unbroken [s].
+    stopped_for: 3.0
+    # NDT's input cloud (the localization util chain's output).
+    ready_pointcloud_topic: /localization/util/downsample/pointcloud
+    # How recent the last VelocityReport / cloud must be [s].
+    ready_timeout: 1.0

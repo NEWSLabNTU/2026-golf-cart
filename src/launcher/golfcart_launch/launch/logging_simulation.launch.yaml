@@ -319,6 +319,11 @@ launch:
     -
       name: pose_initializer
       value: $(var pose_initializer)
+    # Replay bags carry no velocity report: the board initializer must not wait
+    # for a stopped wheel speed (board_pose_initializer.param.yaml).
+    -
+      name: board_initializer_params
+      value: board_pose_initializer.no_velocity.param.yaml
     -
       name: reflective_pose_scenario
       value: $(var reflective_pose_scenario)

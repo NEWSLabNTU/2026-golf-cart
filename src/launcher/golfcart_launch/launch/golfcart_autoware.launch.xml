@@ -43,7 +43,7 @@
   <arg name="system_run_mode" default="online" description="run mode in system"/>
   <arg name="launch_system_monitor" default="true" description="launch system monitor"/>
   <arg name="launch_dummy_diag_publisher" default="false" description="launch dummy diag publisher"/>
-  <arg name="diagnostic_graph_aggregator_graph_path" default="$(find-pkg-share autoware_launch)/config/system/diagnostics/autoware-main.yaml" description="diagnostic graph config"/>
+  <arg name="diagnostic_graph_aggregator_graph_path" default="$(find-pkg-share golfcart_launch)/config/system/diagnostics/autoware-main.yaml" description="diagnostic graph config: upstream autoware-main.yaml with 3-5 s timeouts on the 1 Hz AD API heartbeat leaves"/>
   <!-- Tools -->
   <arg name="rviz" default="true" description="launch rviz"/>
   <arg name="rviz_config_name" default="autoware.rviz" description="rviz config name"/>
@@ -211,6 +211,12 @@
        per vehicle, not per site. -->
   <arg name="reflective_pose_scenario" default="basement"
        description="scenarios/NAME/detector.yaml for pose_initializer:=board"/>
+  <!-- The board initializer's handoff policy, a file name beside scenarios/.
+       The vehicle's waits for a stopped wheel speed before acting on a pose;
+       the logging sims pass board_pose_initializer.no_velocity.param.yaml,
+       because their bags carry no velocity report. -->
+  <arg name="board_initializer_params" default="board_pose_initializer.param.yaml"
+       description="policy file for pose_initializer:=board, beside scenarios/"/>
   <!--
     The cloud the board detector reads. The VLP-32C's RAW driver output, on
     purpose, and it is the same topic name the D1a replay bag carries:
@@ -261,7 +267,7 @@
       <include file="$(find-pkg-share reflective_pose_autoware)/launch/board_pose_initializer.launch.xml">
         <arg name="config_file" value="$(var reflective_pose_config_path)/scenarios/$(var reflective_pose_scenario)/detector.yaml"/>
         <arg name="detector_params_file" value="$(var reflective_pose_config_path)/board_detector.param.yaml"/>
-        <arg name="initializer_params_file" value="$(var reflective_pose_config_path)/board_pose_initializer.param.yaml"/>
+        <arg name="initializer_params_file" value="$(var reflective_pose_config_path)/$(var board_initializer_params)"/>
         <arg name="input_topic" value="$(var board_input_pointcloud)"/>
         <arg name="namespace" value="/localization"/>
       </include>

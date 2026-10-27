@@ -129,6 +129,8 @@
 
     <arg name="pose_initializer" value="$(var pose_initializer)"/>
     <arg name="reflective_pose_scenario" value="$(var reflective_pose_scenario)"/>
+    <!-- The bag has no velocity report, so no wait for a stopped wheel speed. -->
+    <arg name="board_initializer_params" value="board_pose_initializer.no_velocity.param.yaml"/>
     <arg name="board_input_pointcloud" value="$(var board_input_pointcloud)"/>
 
     <!-- No GNSS indoors. gnss_receiver still needs a REAL value: the sensor
