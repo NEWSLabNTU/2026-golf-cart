@@ -219,7 +219,9 @@ interface's CAN frames (2026-10-24; findings in Phase 8 S5).
     the 18 m gate.
 16a. In item 16, watch `/adapi/node/localization: state` for STALE blips
     (Phase 8 L6): seen every 1-3 s in sim-time replays, each one an
-    `/autoware/localization` ERROR.
+    `/autoware/localization` ERROR. Since 600e418 (2026-10-27, from AutoSDV) the leaf
+    times out at 3.0 s: 177 transitions in 200 s of replay became none. Check
+    the leaf stays OK on the cart.
 16. Stationary rehearsal: `just launch-drive-mingda`, board init, NDT lock, route
     on the lane, no engage.
 17. L5 speed report (push the cart a metre, forward and reverse), physical e-stop,
