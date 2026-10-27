@@ -608,6 +608,14 @@ launch:
             - from: ~/output/objects
               to: /perception/object_recognition/objects
 
+# H.264 left/right rectified ZED X streams, encoded on the orin's NVENC and
+# recorded there (zed.launch.xml, config/recording/orin_topics.txt). Needs the
+# isaac-h264-encoder setup step on the orin; off, nothing references Isaac ROS.
+- arg:
+    name: zed_stereo_video
+    default: "false"
+    description: "ZED X stereo video (H.264 left/right) for the orin's bag"
+
 # ZED X camera - runs on the orin (slave) host.
 #
 # Included directly rather than through sensing.launch.xml, because the whole
@@ -623,6 +631,9 @@ launch:
         -
           name: camera_model
           value: zedx
+        -
+          name: zed_stereo_video
+          value: $(var zed_stereo_video)
 
 # rig_localization's twist estimator (localization_preset:=rigloc), on the orin.
 #

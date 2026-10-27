@@ -402,6 +402,18 @@ STEPS: list[Step] = [
         profiles=_on(*OPT_IN),                  # one machine; tick it there
     ),
     Step(
+        id="isaac-h264-encoder",
+        label="Isaac ROS H.264 encoder (ZED X stereo video)",
+        why="NVENC encoding of the ZED X's left and right images for the orin's "
+            "bag, used by zed_stereo_video:=true. Needs the Isaac ROS apt "
+            "repository, which this step does not add.",
+        group="System config",
+        run=[_S("install-isaac-h264-encoder.sh")],
+        requires=Requires(sudo=True, arch=("aarch64",)),
+        after=("ros2",),
+        profiles=_on(*OPT_IN),                  # the orin only; tick it there
+    ),
+    Step(
         id="otocam",
         label="OTOCAM GMSL kernel modules",
         why="IMX390 + MAX9296 kmods and a DTB overlay. Needs the vendor blob and "

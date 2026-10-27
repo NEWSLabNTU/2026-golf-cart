@@ -22,6 +22,15 @@
 /sensing/camera/zed/rgb/color/rect/image/compressed
 /sensing/camera/zed/rgb/color/rect/camera_info
 
+# ── ZED X stereo video — H.264 (NVENC), only with zed_stereo_video:=true ───
+# Empty in a bag recorded without it. The left camera_info is the RGB one
+# above (RGB is the left camera); the right one carries the stereo baseline.
+# Decode with isaac_ros_h264_decoder (its rosbag launch) or any H.264 decoder:
+# each message's data is an Annex-B access unit.
+/sensing/camera/zed/left/color/rect/image/h264
+/sensing/camera/zed/right/color/rect/image/h264
+/sensing/camera/zed/right/color/rect/camera_info
+
 # ── ZED IMU and driver health ───────────────────────────────────────────────
 /sensing/camera/zed/imu/data
 /sensing/camera/zed/status/health

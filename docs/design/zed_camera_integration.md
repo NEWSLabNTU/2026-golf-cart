@@ -115,9 +115,38 @@ on the inter-machine link.
 and its `camera_info` are stamped with the frame
 `zed_left_camera_frame_optical`.
 
-Enabling `video.publish_left_right` would add the stereo pair, needed if visual
-SLAM is added later. It also changes nothing about transforms, since
-`pos_tracking` stays disabled either way.
+### Stereo video (`zed_stereo_video:=true`)
+
+`zed_stereo_video:=true` (golfcart.launch.yaml, forwarded through
+`camera.launch.xml` to `zed.launch.xml`) turns on `video.publish_left_right` and
+loads four Isaac ROS components into the ZED's container: per side an
+`ImageFormatConverterNode` (the wrapper's bgr8 to the rgb8 the encoder
+subscribes, on the GPU) and an `h264_encoder::EncoderNode` (NVENC). The
+outputs are `sensor_msgs/CompressedImage`, `format` h264, one Annex-B access
+unit per message:
+
+    /sensing/camera/zed/left/color/rect/image/h264
+    /sensing/camera/zed/right/color/rect/image/h264
+
+The orin records both plus the right `camera_info`
+(`config/recording/orin_topics.txt`); nothing crosses the link. Encoder settings
+are Isaac's defaults (qp 20, an I-frame every 5 frames). It needs the
+`isaac-h264-encoder` setup step on the orin (the Isaac ROS apt repository
+first); with the switch off nothing references Isaac ROS.
+
+`debug.disable_nitros: true` is set in `zed.param.yaml` because installing the
+encoder installs `isaac_ros_nitros`, and the wrapper compiles a NITROS path
+whenever it finds that package: it would then publish NITROS images with no
+`image/compressed` transport, and the recorded RGB JPEG would disappear on the
+next rebuild.
+
+**Not yet run on the orin** (2026-10-27). To check there: the encoders load
+(`ros2 component list`), both h264 topics at 30 Hz, the container's CPU with
+and without, and a recorded bag decoding (`isaac_ros_h264_decoder`'s rosbag
+launch, or ffmpeg on the concatenated payloads). The raw images reach the
+encoders through DDS inside one process, not intra-process; if the CPU cost is
+high, intra-process comms on the four components is the next thing to try.
+`pos_tracking` stays disabled either way, so transforms do not change.
 
 ---
 
