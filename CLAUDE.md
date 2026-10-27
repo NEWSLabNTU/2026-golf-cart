@@ -517,7 +517,8 @@ launch:
 **Planning** (`config/planning/preset/`, `planning_preset:=`):
 - `default` - stock autoware_launch (default)
 - `slow_indoor` - the 1 m/s cart on indoor lanelets: no avoidance, lane change,
-  crosswalk, traffic-light or intersection modules; 2.0 m stop margins;
+  crosswalk, traffic-light or intersection modules; no reversing manoeuvres
+  (start/goal planner back-out and freespace off); 2.0 m stop margins;
   `max_vel` 1.5. The drive recipes and `just sim-drive-basement` use it. Unlike
   upstream's planning presets it can change parameter files, through our copy
   of `tier4_planning_component.launch.xml`; `test_planning_preset.py` pins both.

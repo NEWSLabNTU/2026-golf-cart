@@ -46,6 +46,9 @@ def main(argv=None) -> int:
                          'the goal planner searches for a pull-over spot, and a lanelet '
                          'with no road shoulder (the basement) leaves it holding a stop '
                          'at distance 0 forever')
+    ap.add_argument('--route-subscriber-timeout', type=float, default=120.0,
+                    help='s to wait for the lane departure checker to subscribe to the '
+                         'route before setting one (route_subscriber.py); 0 skips')
     args = ap.parse_args(argv)
 
     import rclpy
@@ -117,6 +120,11 @@ def main(argv=None) -> int:
     if err:
         return fail(f'initialize: {err}')
     say(f'localization initialized at ({sx:.1f}, {sy:.1f}, {args.start[2]:.0f} deg)')
+
+    from route_subscriber import wait_for_route_subscriber
+    err = wait_for_route_subscriber(node, args.route_subscriber_timeout, say=say)
+    if err:
+        return fail(err)
 
     route = SetRoutePoints.Request()
     route.header.frame_id = 'map'

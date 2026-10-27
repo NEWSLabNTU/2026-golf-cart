@@ -328,6 +328,18 @@ modules by preset but hardcodes every parameter path, hence the copy.
   light with recognition off). `stop_line` stays.
 - obstacle_stop and road_user_stop margins 5.0/3.0/3.0 -> 2.0/1.5/1.5 m;
   `max_vel` 4.17 -> 1.5 m/s, the interface's ceiling (S4).
+- No reversing manoeuvres (2026-10-27, ported from AutoSDV 2cf5ae5e):
+  start_planner `enable_back` and `freespace_planner.enable_freespace_planner`,
+  goal_planner `enable_arc_backward_parking` and `enable_freespace_parking`, all
+  true -> false. Every loop leg (M6) starts from a stop with a new route, and
+  the cart has no rear obstacle detection and an unchecked reverse speed sign
+  (L5); the freespace planners also run their own thread, which AutoSDV saw a
+  behavior planner crash tear down on a route change. Forward pull-out and
+  pull-over stay. Planning sim, loop, 3 laps each, with and without: 9/9 legs
+  ARRIVED, 0 mid-leg stops, arrival error 0.06-0.10 vs 0.07-0.10 m, and no
+  backward motion planned or driven in either (no negative trajectory or path
+  velocity, no REVERSE gear command): the simulated cart always stops on the
+  lane heading, so this guards the cart, where it may not.
 
 The drive recipes and `just sim-drive-basement` use it; the planning simulator
 goes through `planning_sim.launch.xml` (upstream's, with our planning

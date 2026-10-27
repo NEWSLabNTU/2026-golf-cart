@@ -10,7 +10,7 @@
 #
 # Every value here is a launch-argument default, as upstream's presets are: an
 # explicit `name:=value` still wins. Anything not named here falls through to
-# upstream's default preset, included at the end. The four parameter files
+# upstream's default preset, included at the end. The six parameter files
 # are copies of upstream's with the changed values marked; see
 # config/planning/slow_indoor/ and test/test_planning_preset.py.
 #
@@ -86,6 +86,16 @@ launch:
   - arg:
       name: golfcart_drivable_area_expansion_param_path
       default: "$(find-pkg-share golfcart_launch)/config/planning/slow_indoor/drivable_area_expansion.param.yaml"
+  # No reversing manoeuvres: start_planner's backward search and freespace
+  # pull-out, goal_planner's backward arc and freespace parking are off. Every
+  # loop leg starts from a stop with a new route, and the cart has no rear
+  # obstacle detection and an unchecked reverse speed sign (Phase 8, L5).
+  - arg:
+      name: golfcart_start_planner_param_path
+      default: "$(find-pkg-share golfcart_launch)/config/planning/slow_indoor/start_planner.param.yaml"
+  - arg:
+      name: golfcart_goal_planner_param_path
+      default: "$(find-pkg-share golfcart_launch)/config/planning/slow_indoor/goal_planner.param.yaml"
 
   # Everything else: upstream's default preset.
   - include:

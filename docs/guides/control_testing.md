@@ -66,12 +66,21 @@ Then:
    seeds `/localization/initialize`; `scripts/localization/check_ndt_activated.py`
    reports when NDT is tracking.
 2. In RViz on the master, confirm the scan overlays the map.
-3. Set the route with goal modification **off**, a few metres short of the
+3. Before the first route, check that the lane departure checker is listening
+   for it: `ros2 topic info -v --no-daemon /planning/mission_planning/route`
+   lists `lane_departure_checker_node` among the subscriptions. In Autoware
+   1.5.0 that subscription is VOLATILE and the route is published once, so a
+   checker that comes up after the route was set never gets it: it checks
+   nothing, its diagnostic drops to 1 Hz, and autonomous availability flaps
+   (an MRM each time). If the route went in first, clear it and set it again.
+   The simulator scripts (`sim_route_check.py`, `sim_loop_drive.py`,
+   `sim_mrm_check.py`) wait for this themselves (`route_subscriber.py`).
+4. Set the route with goal modification **off**, a few metres short of the
    lane's end. With it on (the route TUI's setting), the goal planner looks for a
    pull-over spot, finds no road shoulder in the basement, and holds the cart at
    zero speed with a `goal-planner` stop: engaged, and going nowhere. Seen in the
    planning simulator, 2026-09-29.
-4. Confirm on the mode strip that autonomous is available. If it is not, the
+5. Confirm on the mode strip that autonomous is available. If it is not, the
    strip names the leaf; do not proceed past a red leaf you cannot explain.
 
 ## Engage
@@ -131,6 +140,13 @@ about a second near (14, 22.8), just past the board, because path_optimizer's
 footprint pokes a few cm past the drivable area (no velocity factor names it).
 `planning_preset:=slow_indoor` widens the bound on curves by 0.1 m
 (`extra_width`) and drives through.
+
+Each leg starts from a stop on a new route, which is when Autoware's start
+planner may plan a back-out. Under `slow_indoor` it cannot: backward start
+search, backward-arc parking and both freespace planners are off, because the
+cart has no rear obstacle detection and its reverse speed sign is unchecked
+(Phase 8, L5). A cart stopped well off the lane heading may then find no
+forward pull-out and hold; the driver straightens it by hand.
 
 ## Stopping
 

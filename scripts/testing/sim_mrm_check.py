@@ -143,6 +143,9 @@ def main(argv=None) -> int:
                     help='skip the vehicle interface and the CAN checks')
     ap.add_argument('--log-dir', type=Path, default=Path('/tmp/sim_mrm_check'),
                     help='where the interface and mock_vcu logs go')
+    ap.add_argument('--route-subscriber-timeout', type=float, default=120.0,
+                    help='s to wait for the lane departure checker to subscribe to the '
+                         'route before setting one (route_subscriber.py); 0 skips')
     args = ap.parse_args(argv)
 
     import rclpy
@@ -281,6 +284,11 @@ def main(argv=None) -> int:
     _, err = call(InitializeLocalization, '/api/localization/initialize', init)
     if err:
         return finish(1, f'initialize: {err}')
+
+    from route_subscriber import wait_for_route_subscriber
+    err = wait_for_route_subscriber(node, args.route_subscriber_timeout, say=say)
+    if err:
+        return finish(1, err)
 
     route = SetRoutePoints.Request()
     route.header.frame_id = 'map'

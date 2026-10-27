@@ -6,13 +6,13 @@
   Upstream resolves module_preset inside autoware_launch's own share directory
   and hardcodes every parameter file path, so a preset there can only switch
   modules on and off. Here module_preset names a file under
-  golfcart_launch/config/planning/preset/, and four parameter files are taken
+  golfcart_launch/config/planning/preset/, and six parameter files are taken
   from golfcart_ paths that a preset may set. Their defaults are upstream's
   files, and default_preset.yaml includes upstream's default preset, so
   module_preset default is stock Autoware.
 
-  Changed lines are the preset include, the four golfcart_ path arguments and
-  the four values that read them. test_planning_preset.py holds the rest to
+  Changed lines are the preset include, the six golfcart_ path arguments and
+  the six values that read them. test_planning_preset.py holds the rest to
   upstream; re-copy on an Autoware upgrade.
 -->
 <launch>
@@ -40,6 +40,8 @@
   <arg name="golfcart_obstacle_stop_param_path" default="$(find-pkg-share autoware_launch)/config/planning/scenario_planning/lane_driving/motion_planning/motion_velocity_planner/obstacle_stop.param.yaml"/>
   <arg name="golfcart_road_user_stop_param_path" default="$(find-pkg-share autoware_launch)/config/planning/scenario_planning/lane_driving/motion_planning/motion_velocity_planner/road_user_stop.param.yaml"/>
   <arg name="golfcart_drivable_area_expansion_param_path" default="$(find-pkg-share autoware_launch)/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/drivable_area_expansion.param.yaml"/>
+  <arg name="golfcart_goal_planner_param_path" default="$(find-pkg-share autoware_launch)/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/goal_planner/goal_planner.param.yaml"/>
+  <arg name="golfcart_start_planner_param_path" default="$(find-pkg-share autoware_launch)/config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/start_planner/start_planner.param.yaml"/>
 
   <include file="$(find-pkg-share tier4_planning_launch)/launch/planning.launch.xml">
     <arg name="vehicle_param_file" value="$(find-pkg-share $(var vehicle_model)_description)/config/vehicle_info.param.yaml"/>
@@ -76,8 +78,8 @@
       value="$(var behavior_path_config_path)/autoware_behavior_path_dynamic_obstacle_avoidance_module/dynamic_obstacle_avoidance.param.yaml"
     />
     <arg name="behavior_path_planner_lane_change_module_param_path" value="$(var behavior_path_config_path)/lane_change/lane_change.param.yaml"/>
-    <arg name="behavior_path_planner_goal_planner_module_param_path" value="$(var behavior_path_config_path)/goal_planner/goal_planner.param.yaml"/>
-    <arg name="behavior_path_planner_start_planner_module_param_path" value="$(var behavior_path_config_path)/start_planner/start_planner.param.yaml"/>
+    <arg name="behavior_path_planner_goal_planner_module_param_path" value="$(var golfcart_goal_planner_param_path)"/>
+    <arg name="behavior_path_planner_start_planner_module_param_path" value="$(var golfcart_start_planner_param_path)"/>
     <arg name="behavior_path_bidirectional_traffic_module_param_path" value="$(var behavior_path_config_path)/autoware_behavior_path_bidirectional_traffic_module/bidirectional_traffic.param.yaml"/>
     <arg name="behavior_path_planner_drivable_area_expansion_param_path" value="$(var golfcart_drivable_area_expansion_param_path)"/>
 

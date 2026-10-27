@@ -395,6 +395,9 @@ def main(argv=None) -> int:
     ap.add_argument('--no-init', action='store_true',
                     help='do not initialize localization: the stack already knows where it is')
     ap.add_argument('--csv', type=Path, help='write every kinematic_state sample here')
+    ap.add_argument('--route-subscriber-timeout', type=float, default=120.0,
+                    help='s to wait for the lane departure checker to subscribe to the '
+                         'route before setting one (route_subscriber.py); 0 skips')
     ap.add_argument('--check-only', action='store_true',
                     help='check the goal placement against the map files and exit')
     args = ap.parse_args(argv)
@@ -518,6 +521,11 @@ def main(argv=None) -> int:
             return finish(1, f'initialize: {err}')
         say(f'localization initialized at {plan.start.name}')
         spin(2.0)
+
+    from route_subscriber import wait_for_route_subscriber
+    err = wait_for_route_subscriber(node, args.route_subscriber_timeout, say=say)
+    if err:
+        return finish(1, err)
 
     use_truth = bool(args.truth_topic)
     results: list[LegResult] = []
