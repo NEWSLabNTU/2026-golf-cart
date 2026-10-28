@@ -7,15 +7,14 @@ Panels:
         - /Global Options1
         - /System1/Vehicle1
         - /System1/Vehicle1/VehicleModel1
-        - /Sensing1
+        - /Map1
+        - /Map1/PointCloudMap1
+        - /Map1/Lanelet2VectorMap1
         - /Sensing1/LiDAR1
         - /Sensing1/LiDAR1/ConcatenatePointCloud1/Autocompute Value Bounds1
         - /Planning1/ScenarioPlanning1
-        - /LeftCam1
         - /LeftCam1/Topic1
-        - /RightCam1
         - /RightCam1/Topic1
-        - /RearCam1
         - /RearCam1/Topic1
       Splitter Ratio: 0.557669460773468
     Tree Height: 594
@@ -100,11 +99,23 @@ Visualization Manager:
                   Alpha: 1
                   Show Axes: false
                   Show Trail: false
+                camera_left_optical_link:
+                  Alpha: 1
+                  Show Axes: false
+                  Show Trail: false
                 camera_rear:
                   Alpha: 1
                   Show Axes: false
                   Show Trail: false
+                camera_rear_optical_link:
+                  Alpha: 1
+                  Show Axes: false
+                  Show Trail: false
                 camera_right:
+                  Alpha: 1
+                  Show Axes: false
+                  Show Trail: false
+                camera_right_optical_link:
                   Alpha: 1
                   Show Axes: false
                   Show Trail: false
@@ -130,6 +141,10 @@ Visualization Manager:
                   Show Axes: false
                   Show Trail: false
                 velodyne:
+                  Alpha: 1
+                  Show Axes: false
+                  Show Trail: false
+                zed_camera_link:
                   Alpha: 1
                   Show Axes: false
                   Show Trail: false
@@ -184,7 +199,7 @@ Visualization Manager:
       Name: System
     - Class: rviz_common/Group
       Displays:
-        - Alpha: 0.20000000298023224
+        - Alpha: 0.10000000149011612
           Autocompute Intensity Bounds: true
           Autocompute Value Bounds:
             Max Value: 28.71826171875
@@ -205,7 +220,7 @@ Visualization Manager:
           Name: PointCloudMap
           Position Transformer: XYZ
           Selectable: false
-          Size (Pixels): 3
+          Size (Pixels): 1
           Size (m): 0.019999999552965164
           Style: Points
           Topic:
@@ -224,9 +239,7 @@ Visualization Manager:
           Namespaces:
             center_lane_line: true
             center_line_arrows: true
-            curbstone: true
             lane_start_bound: true
-            lanelet direction: true
             lanelet_id: true
             left_lane_bound: true
             right_lane_bound: true
@@ -306,7 +319,7 @@ Visualization Manager:
               Enabled: true
               Invert Rainbow: false
               Max Color: 255; 255; 255
-              Max Intensity: 193
+              Max Intensity: 253
               Min Color: 0; 0; 0
               Min Intensity: 0
               Name: Velodyne Points
@@ -608,6 +621,95 @@ Visualization Manager:
             History Policy: Keep Last
             Reliability Policy: Reliable
             Value: /localization/board_detector/debug/board_outline
+          Value: true
+        - Alpha: 1
+          Axes Length: 0.800000011920929
+          Axes Radius: 0.03999999910593033
+          Class: rviz_default_plugins/Pose
+          Color: 255; 85; 0
+          Enabled: true
+          Head Length: 0.30000001192092896
+          Head Radius: 0.10000000149011612
+          Name: BoardPose (detected, sensor frame)
+          Shaft Length: 1
+          Shaft Radius: 0.05000000074505806
+          Shape: Axes
+          Topic:
+            Depth: 1
+            Durability Policy: Transient Local
+            Filter size: 10
+            History Policy: Keep Last
+            Reliability Policy: Reliable
+            Value: /localization/board_detector/debug/board_pose
+          Value: true
+        - Alpha: 1
+          Axes Length: 1.5
+          Axes Radius: 0.07999999821186066
+          Class: rviz_default_plugins/PoseWithCovariance
+          Color: 255; 25; 0
+          Covariance:
+            Orientation:
+              Alpha: 0.5
+              Color: 255; 255; 127
+              Color Style: Unique
+              Frame: Local
+              Offset: 1
+              Scale: 1
+              Value: true
+            Position:
+              Alpha: 0.30000001192092896
+              Color: 204; 51; 204
+              Scale: 1
+              Value: true
+            Value: true
+          Enabled: true
+          Head Length: 0.30000001192092896
+          Head Radius: 0.10000000149011612
+          Name: BoardVehiclePose (map, seeds init)
+          Shaft Length: 1
+          Shaft Radius: 0.05000000074505806
+          Shape: Axes
+          Topic:
+            Depth: 1
+            Durability Policy: Transient Local
+            Filter size: 10
+            History Policy: Keep Last
+            Reliability Policy: Reliable
+            Value: /localization/board_detector/board_pose
+          Value: true
+        - Alpha: 1
+          Autocompute Intensity Bounds: true
+          Autocompute Value Bounds:
+            Max Value: 10
+            Min Value: -10
+            Value: true
+          Axis: Z
+          Channel Name: intensity
+          Class: rviz_default_plugins/PointCloud2
+          Color: 255; 85; 0
+          Color Transformer: FlatColor
+          Decay Time: 0
+          Enabled: true
+          Invert Rainbow: false
+          Max Color: 255; 255; 255
+          Max Intensity: 255
+          Min Color: 0; 0; 0
+          Min Intensity: 0
+          Name: BoardPoints (detected cluster)
+          Position Transformer: XYZ
+          Selectable: false
+          Size (Pixels): 5
+          Size (m): 0.05000000074505806
+          Style: Points
+          Topic:
+            Depth: 1
+            Durability Policy: Transient Local
+            Filter size: 10
+            History Policy: Keep Last
+            Reliability Policy: Reliable
+            Value: /localization/board_detector/debug/board_points
+          Use Fixed Frame: true
+          Use rainbow: false
           Value: true
       Enabled: true
       Name: Localization
@@ -3118,36 +3220,11 @@ Visualization Manager:
                     Value: true
                   Map: true
                   Perception:
-                    CameraLidarFusion(purple): true
-                    Centerpoint(red1): true
-                    CenterpointROIFusion(red2): true
-                    CenterpointValidator(red3): true
-                    Detection(yellow): true
-                    DetectionByTracker(orange): true
-                    PointPainting(light_green1): true
-                    PointPaintingROIFusion(light_green2): true
-                    PointPaintingValidator(light_green3): true
-                    Prediction(light_blue): true
-                    RadarFarObjects(white): true
-                    Tracking(green): true
+                    "": true
                     Value: true
                   Planning:
-                    Objects Of Interest:
-                      AvoidanceByLCLeft: true
-                      AvoidanceByLCRight: true
-                      AvoidanceLeft: true
-                      AvoidanceRight: true
-                      BlindSpot: true
-                      Crosswalk: true
-                      DetectionArea: true
-                      GoalPlanner: true
-                      Intersection: true
-                      LaneChangeLeft: true
-                      LaneChangeRight: true
-                      NoStoppingArea: true
-                      ObstacleCruise: true
-                      StartPlanner: true
-                      TrafficLight: true
+                    "":
+                      "": true
                       Value: true
                     Value: true
                   Sensing:
@@ -3157,6 +3234,10 @@ Visualization Manager:
                   Value: true
                 LeftCam: true
                 Localization:
+                  BoardOutline: true
+                  BoardPoints (detected cluster): true
+                  BoardPose (detected, sensor frame): true
+                  BoardVehiclePose (map, seeds init): true
                   EKF:
                     PoseHistory: true
                     Value: true
@@ -3343,7 +3424,6 @@ Visualization Manager:
                   Value: true
                 System:
                   Grid: true
-                  MRM Summary: true
                   TF: true
                   Value: false
                   Vehicle:
@@ -4397,7 +4477,7 @@ Visualization Manager:
       Enabled: false
       Name: Debug
     - Class: rviz_default_plugins/Image
-      Enabled: true
+      Enabled: false
       Max Value: 1
       Median window: 5
       Min Value: 0
@@ -4409,9 +4489,9 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Best Effort
         Value: /sensing/camera/left/image_raw/compressed
-      Value: true
+      Value: false
     - Class: rviz_default_plugins/Image
-      Enabled: true
+      Enabled: false
       Max Value: 1
       Median window: 5
       Min Value: 0
@@ -4423,9 +4503,9 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Best Effort
         Value: /sensing/camera/right/image_raw/compressed
-      Value: true
+      Value: false
     - Class: rviz_default_plugins/Image
-      Enabled: true
+      Enabled: false
       Max Value: 1
       Median window: 5
       Min Value: 0
@@ -4437,7 +4517,7 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Best Effort
         Value: /sensing/camera/rear/image_raw/compressed
-      Value: true
+      Value: false
   Enabled: true
   Global Options:
     Background Color: 15; 20; 23
@@ -4548,11 +4628,11 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Scale: 57.862831115722656
+      Scale: 22.606897354125977
       Target Frame: base_link
       Value: BirdEyeView (tier4_camera_view_rviz_plugin)
-      X: 13.746209144592285
-      Y: 1.727691888809204
+      X: -2.797414779663086
+      Y: -3.757359504699707
     Saved:
       - Class: rviz_default_plugins/ThirdPersonFollower
         Distance: 18
@@ -4603,7 +4683,7 @@ Window Geometry:
     collapsed: false
   PointcloudOnCamera:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd0000000400000000000001c60000039afc0200000012fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005d00fffffffb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb00000024004100750074006f00770061007200650053007400610074006500500061006e0065006c010000003f000001a80000006f00fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb0000000c00430061006d0065007200610100000682000000eb0000000000000000fb0000000a0049006d0061006700650100000505000002680000000000000000fb0000002c0049006e0069007400690061006c0050006f007300650042007500740074006f006e00500061006e0065006c000000068f000000de0000000000000000fb0000002c0049006e0069007400690061006c0050006f007300650042007500740074006f006e00500061006e0065006c000000068f000000de0000000000000000fb00000030005200650063006f0067006e006900740069006f006e0052006500730075006c0074004f006e0049006d0061006700650000000244000000c40000002900fffffffb0000002a004100750074006f0077006100720065004400610074006500540069006d006500500061006e0065006c0000000332000000720000004400fffffffb000000240050006f0069006e00740063006c006f00750064004f006e00430061006d006500720061000000039d000000560000002900fffffffb0000000a0049006d00610067006501000002d5000001040000000000000000fb0000000e004c00650066007400430061006d01000001ed000000790000002900fffffffb000000100052006900670068007400430061006d010000026c0000009c0000002900fffffffb0000000e005200650061007200430061006d010000030e000000cb0000002900ffffff00000001000001ab0000039afc0200000004fb000000100044006900730070006c006100790073010000003f00000292000000cc00fffffffc000002d700000102000000c80100001efa000000000100000002fb0000000a0056006900650077007301000005d5000001ab0000010000fffffffb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000000ffffffff000000a900fffffffb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000e7a0000005afc0100000001fb0000000a00560069006500770073030000004e00000080000002e1000001970000000300000e7a0000005afc0100000002fb0000000800540069006d0065010000000000000e7a0000000000000000fb0000000800540069006d00650100000000000004500000000000000000000003bd0000039a00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd0000000400000000000001c60000039afc0200000012fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005d00fffffffb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb00000024004100750074006f00770061007200650053007400610074006500500061006e0065006c010000003f0000039a0000006f00fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb0000000c00430061006d0065007200610100000682000000eb0000000000000000fb0000000a0049006d0061006700650100000505000002680000000000000000fb0000002c0049006e0069007400690061006c0050006f007300650042007500740074006f006e00500061006e0065006c000000068f000000de0000000000000000fb0000002c0049006e0069007400690061006c0050006f007300650042007500740074006f006e00500061006e0065006c000000068f000000de0000000000000000fb00000030005200650063006f0067006e006900740069006f006e0052006500730075006c0074004f006e0049006d0061006700650000000244000000c40000002900fffffffb0000002a004100750074006f0077006100720065004400610074006500540069006d006500500061006e0065006c0000000332000000720000004400fffffffb000000240050006f0069006e00740063006c006f00750064004f006e00430061006d006500720061000000039d000000560000002900fffffffb0000000a0049006d00610067006501000002d5000001040000000000000000fb0000000e004c00650066007400430061006d000000030e000000cb0000002900fffffffb000000100052006900670068007400430061006d000000030e000000cb0000002900fffffffb0000000e005200650061007200430061006d000000030e000000cb0000002900ffffff00000001000001ab0000039afc0200000004fb000000100044006900730070006c006100790073010000003f00000292000000cc00fffffffc000002d700000102000000c80100001efa000000000100000002fb0000000a0056006900650077007301000005d5000001ab0000010000fffffffb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000000ffffffff000000a900fffffffb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000e7a0000005afc0100000001fb0000000a00560069006500770073030000004e00000080000002e1000001970000000300000e7a0000005afc0100000002fb0000000800540069006d0065010000000000000e7a0000000000000000fb0000000800540069006d00650100000000000004500000000000000000000003bd0000039a00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   RearCam:
     collapsed: false
   RecognitionResultOnImage:

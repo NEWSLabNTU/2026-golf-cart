@@ -31,6 +31,11 @@ init MAP SPOT:
 capture MAP SPOT:
     python3 ./scripts/localization/capture_initial_pose.py --map {{MAP}} {{SPOT}}
 
+# Seed localization from the reflective board again: cart stopped, board in view.
+# Re-arms board_pose_initializer (one initialization per launch otherwise).
+board:
+    ros2 service call /localization/board_pose_initializer/reinitialize std_srvs/srv/Trigger
+
 # Maps and the spots captured on each
 list:
     #!/usr/bin/env bash
