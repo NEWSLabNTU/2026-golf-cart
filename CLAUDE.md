@@ -871,6 +871,16 @@ twist_source:=gyro_odom|eagleye|rigloc     # Override preset twist source
 
 ## Known Issues
 
+- **The VCU speed signals are whole km/h, not m/s** (measured 2026-10-28). `Vcu_Ads_Vehicle_Speed` (the
+  report) is floored to whole km/h, each value 0.001 short, and has no sign; `Ads_Vcu_Target_Speed`
+  (the setpoint) is km/h too (inferred, consistent with the first autonomous run). The vehicle
+  interface converts both (`dbc::vcu_speed_mps`, `dbc::vcu_target_speed_raw`), signs the report by
+  gear, and adds half a step back to the floored report. Do not read either DBC "m/s" literally. See
+  [docs/research/system/vcu-speed-report.md](docs/research/system/vcu-speed-report.md).
+- **`min_speed_mps: 1.5` in `vehicle_interface.param.yaml`** raises any nonzero speed setpoint to 5.4 km/h
+  (the cart stalls on a bump at a crawl), equal to `max_speed_mps`, so the cart moves at exactly that
+  speed whatever the planner asks.
+
 - **Steering sign verified on the cart 2026-10-22** (Phase 8 V2): `invert_steering` (vehicle interface, 2026-08-12) is right; keyboard left (+5 deg) went out as -4.98 deg and turned the wheels left. The VCU's steering *report* is not usable yet (live only in AUTO and only for right turns; vendor), see [Phase 9](docs/roadmaps/9-mingda-autonomous-driving.md).
 - **Network monitor errors**: AWS Greengrass socket errors (non-critical, ignore)
 - **Isaac ROS GXF libraries**: If `pose_source:=visual` or `pose_source:=isaac` fails with "libgxf_*.so not found", the GXF library paths are not in `LD_LIBRARY_PATH`. Re-source the setup files:

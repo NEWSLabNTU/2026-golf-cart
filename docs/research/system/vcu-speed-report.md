@@ -80,6 +80,19 @@ well above that, stop: the target is m/s after all and the 3.6 is wrong.
 Autoware's own start speed is 0.25 m/s and does not ramp while the cart is stopped, so
 before this fix it commanded 0.25 km/h forever and the motor never started.
 
+## Confirmation, and one thing to measure
+
+The loop then ran autonomously, driver aboard, with the setpoint in km/h and
+`min_speed_mps` 1.5 (5.4 km/h): it did not run away at 3.6 times the commanded speed, which
+the m/s alternative would have done (5.4 m/s, 19 km/h), and it completed. That is
+consistent with the km/h inference and is strong evidence for it, but **the run was not
+recorded**, so the speed actually reached is unmeasured. Record the next one and compare
+`/vehicle/status/velocity_status` (about 1.4 to 1.6 m/s expected) against NDT.
+
+In that run Autoware's own engage cleared the fault latch: its MANUAL request clears it
+("fault latch cleared and setpoints zeroed") and the retried AUTONOMOUS request is then
+acknowledged. The keyboard workaround (`m` twice) is only needed without Autoware.
+
 ## Why the motor did not run in the keyboard test
 
 Separate from the unit: the interface had **latched a fault**. The VCU raised

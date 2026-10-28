@@ -7,9 +7,21 @@ The VCU speed findings have their own note:
 
 ## State at the end of the day
 
-* The cart reached **AUTO on the dashboard with a route set and the AUTO button
-  enabled in RViz**. On engage it **always turned to the rightmost steering
-  angle**. Not investigated; see open item 1.
+* **The first supervised autonomous run on the loop succeeded** (driver's report,
+  evening of 2026-10-28), with the stack, perception off, the stand-in grid and
+  cloud, board init at launch, `min_speed_mps` 1.5, setpoint in km/h and the gear
+  check. **Nothing was recorded** (no bag, no CAN log), so the speed reached and the
+  distance are not on file; do `just record start` next time. What the orin
+  interface log does show, in order: the VCU went Abnormal then Autonomous; Autoware's
+  engage got `ControlMode AUTONOMOUS not acknowledged ... fault_latched=true`, then its
+  own MANUAL request cleared the latch ("fault latch cleared and setpoints zeroed") and
+  the retry went through; 5 s later `the VCU is in gear Drive: motor released` (the gear
+  check, working); the mode flapped Autonomous/Abnormal for 0.1 s twice and ended at
+  Manual when the driver left AUTO. A second engage later looked the same, with the
+  gear going Neutral then Drive.
+* The earlier "rightmost steering" and "motor does not start" reports were resolved by
+  the km/h setpoint, the one-frame fault latch and the gear check (open item 1); the
+  wheel had been about 10 deg right, as commanded.
 * Localization works: board init at launch scores 2.5 to 2.86 (`reliable=true`),
   and in recorded drives the pose moved along its heading in Drive and against it
   in Reverse, EKF and NDT agreeing within 0.1 m.
@@ -99,7 +111,7 @@ The VCU speed findings have their own note:
 
 ## Open, in order
 
-1. **The motor does not start in AUTO (blocking); steering looks consistent.**
+1. **Resolved by the run above; kept for the evidence.** The motor did not start in AUTO; steering looked consistent.
    Measured live at 20:40 to 20:50 with the brake pedal held and the stack up (VCU restarted before it):
    * Autoware engaged (`mode 2`); the cart was 0.04 m from the path with a 4.6 deg
      heading error. `control_cmd` steering stayed at **-0.178 rad (-10.2 deg, right)**
