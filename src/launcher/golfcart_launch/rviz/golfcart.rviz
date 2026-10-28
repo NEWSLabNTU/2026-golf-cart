@@ -7,9 +7,6 @@ Panels:
         - /Global Options1
         - /System1/Vehicle1
         - /System1/Vehicle1/VehicleModel1
-        - /Map1
-        - /Map1/PointCloudMap1
-        - /Map1/Lanelet2VectorMap1
         - /Sensing1/LiDAR1
         - /Sensing1/LiDAR1/ConcatenatePointCloud1/Autocompute Value Bounds1
         - /Planning1/ScenarioPlanning1
@@ -230,7 +227,7 @@ Visualization Manager:
             History Policy: Keep Last
             Reliability Policy: Reliable
             Value: /map/pointcloud_map
-          Use Fixed Frame: true
+          Use Fixed Frame: false
           Use rainbow: false
           Value: true
         - Class: rviz_default_plugins/MarkerArray
@@ -319,7 +316,7 @@ Visualization Manager:
               Enabled: true
               Invert Rainbow: false
               Max Color: 255; 255; 255
-              Max Intensity: 253
+              Max Intensity: 245
               Min Color: 0; 0; 0
               Min Intensity: 0
               Name: Velodyne Points
@@ -3590,7 +3587,7 @@ Visualization Manager:
                 History Policy: Keep Last
                 Reliability Policy: Reliable
                 Value: /localization/pose_estimator/debug/loaded_pointcloud_map
-              Use Fixed Frame: true
+              Use Fixed Frame: false
               Use rainbow: true
               Value: true
             - Buffer Size: 200
@@ -4628,11 +4625,11 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Scale: 22.606897354125977
+      Scale: 44.93466567993164
       Target Frame: base_link
       Value: BirdEyeView (tier4_camera_view_rviz_plugin)
-      X: -2.797414779663086
-      Y: -3.757359504699707
+      X: 2.289555072784424
+      Y: -3.0485193729400635
     Saved:
       - Class: rviz_default_plugins/ThirdPersonFollower
         Distance: 18

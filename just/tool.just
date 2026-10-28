@@ -17,6 +17,13 @@ default:
 rviz:
     rviz2 -d ./src/launcher/golfcart_launch/rviz/golfcart.rviz
 
+# RViz for driving: fixed frame AND camera on the map, so the vehicle moves over
+# the map instead of the map scrolling past a vehicle that stays put, plus a green
+# arrow along the EKF heading (the vehicle model is a symmetric box). golfcart.rviz
+# follows base_link, which makes forward motion look like the map moving backward.
+rviz-drive:
+    rviz2 -d ./src/launcher/golfcart_launch/rviz/golfcart_drive.rviz
+
 # Check sensor transforms: cameras and LiDARs on one sphere at base_link
 sphere:
     # Read-only. LCTK computes the extrinsics; this shows what the running
