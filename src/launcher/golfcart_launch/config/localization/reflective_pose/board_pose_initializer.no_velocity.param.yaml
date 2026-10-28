@@ -33,10 +33,15 @@
     # three weeks later.
     fallback_to_user_defined_pose: false
 
-    # Seconds to wait for a pose before counting an attempt as spent. Zero
-    # disables it. Left disabled because the fallback above is off, so there
-    # is nothing for a spent budget to trigger.
+    # Seconds without any board pose before the node fails (counted from the
+    # last pose seen, acted on or not). Zero disables it, which is what the
+    # drive wants: the driver may take minutes to bring the cart to the board,
+    # and a timeout is terminal until the stack is relaunched.
     pose_wait_timeout: 0.0
+
+    # Least time between two initialize calls, so a refused call retried on the
+    # detector's next pose (100 ms away) cannot spend the budget in a second.
+    min_attempt_spacing: 1.0
 
     # Phase 8 L8. A cart parked at the board through boot is detected about a
     # second after the first scan, and the map reached the matcher 8.6 s after
