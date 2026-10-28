@@ -15,6 +15,10 @@ if(BUILD_TESTING)
     test/test_planning_speed_limit.py
   )
   ament_add_pytest_test(
+    test_perception_stubs
+    test/test_perception_stubs.py
+  )
+  ament_add_pytest_test(
     test_planning_preset
     test/test_planning_preset.py
   )
@@ -43,7 +47,8 @@ endif()
 # The one node this package ships: a latched startup planning speed limit (Phase 8,
 # S4). A node rather than `ros2 topic pub` in the launch file, because play_launch
 # runs `executable` actions during its dump and drops them from the run.
-install(PROGRAMS scripts/planning_speed_limit.py DESTINATION lib/${PROJECT_NAME})
+install(PROGRAMS scripts/planning_speed_limit.py scripts/perception_stubs.py
+  DESTINATION lib/${PROJECT_NAME})
 
 ament_auto_package(
   INSTALL_TO_SHARE

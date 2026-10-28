@@ -607,6 +607,14 @@ launch:
             remap:
             - from: ~/output/objects
               to: /perception/object_recognition/objects
+        # The occupancy grid and obstacle cloud the planners also wait on, which
+        # perception would normally publish (scripts/perception_stubs.py, which
+        # says what they mean and why this is not perception_preset:=minimal).
+        - node:
+            pkg: golfcart_launch
+            exec: perception_stubs.py
+            name: perception_stubs
+            namespace: perception
 
 # H.264 left/right rectified ZED X streams, encoded on the orin's NVENC and
 # recorded there (zed.launch.xml, config/recording/orin_topics.txt). Needs the

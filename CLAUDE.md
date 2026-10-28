@@ -764,7 +764,15 @@ perception, diagnostic graph included.** With it false the graph is the base gra
 aggregator's own `edits: [{type: remove}]`
 (`config/system/diagnostics/*-no-perception.yaml`, four-line overlays, not
 copies). There is then no obstacle detection at all, and autonomy is for a
-supervised run only. With it true, upstream's graph stands unchanged. **The driver puts the cart in
+supervised run only. The planners still wait on the perception outputs, so in
+that case `scripts/perception_stubs.py` publishes an all-free
+`/perception/occupancy_grid_map/map` and an empty
+`/perception/obstacle_segmentation/pointcloud`; without them behavior_path_planner
+logs `waiting for occupancy_grid` and no trajectory ever flows (seen 2026-10-28).
+Do not reach for `perception_preset:=minimal` instead: CenterPoint's TensorRT
+engine build blocks its composable container for 10 to 30 minutes, and the
+ground filter behind it, so the real grid never appears either. With it true,
+upstream's graph stands unchanged. **The driver puts the cart in
 AUTO on the dashboard, brake pedal held + AUTO button, before Autoware engages,
 and leaves it the same way.** Nothing over CAN changes the VCU's mode; Autoware
 reads the mode the VCU reports, and the interface's control-mode service only
