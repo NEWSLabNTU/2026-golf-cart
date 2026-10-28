@@ -127,18 +127,18 @@ The VCU speed findings have their own note:
      the speed loop never leaves rest; Autoware's start velocity is 0.25 m/s and
      does not ramp while the cart is stopped, so it stays there. The VCU may also
      have a minimum creep speed.
-   Experiment for the motor (stack DOWN, driver aboard, cart on the ground, clear
-   run ahead): on the orin `just vehicle interface`, then
-   `just vehicle sysid-steps speed --levels 0.25,0.5,1.0 --hold 3`, which publishes
-   `control_cmd` with no Autoware in the way, with a candump or `just vehicle
-   sysid-record` running. Read `/vehicle/status/velocity_status` (m/s, already
-   converted) at each step. If the cart stays at rest at 0.25 and moves at 0.5 or
-   1.0, the VCU has a minimum speed and the interface needs a floor for a nonzero
-   command. If it reaches about 0.28 m/s at a command of 1.0, the target is in
-   km/h and the interface needs the 3.6 conversion on the command side. If it
-   reaches about 1.0, the target is m/s and the cause is elsewhere (acceleration,
-   gear, brake). For steering, `steer-standstill` in the same tool, writing down the
-   physical angle for each step.
+   **Resolved the same evening, pending a drive:** a keyboard run through the interface
+   alone showed two causes. The speed setpoint is km/h like the report (0.25 m/s went
+   out as 0.25 km/h, so the motor never left rest), and a one-frame VCU `err_sys`
+   blip at each AUTO press had latched the interface into DISENGAGED. The interface now
+   sends the setpoint x 3.6, holds the motor until the VCU is in the gear we sent,
+   and raises any nonzero setpoint to `min_speed_mps` (1.5 m/s, 5.4 km/h; the cart
+   stalls on a bump at a crawl). Details in
+   [the research note](../research/system/vcu-speed-report.md). To check on the cart,
+   driver aboard, interface alone: keyboard speed 0.28, 0.5, 0.75, 1.0 m/s should read
+   1, 1, 2, 3 km/h on `/vehicle/status/velocity_status`, while the minimum speed lifts
+   a small setpoint to 1.5 m/s; stop if the report is far above the table. The latch
+   fix (latch error bits only while the VCU is Autonomous) is still to do.
    Other leads from before: `max_steer_angle` 0.52 rad (was 0.349) against a cart
    right stop of about 22 deg (the loop is all right turns; simulated, the cap was
    hit for 14% of a lap), and the first leg ends at a right-hand corner.

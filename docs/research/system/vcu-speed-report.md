@@ -65,6 +65,42 @@ none can disagree.
 
 Cargo tests cover all of it (70 + 6 in the crate).
 
+## The setpoint is in km/h as well (inferred, 2026-10-28 evening)
+
+A keyboard run through the interface alone (`~/can/speed_test.log.` on the orin)
+stepped the target 0.25, 0.5, 0.75, 1.0, 1.25, 1.5 m/s with `motor_en=1`,
+`gear_en=1`, Speed Control, Drive. The speed report stayed 0.000 the whole way up and
+read 0.999 only once 1.5 had been held for about 3 s. At 5.4 km/h (1.5 m/s) it would
+have read 4 or 5; it read 1. So `Ads_Vcu_Target_Speed` takes km/h like the report:
+1.5 "m/s" was 1.5 km/h. The interface now sends planner speed x 3.6
+(`dbc::vcu_target_speed_raw`). **Not yet confirmed by driving it**: step the setpoint
+0.28, 0.5, 0.75, 1.0 m/s and expect the report to read 1, 1, 2, 3 km/h. If it reads
+well above that, stop: the target is m/s after all and the 3.6 is wrong.
+
+Autoware's own start speed is 0.25 m/s and does not ramp while the cart is stopped, so
+before this fix it commanded 0.25 km/h forever and the motor never started.
+
+## Why the motor did not run in the keyboard test
+
+Separate from the unit: the interface had **latched a fault**. The VCU raised
+`Vcu_Ads_Error_Code_Sys` for about 0.1 s, at 39.8 s and again at 84.9 s, just before
+each AUTO press. `handle_vehicle_status` latches on any single frame with an error bit,
+and a latched fault makes the interface report DISENGAGED and keep `motor_en=0` until a
+MANUAL request clears it (the keyboard shows "Disengaged"). Working order: dashboard
+AUTO first, then `m` to manual and `m` again to auto. The proper fix, not applied: latch
+the VCU's error bits only while the VCU is Autonomous.
+
+## What the interface now does about gear and minimum speed
+
+* The motor is held at zero until the VCU reports the gear we are sending (Drive or
+  Reverse); the gear request stays on the wire. A log line after 2 s says what the VCU
+  reports instead.
+* `min_speed_mps` (1.5 in the vehicle config, 5.4 km/h): any nonzero speed setpoint is
+  raised to it, never above `max_speed_mps`; zero is left alone so stopping is unaffected.
+  The cart stalls on a bump at a crawl. With `max_speed_mps` also 1.5 it moves at exactly
+  1.5 m/s whatever the planner asks, so planning_speed_limit and the 2 km/h lane tags no
+  longer slow it; raise `max_speed_mps` to give the planner room above the floor.
+
 ## What is still true
 
 * **Resolution is 1 km/h (0.28 m/s).** Anything below 1 km/h reads zero. The EKF
