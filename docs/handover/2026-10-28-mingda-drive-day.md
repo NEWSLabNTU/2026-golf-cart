@@ -99,24 +99,44 @@ The VCU speed findings have their own note:
 
 ## Open, in order
 
-1. **Rightmost turn on engage (blocking).** With the route set and AUTO pressed the
-   cart steered fully right and kept it there. Nothing was recorded or measured.
-   Known leads, none confirmed:
-   * The VCU's steering report is unusable (frozen in manual, 0 for left turns,
-     live only in AUTO and only for right turns; vendor, Phase 9). The lateral
-     controller reads `SteeringReport`; if that is wrong the loop can saturate.
-   * `max_steer_angle` is 0.52 rad (was 0.349) and the cart's right stop is about
-     22 deg; the loop is all right turns, and the simulated cap was hit for 14% of
-     a lap (Phase 8 decisions 4 and 4c).
-   * The first leg runs west along the bottom straight to a right-hand corner at
-     the west end (the loop is clockwise), so any steering offset or a trajectory
-     that starts with a large lateral error shows up as a hard right quickly.
-   Next run: `just record start`, the CAN log on the orin, and note whether the
-   wheel goes right at engage or as it moves. Compare `/control/command/control_cmd`,
-   `/vehicle/status/steering_status` and the CAN 0x102 tire angle. A sustained
-   right command that never settles points at the report; a command that settles
-   while the wheel does not points at the EPS. Try `just vehicle interface` plus
-   the keyboard first (steering sign was verified that way on 2026-10-22).
+1. **Rightmost steering and no motor, in AUTO (blocking).** Measured live at 20:40
+   to 20:50 with the brake pedal held and the stack up (VCU restarted before it):
+   * Autoware engaged (`mode 2`); the cart was 0.04 m from the path with a 4.6 deg
+     heading error. `control_cmd` steering stayed at **-0.178 rad (-10.2 deg, right)**
+     for the whole 60 s; it never moved toward the 22 deg stop. Autoware asked for
+     0.25 m/s with +0.5 m/s2; the VCU reported 0.000 and the cart did not move.
+   * The CAN frames match that command: 0x065 `en=1 mode=1 (front-wheel)
+     target=+10.228 deg ang_speed=0.0`; 0x075 `Speed Control, gear Drive,
+     accel 0.500, target_speed 0.250`; brake released (0x068 pedal 0).
+   * **The user saw the steering at the right stop** with a +10.2 deg command. So
+     the physical angle and the commanded one disagree.
+   * **The VCU's tire-angle report is an echo of our target**, bit for bit (0x102
+     `13fa` equals 0x065 `13fa`, +10.228 in both). It is not a measurement, so
+     nothing in the stack can see the disagreement, and a controller that believes
+     the report sees perfect tracking.
+   * `Ads_Vcu_Target_Tire_Ang_Speed` (0x065 byte 3, "steering angular speed
+     control") is never set by the interface: it is always 0.0 deg/s. Nobody knows
+     what the EPS does with a rate of zero.
+   Hypotheses, none confirmed:
+   * (steering) the EPS reads our angle on another scale or sign convention than
+     the DBC says, as the speed report turned out to (km/h in a signal labelled
+     m/s); or a zero angular speed means something other than "no limit".
+     The 2026-10-22 check only showed direction (+5 deg went out as -4.98 and the
+     wheels turned left); nobody measured the magnitude.
+   * (motor) the target speed is also km/h in whole steps, so 0.25 reads as 0 and
+     the speed loop never leaves rest; Autoware's start velocity is 0.25 m/s and
+     does not ramp while the cart is stopped, so it stays there. The VCU may also
+     have a minimum creep speed.
+   Experiment that separates them (stack down, driver aboard, cart on the ground,
+   `just vehicle interface` plus `just vehicle manual-control`, CAN log running):
+   command steering 0, +5, +10, +15 deg and -10 deg and write down the physical
+   tire angle for each against 0x065 and 0x102; then command forward speed 0.28,
+   0.5, 1.0 m/s and note the km/h the cart actually reaches. If the cart reaches
+   1 km/h at 1.0 "m/s", the target is km/h and the interface needs the same
+   conversion (and a floor of 1 km/h, 0.278 m/s) it got on the report side.
+   Other leads from before: `max_steer_angle` 0.52 rad (was 0.349) against a cart
+   right stop of about 22 deg (the loop is all right turns; simulated, the cap was
+   hit for 14% of a lap), and the first leg ends at a right-hand corner.
 2. The half-step speed correction is not on the cart. Deploy it, then compare the
    EKF-minus-NDT offset while moving (it was about 0.2 m).
 3. Autoware's CPU NDT as a control run: `just launch-drive-mingda-loop
