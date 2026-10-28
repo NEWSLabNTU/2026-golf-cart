@@ -99,8 +99,8 @@ The VCU speed findings have their own note:
 
 ## Open, in order
 
-1. **Rightmost steering and no motor, in AUTO (blocking).** Measured live at 20:40
-   to 20:50 with the brake pedal held and the stack up (VCU restarted before it):
+1. **The motor does not start in AUTO (blocking); steering looks consistent.**
+   Measured live at 20:40 to 20:50 with the brake pedal held and the stack up (VCU restarted before it):
    * Autoware engaged (`mode 2`); the cart was 0.04 m from the path with a 4.6 deg
      heading error. `control_cmd` steering stayed at **-0.178 rad (-10.2 deg, right)**
      for the whole 60 s; it never moved toward the 22 deg stop. Autoware asked for
@@ -108,8 +108,10 @@ The VCU speed findings have their own note:
    * The CAN frames match that command: 0x065 `en=1 mode=1 (front-wheel)
      target=+10.228 deg ang_speed=0.0`; 0x075 `Speed Control, gear Drive,
      accel 0.500, target_speed 0.250`; brake released (0x068 pedal 0).
-   * **The user saw the steering at the right stop** with a +10.2 deg command. So
-     the physical angle and the commanded one disagree.
+   * First reported as "rightmost"; on a second look the user judged the wheel to
+     be about 10 deg right, which matches the +10.2 deg command. So steering may be
+     fine. It stays unmeasured (see the echo below), and the loop's right-hand
+     corner will ask for 16 to 28 deg, past the cart's roughly 22 deg stop.
    * **The VCU's tire-angle report is an echo of our target**, bit for bit (0x102
      `13fa` equals 0x065 `13fa`, +10.228 in both). It is not a measurement, so
      nothing in the stack can see the disagreement, and a controller that believes
@@ -118,22 +120,25 @@ The VCU speed findings have their own note:
      control") is never set by the interface: it is always 0.0 deg/s. Nobody knows
      what the EPS does with a rate of zero.
    Hypotheses, none confirmed:
-   * (steering) the EPS reads our angle on another scale or sign convention than
-     the DBC says, as the speed report turned out to (km/h in a signal labelled
-     m/s); or a zero angular speed means something other than "no limit".
-     The 2026-10-22 check only showed direction (+5 deg went out as -4.98 and the
-     wheels turned left); nobody measured the magnitude.
+   * (steering, now unlikely) the EPS reads our angle on another scale than the DBC
+     says. The 2026-10-22 check only showed direction; the magnitude has still not
+     been measured against the wheel.
    * (motor) the target speed is also km/h in whole steps, so 0.25 reads as 0 and
      the speed loop never leaves rest; Autoware's start velocity is 0.25 m/s and
      does not ramp while the cart is stopped, so it stays there. The VCU may also
      have a minimum creep speed.
-   Experiment that separates them (stack down, driver aboard, cart on the ground,
-   `just vehicle interface` plus `just vehicle manual-control`, CAN log running):
-   command steering 0, +5, +10, +15 deg and -10 deg and write down the physical
-   tire angle for each against 0x065 and 0x102; then command forward speed 0.28,
-   0.5, 1.0 m/s and note the km/h the cart actually reaches. If the cart reaches
-   1 km/h at 1.0 "m/s", the target is km/h and the interface needs the same
-   conversion (and a floor of 1 km/h, 0.278 m/s) it got on the report side.
+   Experiment for the motor (stack DOWN, driver aboard, cart on the ground, clear
+   run ahead): on the orin `just vehicle interface`, then
+   `just vehicle sysid-steps speed --levels 0.25,0.5,1.0 --hold 3`, which publishes
+   `control_cmd` with no Autoware in the way, with a candump or `just vehicle
+   sysid-record` running. Read `/vehicle/status/velocity_status` (m/s, already
+   converted) at each step. If the cart stays at rest at 0.25 and moves at 0.5 or
+   1.0, the VCU has a minimum speed and the interface needs a floor for a nonzero
+   command. If it reaches about 0.28 m/s at a command of 1.0, the target is in
+   km/h and the interface needs the 3.6 conversion on the command side. If it
+   reaches about 1.0, the target is m/s and the cause is elsewhere (acceleration,
+   gear, brake). For steering, `steer-standstill` in the same tool, writing down the
+   physical angle for each step.
    Other leads from before: `max_steer_angle` 0.52 rad (was 0.349) against a cart
    right stop of about 22 deg (the loop is all right turns; simulated, the cap was
    hit for 14% of a lap), and the first leg ends at a right-hand corner.
