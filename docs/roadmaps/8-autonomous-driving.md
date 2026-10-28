@@ -774,7 +774,7 @@ fbf85c6):
   (5, always on). Detector 2 is `divergence.nvtl_median_gate` over
   `divergence.nvtl_window_size` (10); the parent's launch argument
   `ndt_divergence_nvtl_median_gate` defaults to 0.0 (off), and
-  `just launch-drive-mingda` passes 2.5. Only a successful `ndt_align` clears
+  `just launch-drive-mingda` passes 2.1 (2.5 on the 0.30 m map; on the dense cloud a healthy lock scored a median 2.53 and 2.5 latched on it, wrong poses scored 1.5 to 1.66, 2026-10-28). Only a successful `ndt_align` clears
   the latch; a bare `/initialpose3d` does not. New diagnostic keys:
   `divergence_latched`, `nvtl_window_median`, `nvtl_window_median_gate`.
 - The seed zone is in the board **detector**, not the initializer, which has

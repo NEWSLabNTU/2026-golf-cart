@@ -112,6 +112,13 @@
 /vehicle/status/turn_indicators_status
 /vehicle/status/velocity_status
 
+# ── NDT scoring ─────────────────────────────────────────────────────────────
+# Not driver output: the scan matcher's own per-scan score, recorded so the
+# divergence gate (ndt_divergence_nvtl_median_gate) can be set from a run's
+# distribution instead of inherited from another map. A good lock on the dense
+# Ming-Da cloud scored about 2.5 against a gate of 2.5 on 2026-10-28.
+/localization/pose_estimator/nearest_voxel_transformation_likelihood
+
 # ── Diagnostics and frames ──────────────────────────────────────────────────
 /diagnostics
 /tf

@@ -438,10 +438,14 @@ launch-drive-basement ARGS="":
 # [0, 0, 1.3, 0, 0, 0] in either; what changed is which way the survey cloud
 # was turned to put it there. A copy would be a second place to tune the gates.
 #
-# ndt_divergence_nvtl_median_gate:=2.5 is this map's NVTL divergence gate
-# (Phase 8, L6): healthy Ming-Da NVTL never drops below 2.57 with today's input.
+# ndt_divergence_nvtl_median_gate:=2.1 is this map's NVTL divergence gate
+# (Phase 8, L6). On the dense 0.15 m cloud, 2026-10-28 bag master_20261028_192241:
+# a healthy lock scores a median 2.53 (rolling median of 10 never below 2.51, single
+# scans down to 2.03) while hand-clicked wrong poses scored 1.5 to 1.66. 2.1 sits
+# between them with about 0.4 either side. The 2.5 it replaces was set on the
+# 0.30 m map (healthy never below 2.57) and latched on a good lock here.
 launch-drive-mingda ARGS="":
-    just launch-all "pose_initializer:=board reflective_pose_scenario:=basement map_path:=./data/mingda-basement use_gnss:=false planning_speed_limit:=1.0 planning_preset:=slow_indoor ndt_divergence_nvtl_median_gate:=2.5 {{ARGS}}"
+    just launch-all "pose_initializer:=board reflective_pose_scenario:=basement map_path:=./data/mingda-basement use_gnss:=false planning_speed_limit:=1.0 planning_preset:=slow_indoor ndt_divergence_nvtl_median_gate:=2.1 {{ARGS}}"
 
 # The same, on the clockwise loop lane (lanelet2_map_loop.osm, from the
 # 2026-09-24 drive carried into this frame; see route_loop_cw.yaml). Narrows to
