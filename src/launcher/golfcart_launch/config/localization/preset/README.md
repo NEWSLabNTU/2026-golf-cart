@@ -72,15 +72,17 @@ IMU and the vehicle interface, so no image crosses the link. Only its twist does
 - No twist for the first ~10-25 s while the localizer initialises: the EKF reports ERROR until
   the first one.
 
-**EKF tuning**: the preset loads `config/localization/rigloc/ekf_localizer.param.yaml`, upstream's
-values with lower process noise (`proc_stddev_wz_c` 0.5, `proc_stddev_vx_c` 5.0; the file's
-header has the sweep). With upstream's, the 10 Hz twist 0.27 s late left the EKF's yaw-rate
-variance high and the lateral-ellipse diagnostic reached ERROR within 1-4 s of losing NDT.
+**EKF**: the shared `config/localization/ekf_localizer.param.yaml`, as every other preset.
+rig_localization publishes one twist per IMU sample (100 Hz, `fast_twist`, on by default since
+rig_localization f171586), so the EKF needs no tuning of its own; the 10 Hz keyframe twist, 0.27 s
+late, used to need lower process noise.
 
-**Measured** (rig-odom-sim results 014, the clockwise recording replayed into the live NDT + EKF,
-n=3, wheel stand-in, the tuned EKF): EKF xy RMS 0.037 m against `gyro_odom`'s 0.041 m; over three
-10-20 s NDT outages the drift ties `gyro_odom`'s and the first lateral-ellipse ERROR comes at 75 s,
-where `gyro_odom` has it (76-77 s). Not yet run on the vehicle.
+**Measured** (2026-10-29, the clockwise recording replayed into the live NDT + EKF on 139, n=3,
+wheel stand-in, the shared EKF file; rig_localization `docs/design/autoware.md`, "Fast twist"):
+EKF xy RMS with NDT 0.023-0.030 m against `gyro_odom`'s 0.041-0.049 m; over three 10-20 s NDT
+outages the first lateral-ellipse ERROR comes at 74 s (`gyro_odom` 76-77 s) and the drift is at
+`gyro_odom`'s level (end errors 0.23-0.30 / 0.33-0.55 / 0.24-0.41 m against 0.28 / 0.26 /
+0.39). Not yet run on the vehicle.
 
 **Launch**:
 ```bash

@@ -19,13 +19,11 @@
        default="$(find-pkg-share golfcart_launch)/config/localization/rigloc/rigloc.param.yaml"
        description="twist_source:=rigloc: overlay on rigloc_launch's rigloc.param.yaml"/>
   <arg name="rigloc_out_dir" default="" description="twist_source:=rigloc: the localizer's run logs; empty: none"/>
-  <!-- The EKF's parameters. twist_source:=rigloc has its own tuning
-       (config/localization/rigloc/ekf_localizer.param.yaml: lower process
-       noise for a 10 Hz twist 0.27 s late); every other twist source keeps
-       config/localization/ekf_localizer.param.yaml. -->
+  <!-- The EKF's parameters, the same for every twist source (rigloc's IMU-rate
+       twist, fast_twist, needs no tuning of its own). -->
   <arg name="ekf_param_file"
-       default="$(var loc_config_path)/$(eval '\'rigloc/\' if \'$(var twist_source)\' == \'rigloc\' else \'\'')ekf_localizer.param.yaml"
-       description="ekf_localizer parameters; default by twist_source"/>
+       default="$(var loc_config_path)/ekf_localizer.param.yaml"
+       description="ekf_localizer parameters"/>
   <!-- Overridable so a tuning run can swap NDT parameters without editing the
        shipped file. Defaults to it, so nothing changes unless asked. -->
   <arg name="ndt_param_file"
