@@ -1660,7 +1660,7 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="4" />
+    <tag k="speed_limit" v="7" />
   </relation>
   <way id="200002" visible="true">
     <nd ref="100040" />
@@ -1700,7 +1700,7 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="4" />
+    <tag k="speed_limit" v="7" />
   </relation>
   <way id="200004" visible="true">
     <nd ref="100060" />
@@ -1740,7 +1740,7 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="4" />
+    <tag k="speed_limit" v="7" />
   </relation>
   <way id="200006" visible="true">
     <nd ref="100080" />
@@ -1780,7 +1780,7 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="4" />
+    <tag k="speed_limit" v="7" />
   </relation>
   <way id="200008" visible="true">
     <nd ref="100100" />
@@ -1820,7 +1820,7 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="4" />
+    <tag k="speed_limit" v="7" />
   </relation>
   <way id="200010" visible="true">
     <nd ref="100120" />
@@ -1860,7 +1860,7 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="4" />
+    <tag k="speed_limit" v="7" />
   </relation>
   <way id="200012" visible="true">
     <nd ref="100136" />
@@ -1896,7 +1896,7 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="4" />
+    <tag k="speed_limit" v="7" />
   </relation>
   <way id="200014" visible="true">
     <nd ref="100140" />
@@ -1920,7 +1920,7 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="2" />
+    <tag k="speed_limit" v="5.4" />
   </relation>
   <way id="200016" visible="true">
     <nd ref="100160" />
@@ -1960,7 +1960,7 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="2" />
+    <tag k="speed_limit" v="5.4" />
   </relation>
   <way id="200018" visible="true">
     <nd ref="100180" />
@@ -2000,7 +2000,7 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="2" />
+    <tag k="speed_limit" v="5.4" />
   </relation>
   <way id="200020" visible="true">
     <nd ref="100198" />
@@ -2038,7 +2038,7 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="2" />
+    <tag k="speed_limit" v="5.4" />
   </relation>
   <way id="200022" visible="true">
     <nd ref="100200" />
@@ -2060,7 +2060,7 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="4" />
+    <tag k="speed_limit" v="7" />
   </relation>
   <way id="200024" visible="true">
     <nd ref="100220" />
@@ -2100,7 +2100,7 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="4" />
+    <tag k="speed_limit" v="7" />
   </relation>
   <way id="200026" visible="true">
     <nd ref="100240" />
@@ -2140,7 +2140,7 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="4" />
+    <tag k="speed_limit" v="7" />
   </relation>
   <way id="200028" visible="true">
     <nd ref="100260" />
@@ -2180,7 +2180,7 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="4" />
+    <tag k="speed_limit" v="7" />
   </relation>
   <way id="200030" visible="true">
     <nd ref="100280" />
@@ -2220,7 +2220,7 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="4" />
+    <tag k="speed_limit" v="7" />
   </relation>
   <way id="200032" visible="true">
     <nd ref="100300" />
@@ -2260,7 +2260,7 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="4" />
+    <tag k="speed_limit" v="7" />
   </relation>
   <way id="200034" visible="true">
     <nd ref="100000" />
@@ -2298,6 +2298,6 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="4" />
+    <tag k="speed_limit" v="7" />
   </relation>
 </osm>

@@ -12,6 +12,6 @@
 # The curb was located at x ~11 only; it is assumed parallel to the lane.
 # Build with:
 #   python3 scripts/map/centerline_to_lanelet.py data/mingda-basement/route_straight.yaml \
-#       --map-dir data/mingda-basement --width 2.4 --ele 0.0 --speed-limit 4 --smoothing 0 --write
+#       --map-dir data/mingda-basement --width 2.4 --ele 0.0 --speed-limit 7 --smoothing 0 --write
 - [17.6, -4.9]
 - [2.6, -4.9]

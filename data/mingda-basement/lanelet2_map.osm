@@ -230,7 +230,7 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="4" />
+    <tag k="speed_limit" v="7" />
   </relation>
   <way id="200002" visible="true">
     <nd ref="100030" />
@@ -260,6 +260,6 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="4" />
+    <tag k="speed_limit" v="7" />
   </relation>
 </osm>

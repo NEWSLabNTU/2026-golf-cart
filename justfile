@@ -445,11 +445,11 @@ launch-drive-basement ARGS="":
 # between them with about 0.4 either side. The 2.5 it replaces was set on the
 # 0.30 m map (healthy never below 2.57) and latched on a good lock here.
 launch-drive-mingda ARGS="":
-    just launch-all "pose_initializer:=board reflective_pose_scenario:=basement map_path:=./data/mingda-basement use_gnss:=false planning_speed_limit:=1.0 planning_preset:=slow_indoor ndt_divergence_nvtl_median_gate:=2.1 {{ARGS}}"
+    just launch-all "pose_initializer:=board reflective_pose_scenario:=basement map_path:=./data/mingda-basement use_gnss:=false planning_speed_limit:=2.0 planning_preset:=slow_indoor ndt_divergence_nvtl_median_gate:=2.1 {{ARGS}}"
 
 # The same, on the clockwise loop lane (lanelet2_map_loop.osm, from the
 # 2026-09-24 drive carried into this frame; see route_loop_cw.yaml). Narrows to
-# 1.5 m and 2 km/h past the board hanging over the top aisle; drives two laps in
+# 1.5 m and 5.4 km/h past the board hanging over the top aisle; drives two laps in
 # the planning simulator.
 launch-drive-mingda-loop ARGS="":
     just launch-drive-mingda "lanelet2_map_file:=lanelet2_map_loop.osm {{ARGS}}"

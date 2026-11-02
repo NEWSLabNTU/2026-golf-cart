@@ -63,7 +63,7 @@
 # Result, measured on the built lanelets: no obstacle cell inside the lane, the
 # nearest cell face 0.13 m outside an edge (the board). 2.5 m except x 8.0 on
 # the top aisle round to y 20.8 on the east side (11 m), 1.5 m at the
-# narrowest; that stretch plus 2 m either side is 2 km/h, the rest 4. Tightest
+# narrowest; that stretch plus 2 m either side is 5.4 km/h, the rest 7. Tightest
 # radius 3.8 m by the builder's 1 m check, against the 3.6 m the vehicle
 # description's 0.52 rad steer allows. Planning simulator, two laps: every leg
 # arrived; footprint never within 0.12 m of an obstacle cell (the front-left
@@ -75,7 +75,7 @@
 # would overwrite the straight lane:
 #
 #   python3 scripts/map/centerline_to_lanelet.py data/mingda-basement/route_loop_cw.yaml \
-#       --map-dir data/mingda-basement --width 2.5 --ele 0.0 --speed-limit 4 --smoothing 0 \
+#       --map-dir data/mingda-basement --width 2.5 --ele 0.0 --speed-limit 7 --smoothing 0 \
 #       > data/mingda-basement/lanelet2_map_loop.osm
 - {x: 11.979, y: -6.288, width: 2.50}
 - {x: 11.479, y: -6.281, width: 2.50}
@@ -145,7 +145,7 @@
 - {x: 5.306, y: 20.446, width: 2.50}
 - {x: 5.600, y: 20.815, width: 2.50}
 - {x: 5.930, y: 21.161, width: 2.50}
-- {x: 6.294, y: 21.479, width: 2.50, speed_limit: 2}
+- {x: 6.294, y: 21.479, width: 2.50, speed_limit: 5.4}
 - {x: 6.687, y: 21.765, width: 2.50}
 - {x: 7.106, y: 22.015, width: 2.45}
 - {x: 7.546, y: 22.226, width: 2.16}
@@ -176,7 +176,7 @@
 - {x: 18.687, y: 19.792, width: 2.32}
 - {x: 18.828, y: 19.276, width: 2.50}
 - {x: 18.929, y: 18.773, width: 2.50}
-- {x: 18.999, y: 18.274, width: 2.50, speed_limit: 4}
+- {x: 18.999, y: 18.274, width: 2.50, speed_limit: 7}
 - {x: 19.046, y: 17.767, width: 2.50}
 - {x: 19.078, y: 17.264, width: 2.50}
 - {x: 19.102, y: 16.764, width: 2.50}

@@ -327,7 +327,9 @@ modules by preset but hardcodes every parameter path, hence the copy.
   maps have none of their elements; traffic light would stop for an UNKNOWN
   light with recognition off). `stop_line` stays.
 - obstacle_stop and road_user_stop margins 5.0/3.0/3.0 -> 2.0/1.5/1.5 m;
-  `max_vel` 4.17 -> 1.5 m/s, the interface's ceiling (S4).
+  `max_vel` 4.17 -> 1.5 m/s, the interface's ceiling (S4). Raised 2026-11-02
+  with the interface ceiling to 2.5: `max_vel` 2.5 and stop margins 3.5 m (a
+  2.0 m stop from the 2.0 m/s cruise plus the same 1.5 m reserve).
 - No reversing manoeuvres (2026-10-27, ported from AutoSDV 2cf5ae5e):
   start_planner `enable_back` and `freespace_planner.enable_freespace_planner`,
   goal_planner `enable_arc_backward_parking` and `enable_freespace_parking`, all

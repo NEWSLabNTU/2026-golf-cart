@@ -9,14 +9,14 @@
         suppress_sudden_stop: false
 
       stop_planning:
-        # golfcart: 5.0 -> 2.0. From 1.0 m/s the planned stop at normal.min_acc
-        # (-1.0 m/s2) takes 0.5 m; the other 1.5 m is reserve for the VCU coasting
-        # through decelerations under its 1.2 m/s2 first brake stage (S3) and
-        # for detection latency. 5 m stops the cart for anything within an aisle
-        # width and a half.
-        stop_margin : 2.0 # longitudinal margin to obstacle [m]
-        # golfcart: 3.0 -> 1.5, must stay below stop_margin; same 0.5 m stop plus
-        # 1.0 m reserve, for an obstacle just past a goal against a wall.
+        # golfcart: 5.0 -> 3.5. From the 2.0 m/s cruise the planned stop at
+        # normal.min_acc (-1.0 m/s2) takes 2.0 m; the other 1.5 m is reserve for
+        # the VCU coasting through decelerations under its 1.2 m/s2 first brake
+        # stage (S3) and for detection latency. It was 2.0 for a 1.0 m/s cruise.
+        stop_margin : 3.5 # longitudinal margin to obstacle [m]
+        # golfcart: 3.0 -> 1.5, must stay below stop_margin; a 0.5 m stop from the
+        # 1.0 m/s the cart has slowed to approaching a goal, plus 1.0 m reserve,
+        # for an obstacle just past a goal against a wall.
         terminal_stop_margin : 1.5 # Stop margin at the goal. This value cannot exceed stop margin. [m]
         # golfcart: 3.0 -> 1.5, with terminal_stop_margin.
         min_behavior_stop_margin: 1.5 # [m]

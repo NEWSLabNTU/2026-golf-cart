@@ -3,11 +3,11 @@
 # stay upstream (test_planning_preset.py compares every leaf).
 /**:
   ros__parameters:
-    # golfcart: 4.17 -> 1.5, the vehicle interface's max_speed_mps (S4). Above
-    # it the interface clamps the command and the controller tracks a speed
+    # golfcart: 4.17 -> 2.5, the vehicle interface's max_speed_mps. Above it
+    # the interface clamps the command and the controller tracks a speed
     # profile the cart will not follow. A ceiling; planning_speed_limit is the
     # startup default under it.
-    max_vel: 1.5            # max velocity limit [m/s]
+    max_vel: 2.5            # max velocity limit [m/s]
 
     # constraints param for normal driving
     normal:

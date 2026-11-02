@@ -64,10 +64,10 @@ SWITCHES = {
 PARAM_COPIES = [
     ('config/planning/scenario_planning/common/common.param.yaml',
      SLOW / 'common.param.yaml',
-     {'max_vel': (4.17, 1.5)}),
+     {'max_vel': (4.17, 2.5)}),
     (MOTION + 'obstacle_stop.param.yaml',
      SLOW / 'obstacle_stop.param.yaml',
-     {'obstacle_stop.stop_planning.stop_margin': (5.0, 2.0),
+     {'obstacle_stop.stop_planning.stop_margin': (5.0, 3.5),
       'obstacle_stop.stop_planning.terminal_stop_margin': (3.0, 1.5),
       'obstacle_stop.stop_planning.min_behavior_stop_margin': (3.0, 1.5)}),
     (BEHAVIOR + 'drivable_area_expansion.param.yaml',
@@ -84,7 +84,7 @@ PARAM_COPIES = [
       'goal_planner.pull_over.freespace_parking.enable_freespace_parking': (True, False)}),
     (MOTION + 'road_user_stop.param.yaml',
      SLOW / 'road_user_stop.param.yaml',
-     {'road_user_stop.stop_planning.longitudinal_margin.default_margin': (5.0, 2.0),
+     {'road_user_stop.stop_planning.longitudinal_margin.default_margin': (5.0, 3.5),
       'road_user_stop.stop_planning.longitudinal_margin.terminal_margin': (3.0, 1.5),
       'road_user_stop.stop_planning.longitudinal_margin.minimum_margin': (3.0, 1.5)}),
 ]

@@ -518,8 +518,8 @@ launch:
 - `default` - stock autoware_launch (default)
 - `slow_indoor` - the 1 m/s cart on indoor lanelets: no avoidance, lane change,
   crosswalk, traffic-light or intersection modules; no reversing manoeuvres
-  (start/goal planner back-out and freespace off); 2.0 m stop margins;
-  `max_vel` 1.5. The drive recipes and `just sim-drive-basement` use it. Unlike
+  (start/goal planner back-out and freespace off); 3.5 m stop margins;
+  `max_vel` 2.5. The drive recipes and `just sim-drive-basement` use it. Unlike
   upstream's planning presets it can change parameter files, through our copy
   of `tier4_planning_component.launch.xml`; `test_planning_preset.py` pins both.
 
@@ -877,9 +877,10 @@ twist_source:=gyro_odom|eagleye|rigloc     # Override preset twist source
   interface converts both (`dbc::vcu_speed_mps`, `dbc::vcu_target_speed_raw`), signs the report by
   gear, and adds half a step back to the floored report. Do not read either DBC "m/s" literally. See
   [docs/research/system/vcu-speed-report.md](docs/research/system/vcu-speed-report.md).
-- **`min_speed_mps: 1.5` in `vehicle_interface.param.yaml`** raises any nonzero speed setpoint to 5.4 km/h
-  (the cart stalls on a bump at a crawl), equal to `max_speed_mps`, so the cart moves at exactly that
-  speed whatever the planner asks.
+- **`min_speed_mps: 1.5` in `vehicle_interface.param.yaml`** raises any nonzero speed setpoint to 5.4 km/h,
+  the least that overcomes the cart's friction (it stalls on a bump at a crawl). The planner's range is
+  1.5 to `max_speed_mps` (2.5 since 2026-11-02; at 1.5 the cart ran at one fixed speed). The Ming-Da
+  lanes are 7 km/h, 5.4 past the hanging board; `just launch-drive-mingda` cruises at 2.0 m/s.
 
 - **Steering sign verified on the cart 2026-10-22** (Phase 8 V2): `invert_steering` (vehicle interface, 2026-08-12) is right; keyboard left (+5 deg) went out as -4.98 deg and turned the wheels left. The VCU's steering *report* is not usable yet (live only in AUTO and only for right turns; vendor), see [Phase 9](docs/roadmaps/9-mingda-autonomous-driving.md).
 - **Network monitor errors**: AWS Greengrass socket errors (non-critical, ignore)
