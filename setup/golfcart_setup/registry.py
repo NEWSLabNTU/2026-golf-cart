@@ -247,9 +247,10 @@ STEPS: list[Step] = [
     Step(
         id="autoware-data",
         label="Writable Autoware data directory",
-        why="Seconds. The packaged /opt/autoware data is root-owned and TensorRT "
-            "writes each .engine beside its .onnx, so without this every model "
-            "fails to cache and rebuilds on every launch.",
+        why="Downloads ~2.4 GB of models with autoware-localrepo 1.5.0-3 or "
+            "later; seconds on older installs, which only symlink the root-owned "
+            "/opt/autoware data. TensorRT writes each .engine beside its .onnx, "
+            "so the models must sit in a tree this user owns.",
         group="Autoware",
         run=[str(REPO_ROOT / "scripts" / "setup_autoware_data.sh")],
         after=("autoware-debian",),

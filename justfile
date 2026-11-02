@@ -141,13 +141,16 @@ build *FLAGS="":
         --cargo-args --release \
         "${IGNORE_ARGS[@]}"
 
-# Symlink the packaged Autoware models into a writable tree so TensorRT can
-# write its .engine files beside them. See scripts/setup_autoware_data.sh.
+# Fill data/autoware_data, a tree this user owns, so TensorRT can write its
+# .engine files beside the models. With autoware-localrepo 1.5.0-3 or later it
+# runs autoware-download-models (arguments pass through, e.g. `--only
+# lidar_centerpoint` or `--list`); on older installs it symlinks the packaged
+# models. See scripts/setup_autoware_data.sh.
 #
 # just --list shows only the LAST comment line, so the description goes here.
-# Link Autoware model data into data/autoware_data (writable, for TensorRT)
-setup-autoware-data:
-    ./scripts/setup_autoware_data.sh
+# Download or link Autoware models into data/autoware_data (writable, for TensorRT)
+setup-autoware-data *ARGS:
+    ./scripts/setup_autoware_data.sh {{ARGS}}
 
 # Compile the TensorRT engines this stack needs, ahead of the first launch.
 #
