@@ -24,6 +24,19 @@ _twin_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 [ -f "$_twin_root/config/twin.env" ] && set -a && source "$_twin_root/config/twin.env" && set +a
 : "${TWIN_SWB:=$HOME/repos/carla-scenario-bridge}"
 : "${TWIN_DOMAIN:=1}"
+# ROS Humble's Python is the system's 3.10: a virtualenv's python3 ahead of it on PATH (an
+# activated venv, or a desktop session that inherited one) runs `ros2 run` scripts without
+# rclpy. Such directories leave PATH in this terminal.
+_twin_path=
+while IFS= read -r -d: _d; do
+    if [ -n "$_d" ] && [ "$_d" != /usr/bin ] && [ "$_d" != /bin ] && [ -x "$_d/python3" ]; then
+        echo "twin: $_d left PATH (its python3 is not ROS's)"
+        continue
+    fi
+    _twin_path="${_twin_path:+$_twin_path:}$_d"
+done <<< "$PATH:"
+PATH=$_twin_path
+unset VIRTUAL_ENV _twin_path _d
 source /opt/autoware/1.5.0/setup.bash
 source "$TWIN_SWB/install/setup.bash"
 source "$_twin_root/install/setup.bash"

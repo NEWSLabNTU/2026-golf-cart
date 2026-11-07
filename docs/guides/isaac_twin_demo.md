@@ -31,6 +31,9 @@ both sides share.
 source scripts/twin/setup.bash
 ```
 
+It is a bash script: in zsh or fish, run `bash` first. A virtualenv's `python3` on `PATH` would
+hide ROS's, so it takes such directories out of `PATH` in that terminal and says so.
+
 It prints the domain, the map, Isaac's install and the display:
 `twin: domain 11, map /mnt/renegade/aeon/ntu-twin/map, Isaac /mnt/renegade/aeon/isaac-sim, display :9`.
 
