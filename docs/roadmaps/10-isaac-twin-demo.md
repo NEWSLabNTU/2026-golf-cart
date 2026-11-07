@@ -91,25 +91,16 @@ The cameras are for the people watching: RViz and the editor.
   - Host notes: the ArUco detector needs NASM, which the host lacks, so it was skipped. The
     Seyond SDK now builds with CMake 4 (inno-lidar-sdk bd072b4).
 
-## Open questions for the user
+## Decisions (2026-11-07, later)
 
-- **Photos or calibration for the front deck and the side cameras.** The photos put the
-  Falcon and the ZED X about 0.155 m above their calibrated poses (Falcon z 0.62 against
-  0.465), and the left and right cameras outside the front posts at the windshield base
-  rather than behind the hood. The body follows the photos; the sim's sensors follow the
-  calibration, because the cart's Autoware uses that TF tree. If the photos are right, the
-  fix is in `sensor_kit_calibration.yaml`, and the sim follows it.
-- **The cart's mass**, for the spec (750 kg is an estimate).
+- **The front deck and the side cameras follow the calibration** (user), not the photos.
+  The sim's sensors already did. The body is moved back onto them (swb 243, J-BODY-CAL).
+- **The cart's mass is unknown** (user). newslab_golfcart keeps 750 kg, marked assumed. It
+  matters little at 2.5 m/s on flat campus roads; weigh the cart if the twin is later used
+  for dynamics.
 
-- **2026-11-07, through the recipes**: `just twin stop`, then `world 1` (the world was up in
-  158 s), `autoware` (37 s, 84/84 composables, CenterPoint loaded from ~/autoware_data with
-  TensorRT 10.8), then `go 1`. The cart arrived 0.76 m from the goal in 65 s, with a top
-  speed of 2.53 m/s. The host was shared and loaded (load 150-300 on 48 cores, from other
-  jobs), and the sim ran at about 0.2x real time.
-  - **The speed limit.** The 2.5 m/s planning default (`planning_speed_limit`) reaches the
-    external velocity limit selector, but the selector forwards nothing to the velocity
-    smoother, which plans at Autoware's 4.17 m/s. On the cart the VCU's 2.5 m/s ceiling hides
-    this. The sim now models that ceiling (newslab_golfcart's motor top speed, swb
-    sim_vehicle_spec 62ac087). Autoware's planned speed is still 4.17: open, and worth
-    checking on the cart.
-  - The Isaac window on :9 follows the cart (aib `view:=chase`).
+## Open
+
+- **The route for the demo**: 1 is proven; 2-4 are checked but not yet driven.
+- **Autoware plans at 4.17 m/s**: the 2.5 m/s planning default does not reach the velocity
+  smoother (see Runs). Check it on the cart.
