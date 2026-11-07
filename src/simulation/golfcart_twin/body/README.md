@@ -57,7 +57,7 @@ Estimates, from the photos (01-10) at the wheels' scale:
 | Part | Estimate |
 |---|---|
 | Body half width 0.635, box half width 0.68 | photos 01, 07, 08, 09 |
-| Hood: top sloping from 0.96 at the windshield to 0.78 at the nose; a bluff front face 0.50 to 0.70 with the headlamps on it; two raised panels either side of a narrow centre groove; sides sloping out to a fender line; flared front arches, radius 0.40 | photos 05, 07, 08 |
+| Hood: top sloping from 0.96 at the windshield to 0.78 at the nose; the bonnet's front edge a U seen from the front, 0.72 over the headlamps and 0.555 across the middle (the user's sketch on the front photo, 2026-11-07), the headlamps under it; two raised panels either side of a narrow centre groove; sides sloping out to a fender line; flared front arches, radius 0.40 | photos 05, 07, 08 |
 | Windshield base x 1.55 base_link, front posts raked 0.24 m over their height | photo 05 |
 | Canopy x 0.42 to 1.54, top 1.80; roof rack 5 cm above it | photos 05, 06; the canopy sits under the VLP-32C |
 | Cargo box x -0.821 to 0.47, z 0.73 to 1.90, doors in two rows of two each side | photos 05, 06 |

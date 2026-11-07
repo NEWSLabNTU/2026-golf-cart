@@ -219,8 +219,10 @@ FLOOR_Z = 0.30
 HOOD_REAR_X = 1.55    # windshield base (estimate: photo 05)
 HOOD_TOP = 0.96       # the hood's top at the windshield (estimate: photo 05)
 HOOD_NOSE_TOP = 0.78  # ... where the nose starts (estimate: photo 05)
-FRONT_FACE_TOP = 0.70      # the front face, between the nose and the bumper (estimate: photos 05, 08)
+FRONT_FACE_TOP = 0.74      # the front face, between the nose and the bumper (estimate: photos 05, 08)
 FRONT_FACE_BOTTOM = 0.50
+BONNET_EDGE_MID = 0.555    # the bonnet's front edge at the centre line (sketch; README)
+BONNET_EDGE_CORNER = 0.72  # ... over the headlamps
 HOOD_SKIRT = 0.45     # the white fender's lower edge away from the wheel (estimate: photo 05)
 # the left and right cameras' origins, from the photos (front view, 2026-11-07): outside the
 # front posts, just above the windshield's base. The calibration has them at (1.366, 0.539,
@@ -237,6 +239,13 @@ BOX_Z = (0.73, 1.90)
 def post_x(z):
     """The front post's line, from the floor to the canopy (photo 05)."""
     return 1.60 - (z - FLOOR_Z) * (0.24 / 1.42)
+
+
+def bonnet_edge(y):
+    """The bonnet's front edge, seen from the front (the user's sketch on the front photo,
+    2026-11-07): high over each headlamp, low across the middle, just under the Falcon."""
+    u = min(abs(y) / 0.60, 1.0)
+    return BONNET_EDGE_MID + (BONNET_EDGE_CORNER - BONNET_EDGE_MID) * u ** 3
 
 
 def _smooth(pts, n=3):
@@ -277,6 +286,10 @@ def hood_ring(x, m=None):
         (ws, zt - 0.012), (ws + 0.05, zt - 0.045), (wb - 0.015, zf + 0.015), (wb, zf - 0.02),
         (wb, zb + 0.03), (wb - 0.02, zb), (0.0, zb))]
     half = half[:2] + _smooth(half[1:-1], 2)[1:] + [half[-1]]
+    if k > 0:   # the nose's top comes down to the bonnet's front edge, a U across the front
+        c = k ** 1.5
+        half = [np.array([y, z - c * max(0.0, z - bonnet_edge(y))]) if z > zb + 0.02 else np.array([y, z])
+                for y, z in half]
     ring = [np.array([x, y, z]) for y, z in half] + [np.array([x, -y, z]) for y, z in reversed(half[1:-1])]
     return ring
 
@@ -314,9 +327,14 @@ def build():
         part("Body/FrontLower", "black_plastic").add(*rbox((1.52, 1.68), sorted((sgn * 0.52, sgn * 0.64)), (0.22, 0.56), 0.02, 2))
     part("Body/BumperFront", "black_plastic").add(*rbox((2.29, X_FRONT), (-0.60, 0.60), (0.22, 0.50), 0.05, 3))
     lamps = part("Body/Headlamps", "lamp")
-    for y in (0.46, -0.46):           # on the hood's front face, wherever it is at that y and z
-        xl = surface_x(y, 0.60)
-        lamps.add(*disc((xl - 0.008, y, 0.60), (1, 0.6 * y, 0), 0.05, 0.03))
+    for y in (0.49, -0.49):           # on the front face, under the bonnet's edge
+        xl = surface_x(y, 0.585)
+        lamps.add(*disc((xl - 0.008, y, 0.585), (1, 0.6 * y, 0), 0.05, 0.03))
+    seam = part("Body/BonnetSeam", "dark_plastic")   # the bonnet's front edge, as a dark line
+    ys = np.linspace(-0.58, 0.58, 41)
+    pts = [np.array([surface_x(y, bonnet_edge(y) - 0.008) + 0.003, y, bonnet_edge(y) - 0.008]) for y in ys]
+    for p0, p1 in zip(pts[:-1], pts[1:]):
+        seam.add(*bar(p0, p1, 0.008, 0.006))
     amb = part("Body/Reflectors", "amber")
     for y in (0.43, -0.43):
         amb.add(*disc((X_FRONT - 0.004, y, 0.36), (1, 0, 0), 0.03, 0.008))
