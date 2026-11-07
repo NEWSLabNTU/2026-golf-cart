@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Offline previews of the body make_body.py wrote, optionally beside the photos.
 
-    python3 render_previews.py OUT_DIR PREVIEW_DIR [PHOTO_DIR]
+    python3 render_previews.py OUT_DIR PREVIEW_DIR [PHOTO_DIR] [--headlights on]
 
 Renders the composed /Vehicle (wheels included) with a small numpy z-buffer, flat-shaded
 from each material's diffuse colour: front, left, right, rear (orthographic) and two 3/4 views
@@ -34,8 +34,11 @@ FILL = np.array([0.5, 0.7, 0.1])
 FILL /= np.linalg.norm(FILL)
 
 
-def triangles(path):
+def triangles(path, headlights="off"):
     stage = Usd.Stage.Open(str(path))
+    vs = stage.GetPrimAtPath("/Vehicle").GetVariantSets()
+    if vs.HasVariantSet("headlights"):
+        vs.GetVariantSet("headlights").SetVariantSelection(headlights)
     cache = UsdGeom.XformCache()
     tris, cols, alphas = [], [], []
     for prim in stage.Traverse():
@@ -53,6 +56,9 @@ def triangles(path):
             col = tuple(sh.GetInput("diffuseColor").Get())
             op = sh.GetInput("opacity")
             alpha = op.Get() if op else 1.0
+            em = sh.GetInput("emissiveColor")
+            if em and em.Get() is not None and max(em.Get()) > 0:      # a lit lamp: draw it glowing
+                col = tuple(min(1.0, c) for c in em.Get())
         o = 0
         for c in counts:
             f = idx[o:o + c]
@@ -153,13 +159,20 @@ def render(tris, cols, alphas, view, out_png, title, size=900, margin=0.06):
 
 
 def main():
+    argv = sys.argv[1:]
+    headlights = "off"
+    if "--headlights" in argv:
+        i = argv.index("--headlights")
+        headlights = argv[i + 1]
+        del argv[i:i + 2]
+    sys.argv = [sys.argv[0]] + argv
     if len(sys.argv) not in (3, 4):
         sys.exit(__doc__)
     usd = Path(sys.argv[1]) / ASSET_ID / f"{ASSET_ID}.usda"
     dest = Path(sys.argv[2])
     dest.mkdir(parents=True, exist_ok=True)
     photos = Path(sys.argv[3]) if len(sys.argv) == 4 else None
-    tris, cols, alphas = triangles(usd)
+    tris, cols, alphas = triangles(usd, headlights)
     print(f"{len(tris)} triangles")
     for name, view in VIEWS.items():
         png = dest / f"render_{name}.png"

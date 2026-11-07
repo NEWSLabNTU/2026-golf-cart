@@ -28,7 +28,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade, Vt
+from pxr import Gf, Sdf, Usd, UsdGeom, UsdLux, UsdShade, Vt
 
 ASSET_ID = "vehicle.newslab.golfcart"
 
@@ -330,6 +330,51 @@ def surface_x(y, z):
     return HOOD_REAR_X
 
 
+HEADLAMPS = []          # each headlamp's light origin in base_link, filled by build()
+# Headlights (the `headlights` variant set). A SphereLight per lamp, shaped to a cone along the
+# lamp's axis. Intensity is the light's luminance in nits: a 0.03 m sphere at 7e5 nits gives
+# about 2000 cd on the axis, an LED golf cart lamp's order (an estimate; tune in Isaac).
+HEADLIGHT_RADIUS = 0.03
+HEADLIGHT_INTENSITY = 7.0e5
+HEADLIGHT_COLOR = (1.0, 0.96, 0.90)
+HEADLIGHT_CONE_DEG = 32.0
+HEADLIGHT_CONE_SOFTNESS = 0.3
+HEADLIGHT_DOWN_DEG = 4.0       # aimed slightly down at the road
+LAMP_EMISSIVE_ON = (3.0, 2.9, 2.7)
+
+
+def add_headlights(stage, shift):
+    """The `headlights` variant set on /Vehicle: `off` (the default) and `on`. With `on`, the
+    headlamps' material glows and a shaped light shines from each lamp. Select it in the
+    editor (the vehicle prim's Variants in the Property panel) or from code:
+    prim.GetVariantSets().GetVariantSet("headlights").SetVariantSelection("on")."""
+    vehicle = stage.GetPrimAtPath("/Vehicle")
+    vset = vehicle.GetVariantSets().AddVariantSet("headlights")
+    for name in ("off", "on"):
+        vset.AddVariant(name)
+        vset.SetVariantSelection(name)
+        with vset.GetVariantEditContext():
+            sh = UsdShade.Shader(stage.GetPrimAtPath("/Vehicle/Looks/lamp/PreviewSurface"))
+            sh.CreateInput("emissiveColor", Sdf.ValueTypeNames.Color3f).Set(
+                Gf.Vec3f(*(LAMP_EMISSIVE_ON if name == "on" else (0.0, 0.0, 0.0))))
+            if name == "on":
+                UsdGeom.Xform.Define(stage, "/Vehicle/Lights")
+                for side, (x, y, z) in zip(("Left", "Right"), sorted(HEADLAMPS, key=lambda p: -p[1])):
+                    light = UsdLux.SphereLight.Define(stage, f"/Vehicle/Lights/Headlight_{side}")
+                    light.CreateRadiusAttr(HEADLIGHT_RADIUS)
+                    light.CreateIntensityAttr(HEADLIGHT_INTENSITY)
+                    light.CreateColorAttr(Gf.Vec3f(*HEADLIGHT_COLOR))
+                    light.CreateTreatAsPointAttr(False)
+                    shaping = UsdLux.ShapingAPI.Apply(light.GetPrim())
+                    shaping.CreateShapingConeAngleAttr(HEADLIGHT_CONE_DEG)
+                    shaping.CreateShapingConeSoftnessAttr(HEADLIGHT_CONE_SOFTNESS)
+                    xf = UsdGeom.Xformable(light)
+                    xf.AddTranslateOp().Set(Gf.Vec3d(x + shift[0], y, z))
+                    # a light's cone points along its -Z: turn -Z to +x, then down a little
+                    xf.AddRotateXYZOp().Set(Gf.Vec3f(0.0, -90.0 + HEADLIGHT_DOWN_DEG, 0.0))
+    vset.SetVariantSelection("off")
+
+
 def build():
     P = {}
 
@@ -363,6 +408,7 @@ def build():
         xl = surface_x(y, 0.63)
         nrm = np.array([1.0, 0.3 * y, 0.0])
         lamps.add(*disc((xl + 0.004, y, 0.63), nrm, 0.055, 0.02))
+        HEADLAMPS.append((xl + 0.016, y, 0.63))
         part("Body/HeadlampBezels", "black_plastic").add(*disc(np.array([xl - 0.002, y, 0.63]), nrm, 0.060, 0.02))
     amb = part("Body/Reflectors", "amber")
     for y in (0.43, -0.43):
@@ -646,6 +692,7 @@ def main():
                        "radius": WHEEL_RADIUS, "width": WHEEL_WIDTH,
                        "max_steer_deg": MAX_STEER_DEG if xb > 0 else 0.0,
                        "usd": f"{ASSET_ID}/wheels.usda", "usd_prim": f"/{name}"})
+    add_headlights(st, shift)
     st.GetRootLayer().Save()
     allp = np.concatenate(allp)
     lo, hi = allp.min(0), allp.max(0)

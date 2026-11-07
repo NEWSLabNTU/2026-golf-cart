@@ -35,6 +35,38 @@ python3 render_previews.py OUT_DIR PREVIEW_DIR [PHOTO_DIR]
 With `PHOTO_DIR`, each view is put beside the matching photo. The photos stay out of git
 because they show bystanders' licence plates.
 
+## Headlights
+
+The body carries a `headlights` variant set on `/Vehicle`: `off` (the default) and `on`. With
+`on`, the headlamps' material glows and a light shines from each lamp: a UsdLux SphereLight,
+0.03 m across, shaped to a 32 degree cone and aimed 4 degrees down. Its intensity is 7e5 nits,
+about 2000 cd on the axis, an estimate for an LED golf cart lamp; tune `HEADLIGHT_INTENSITY` in
+`make_body.py` after seeing it in Isaac.
+
+Switch it in the Isaac editor: select the vehicle's `model` prim (the prim that references
+this asset), then Property panel, Variants, `headlights`. From code:
+
+```python
+prim.GetVariantSets().GetVariantSet("headlights").SetVariantSelection("on")
+```
+
+`render_previews.py ... --headlights on` draws the lamps lit.
+
+## The Autoware vehicle mesh
+
+`make_vehicle_mesh.py OUT.dae` writes the same geometry (body, sensor housings, wheels) as a
+COLLADA mesh for `golfcart_vehicle_description` (`mesh/golfcart.dae`). It uses the frame of
+Autoware's vehicle meshes, as in sample_vehicle_description's lexus.dae: Y up, facing -X, with
+the origin on the ground at mid wheelbase. `vehicle.xacro` places it with
+`origin xyz="${wheel_base/2} 0 0" rpy="${pi/2} 0 ${pi}"`.
+
+Every triangle is written for both sides, because RViz culls back faces. Regenerate the mesh
+after changing the body:
+
+```bash
+python3 make_vehicle_mesh.py ../../../vehicle/golfcart_vehicle_launch/golfcart_vehicle_description/mesh/golfcart.dae
+```
+
 ## What each part is sized from
 
 From the cart's files, exact:
