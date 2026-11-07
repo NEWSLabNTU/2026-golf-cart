@@ -1,0 +1,39 @@
+# The demo's routes in front of 學新館, NTU campus twin (Phase 10, T6). Poses are in the map
+# frame (MGRS 51RUH local, as the twin's lanelet2_map.osm): x, y, z (m, the lane's elevation)
+# and yaw (rad, counter-clockwise from east).
+#
+# Checked by swb 243 on 2026-11-07 against the twin's lanes (S1 80f24846) with Lanelet2's
+# routing graph: each sequence is routable, start and goal sit on a centreline with the lane's
+# heading, each start has 10 m straight ahead, and each route stays on scanned ground. The
+# junction in front of the building is the T at x 53006-53022, y 67844-67857.
+# Turn radii are as drawn; the cart turns down to about 3.6 m (max_steer_angle 0.52).
+routes:
+  "1":
+    title: west approach, left at the T in front of the building, north
+    lanelets: [1004984, 1007915, 1004783]
+    turns: 1
+    length_m: 89.5
+    start: {x: 52980.25, y: 67848.25, z: 11.88, yaw: 0.0204}
+    goal: {x: 53021.67, y: 67901.92, z: 12.09, yaw: 1.5535}
+  "2":
+    title: north approach, right at the T, west
+    lanelets: [1000429, 1007956, 1004790]
+    turns: 1
+    length_m: 92.1
+    start: {x: 53017.24, y: 67909.66, z: 12.03, yaw: -1.5863}
+    goal: {x: 52981.19, y: 67848.27, z: 11.89, yaw: -3.1212}
+  "3":
+    title: west approach, left at the T, left again at the north junction, west
+    lanelets: [1004984, 1007915, 1004783, 1008152, 1004918]
+    turns: 2
+    length_m: 163.6
+    start: {x: 52980.25, y: 67848.25, z: 11.88, yaw: 0.0204}
+    goal: {x: 52972.45, y: 67933.01, z: 11.99, yaw: 3.1162}
+  "4":
+    title: north road eastbound, right south, right again at the T, west
+    lanelets: [1004772, 1008034, 1000429, 1007956, 1004790]
+    turns: 2
+    length_m: 135.8
+    note: the first right (1008034) is a 4.5 m radius, close to the cart's 3.6 m
+    start: {x: 52986.60, y: 67925.86, z: 11.98, yaw: -0.024}
+    goal: {x: 52981.19, y: 67848.27, z: 11.89, yaw: -3.1212}

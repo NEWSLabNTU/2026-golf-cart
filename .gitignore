@@ -88,3 +88,4 @@ data/coss_maps/
 setup/.venv/
 setup/.state.json
 setup/.markers/
+config/twin.env

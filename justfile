@@ -53,6 +53,9 @@ mod link 'just/link.just'
 # CPU / kernel profiling of the running stack
 mod profile 'just/profile.just'
 
+# The cart in the NTU twin on Isaac Sim: `just twin` (Phase 10)
+mod twin 'just/twin.just'
+
 # Initialize and update all git submodules
 checkout:
     git submodule update --init --recursive --checkout
