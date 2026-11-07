@@ -2,7 +2,7 @@
 """Drive one of the demo's routes: wait until the cart is localized, set the route's goal,
 engage, and report until it arrives (Phase 10).
 
-    twin_go.py ROUTES_YAML ROUTE [--no-engage] [--timeout 300]
+    twin_go.py ROUTE [--routes ROUTES_YAML] [--no-engage] [--timeout 300]
 
 The same as a person does in RViz: 2D Goal Pose on the route's goal, then the Autoware
 state panel's engage button. Use it to rehearse, or when no one is at the RViz window.
@@ -18,11 +18,16 @@ import yaml
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("routes")
-    ap.add_argument("route")
+    ap.add_argument("route", help="a route of config/routes.yaml: 1, 2, 3 or 4")
+    ap.add_argument("--routes", default="",
+                    help="routes file (default: this package's config/routes.yaml)")
     ap.add_argument("--no-engage", action="store_true", help="set the goal only")
     ap.add_argument("--timeout", type=float, default=300.0, help="wall seconds to arrive")
     a = ap.parse_args()
+    if not a.routes:
+        from ament_index_python.packages import get_package_share_directory
+
+        a.routes = f"{get_package_share_directory('golfcart_twin')}/config/routes.yaml"
     routes = yaml.safe_load(open(a.routes))["routes"]
     if a.route not in routes:
         sys.exit(f"no route {a.route!r}; the routes are {', '.join(routes)}")

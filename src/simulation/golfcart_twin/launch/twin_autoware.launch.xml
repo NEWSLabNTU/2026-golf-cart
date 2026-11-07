@@ -4,16 +4,19 @@
   logging simulation (drivers off, sim time) with what the first drive on 118 (2026-11-07)
   needed. aib's runner plays the sensors and the vehicle interface on the Isaac side.
 
-    ros2 launch golfcart_twin twin_autoware.launch.xml map_path:=<twin map directory>
+    play_launch launch golfcart_twin twin_autoware.launch.xml   (web-addr 127.0.0.1:8081)
+
+  map_path defaults to $TWIN_MAP. Give play_launch a web port other than the world launch's
+  (8080 by default; scripts/twin/setup.bash shows the commands).
 
   The DDS settings are the caller's, not this file's: ROS_DOMAIN_ID, RMW_IMPLEMENTATION and
-  CYCLONEDDS_URI come from the recipe, and both sides must share them (on 118, swb's
+  CYCLONEDDS_URI come from scripts/twin/setup.bash, and both sides must share them (on 118, swb's
   cyclonedds-localhost.xml: loopback multicast is off there, so the cart's loopback.xml
   discovers nothing).
 -->
 <launch>
-  <arg name="map_path"
-       description="The twin's map directory: lanelet2_map.osm, pointcloud_map/ with pointcloud_map_metadata.yaml, map_projector_info.yaml (MGRS 51RUH). Required."/>
+  <arg name="map_path" default="$(env TWIN_MAP '')"
+       description="The twin's map directory (default $TWIN_MAP): lanelet2_map.osm, pointcloud_map/ with pointcloud_map_metadata.yaml, map_projector_info.yaml (MGRS 51RUH)."/>
   <arg name="imu_source" default="xsens"
        description="xsens: the sim publishes /sensing/imu/xsens/imu_raw in imu_link. It has no ZED IMU and no zed_imu_link frame, so zed does not work here."/>
   <arg name="data_path" default="$(env AUTOWARE_DATA ./data/autoware_data)"
@@ -23,7 +26,10 @@
   <arg name="camera_model" default="none"
        description="none: Isaac publishes the camera topics itself. The sensor kit starts its GMSL camera nodes whatever launch_driver says, and they die with no nvv4l2camerasrc off the cart."/>
   <arg name="launch_perception" default="true" description="Launch perception"/>
-  <arg name="rviz" default="true" description="The twin demo RViz (rviz/twin_demo.rviz) with the vehicle parameters and sim time"/>
+  <!-- Not "rviz": the include below sets rviz:=false, and an XML include's arguments are not
+       scoped (ros2 launch on Humble and play_launch alike), so that value would reach this
+       file's scope and the demo RViz would never start (118, 2026-11-07). -->
+  <arg name="demo_rviz" default="true" description="The twin demo RViz (rviz/twin_demo.rviz) with the vehicle parameters and sim time"/>
 
   <include file="$(find-pkg-share golfcart_launch)/launch/logging_simulation.launch.yaml">
     <arg name="map_path" value="$(var map_path)"/>
@@ -47,7 +53,7 @@
 
   <!-- RViz needs the vehicle parameters, or it drops the whole config ("Statically typed
        parameter 'wheel_radius' must be initialized"). -->
-  <node pkg="rviz2" exec="rviz2" name="twin_rviz" output="screen" if="$(var rviz)"
+  <node pkg="rviz2" exec="rviz2" name="twin_rviz" output="screen" if="$(var demo_rviz)"
         args="-d $(find-pkg-share golfcart_twin)/rviz/twin_demo.rviz">
     <param from="$(find-pkg-share golfcart_vehicle_description)/config/vehicle_info.param.yaml"/>
     <param name="use_sim_time" value="true"/>

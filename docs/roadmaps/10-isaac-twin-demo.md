@@ -99,6 +99,37 @@ The cameras are for the people watching: RViz and the editor.
   matters little at 2.5 m/s on flat campus roads; weigh the cart if the twin is later used
   for dynamics.
 
+## Start-up by ROS commands (2026-11-07, later)
+
+The user types ROS commands, with play_launch in place of `ros2 launch` (user). Three
+terminals, each with `source scripts/twin/setup.bash`:
+
+```bash
+play_launch launch golfcart_twin twin_world.launch.py route:=1
+play_launch launch --web-addr 127.0.0.1:8081 golfcart_twin twin_autoware.launch.xml
+ros2 run golfcart_twin twin_go.py 1
+```
+
+- `twin_world.launch.py` builds the body and the lidar profiles when they are stale, writes
+  the ego config on the terminal's domain, and includes swb's `aib_launch
+  isaac_vehicle.launch.xml` (aib 1e7c44d) at the route's start, given in map coordinates
+  (`map_pose`).
+- `just twin` runs the same launches; it is optional.
+- **GNSS**: the sim plays the cart's u-blox RTK receiver as a fixed RTK solution
+  (`NavSatFix`, status GBAS_FIX, 1 Hz, no noise) on `/sensing/gnss/ublox/nav_sat_fix`. The
+  automatic pose initializer initializes NDT from it with no one at the keyboard:
+  - on a fresh start, within 10 s (after "The GNSS pose has not arrived" and two "align
+    server failed" retries), 6 cm from the spawn;
+  - after a restart of Autoware alone, with the cart at route 1's goal, in about 10 s, at
+    the goal.
+- Route 1 by these commands: arrived in 65.8 s, 0.76 m from the goal; by `just twin`, in
+  69.1 s, 0.76 m (host load about 277).
+- play_launch 0.30.0 against stock `ros2 launch` (Humble): no difference was found. Both
+  reject `args="--world ''"` (unbalanced quotes, so aib's runner wrapper takes `--opt=value`).
+  Both let an XML include's arguments reach the including file's scope, so the demo's RViz
+  argument is `demo_rviz`, not `rviz`. Each play_launch serves a web UI on 8080 by default,
+  so the second needs `--web-addr`, or it runs without one.
+
 ## Open
 
 - **The route for the demo**: 1 is proven; 2-4 are checked but not yet driven.

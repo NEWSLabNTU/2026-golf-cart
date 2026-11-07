@@ -66,38 +66,24 @@ assets() {
 world() {
     local route=${1:-1}
     need ISAAC_ROOT; need TWIN_MAP
+    route_field "$route" start > /dev/null
     alive world && die "the world is already up (pgid $(cat "$run/world.pgid")); twin stop first"
-    [ -f "$TWIN_ASSETS/lidars/VLP32C.usda" ] && [ -f "$TWIN_ASSETS/vehicles/vehicle.newslab.golfcart/entry.json" ] \
-        || assets
-    read -r x y z yaw < <(route_field "$route" start)
-    # Isaac's world is the map less isaac/world.yaml's map_origin
-    read -r ox oy oz < <(python3 -c "import yaml,sys; o=yaml.safe_load(open(sys.argv[1]))['map_origin']; print(*o)" \
-        "$TWIN_MAP/isaac/world.yaml")
-    pose=$(python3 -c "print(f'{$x-$ox:.3f},{$y-$oy:.3f},{$z-$oz+0.05:.3f},{$yaw}')")
-    ego="$run/ego_golfcart.yaml"
-    sed "s/^domain: .*/domain: $TWIN_DOMAIN/" "$pkg/config/ego_golfcart.yaml" > "$ego"
-    local aib="$TWIN_SWB/src/autoware_isaac_bridge"
-    [ -d "$aib" ] || die "no $aib (TWIN_SWB)"
-    echo "twin: Isaac Sim, route $route's start at $pose (world frame), domain $TWIN_DOMAIN," \
-         "window ${TWIN_DISPLAY:-none}; log $run/world.log"
-    (
-      cd "$aib"; dds_env
-      export AIB_CONFIG="$aib/src/aib/config" GOLFCART_LIDARS="$TWIN_ASSETS/lidars" \
-          GOLFCART_BODY="$TWIN_ASSETS/vehicles" OMNI_KIT_ACCEPT_EULA=YES ISAAC_ROOT="$ISAAC_ROOT" \
-          ISAAC_KIT_ARGS="--/renderer/multiGpu/enabled=false --/renderer/activeGpu=$TWIN_GPU" \
-          DISPLAY="$TWIN_DISPLAY"
-      # Its own process group (setsid), whose leader's pid is the one written: `stop` signals
-      # the group. Only setsid is backgrounded, with every descriptor away from the caller's.
-      setsid just isaac-ego ego:="$ego" world:="$TWIN_MAP/isaac/world.yaml" pose:="$pose" \
-          realtime:=true > "$run/world.log" 2>&1 < /dev/null &
-      echo $! > "$run/world.pgid"
-    )
+    echo "twin: Isaac Sim, route $route's start, domain $TWIN_DOMAIN, window ${TWIN_DISPLAY:-none};" \
+         "log $run/world.log"
+    # The launch a person types (docs/guides/isaac_twin_demo.md), in its own process group
+    # (setsid), whose leader's pid is the one written: `stop` signals the group.
+    rm -rf "${run:?}/play_log_world"
+    ( export DISPLAY="$TWIN_DISPLAY"; source "$root/scripts/twin/setup.bash" > /dev/null
+      setsid play_launch launch --web-addr 127.0.0.1:${TWIN_WORLD_WEB_PORT:-8095} \
+          --log-dir "$run/play_log_world" golfcart_twin twin_world.launch.py route:="$route" \
+          > "$run/world.log" 2>&1 < /dev/null &
+      echo $! > "$run/world.pgid" )
     for _ in $(seq 1 120); do
-        grep -q 'sensors warm after' "$run/world.log" && { echo "twin: the world is up"; return; }
+        grep -rqs 'sensors warm' "$run/play_log_world" && { echo "twin: the world is up"; return; }
         alive world || { tail -20 "$run/world.log"; die "the world exited"; }
         sleep 5
     done
-    die "the world is not up after 10 min; see $run/world.log"
+    die "the world is not up after 10 min; see $run/world.log and $run/play_log_world"
 }
 
 autoware() {
@@ -120,7 +106,7 @@ autoware() {
 go() {
     local route=${1:-1}
     ( source /opt/autoware/1.5.0/setup.bash; dds_env
-      python3 "$pkg/scripts/twin_go.py" "$pkg/config/routes.yaml" "$route" "${@:2}" )
+      python3 "$pkg/scripts/twin_go.py" "$route" --routes "$pkg/config/routes.yaml" "${@:2}" )
 }
 
 status() {
