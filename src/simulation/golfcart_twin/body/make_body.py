@@ -223,7 +223,12 @@ SINK_FRONT = 0.15      # the centre panel's depth at the front: the U's middle a
 SINK_HALF = 0.22       # the sunken panel's flat half width (the user's sketch)
 SLOPE_OUT = 0.44       # where the side slopes reach the shoulders
 NOSE_R = 0.065         # the front edge's roll-over radius
-FRONT_FACE_BOTTOM = 0.50
+WHITE_BOTTOM_MID = 0.415     # the white front face's lower edge in the middle (sketch)
+WHITE_BOTTOM_CORNER = 0.565  # ... under the headlamps
+BUMPER_BOTTOM = 0.25
+BUMPER_BLOCK_HALF = 0.44     # the bumper's centre block, half width
+BUMPER_WING_OUT = 0.70       # the wings reach out to the wheel arches
+WING_BOTTOM = 0.50
 HOOD_SKIRT = 0.45     # the white fender's lower edge away from the wheel (estimate: photo 05)
 # the left and right cameras' origins, from the photos (front view, 2026-11-07): outside the
 # front posts, just above the windshield's base. The calibration has them at (1.366, 0.539,
@@ -252,7 +257,14 @@ def _smooth(pts, n=3):
     return pts
 
 
-def hood_ring(x, m=None):
+def white_bottom(y):
+    """The white front face's lower edge, where the black bumper starts: a U like the bonnet's
+    edge, 0.15 m below it (the user's sketch of the front face, 2026-11-07)."""
+    u = min(max((abs(y) - 0.28) / 0.20, 0.0), 1.0)
+    return WHITE_BOTTOM_MID + (WHITE_BOTTOM_CORNER - WHITE_BOTTOM_MID) * u * u * (3 - 2 * u)
+
+
+def hood_ring(x, top_only=False):
     """The bonnet's cross-section at x, from the user's two sketches on the front photo
     (2026-11-07). The bonnet is bounded by the windshield (rear), its two near-vertical outer
     edges and the U at its front. Its centre is a sunken panel, flat across +-SINK_HALF, that
@@ -272,26 +284,31 @@ def hood_ring(x, m=None):
     dx = x - WHEEL_BASE
     if abs(dx) < ARCH_R:
         zb = max(zb, WHEEL_RADIUS + math.sqrt(ARCH_R ** 2 - dx ** 2))
-    if x > X_FRONT - 0.30:
-        zb = max(zb, FRONT_FACE_BOTTOM)
+    front = x > X_FRONT - 0.30
+    zbf = (lambda y: max(zb, white_bottom(y))) if front else (lambda y: zb)   # the white face's lower edge
     zc = zs - sink
     half = [np.array(p, float) for p in (
         (0.0, zc - 0.006), (0.010, zc), (SINK_HALF, zc),                  # the sunken panel, its crease
         (SINK_HALF + 0.05, zc + 0.15 * (zs - zc)),
         (SLOPE_OUT - 0.04, zs - 0.10 * (zs - zc)), (SLOPE_OUT, zs),         # the slope up to the shoulder
         (wb - 0.04, zs - 0.004), (wb - 0.01, zs - 0.025), (wb, zs - 0.07),  # the rounded shoulder edge
-        (wb + 0.004, zb + 0.06), (wb, zb + 0.02), (wb - 0.02, zb), (0.0, zb))]
-    half = half[:2] + _smooth(half[1:-1], 2)[1:] + [half[-1]]
+        (wb + 0.004, zbf(wb) + 0.06), (wb, zbf(wb) + 0.02))]
+    half = half[:2] + _smooth(half[1:], 2)[1:]
+    ntop = len(half)
+    # the lower edge: flat behind the face, the white face's U at the front (same count everywhere)
+    half += [np.array([y, zbf(y)]) for y in np.linspace(wb - 0.02, 0.0, 14)]
     if roll > 0:
-        half = [np.array([y, max(z - roll, zb + 0.01)]) if z > zb + 0.03 else np.array([y, z]) for y, z in half]
+        half = [np.array([y, max(z - roll, zbf(y) + 0.01)]) if i < ntop else np.array([y, z])
+                for i, (y, z) in enumerate(half)]
+    if top_only:
+        return half[:ntop]
     ring = [np.array([x, y, z]) for y, z in half] + [np.array([x, -y, z]) for y, z in reversed(half[1:-1])]
     return ring
 
 
 def bonnet_edge(y):
     """The bonnet's front edge (the U), as the top of its last cross-section."""
-    ring = hood_ring(X_FRONT - 0.002)
-    top = sorted((abs(p[1]), p[2]) for p in ring if p[2] > FRONT_FACE_BOTTOM + 0.03)
+    top = sorted((abs(p[0]), p[1]) for p in hood_ring(X_FRONT - 0.002, top_only=True))
     ys, zs = np.array([t[0] for t in top]), np.array([t[1] for t in top])
     return float(np.interp(abs(y), ys, zs))
 
@@ -327,22 +344,26 @@ def build():
     part("Body/FrontLower", "black_plastic").add(*rbox((1.52, 2.36), (-0.50, 0.50), (0.24, 0.55), 0.04, 2))
     for sgn in (1, -1):     # the black panel behind each front wheel, floor to fender (photo 05)
         part("Body/FrontLower", "black_plastic").add(*rbox((1.52, 1.68), sorted((sgn * 0.52, sgn * 0.64)), (0.22, 0.56), 0.02, 2))
-    # the black bumper (photos 07, 08 and the front photo, 2026-11-07): a low centre piece and
-    # two corner pieces that rise to the headlamps and wrap back to the wheel arches
+    # The black bumper under the white face (the user's sketch of the front face, 2026-11-07):
+    # its top follows the white face's lower edge; thin wings run out under the headlamps to
+    # the wheel arches, and a deeper block hangs in the middle, carrying the reflectors.
     bump = part("Body/BumperFront", "black_plastic")
-    bump.add(*rbox((2.30, X_FRONT), (-0.44, 0.44), (0.25, 0.44), 0.04, 3))
+    ys = np.linspace(-BUMPER_BLOCK_HALF, BUMPER_BLOCK_HALF, 25)
+    block = [(y, white_bottom(y) + 0.005) for y in ys[::-1]] + [(-BUMPER_BLOCK_HALF, BUMPER_BOTTOM), (BUMPER_BLOCK_HALF, BUMPER_BOTTOM)]
+    bump.add(*loft([[np.array([x, y, z]) for y, z in block] for x in (X_FRONT - 0.20, X_FRONT)]))
     for sgn in (1, -1):
-        bump.add(*rbox((2.24, X_FRONT - 0.01), sorted((sgn * 0.40, sgn * 0.62)), (0.25, 0.47), 0.06, 3))
-    # the white fascia under the bonnet's front edge, set back from the bumper, with its
-    # horizontal recess (front photo)
-    part("Body/Fascia", "white_body").add(*rbox((2.28, X_FRONT - 0.025), (-0.44, 0.44), (0.43, 0.53), 0.02, 2))
-    part("Body/FasciaRecess", "fascia_recess").add(*rbox((X_FRONT - 0.032, X_FRONT - 0.022), (-0.28, 0.28), (0.455, 0.505), 0.004, 1))
+        y0, y1 = sorted((sgn * (BUMPER_BLOCK_HALF - 0.04), sgn * BUMPER_WING_OUT))
+        wing = [(y0, WING_BOTTOM), (y1, WING_BOTTOM + 0.01), (y1, white_bottom(y1) + 0.005)]
+        wing += [(y, white_bottom(y) + 0.005) for y in np.linspace(y1, y0, 8)[1:]]
+        bump.add(*loft([[np.array([x, y, z]) for y, z in wing] for x in (2.30, X_FRONT - 0.008)]))
+    # the white face's horizontal recess in the middle (front photo)
+    part("Body/FasciaRecess", "fascia_recess").add(*rbox((X_FRONT - 0.012, X_FRONT - 0.004), (-0.26, 0.26), (0.43, 0.48), 0.004, 1))
     lamps = part("Body/Headlamps", "lamp")
-    for y in (0.45, -0.45):           # on the front face, right under the bonnet's edge
-        xl = surface_x(y, 0.61)
-        nrm = np.array([1.0, 0.6 * y, 0.0])
-        lamps.add(*disc((xl + 0.004, y, 0.61), nrm, 0.055, 0.02))
-        part("Body/HeadlampBezels", "black_plastic").add(*disc(np.array([xl - 0.002, y, 0.61]), nrm, 0.066, 0.02))
+    for y in (0.48, -0.48):           # on the white face's raised corners, under the bonnet's edge
+        xl = surface_x(y, 0.63)
+        nrm = np.array([1.0, 0.3 * y, 0.0])
+        lamps.add(*disc((xl + 0.004, y, 0.63), nrm, 0.055, 0.02))
+        part("Body/HeadlampBezels", "black_plastic").add(*disc(np.array([xl - 0.002, y, 0.63]), nrm, 0.066, 0.02))
     seam = part("Body/BonnetSeam", "dark_plastic")   # the bonnet's front edge, as a dark line
     ys = np.linspace(-0.56, 0.56, 41)
     pts = [np.array([surface_x(y, bonnet_edge(y) - 0.008) + 0.003, y, bonnet_edge(y) - 0.008]) for y in ys]
@@ -350,7 +371,7 @@ def build():
         seam.add(*bar(p0, p1, 0.008, 0.006))
     amb = part("Body/Reflectors", "amber")
     for y in (0.43, -0.43):
-        amb.add(*disc((X_FRONT + 0.002, math.copysign(0.33, y), 0.36), (1, 0, 0), 0.03, 0.008))
+        amb.add(*disc((X_FRONT + 0.002, math.copysign(0.37, y), 0.36), (1, 0, 0), 0.03, 0.008))
     ar = part("Body/WheelArches", "black_plastic")
     for xc in (xf, xr):
         for sgn in (1, -1):
