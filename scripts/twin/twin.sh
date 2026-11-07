@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # The cart in the NTU twin on Isaac Sim (docs/roadmaps/10-isaac-twin-demo.md), behind `just twin`.
 #
-#   twin.sh generate [--check]  regenerate the cart's Isaac files (the rig from the spec, the
-#                             lidar profiles, the body) into the package; --check: rig only, exit 1 if stale
+#   twin.sh generate [--check]  regenerate the cart's files into the package: the Isaac rig, its
+#                             SSv2 catalog and spec_hash, the route scenarios, the lidar profiles,
+#                             the body; --check: the spec-derived ones only, exit 1 if stale
 #   twin.sh world [ROUTE]     Isaac Sim with the twin and the cart at ROUTE's start (default 1)
 #   twin.sh autoware          the cart's own Autoware on the twin's map, with RViz
 #   twin.sh go [ROUTE]        set ROUTE's goal and engage, then report until it arrives
@@ -61,8 +62,16 @@ generate() {
     [ -d "$aib" ] || die "no $aib (TWIN_SWB)"
     local gen=(env PYTHONPATH="$aib" python3 -m aib.gen --spec "$pkg/vehicle/newslab_golfcart.yaml"
                -o "$pkg/isaac/newslab_golfcart.rig.yaml")
-    if [ "${1:-}" = --check ]; then "${gen[@]}" --check; return; fi
+    # The cart's SSv2 catalog entry and its spec_hash file: swb's sim_vehicle_spec on this spec
+    local svs="$TWIN_SWB/src/sim_vehicle_spec"
+    [ -d "$svs" ] || die "no $svs (TWIN_SWB)"
+    local cat=(env PYTHONPATH="$svs" python3 -m sim_vehicle_spec.gen
+               --spec "$pkg/vehicle/newslab_golfcart.yaml"
+               --catalog "$pkg/catalogs/vehicles.xosc" --spec-hash "$pkg/isaac/spec_hash.yaml")
+    if [ "${1:-}" = --check ]; then "${gen[@]}" --check && "${cat[@]}" --check && python3 "$pkg/scripts/make_scenarios.py" --check; return; fi
     "${gen[@]}"
+    "${cat[@]}"
+    python3 "$pkg/scripts/make_scenarios.py"
     need ISAAC_ROOT
     py="$ISAAC_ROOT/venv/bin/python"
     [ -x "$py" ] || die "no $py (ISAAC_ROOT: swb's install_isaac.sh)"

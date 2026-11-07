@@ -3,6 +3,9 @@
 #   source scripts/twin/setup.bash
 #
 # Then:
+#   play_launch launch golfcart_twin twin.launch.py route:=1            # everything, free drive
+#   play_launch launch golfcart_twin twin.launch.py scenario:=route1    # everything, a scenario
+# or the lighter path, Isaac's stand-alone runner and the cart's Autoware apart:
 #   play_launch launch golfcart_twin twin_world.launch.py route:=1      # Isaac Sim and the cart
 #   play_launch launch --web-addr 127.0.0.1:8081 \
 #       golfcart_twin twin_autoware.launch.xml                         # the cart's Autoware, RViz
@@ -20,6 +23,8 @@
 #   TWIN_MAP      the NTU twin's map directory (lanelet2_map.osm, pointcloud_map/, isaac/)
 #   TWIN_DOMAIN   ROS domain (default 1; at most 57)
 #   TWIN_GPU, AUTOWARE_DATA, AUTOWARE_TENSORRT_LIB (optional)
+#   TWIN_SCENARIO_DOMAIN (SSv2's, default TWIN_DOMAIN + 1), SSV2_PORT, AGENT_PORT, ISAAC_PORT
+#                 (swb's; set them when another stack on the host has the defaults)
 _twin_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 [ -f "$_twin_root/config/twin.env" ] && set -a && source "$_twin_root/config/twin.env" && set +a
 : "${TWIN_SWB:=$HOME/repos/carla-scenario-bridge}"
@@ -41,6 +46,11 @@ source /opt/autoware/1.5.0/setup.bash
 source "$TWIN_SWB/install/setup.bash"
 source "$_twin_root/install/setup.bash"
 export ROS_DOMAIN_ID=$TWIN_DOMAIN
+# scenario-world-bridge's stack (twin.launch.py): the cart's side on TWIN_DOMAIN, SSv2 and the
+# bridge on TWIN_SCENARIO_DOMAIN (default TWIN_DOMAIN + 1); its ports, when twin.env moves them
+export EGO_ROS_DOMAIN_ID=$TWIN_DOMAIN
+export SCENARIO_ROS_DOMAIN_ID=${TWIN_SCENARIO_DOMAIN:-$((TWIN_DOMAIN + 1))}
+for _v in SSV2_PORT AGENT_PORT ISAAC_PORT SWB_LOG_ROOT; do [ -n "${!_v:-}" ] && export "$_v"; done
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 # The twin's loopback-unicast profile: needs no multicast on lo (which the cart's loopback.xml does)
 export CYCLONEDDS_URI="file://$(ros2 pkg prefix golfcart_twin)/share/golfcart_twin/config/cyclonedds-unicast-lo.xml"
@@ -50,4 +60,4 @@ if [ -n "${AUTOWARE_TENSORRT_LIB:-}" ] && [ -d "$AUTOWARE_TENSORRT_LIB" ]; then
 fi
 export ISAAC_ROOT TWIN_MAP TWIN_GPU AUTOWARE_DATA
 echo "twin: domain $ROS_DOMAIN_ID, map ${TWIN_MAP:-unset}, Isaac ${ISAAC_ROOT:-unset}, display ${DISPLAY:-none}"
-unset _twin_root
+unset _twin_root _v

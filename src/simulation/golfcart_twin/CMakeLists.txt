@@ -4,10 +4,10 @@ project(golfcart_twin)
 find_package(ament_cmake REQUIRED)
 
 # Data: the cart for Isaac (vehicle/: its spec; isaac/: the ego config, the rig, the body and
-# the lidar profiles, with their generators), the body generator, the demo routes, the DDS
-# profile, the demo RViz and the launches.
+# the lidar profiles, with their generators), its SSv2 catalog and the route scenarios, the
+# body generator, the demo routes, the DDS profile, the demo RViz and the launches.
 install(
-  DIRECTORY body isaac rviz config launch vehicle
+  DIRECTORY body isaac rviz config launch vehicle catalogs scenarios
   DESTINATION share/${PROJECT_NAME}
   PATTERN "__pycache__" EXCLUDE
 )

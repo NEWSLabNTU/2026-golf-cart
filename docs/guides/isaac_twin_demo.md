@@ -21,6 +21,40 @@ repository root. For another host, see [Setting up a new host](#setting-up-a-new
    pgrep -u $USER -x play_launch    # prints nothing
    ```
 
+## Everything in one launch
+
+scenario-world-bridge's stack starts Isaac Sim, its bridge, the cart's Autoware and RViz with
+one command (swb roadmap 073). In one terminal:
+
+```bash
+source scripts/twin/setup.bash
+play_launch launch golfcart_twin twin.launch.py route:=1          # free drive: you drive
+play_launch launch golfcart_twin twin.launch.py scenario:=route1  # SSv2 runs a scenario
+```
+
+- **Free drive** (`route:=N`): the cart appears at the route's start and time runs. Set the
+  goal and press AUTO in RViz (see [Drive](#drive)), or in a second terminal
+  `ros2 run golfcart_twin twin_go.py N`.
+- **A scenario** (`scenario:=route1` .. `route4`, or a path to an `.xosc`): SSv2 places the
+  cart, routes it to the goal, engages, and judges it. It passes within 2 m of the goal.
+  Add `exit_on_scenario_end:=true` to end everything with the scenario, and
+  `scenario_args:="output_directory:=<dir>"` to keep its JUnit result. Another scenario on
+  the live stack, from a second terminal after `source scripts/twin/setup.bash`:
+  ```bash
+  ROS_DOMAIN_ID=$SCENARIO_ROS_DOMAIN_ID play_launch launch --web-addr 127.0.0.1:8081 \
+      swb_launch scenario.launch.xml port:=$SSV2_PORT \
+      scenario:=$(ros2 pkg prefix golfcart_twin)/share/golfcart_twin/scenarios/route2.xosc
+  ```
+- Time is synchronous either way: the world advances one step per frame. Free drive paces it
+  to the wall clock (`realtime:=false`: as fast as it goes); a scenario's pace is SSv2's.
+- Other arguments: `render`, `rviz`, `follow` (`true`: no editor UI, the view chases the
+  cart), `gpu`, `map_path`.
+- The scenarios are made from `config/routes.yaml` by `scripts/make_scenarios.py`, and the
+  cart's catalog and spec hash from its spec (`just twin generate`).
+
+The sections below run the pieces apart instead: Isaac's stand-alone runner, the cart's
+Autoware, and `twin_go.py`, each in its own terminal.
+
 ## Start
 
 Open three terminals at the repository root. Source the demo's environment in each one: it

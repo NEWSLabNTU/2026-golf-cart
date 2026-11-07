@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated from ../vehicle/newslab_golfcart.yaml (spec_hash 40ffc561f31cb5e589c4ee3e9f8ed831510771faf14d136d7f0ac765218822c6) by sim_vehicle_spec.gen (`just generate`): do not edit; change the spec and regenerate. -->
+<!-- The simulated cars as SSv2 vehicles: one entry per spec, its body box and axles in the
+     spec's base_link (the rear axle centre on the ground), model3d its body. A scenario refers to
+     an entry with CatalogReference and assigns maxSpeed, maxAcceleration, maxDeceleration and
+     maxSteering, all four (the entry declares no defaults: in SSv2 a declared default would
+     shadow the assignment); the box and the axles are the car's and are not parameters. -->
+<OpenSCENARIO>
+  <FileHeader author="sim_vehicle_spec" date="2026-10-23T00:00:00" description="Simulated cars, generated from sim_vehicle_spec's specs" revMajor="1" revMinor="1" />
+  <Catalog name="vehicles">
+    <Vehicle name="newslab_golfcart" vehicleCategory="car" model3d="vehicle.newslab.golfcart">
+      <BoundingBox>
+        <Center x="0.823" y="0.0" z="1.002" />
+        <Dimensions width="1.215" height="2.005" length="3.288" />
+      </BoundingBox>
+      <Performance maxSpeed="$maxSpeed" maxAcceleration="$maxAcceleration" maxDeceleration="$maxDeceleration" />
+      <Axles>
+        <FrontAxle maxSteering="$maxSteering" positionX="2.061" wheelDiameter="0.53" trackWidth="1.213" positionZ="0.265" />
+        <RearAxle maxSteering="0.0" positionX="0.0" wheelDiameter="0.53" trackWidth="1.213" positionZ="0.265" />
+      </Axles>
+      <Properties>
+        <Property name="swb.spec_hash" value="40ffc561f31cb5e589c4ee3e9f8ed831510771faf14d136d7f0ac765218822c6" />
+      </Properties>
+    </Vehicle>
+  </Catalog>
+</OpenSCENARIO>
