@@ -219,6 +219,7 @@ FLOOR_Z = 0.30
 HOOD_REAR_X = 1.55    # windshield base (estimate: photo 05)
 HOOD_TOP = 0.96
 HOOD_SKIRT = 0.45     # the white fender's lower edge away from the wheel (estimate: photo 05)
+DECK_DZ = 0.155      # the front deck above its calibrated height, from the photos (README)
 NOSE_X = 2.33        # where the hood's top starts rounding down to its front face (estimate: photo 05)
 ARCH_R = 0.345        # the wheel arch's radius about the wheel centre
 CANOPY = (0.42, 1.54, 1.72, 1.80)         # x0, x1, z0, z1 (estimate; the VLP-32C on the rack fixes the top)
@@ -276,7 +277,7 @@ def build():
     part("Body/BumperFront", "black_plastic").add(*rbox((2.29, X_FRONT), (-0.60, 0.60), (0.22, 0.50), 0.05, 3))
     lamps = part("Body/Headlamps", "lamp")
     for y in (0.45, -0.45):
-        lamps.add(*disc((X_FRONT - 0.012, y, 0.68), (1, 0, 0), 0.052, 0.024))
+        lamps.add(*disc((X_FRONT - 0.006, y, 0.68), (1, 0, 0), 0.052, 0.024))
     amb = part("Body/Reflectors", "amber")
     for y in (0.43, -0.43):
         amb.add(*disc((X_FRONT - 0.004, y, 0.36), (1, 0, 0), 0.03, 0.008))
@@ -371,22 +372,29 @@ def build():
     part("Sensors/VLP32C/Housing", "lidar_body").add(*cylinder(base, base + up * 0.025, 0.0515, 24))
     part("Sensors/VLP32C/Window", "lens").add(*cylinder(base + up * 0.025, base + up * 0.068, 0.0505, 24))
     part("Sensors/VLP32C/Cap", "lidar_cap").add(*cylinder(base + up * 0.068, base + up * 0.088, 0.0515, 24))
-    # front deck: two black extrusions on the bumper, the Falcon on a white plate, the ZED X below
-    f_o, _ = sensor_pose("falcon")
+    # front deck, placed from the photos, not the calibration: two black extrusions from the
+    # bumper's bottom, the Falcon on a white plate at headlamp height, the ZED X below it in a
+    # white bracket, a white bar across the bottom. The calibration puts the Falcon and the
+    # ZED X DECK_DZ lower, level with the black bumper (README).
+    lift = np.array([0.0, 0.0, DECK_DZ])
+    f_o = sensor_pose("falcon")[0] + lift
     z_o, z_R = sensor_pose("zed_camera_link")
+    z_o = z_o + lift
     FAL = (0.16, 0.27, 0.09)          # the Falcon box, depth x width x height (estimate: photos 04, 10)
     deck = part("Sensors/SensorDeck/Frame", "alu_black")
-    xd = f_o[0] - FAL[0] / 2 - 0.03
+    xp, yp = f_o[0] + 0.03, 0.215     # the posts, beside the Falcon's front half
     for sgn in (1, -1):
-        y = sgn * 0.21
-        deck.add(*bar((xd, y, 0.22), (xd, y, f_o[2] + 0.07), 0.035))
-        deck.add(*bar((2.47, y, 0.30), (xd, y, 0.30), 0.03))
-    deck.add(*bar((xd + 0.02, -0.21, 0.24), (xd + 0.02, 0.21, 0.24), 0.03))
+        y = sgn * yp
+        deck.add(*bar((xp, y, 0.20), (xp, y, f_o[2] + FAL[2] / 2 + 0.035), 0.04))
+        deck.add(*bar((X_FRONT - 0.02, y, 0.28), (xp, y, 0.28), 0.03))
+    deck.add(*bar((xp - 0.04, -yp, 0.24), (xp - 0.04, yp, 0.24), 0.03))
     plates = part("Sensors/SensorDeck/Plates", "white_plate")
-    plates.add(*box_span((xd - 0.02, f_o[0] + FAL[0] / 2 + 0.01), (-0.19, 0.19),
-                         (f_o[2] - FAL[2] / 2 - 0.006, f_o[2] - FAL[2] / 2)))
-    plates.add(*box_span((z_o[0] - 0.05, z_o[0] - 0.02), (-0.15, 0.15), (z_o[2] - 0.03, z_o[2] + 0.05)))
-    plates.add(*box_span((xd + 0.03, xd + 0.15), (-0.20, 0.20), (0.255, 0.262)))
+    zf = f_o[2] - FAL[2] / 2
+    plates.add(*box_span((f_o[0] - FAL[0] / 2 - 0.02, xp + 0.02), (-yp, yp), (zf - 0.008, zf)))
+    zz = z_o[2]
+    plates.add(*box_span((z_o[0] - 0.035, z_o[0] - 0.017), (-0.15, 0.15), (zz - 0.035, zf - 0.008)))
+    plates.add(*box_span((z_o[0] - 0.035, z_o[0] + 0.02), (-0.15, 0.15), (zz - 0.035, zz - 0.025)))
+    plates.add(*box_span((xp + 0.02, xp + 0.026), (-yp + 0.02, yp - 0.02), (0.235, 0.29)))
     part("Sensors/Falcon/Housing", "black_plastic").add(*box(f_o, FAL))
     part("Sensors/Falcon/Window", "lens").add(*box(f_o + [FAL[0] / 2 + 0.002, 0, 0.005], (0.004, FAL[1] * 0.75, FAL[2] * 0.6)))
     ZED = (0.034, 0.188, 0.033)       # ZED X, depth x width x height (estimate, Stereolabs' size class)
