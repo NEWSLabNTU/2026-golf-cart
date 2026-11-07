@@ -217,11 +217,18 @@ BOX_HALF_W = 0.68     # cargo box half width (estimate: overhangs the wheels a l
 POST_Y = 0.60
 FLOOR_Z = 0.30
 HOOD_REAR_X = 1.55    # windshield base (estimate: photo 05)
-HOOD_TOP = 0.96
+HOOD_TOP = 0.96       # the hood's top at the windshield (estimate: photo 05)
+HOOD_NOSE_TOP = 0.78  # ... where the nose starts (estimate: photo 05)
+FRONT_FACE_TOP = 0.70      # the front face, between the nose and the bumper (estimate: photos 05, 08)
+FRONT_FACE_BOTTOM = 0.50
 HOOD_SKIRT = 0.45     # the white fender's lower edge away from the wheel (estimate: photo 05)
+# the left and right cameras' origins, from the photos (front view, 2026-11-07): outside the
+# front posts, just above the windshield's base. The calibration has them at (1.366, 0.539,
+# 0.800) and (1.403, -0.474, 0.807), behind the hood (README).
+CAMERA_PHOTO = {"camera_left": (1.50, 0.665, 0.99), "camera_right": (1.50, -0.665, 0.99)}
 DECK_DZ = 0.155      # the front deck above its calibrated height, from the photos (README)
-NOSE_X = 2.33        # where the hood's top starts rounding down to its front face (estimate: photo 05)
-ARCH_R = 0.345        # the wheel arch's radius about the wheel centre
+NOSE_X = 2.30        # where the hood's top starts rounding down to its front face (estimate: photo 05)
+ARCH_R = 0.40         # the wheel arch's radius about the wheel centre: big flares, top at 0.70 (photo 05)
 CANOPY = (0.42, 1.54, 1.72, 1.80)         # x0, x1, z0, z1 (estimate; the VLP-32C on the rack fixes the top)
 BOX_X = (X_REAR, 0.47)
 BOX_Z = (0.73, 1.90)
@@ -232,33 +239,63 @@ def post_x(z):
     return 1.60 - (z - FLOOR_Z) * (0.24 / 1.42)
 
 
-def hood_ring(x, m=40):
-    """The hood's cross-section at x: a superellipse with a crown and the centre crease."""
-    nose0, nose = NOSE_X, X_FRONT
-    if x <= nose0:
-        s = (x - HOOD_REAR_X) / (nose0 - HOOD_REAR_X)
-        top, w = HOOD_TOP - 0.04 * s, HALF_W
-    else:
-        t = math.asin(min(1.0, (x - nose0) / (nose - nose0)))
-        k = max(math.cos(t), 0.0)
-        top = 0.80 + (HOOD_TOP - 0.04 - 0.80) * k ** 0.6     # the front face, 0.80 down to 0.50
-        w = HALF_W * (0.84 + 0.16 * k ** 0.5)
+def _smooth(pts, n=3):
+    """Chaikin corner cutting of an open polyline, ends kept."""
+    for _ in range(n):
+        q = [pts[0]]
+        for p0, p1 in zip(pts[:-1], pts[1:]):
+            q += [0.75 * p0 + 0.25 * p1, 0.25 * p0 + 0.75 * p1]
+        q.append(pts[-1])
+        pts = q
+    return pts
+
+
+def hood_ring(x, m=None):
+    """The hood's cross-section at x (photos 05, 07, 08). The top slopes from HOOD_TOP at the
+    windshield down to HOOD_NOSE_TOP before the nose. Two raised panels sit either side of a
+    centre groove. The sides slope out from the panels' shoulders to the fender line, the
+    widest point, then drop to the skirt, which follows the wheel arch."""
+    s = min(max((x - HOOD_REAR_X) / (NOSE_X - HOOD_REAR_X), 0.0), 1.0)
+    zt = HOOD_TOP + (HOOD_NOSE_TOP - HOOD_TOP) * s
+    ws, wb = 0.47 - 0.03 * s, HALF_W - 0.01 * s            # shoulder and fender half widths
+    zf = zt - (0.25 - 0.13 * s)                             # the fender line
+    zb = HOOD_SKIRT
     dx = x - WHEEL_BASE
-    zb = HOOD_SKIRT if abs(dx) >= ARCH_R else max(HOOD_SKIRT, WHEEL_RADIUS + math.sqrt(ARCH_R ** 2 - dx ** 2))
-    if x > nose0:
-        zb = max(zb, 0.50)
-    zc, b, e = (top + zb) / 2, (top - zb) / 2, 2 / 6
-    ring = []
-    for i in range(m):
-        t = 2 * math.pi * (i + 0.5) / m
-        c, s_ = math.cos(t), math.sin(t)
-        y = w * math.copysign(abs(c) ** e, c)
-        z = zc + b * math.copysign(abs(s_) ** e, s_)
-        if s_ > 0:
-            u = y / w
-            z += s_ ** 2 * (0.03 * (1 - u * u) - 0.018 * math.exp(-(y / 0.045) ** 2))
-        ring.append(np.array([x, y, z]))
+    if abs(dx) < ARCH_R:
+        zb = max(zb, WHEEL_RADIUS + math.sqrt(ARCH_R ** 2 - dx ** 2))
+    k = 0.0                                                 # 0 behind the nose, 1 at the front face
+    if x > NOSE_X:
+        k = min((x - NOSE_X) / (X_FRONT - NOSE_X), 1.0)
+        c = 1 - math.sqrt(max(1 - k * k, 0.0))              # quarter-circle nose in plan and side
+        zt -= (HOOD_NOSE_TOP - FRONT_FACE_TOP) * c
+        zf = min(zf, zt - 0.06)
+        ws *= 1 - 0.12 * c
+        wb *= 1 - 0.14 * c
+        zb = max(zb, FRONT_FACE_BOTTOM)
+    half = [np.array(p, float) for p in (
+        (0.0, zt - 0.008), (0.012, zt + 0.002), (0.05, zt + 0.008), (ws - 0.08, zt + 0.006),
+        (ws, zt - 0.012), (ws + 0.05, zt - 0.045), (wb - 0.015, zf + 0.015), (wb, zf - 0.02),
+        (wb, zb + 0.03), (wb - 0.02, zb), (0.0, zb))]
+    half = half[:2] + _smooth(half[1:-1], 2)[1:] + [half[-1]]
+    ring = [np.array([x, y, z]) for y, z in half] + [np.array([x, -y, z]) for y, z in reversed(half[1:-1])]
     return ring
+
+
+def _inside(poly, y, z):
+    """Point in polygon (y-z plane), even-odd."""
+    c = False
+    for (y0, z0), (y1, z1) in zip(poly, poly[1:] + poly[:1]):
+        if (z0 > z) != (z1 > z) and y < y0 + (z - z0) * (y1 - y0) / (z1 - z0):
+            c = not c
+    return c
+
+
+def surface_x(y, z):
+    """The hood's foremost x at (y, z): where a headlamp sits on its front face."""
+    for x in np.linspace(X_FRONT, HOOD_REAR_X, 400):
+        if _inside([(p[1], p[2]) for p in hood_ring(x)], y, z):
+            return float(x)
+    return HOOD_REAR_X
 
 
 def build():
@@ -270,22 +307,26 @@ def build():
 
     xf, xr = WHEEL_BASE, 0.0
     # body
-    xs = list(np.linspace(HOOD_REAR_X, NOSE_X, 16)) + [NOSE_X + (X_FRONT - NOSE_X) * math.sin(t)
-                                                    for t in np.linspace(0.15, math.pi / 2, 7)]
+    xs = list(np.linspace(HOOD_REAR_X, NOSE_X, 22)) + list(NOSE_X + (X_FRONT - NOSE_X) * np.linspace(0.12, 1.0, 8))
     part("Body/Hood", "white_body").add(*loft([hood_ring(x) for x in xs]))
     part("Body/FrontLower", "black_plastic").add(*rbox((1.52, 2.36), (-0.50, 0.50), (0.24, 0.55), 0.04, 2))
+    for sgn in (1, -1):     # the black panel behind each front wheel, floor to fender (photo 05)
+        part("Body/FrontLower", "black_plastic").add(*rbox((1.52, 1.68), sorted((sgn * 0.52, sgn * 0.64)), (0.22, 0.56), 0.02, 2))
     part("Body/BumperFront", "black_plastic").add(*rbox((2.29, X_FRONT), (-0.60, 0.60), (0.22, 0.50), 0.05, 3))
     lamps = part("Body/Headlamps", "lamp")
-    for y in (0.45, -0.45):
-        lamps.add(*disc((X_FRONT - 0.006, y, 0.68), (1, 0, 0), 0.052, 0.024))
+    for y in (0.46, -0.46):           # on the hood's front face, wherever it is at that y and z
+        xl = surface_x(y, 0.60)
+        lamps.add(*disc((xl - 0.008, y, 0.60), (1, 0.6 * y, 0), 0.05, 0.03))
     amb = part("Body/Reflectors", "amber")
     for y in (0.43, -0.43):
         amb.add(*disc((X_FRONT - 0.004, y, 0.36), (1, 0, 0), 0.03, 0.008))
     ar = part("Body/WheelArches", "black_plastic")
     for xc in (xf, xr):
         for sgn in (1, -1):
-            yi, yo = sorted((sgn * 0.54, sgn * (HALF_W + 0.055)))
-            ar.add(*arch(xc, yi, yo, ARCH_R - 0.02, ARCH_R + 0.03, -0.05, math.pi + 0.05, 14))
+            yi, yo = sorted((sgn * 0.54, sgn * (HALF_W + 0.04)))
+            r = ARCH_R if xc > 1.0 else 0.345
+            a0 = 0.45 if xc > 1.0 else -0.05    # the front flare ends at the bumper, inside the length
+            ar.add(*arch(xc, yi, yo, r - 0.02, r + 0.035, a0, math.pi + 0.05, 16))
     part("Body/Floor", "rubber_mat").add(*box_span((0.47, 1.60), (-0.60, 0.60), (0.20, FLOOR_Z)))
     sill = part("Body/Sills", "black_plastic")
     for sgn in (1, -1):
@@ -402,16 +443,23 @@ def build():
     zl = part("Sensors/ZEDX/Lenses", "lens")
     for dy in (0.06, -0.06):
         zl.add(*disc(z_o + z_R @ [ZED[0] / 2, dy, 0], z_R[:, 0], 0.012, 0.006, 12))
-    # GMSL cameras: a 35 mm cube with a lens, on a short stalk to the nearest post or the bumper
+    # GMSL cameras (Otobrite): a 35 mm cube with a lens, oriented as calibrated. The left and
+    # right ones sit where the photos show them, outside the front posts at the windshield's
+    # base, each on a silver bracket to its post (CAMERA_PHOTO; README). The rear one is at its
+    # calibrated pose.
     cam = part("Sensors/Cameras/Housings", "dark_plastic")
     lens = part("Sensors/Cameras/Lenses", "lens")
+    brk = part("Sensors/Cameras/Brackets", "white_plate")
     for name in ("camera_left", "camera_right", "camera_rear"):
         o, R = sensor_pose(name)
+        if name in CAMERA_PHOTO:
+            o = np.array(CAMERA_PHOTO[name])
         cam.add(*box(o - R[:, 0] * 0.018, (0.035, 0.035, 0.035), R))
         lens.add(*disc(o + R[:, 0] * 0.003, R[:, 0], 0.009, 0.012, 10))
         if name != "camera_rear":
             y = math.copysign(POST_Y, o[1])
-            cam.add(*bar(o - R[:, 0] * 0.03, (post_x(o[2]), y, o[2]), 0.012))
+            brk.add(*bar(o - R[:, 0] * 0.03 - [0, 0, 0.02], (post_x(o[2] - 0.02), y, o[2] - 0.02), 0.02, 0.006))
+            brk.add(*box(o - R[:, 0] * 0.03 - [0, 0, 0.005], (0.01, 0.03, 0.04), R))
     return P
 
 

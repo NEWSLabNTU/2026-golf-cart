@@ -44,7 +44,7 @@ From the cart's files, exact:
 | Wheel centres, radius 0.265, width 0.14 | `vehicle_info.param.yaml`: wheel_base 2.061, wheel_tread 1.213 |
 | Length 3.288 m, from the hood's front to the cargo box's rear | front_overhang 0.406, rear_overhang 0.821 (see below) |
 | VLP-32C origin at base_link (0.46, 0, 1.966), with the kit's roll and pitch | `sensors_calibration.yaml`, sensor_kit_base_link |
-| Left, right and rear camera housings | `sensor_kit_calibration.yaml`, composed with the kit's pose |
+| Rear camera housing; the left and right cameras' orientation | `sensor_kit_calibration.yaml`, composed with the kit's pose |
 | Falcon and ZED X housings: x and y, and their height relative to each other | the same, then lifted 0.155 m (see below) |
 | Front wheels' max_steer_deg 30 | max_steer_angle 0.52 rad (`vehicle_info.param.yaml`) |
 
@@ -57,7 +57,7 @@ Estimates, from the photos (01-10) at the wheels' scale:
 | Part | Estimate |
 |---|---|
 | Body half width 0.635, box half width 0.68 | photos 01, 07, 08, 09 |
-| Hood: top 0.96 at the windshield, front face 0.50 to 0.80, crown 3 cm, centre crease 1.8 cm | photos 01, 05, 08 |
+| Hood: top sloping from 0.96 at the windshield to 0.78 at the nose; a bluff front face 0.50 to 0.70 with the headlamps on it; two raised panels either side of a narrow centre groove; sides sloping out to a fender line; flared front arches, radius 0.40 | photos 05, 07, 08 |
 | Windshield base x 1.55 base_link, front posts raked 0.24 m over their height | photo 05 |
 | Canopy x 0.42 to 1.54, top 1.80; roof rack 5 cm above it | photos 05, 06; the canopy sits under the VLP-32C |
 | Cargo box x -0.821 to 0.47, z 0.73 to 1.90, doors in two rows of two each side | photos 05, 06 |
@@ -67,11 +67,12 @@ Estimates, from the photos (01-10) at the wheels' scale:
 | Falcon housing 0.16 x 0.27 x 0.09 m, centred on its origin | photos 04, 10 |
 | ZED X housing 0.034 x 0.188 x 0.033 m, centred on its origin | Stereolabs' size class |
 | Front deck height: the Falcon's centre at z 0.62 base_link, its ZED X bracket's foot on the bumper | photos 04, 08, 10 |
-| GMSL camera housings 35 mm cubes, the lens on the calibrated origin | none |
+| GMSL camera housings 35 mm cubes, the lens on the origin | none |
+| Left and right (Otobrite) cameras at (1.50, +-0.665, 0.99) base_link: outside the front posts at the windshield's base, on silver brackets | front photo, 2026-11-07 |
 
 ## Where the photos and the calibration disagree
 
-The housings follow the calibration, except for the front deck.
+The housings follow the calibration, except for the front deck and the left and right cameras.
 
 - **The front deck follows the photos, 0.155 m above the calibration** (`DECK_DZ`).
   The calibration puts the Falcon at z 0.465 and the ZED X at 0.358 in base_link. At that
@@ -80,6 +81,9 @@ The housings follow the calibration, except for the front deck.
   Falcon's six LCTK archives are all marked DEGENERATE. Without the kit's pitch of 0.032 rad,
   the Falcon would sit at 0.535. Their x and y stay calibrated. An Isaac rig built from the
   calibration places these two sensors 0.155 m below their housings here.
+- **The left and right cameras follow the photos** (`CAMERA_PHOTO`). The calibration puts
+  them at (1.366, 0.539, 0.800) and (1.403, -0.474, 0.807), behind the hood's rear edge and
+  about 0.19 m low. Their orientation stays calibrated.
 - **gnss_base_link** is at base_link (0.83, 0, 1.69), under the canopy's front. The antenna puck
   in the photos is on the cargo box's roof, near its rear, so the model puts the puck there.
 - **camera_rear** (-0.50, 0, 0.30) sits at the rear body's lower edge, behind the rear wheels and
