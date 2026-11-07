@@ -104,7 +104,7 @@ just twin stop    # Autoware, then Isaac Sim
 | RViz shows nothing, or no cart | RViz and the sim do not see each other: a different ROS domain or DDS profile | Start both with `just twin`, which gives both swb's `cyclonedds-localhost.xml` and `TWIN_DOMAIN` |
 | The sim runs slowly | Host load | Check `uptime` and `nvidia-smi`; wait for the other job |
 | `world` takes over 10 min | The first start on a host compiles shaders | Let it finish once; later starts are quick |
-| The cart goes faster than 2.5 m/s | The speed cap did not reach the planner | Look for `planning speed default 2.50 m/s` in `log/twin/play_log`, `planning_speed_limit` |
+| The cart goes faster than 2.5 m/s | The sim's speed ceiling is missing. Like the cart's VCU, it is the motor's top speed in swb's `newslab_golfcart` spec (sim_vehicle_spec 62ac087 or later). Autoware itself plans up to 4.17 m/s: its 2.5 default does not reach the planner (roadmap 10) | In `TWIN_SWB`, `git pull` and `git submodule update --init --recursive`, then restart the world |
 | `world` or `autoware` says it is already up | An earlier run is still alive | `just twin stop` |
 
 Logs are in `log/twin/`: `world.log`, `autoware.log` and `play_log/`.
