@@ -73,6 +73,9 @@ def main():
          "localization", 300)
     print("localized", flush=True)
     call(ClearRoute, "/api/routing/clear_route", ClearRoute.Request())
+    # The planner takes the clear on its own time (sim time, which runs slow on a loaded
+    # host): setting a route before it reads UNSET is refused, "The route is already set".
+    wait(lambda: seen.get("route") == RouteState.UNSET, "cleared route", 60)
     req = SetRoutePoints.Request()
     req.header.frame_id = "map"
     req.option.allow_goal_modification = False
