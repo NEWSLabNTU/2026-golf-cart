@@ -7,11 +7,10 @@ cart's own Autoware sees and does at the T junction in front of 學新館.
 src/simulation/golfcart_twin/rviz/twin_rviz.sh      # after sourcing Autoware, in the ego's domain
 ```
 
-`twin_rviz.sh` passes the vehicle parameters from `golfcart_vehicle_description` and
+`ros2 launch golfcart_twin twin_autoware.launch.xml` starts the same RViz (`rviz:=true`, the
+default), with the same parameters. `twin_rviz.sh` is for opening it on its own. It passes the vehicle parameters from `golfcart_vehicle_description` and
 `use_sim_time:=true`. Without the vehicle parameters, RViz drops the whole config ("Statically
-typed parameter 'wheel_radius' must be initialized") and opens empty. That is why it is
-started on its own, as `scripts/rosbag/ntu_sim_rviz.sh` is, and not through
-`golfcart_autoware.launch.xml`'s `rviz_config`.
+typed parameter 'wheel_radius' must be initialized") and opens empty. That is why neither goes through `golfcart_autoware.launch.xml`'s `rviz_config`.
 
 ## How it is made
 

@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>golfcart_twin</name>
+  <version>0.0.0</version>
+  <description>The golf cart in the NTU campus twin on Isaac Sim: its body, the Isaac-side configs, the demo RViz and the Autoware-side launch</description>
+  <maintainer email="jerry73204@gmail.com">aeon</maintainer>
+  <license>TODO: License declaration</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <!-- twin_autoware.launch.xml: the cart's logging simulation, its speed-limit node, RViz -->
+  <exec_depend>golfcart_launch</exec_depend>
+  <exec_depend>golfcart_vehicle_description</exec_depend>
+  <exec_depend>rviz2</exec_depend>
+  <!-- scripts/twin_go.py -->
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>autoware_adapi_v1_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

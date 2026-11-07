@@ -1,0 +1,55 @@
+<?xml version="1.0"?>
+<!--
+  The cart's own Autoware against the NTU twin on Isaac Sim (roadmap 10): golfcart_launch's
+  logging simulation (drivers off, sim time) with what the first drive on 118 (2026-11-07)
+  needed. aib's runner plays the sensors and the vehicle interface on the Isaac side.
+
+    ros2 launch golfcart_twin twin_autoware.launch.xml map_path:=<twin map directory>
+
+  The DDS settings are the caller's, not this file's: ROS_DOMAIN_ID, RMW_IMPLEMENTATION and
+  CYCLONEDDS_URI come from the recipe, and both sides must share them (on 118, swb's
+  cyclonedds-localhost.xml: loopback multicast is off there, so the cart's loopback.xml
+  discovers nothing).
+-->
+<launch>
+  <arg name="map_path"
+       description="The twin's map directory: lanelet2_map.osm, pointcloud_map/ with pointcloud_map_metadata.yaml, map_projector_info.yaml (MGRS 51RUH). Required."/>
+  <arg name="imu_source" default="xsens"
+       description="xsens: the sim publishes /sensing/imu/xsens/imu_raw in imu_link. It has no ZED IMU and no zed_imu_link frame, so zed does not work here."/>
+  <arg name="data_path" default="$(env AUTOWARE_DATA ./data/autoware_data)"
+       description="Autoware's model directory, writable (TensorRT caches engines there). Defaults to $AUTOWARE_DATA, else ./data/autoware_data from the repository root. Without it CenterPoint does not load."/>
+  <arg name="speed_limit" default="2.5"
+       description="Planning speed default in m/s (golfcart_launch's planning_speed_limit.py, latched). 2.5 is the demo cap; empty keeps Autoware's max_vel."/>
+  <arg name="camera_model" default="none"
+       description="none: Isaac publishes the camera topics itself. The sensor kit starts its GMSL camera nodes whatever launch_driver says, and they die with no nvv4l2camerasrc off the cart."/>
+  <arg name="launch_perception" default="true" description="Launch perception"/>
+  <arg name="rviz" default="true" description="The twin demo RViz (rviz/twin_demo.rviz) with the vehicle parameters and sim time"/>
+
+  <include file="$(find-pkg-share golfcart_launch)/launch/logging_simulation.launch.yaml">
+    <arg name="map_path" value="$(var map_path)"/>
+    <arg name="imu_source" value="$(var imu_source)"/>
+    <arg name="camera_model" value="$(var camera_model)"/>
+    <arg name="data_path" value="$(var data_path)"/>
+    <arg name="launch_perception" value="$(var launch_perception)"/>
+    <!-- the stack's own RViz is the stock config; the demo's is started below -->
+    <arg name="rviz" value="false"/>
+  </include>
+
+  <!-- The speed cap. logging_simulation has no planning_speed_limit argument (golfcart.launch.yaml
+       does); this is the same node. Latched, so a velocity limit selector that starts later
+       still receives it. On 118 a cap published by hand did not hold and the cart reached 3.0 m/s. -->
+  <group if="$(eval &quot;'$(var speed_limit)' != ''&quot;)">
+    <node pkg="golfcart_launch" exec="planning_speed_limit.py" name="planning_speed_limit" namespace="planning" output="screen">
+      <param name="max_velocity" value="$(var speed_limit)"/>
+      <param name="use_sim_time" value="true"/>
+    </node>
+  </group>
+
+  <!-- RViz needs the vehicle parameters, or it drops the whole config ("Statically typed
+       parameter 'wheel_radius' must be initialized"). -->
+  <node pkg="rviz2" exec="rviz2" name="twin_rviz" output="screen" if="$(var rviz)"
+        args="-d $(find-pkg-share golfcart_twin)/rviz/twin_demo.rviz">
+    <param from="$(find-pkg-share golfcart_vehicle_description)/config/vehicle_info.param.yaml"/>
+    <param name="use_sim_time" value="true"/>
+  </node>
+</launch>
