@@ -363,12 +363,7 @@ def build():
         xl = surface_x(y, 0.63)
         nrm = np.array([1.0, 0.3 * y, 0.0])
         lamps.add(*disc((xl + 0.004, y, 0.63), nrm, 0.055, 0.02))
-        part("Body/HeadlampBezels", "black_plastic").add(*disc(np.array([xl - 0.002, y, 0.63]), nrm, 0.066, 0.02))
-    seam = part("Body/BonnetSeam", "dark_plastic")   # the bonnet's front edge, as a dark line
-    ys = np.linspace(-0.56, 0.56, 41)
-    pts = [np.array([surface_x(y, bonnet_edge(y) - 0.008) + 0.003, y, bonnet_edge(y) - 0.008]) for y in ys]
-    for p0, p1 in zip(pts[:-1], pts[1:]):
-        seam.add(*bar(p0, p1, 0.008, 0.006))
+        part("Body/HeadlampBezels", "black_plastic").add(*disc(np.array([xl - 0.002, y, 0.63]), nrm, 0.060, 0.02))
     amb = part("Body/Reflectors", "amber")
     for y in (0.43, -0.43):
         amb.add(*disc((X_FRONT + 0.002, math.copysign(0.37, y), 0.36), (1, 0, 0), 0.03, 0.008))
@@ -548,7 +543,7 @@ MATERIALS = {   # name: (diffuse, roughness, metallic, opacity)
     "alu_black": ((0.035, 0.035, 0.04), 0.4, 0.6, 1.0),
     "fascia_recess": ((0.55, 0.55, 0.53), 0.5, 0.0, 1.0),
     "white_plate": ((0.85, 0.85, 0.85), 0.3, 0.3, 1.0),
-    "lamp": ((0.70, 0.70, 0.70), 0.15, 0.7, 1.0),
+    "lamp": ((0.14, 0.14, 0.15), 0.25, 0.6, 1.0),      # the photo's lamps: sRGB about (105, 105, 108)
     "amber": ((0.95, 0.45, 0.02), 0.3, 0.0, 1.0),
     "lidar_body": ((0.42, 0.47, 0.55), 0.4, 0.3, 1.0),
     "lidar_cap": ((0.10, 0.32, 0.72), 0.35, 0.2, 1.0),
