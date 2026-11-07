@@ -233,6 +233,8 @@ HOOD_SKIRT = 0.45     # the white fender's lower edge away from the wheel (estim
 # Every sensor housing sits at its calibrated pose: the user's decision of 2026-11-07, so the
 # model and the sim's sensors agree (README). The photos put the front deck about 0.15 m higher
 # and the side cameras outside the front posts; those overrides are gone.
+VLP_CLEAR = 0.03        # the VLP-32C's body ends this far below its origin (out of its rays)
+FALCON_CLEAR = 0.005    # the Falcon housing's front face, this far behind its origin
 CONSOLE_NOTCH_Z = 0.72  # the console's outer strips stop here, so the side cameras stay visible
 CONSOLE_NOTCH_Y = 0.44  # ... outside this half width
 ARCH_R = 0.32         # the front wheel arch about the wheel centre: the flare hugs the tyre (photos 05, 09)
@@ -508,14 +510,18 @@ def build():
     # the GNSS antenna puck on top of the box (photos 05, 06; estimate: x from the photos, y = 0)
     part("CargoBox/GNSS_Antenna", "lidar_body").add(*cylinder((-0.52, 0, BOX_Z[1]), (-0.52, 0, BOX_Z[1] + 0.03), 0.065, 16))
     # ---- sensors, at their calibrated poses
-    # VLP-32C: 103 mm across, 88 mm tall, its origin 38 mm above the base (estimates from the
-    # Velodyne family's drawings); on a mast from the rack's rear cross bar.
+    # VLP-32C, kept out of its own rays: Isaac's RTX lidar casts from the sensor origin, and a
+    # housing around the emitter stops every ray before its near range (0.3 m), so the sensor
+    # returned nothing (2026-11-07, on 118). The rays span -25 to +15 deg about the origin, so a
+    # part at depth d below it must stay inside radius d / tan(25 deg). The head (window and
+    # cap) is dropped; the body, 103 mm across, ends VLP_CLEAR below the origin, its top band
+    # in the cap's blue as the cue. On a mast from the rack's rear cross bar.
     up = vlp_R[:, 2]
-    base = vlp_o - up * 0.038
+    top = vlp_o - up * VLP_CLEAR
+    base = top - up * 0.055
     part("Sensors/VLP32C/Mast", "alu_black").add(*cylinder((vlp_o[0], 0, zr), base, 0.025, 12))
-    part("Sensors/VLP32C/Housing", "lidar_body").add(*cylinder(base, base + up * 0.025, 0.0515, 24))
-    part("Sensors/VLP32C/Window", "lens").add(*cylinder(base + up * 0.025, base + up * 0.068, 0.0505, 24))
-    part("Sensors/VLP32C/Cap", "lidar_cap").add(*cylinder(base + up * 0.068, base + up * 0.088, 0.0515, 24))
+    part("Sensors/VLP32C/Housing", "lidar_body").add(*cylinder(base, top - up * 0.004, 0.0515, 24))
+    part("Sensors/VLP32C/Cap", "lidar_cap").add(*cylinder(top - up * 0.004, top, 0.0515, 24))
     # front deck, at the calibration: two black extrusions from the bumper's bottom, the Falcon
     # on a white plate, the ZED X below it in a white bracket, a white bar across the bottom
     f_o = sensor_pose("falcon")[0]
@@ -535,8 +541,17 @@ def build():
     plates.add(*box_span((z_o[0] - 0.035, z_o[0] - 0.017), (-0.15, 0.15), (zz - 0.035, zf - 0.008)))
     plates.add(*box_span((z_o[0] - 0.035, z_o[0] + 0.02), (-0.15, 0.15), (zz - 0.035, zz - 0.025)))
     plates.add(*box_span((xp + 0.02, xp + 0.026), (-yp + 0.02, yp - 0.02), (0.235, 0.29)))
-    part("Sensors/Falcon/Housing", "black_plastic").add(*box(f_o, FAL))
-    part("Sensors/Falcon/Window", "lens").add(*box(f_o + [FAL[0] / 2 + 0.002, 0, 0.005], (0.004, FAL[1] * 0.75, FAL[2] * 0.6)))
+    # The Falcon, kept out of its own rays (as the VLP-32C above): its rays leave forward along
+    # the seyond frame's +z, +-60 deg across and -14 to +11 deg up, so the housing lies wholly
+    # behind the emitter plane, its front face FALCON_CLEAR behind the origin, square to the
+    # sensor's own axes. No window.
+    fR = sensor_pose("falcon")[1]
+    fwd = fR[:, 2]
+    across, upf = sorted((fR[:, 0], fR[:, 1]), key=lambda v: abs(v[2]))
+    upf = upf if upf[2] > 0 else -upf
+    across = np.cross(upf, fwd)
+    part("Sensors/Falcon/Housing", "black_plastic").add(
+        *box(f_o - fwd * (FALCON_CLEAR + FAL[0] / 2), FAL, np.stack([fwd, across, upf], 1)))
     ZED = (0.034, 0.188, 0.033)       # ZED X, depth x width x height (estimate, Stereolabs' size class)
     part("Sensors/ZEDX/Housing", "dark_plastic").add(*box(z_o, ZED, z_R))
     zl = part("Sensors/ZEDX/Lenses", "lens")

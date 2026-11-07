@@ -67,6 +67,28 @@ after changing the body:
 python3 make_vehicle_mesh.py ../../../vehicle/golfcart_vehicle_launch/golfcart_vehicle_description/mesh/golfcart.dae
 ```
 
+## The lidars' own rays
+
+Isaac's RTX lidar casts from the sensor origin. A housing around the emitter stops every ray
+before the near range (0.3 m on the VLP-32C, 0.4 m on the Falcon), and the sensor returns
+nothing. That happened on 118 on 2026-11-07. So the housings stay out of their own rays:
+
+- The VLP-32C's body ends 0.03 m below its origin, inside the -25 deg cone, with its top band
+  in the cap's blue as the cue. The head (window and cap) is not modelled.
+- The Falcon's housing lies wholly behind its emitter plane, 5 mm back, square to its own axes.
+  It has no window.
+
+`check_lidar_clearance.py` casts their rays through the generated body. On 2026-11-07:
+
+- **Falcon:** no hit within 0.5 m (the corner and centre rays, and every 1 deg).
+- **VLP-32C:** still meets the cart's own structure close by:
+  - the cargo box's top just behind it and below (646 of 11520 rays, nearest 0.15 m);
+  - the canopy (170, nearest 0.37 m);
+  - the rack's cross bar under the mast (4, nearest 0.23 m).
+
+  The real lidar sits in the same place over the same box, so this is a blind sector, not a
+  modelling error. The box's top height (1.90 m) is an estimate.
+
 ## What each part is sized from
 
 From the cart's files, exact:
@@ -96,7 +118,7 @@ Estimates, from the photos (01-10) at the wheels' scale:
 | Front face, in two parts (the user's sketch, 2026-11-07): a white band under the bonnet's U, following it 0.15 m lower (its lower edge 0.415 in the middle, 0.565 under the headlamps), with the headlamps (0.11 m across, grey as in the photo, sRGB about (105, 105, 108), with a thin dark rim) in its raised corners at (+-0.48, 0.63) and a horizontal recess in the middle; under it the black bumper, its top following the white band, with thin wings out to the wheel arches (down to 0.50) and a deeper centre block (+-0.44, down to 0.25) carrying the reflectors | the user's sketch; photos 07, 08 |
 | Mirrors at the windshield's top corners, z 1.47 to 1.66 | front photo, 2026-11-07 |
 | GNSS antenna puck on the box at x -0.52 base_link, y 0 | photos 05, 06 (see below) |
-| VLP-32C 103 mm across, 88 mm tall, origin 38 mm above its base | the Velodyne family's drawings |
+| VLP-32C body 103 mm across, ending 0.03 m below its origin (the head is left out, see the lidars' own rays) | the Velodyne family's drawings |
 | Falcon housing 0.16 x 0.27 x 0.09 m, centred on its origin | photos 04, 10 |
 | ZED X housing 0.034 x 0.188 x 0.033 m, centred on its origin | Stereolabs' size class |
 | GMSL camera housings 35 mm cubes, the lens on the origin | none |
