@@ -76,8 +76,7 @@ From the cart's files, exact:
 | Wheel centres, radius 0.265, width 0.14 | `vehicle_info.param.yaml`: wheel_base 2.061, wheel_tread 1.213 |
 | Length 3.288 m, from the hood's front to the cargo box's rear | front_overhang 0.406, rear_overhang 0.821 (see below) |
 | VLP-32C origin at base_link (0.46, 0, 1.966), with the kit's roll and pitch | `sensors_calibration.yaml`, sensor_kit_base_link |
-| Rear camera housing; the left and right cameras' orientation | `sensor_kit_calibration.yaml`, composed with the kit's pose |
-| Falcon and ZED X housings: x and y, and their height relative to each other | the same, then lifted 0.155 m (see below) |
+| Every sensor housing (the VLP-32C's too, above): Falcon, ZED X, left, right and rear cameras | `sensor_kit_calibration.yaml`, composed with the kit's pose |
 | Front wheels' max_steer_deg 30 | max_steer_angle 0.52 rad (`vehicle_info.param.yaml`) |
 
 The rear overhang is read as reaching the cargo box's rear, not the bumper's. In the side
@@ -100,24 +99,25 @@ Estimates, from the photos (01-10) at the wheels' scale:
 | VLP-32C 103 mm across, 88 mm tall, origin 38 mm above its base | the Velodyne family's drawings |
 | Falcon housing 0.16 x 0.27 x 0.09 m, centred on its origin | photos 04, 10 |
 | ZED X housing 0.034 x 0.188 x 0.033 m, centred on its origin | Stereolabs' size class |
-| Front deck height: the Falcon's centre at z 0.62 base_link, its ZED X bracket's foot on the bumper | photos 04, 08, 10 |
 | GMSL camera housings 35 mm cubes, the lens on the origin | none |
-| Left and right (Otobrite) cameras at (1.50, +-0.665, 0.99) base_link: outside the front posts at the windshield's base, on silver brackets | front photo, 2026-11-07 |
 
 ## Where the photos and the calibration disagree
 
-The housings follow the calibration, except for the front deck and the left and right cameras.
+Every sensor housing sits at its calibrated pose. On 2026-11-07 the user chose the calibration
+over the photos for the front deck and the side cameras, so the model and the sim's sensors
+(built from the same calibration) agree. A model that followed the photos would have put each
+housing away from the sensor it stands for.
 
-- **The front deck follows the photos, 0.155 m above the calibration** (`DECK_DZ`).
-  The calibration puts the Falcon at z 0.465 and the ZED X at 0.358 in base_link. At that
-  height the deck sits level with the black bumper and does not read as the deck. In photos
-  04, 08 and 10, the Falcon is at headlamp height and the ZED X just above the bumper. The
-  Falcon's six LCTK archives are all marked DEGENERATE. Without the kit's pitch of 0.032 rad,
-  the Falcon would sit at 0.535. Their x and y stay calibrated. An Isaac rig built from the
-  calibration places these two sensors 0.155 m below their housings here.
-- **The left and right cameras follow the photos** (`CAMERA_PHOTO`). The calibration puts
-  them at (1.366, 0.539, 0.800) and (1.403, -0.474, 0.807), behind the hood's rear edge and
-  about 0.19 m low. Their orientation stays calibrated.
+- **The front deck** is at its calibrated height: the Falcon's centre at z 0.465 and the ZED X
+  at 0.358 in base_link, with the kit's pitch. That is level with the black bumper. In photos 04,
+  08 and 10 the Falcon is at headlamp height, about 0.15 m higher. The Falcon's six LCTK
+  archives are all marked DEGENERATE. Without the kit's pitch of 0.032 rad, the Falcon would
+  sit at 0.535.
+- **The left and right cameras** are at (1.366, 0.539, 0.800) and (1.403, -0.474, 0.807). That is
+  behind the bonnet's rear edge, 0.19 m below where the photos show them (outside the front
+  posts at the windshield's base). At those poses they sat inside the cockpit console. The
+  console's outer strips (outside +-0.44) now stop at z 0.72, a local notch that leaves both
+  housings in the open.
 - **gnss_base_link** is at base_link (0.83, 0, 1.69), under the canopy's front. The antenna puck
   in the photos is on the cargo box's roof, near its rear, so the model puts the puck there.
 - **camera_rear** (-0.50, 0, 0.30) sits at the rear body's lower edge, behind the rear wheels and

@@ -230,11 +230,11 @@ BUMPER_BLOCK_HALF = 0.44     # the bumper's centre block, half width
 BUMPER_WING_OUT = 0.70       # the wings reach out to the wheel arches
 WING_BOTTOM = 0.50
 HOOD_SKIRT = 0.45     # the white fender's lower edge away from the wheel (estimate: photo 05)
-# the left and right cameras' origins, from the photos (front view, 2026-11-07): outside the
-# front posts, just above the windshield's base. The calibration has them at (1.366, 0.539,
-# 0.800) and (1.403, -0.474, 0.807), behind the hood (README).
-CAMERA_PHOTO = {"camera_left": (1.50, 0.665, 0.99), "camera_right": (1.50, -0.665, 0.99)}
-DECK_DZ = 0.155      # the front deck above its calibrated height, from the photos (README)
+# Every sensor housing sits at its calibrated pose: the user's decision of 2026-11-07, so the
+# model and the sim's sensors agree (README). The photos put the front deck about 0.15 m higher
+# and the side cameras outside the front posts; those overrides are gone.
+CONSOLE_NOTCH_Z = 0.72  # the console's outer strips stop here, so the side cameras stay visible
+CONSOLE_NOTCH_Y = 0.44  # ... outside this half width
 ARCH_R = 0.32         # the front wheel arch about the wheel centre: the flare hugs the tyre (photos 05, 09)
 CANOPY = (0.42, 1.54, 1.72, 1.80)         # x0, x1, z0, z1 (estimate; the VLP-32C on the rack fixes the top)
 BOX_X = (X_REAR, 0.47)
@@ -432,7 +432,13 @@ def build():
     # photo 05: a sloped front panel over the footwell rising to a deep dashboard top
     prof = [(1.62, FLOOR_Z), (1.62, 1.00), (1.50, 1.08), (1.30, 1.12), (1.14, 1.10), (1.12, 1.03),
             (1.28, 0.96), (1.40, 0.70), (1.43, FLOOR_Z)]
-    part("Cabin/Console", "dark_plastic").add(*loft([[np.array([x, y, z]) for x, z in prof] for y in (-0.56, 0.56)]))
+    console = part("Cabin/Console", "dark_plastic")
+    console.add(*loft([[np.array([x, y, z]) for x, z in prof] for y in (-CONSOLE_NOTCH_Y, CONSOLE_NOTCH_Y)]))
+    # the outer strips, cut down below the calibrated side cameras (at z 0.80, inside the full
+    # profile): a local notch, so the housings show where the calibration puts them
+    low = [(1.62, FLOOR_Z), (1.62, CONSOLE_NOTCH_Z), (1.395, CONSOLE_NOTCH_Z), (1.40, 0.70), (1.43, FLOOR_Z)]
+    for y0, y1 in ((CONSOLE_NOTCH_Y, 0.56), (-0.56, -CONSOLE_NOTCH_Y)):
+        console.add(*loft([[np.array([x, y, z]) for x, z in low] for y in (y0, y1)]))
     sw_c = np.array([1.05, -0.30, 1.20])                        # right-hand drive (photos 01, 08)
     sw_axis = np.array([-0.55, 0.0, 0.84])
     part("Cabin/SteeringColumn", "dark_plastic").add(*cylinder((1.25, -0.30, 1.08), sw_c, 0.025, 10))
@@ -510,14 +516,10 @@ def build():
     part("Sensors/VLP32C/Housing", "lidar_body").add(*cylinder(base, base + up * 0.025, 0.0515, 24))
     part("Sensors/VLP32C/Window", "lens").add(*cylinder(base + up * 0.025, base + up * 0.068, 0.0505, 24))
     part("Sensors/VLP32C/Cap", "lidar_cap").add(*cylinder(base + up * 0.068, base + up * 0.088, 0.0515, 24))
-    # front deck, placed from the photos, not the calibration: two black extrusions from the
-    # bumper's bottom, the Falcon on a white plate at headlamp height, the ZED X below it in a
-    # white bracket, a white bar across the bottom. The calibration puts the Falcon and the
-    # ZED X DECK_DZ lower, level with the black bumper (README).
-    lift = np.array([0.0, 0.0, DECK_DZ])
-    f_o = sensor_pose("falcon")[0] + lift
+    # front deck, at the calibration: two black extrusions from the bumper's bottom, the Falcon
+    # on a white plate, the ZED X below it in a white bracket, a white bar across the bottom
+    f_o = sensor_pose("falcon")[0]
     z_o, z_R = sensor_pose("zed_camera_link")
-    z_o = z_o + lift
     FAL = (0.16, 0.27, 0.09)          # the Falcon box, depth x width x height (estimate: photos 04, 10)
     deck = part("Sensors/SensorDeck/Frame", "alu_black")
     xp, yp = f_o[0] + 0.03, 0.215     # the posts, beside the Falcon's front half
@@ -540,17 +542,13 @@ def build():
     zl = part("Sensors/ZEDX/Lenses", "lens")
     for dy in (0.06, -0.06):
         zl.add(*disc(z_o + z_R @ [ZED[0] / 2, dy, 0], z_R[:, 0], 0.012, 0.006, 12))
-    # GMSL cameras (Otobrite): a 35 mm cube with a lens, oriented as calibrated. The left and
-    # right ones sit where the photos show them, outside the front posts at the windshield's
-    # base, each on a silver bracket to its post (CAMERA_PHOTO; README). The rear one is at its
-    # calibrated pose.
+    # GMSL cameras (Otobrite): a 35 mm cube with a lens at the calibrated pose; the left and
+    # right ones on a silver bracket to their post.
     cam = part("Sensors/Cameras/Housings", "dark_plastic")
     lens = part("Sensors/Cameras/Lenses", "lens")
     brk = part("Sensors/Cameras/Brackets", "white_plate")
     for name in ("camera_left", "camera_right", "camera_rear"):
         o, R = sensor_pose(name)
-        if name in CAMERA_PHOTO:
-            o = np.array(CAMERA_PHOTO[name])
         cam.add(*box(o - R[:, 0] * 0.018, (0.035, 0.035, 0.035), R))
         lens.add(*disc(o + R[:, 0] * 0.003, R[:, 0], 0.009, 0.012, 10))
         if name != "camera_rear":
