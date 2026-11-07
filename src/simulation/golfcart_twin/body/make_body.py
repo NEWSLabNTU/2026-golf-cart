@@ -212,25 +212,25 @@ def disc(c, normal, r, depth, n=16):
 
 # ---- the cart, in base_link -------------------------------------------------------------------
 
-HALF_W = 0.635        # body half width at the hood (estimate: photos 01, 08)
+HALF_W = 0.64         # body half width at the hood (estimate: photos 01, 08)
 BOX_HALF_W = 0.68     # cargo box half width (estimate: overhangs the wheels a little, photos 07, 09)
 POST_Y = 0.60
 FLOOR_Z = 0.30
 HOOD_REAR_X = 1.55    # windshield base (estimate: photo 05)
-HOOD_TOP = 0.96       # the hood's top at the windshield (estimate: photo 05)
-HOOD_NOSE_TOP = 0.78  # ... where the nose starts (estimate: photo 05)
+HOOD_TOP = 0.98       # the hood's top at the windshield (estimate: photo 05)
+HOOD_NOSE_TOP = 0.75  # ... where the nose starts (estimate: photo 05)
 FRONT_FACE_TOP = 0.74      # the front face, between the nose and the bumper (estimate: photos 05, 08)
 FRONT_FACE_BOTTOM = 0.50
-BONNET_EDGE_MID = 0.555    # the bonnet's front edge at the centre line (sketch; README)
-BONNET_EDGE_CORNER = 0.72  # ... over the headlamps
+BONNET_EDGE_MID = 0.55    # the bonnet's front edge at the centre line (sketch; README)
+BONNET_EDGE_CORNER = 0.70  # ... over the headlamps
 HOOD_SKIRT = 0.45     # the white fender's lower edge away from the wheel (estimate: photo 05)
 # the left and right cameras' origins, from the photos (front view, 2026-11-07): outside the
 # front posts, just above the windshield's base. The calibration has them at (1.366, 0.539,
 # 0.800) and (1.403, -0.474, 0.807), behind the hood (README).
 CAMERA_PHOTO = {"camera_left": (1.50, 0.665, 0.99), "camera_right": (1.50, -0.665, 0.99)}
 DECK_DZ = 0.155      # the front deck above its calibrated height, from the photos (README)
-NOSE_X = 2.30        # where the hood's top starts rounding down to its front face (estimate: photo 05)
-ARCH_R = 0.40         # the wheel arch's radius about the wheel centre: big flares, top at 0.70 (photo 05)
+NOSE_X = 2.18        # where the hood's top starts rounding down to its front face (estimate: photo 05)
+ARCH_R = 0.32         # the front wheel arch about the wheel centre: the flare hugs the tyre (photos 05, 09)
 CANOPY = (0.42, 1.54, 1.72, 1.80)         # x0, x1, z0, z1 (estimate; the VLP-32C on the rack fixes the top)
 BOX_X = (X_REAR, 0.47)
 BOX_Z = (0.73, 1.90)
@@ -244,8 +244,8 @@ def post_x(z):
 def bonnet_edge(y):
     """The bonnet's front edge, seen from the front (the user's sketch on the front photo,
     2026-11-07): high over each headlamp, low across the middle, just under the Falcon."""
-    u = min(abs(y) / 0.60, 1.0)
-    return BONNET_EDGE_MID + (BONNET_EDGE_CORNER - BONNET_EDGE_MID) * u ** 3
+    u = min(max((abs(y) - 0.28) / 0.20, 0.0), 1.0)          # flat to +-0.28, up by +-0.48
+    return BONNET_EDGE_MID + (BONNET_EDGE_CORNER - BONNET_EDGE_MID) * u * u * (3 - 2 * u)
 
 
 def _smooth(pts, n=3):
@@ -266,7 +266,7 @@ def hood_ring(x, m=None):
     widest point, then drop to the skirt, which follows the wheel arch."""
     s = min(max((x - HOOD_REAR_X) / (NOSE_X - HOOD_REAR_X), 0.0), 1.0)
     zt = HOOD_TOP + (HOOD_NOSE_TOP - HOOD_TOP) * s
-    ws, wb = 0.47 - 0.03 * s, HALF_W - 0.01 * s            # shoulder and fender half widths
+    ws, wb = 0.50 - 0.02 * s, HALF_W - 0.01 * s            # shoulder and fender half widths
     zf = zt - (0.25 - 0.13 * s)                             # the fender line
     zb = HOOD_SKIRT
     dx = x - WHEEL_BASE
@@ -278,14 +278,14 @@ def hood_ring(x, m=None):
         c = 1 - math.sqrt(max(1 - k * k, 0.0))              # quarter-circle nose in plan and side
         zt -= (HOOD_NOSE_TOP - FRONT_FACE_TOP) * c
         zf = min(zf, zt - 0.06)
-        ws *= 1 - 0.12 * c
-        wb *= 1 - 0.14 * c
+        ws *= 1 - 0.25 * c
+        wb *= 1 - 0.03 * c
         zb = max(zb, FRONT_FACE_BOTTOM)
     half = [np.array(p, float) for p in (
-        (0.0, zt - 0.008), (0.012, zt + 0.002), (0.05, zt + 0.008), (ws - 0.08, zt + 0.006),
+        (0.0, zt - 0.008), (0.012, zt + 0.002), (0.05, zt + 0.012), ((0.05 + ws) / 2, zt + 0.03), (ws - 0.08, zt + 0.012),
         (ws, zt - 0.012), (ws + 0.05, zt - 0.045), (wb - 0.015, zf + 0.015), (wb, zf - 0.02),
         (wb, zb + 0.03), (wb - 0.02, zb), (0.0, zb))]
-    half = half[:2] + _smooth(half[1:-1], 2)[1:] + [half[-1]]
+    half = half[:2] + _smooth(half[1:-1], 3)[1:] + [half[-1]]
     if k > 0:   # the nose's top comes down to the bonnet's front edge, a U across the front
         c = k ** 1.5
         half = [np.array([y, z - c * max(0.0, z - bonnet_edge(y))]) if z > zb + 0.02 else np.array([y, z])
@@ -320,16 +320,27 @@ def build():
 
     xf, xr = WHEEL_BASE, 0.0
     # body
-    xs = list(np.linspace(HOOD_REAR_X, NOSE_X, 22)) + list(NOSE_X + (X_FRONT - NOSE_X) * np.linspace(0.12, 1.0, 8))
+    xs = list(np.linspace(HOOD_REAR_X, NOSE_X, 22)) + list(NOSE_X + (X_FRONT - NOSE_X) * np.linspace(0.06, 1.0, 16))
     part("Body/Hood", "white_body").add(*loft([hood_ring(x) for x in xs]))
     part("Body/FrontLower", "black_plastic").add(*rbox((1.52, 2.36), (-0.50, 0.50), (0.24, 0.55), 0.04, 2))
     for sgn in (1, -1):     # the black panel behind each front wheel, floor to fender (photo 05)
         part("Body/FrontLower", "black_plastic").add(*rbox((1.52, 1.68), sorted((sgn * 0.52, sgn * 0.64)), (0.22, 0.56), 0.02, 2))
-    part("Body/BumperFront", "black_plastic").add(*rbox((2.29, X_FRONT), (-0.60, 0.60), (0.22, 0.50), 0.05, 3))
+    # the black bumper (photos 07, 08 and the front photo, 2026-11-07): a low centre piece and
+    # two corner pieces that rise to the headlamps and wrap back to the wheel arches
+    bump = part("Body/BumperFront", "black_plastic")
+    bump.add(*rbox((2.30, X_FRONT), (-0.44, 0.44), (0.25, 0.44), 0.04, 3))
+    for sgn in (1, -1):
+        bump.add(*rbox((2.24, X_FRONT - 0.01), sorted((sgn * 0.40, sgn * 0.62)), (0.25, 0.47), 0.06, 3))
+    # the white fascia under the bonnet's front edge, set back from the bumper, with its
+    # horizontal recess (front photo)
+    part("Body/Fascia", "white_body").add(*rbox((2.28, X_FRONT - 0.025), (-0.44, 0.44), (0.43, 0.53), 0.02, 2))
+    part("Body/FasciaRecess", "fascia_recess").add(*rbox((X_FRONT - 0.032, X_FRONT - 0.022), (-0.28, 0.28), (0.455, 0.505), 0.004, 1))
     lamps = part("Body/Headlamps", "lamp")
-    for y in (0.49, -0.49):           # on the front face, under the bonnet's edge
-        xl = surface_x(y, 0.585)
-        lamps.add(*disc((xl - 0.008, y, 0.585), (1, 0.6 * y, 0), 0.05, 0.03))
+    for y in (0.45, -0.45):           # on the front face, right under the bonnet's edge
+        xl = surface_x(y, 0.61)
+        nrm = np.array([1.0, 0.6 * y, 0.0])
+        lamps.add(*disc((xl - 0.006, y, 0.61), nrm, 0.055, 0.03))
+        part("Body/HeadlampBezels", "black_plastic").add(*disc(np.array([xl - 0.012, y, 0.61]), nrm, 0.066, 0.03))
     seam = part("Body/BonnetSeam", "dark_plastic")   # the bonnet's front edge, as a dark line
     ys = np.linspace(-0.58, 0.58, 41)
     pts = [np.array([surface_x(y, bonnet_edge(y) - 0.008) + 0.003, y, bonnet_edge(y) - 0.008]) for y in ys]
@@ -337,14 +348,14 @@ def build():
         seam.add(*bar(p0, p1, 0.008, 0.006))
     amb = part("Body/Reflectors", "amber")
     for y in (0.43, -0.43):
-        amb.add(*disc((X_FRONT - 0.004, y, 0.36), (1, 0, 0), 0.03, 0.008))
+        amb.add(*disc((X_FRONT + 0.002, math.copysign(0.33, y), 0.36), (1, 0, 0), 0.03, 0.008))
     ar = part("Body/WheelArches", "black_plastic")
     for xc in (xf, xr):
         for sgn in (1, -1):
-            yi, yo = sorted((sgn * 0.54, sgn * (HALF_W + 0.04)))
+            yi, yo = sorted((sgn * (HALF_W - 0.03), sgn * (HALF_W + 0.035)))   # a thin lip
             r = ARCH_R if xc > 1.0 else 0.345
-            a0 = 0.45 if xc > 1.0 else -0.05    # the front flare ends at the bumper, inside the length
-            ar.add(*arch(xc, yi, yo, r - 0.02, r + 0.035, a0, math.pi + 0.05, 16))
+            a0 = 0.30 if xc > 1.0 else -0.05    # the front flare ends at the bumper, inside the length
+            ar.add(*arch(xc, yi, yo, r - 0.015, r + 0.03, a0, math.pi + 0.05, 16))
     part("Body/Floor", "rubber_mat").add(*box_span((0.47, 1.60), (-0.60, 0.60), (0.20, FLOOR_Z)))
     sill = part("Body/Sills", "black_plastic")
     for sgn in (1, -1):
@@ -352,11 +363,14 @@ def build():
     part("Body/RearBody", "white_body").add(*rbox((-0.47, 0.47), (-0.66, 0.66), (0.26, BOX_Z[0]), 0.03, 2))
     part("Body/BumperRear", "black_plastic").add(*rbox((-0.58, -0.40), (-0.62, 0.62), (0.10, 0.26), 0.03, 2))
     # cabin
-    part("Cabin/Firewall", "dark_plastic").add(*rbox((1.46, 1.62), (-0.56, 0.56), (FLOOR_Z, 1.00), 0.04, 2))
-    part("Cabin/Dashboard", "dark_plastic").add(*rbox((1.28, 1.60), (-0.56, 0.56), (0.90, 1.04), 0.05, 3))
-    sw_c = np.array([1.20, -0.30, 1.13])                        # right-hand drive (photos 01, 08)
+    # the dark cockpit console behind the windshield, floor to dashboard, its side profile from
+    # photo 05: a sloped front panel over the footwell rising to a deep dashboard top
+    prof = [(1.62, FLOOR_Z), (1.62, 1.00), (1.50, 1.08), (1.30, 1.12), (1.14, 1.10), (1.12, 1.03),
+            (1.28, 0.96), (1.40, 0.70), (1.43, FLOOR_Z)]
+    part("Cabin/Console", "dark_plastic").add(*loft([[np.array([x, y, z]) for x, z in prof] for y in (-0.56, 0.56)]))
+    sw_c = np.array([1.05, -0.30, 1.20])                        # right-hand drive (photos 01, 08)
     sw_axis = np.array([-0.55, 0.0, 0.84])
-    part("Cabin/SteeringColumn", "dark_plastic").add(*cylinder((1.42, -0.30, 0.98), sw_c, 0.025, 10))
+    part("Cabin/SteeringColumn", "dark_plastic").add(*cylinder((1.25, -0.30, 1.08), sw_c, 0.025, 10))
     swp = part("Cabin/SteeringWheel", "dark_plastic")
     a, u, v = frame_of(sw_axis)
     ring = [sw_c + 0.17 * (math.cos(t) * u + math.sin(t) * v) for t in np.linspace(0, 2 * math.pi, 17)]
@@ -392,8 +406,8 @@ def build():
     part("Cabin/CanopyVisor", "white_body").add(*rbox((x1 - 0.14, x1 + 0.02), (-0.64, 0.64), (z0 - 0.06, z0 + 0.03), 0.03, 2))
     mir = part("Cabin/Mirrors", "black_plastic")
     for sgn in (1, -1):
-        mir.add(*rbox((1.42, 1.46), sorted((sgn * 0.66, sgn * 0.78)), (1.38, 1.56), 0.012, 2))
-        mir.add(*bar((post_x(1.50), sgn * POST_Y, 1.50), (1.44, sgn * 0.68, 1.48), 0.02))
+        mir.add(*rbox((1.36, 1.40), sorted((sgn * 0.66, sgn * 0.77)), (1.47, 1.66), 0.012, 2))
+        mir.add(*bar((post_x(1.60), sgn * POST_Y, 1.60), (1.38, sgn * 0.68, 1.58), 0.02))
     # roof rack (black aluminium), the VLP-32C mast on its rear cross bar
     vlp_o, vlp_R = sensor_pose("vlp32c")
     rack = part("Cabin/RoofRack", "alu_black")
@@ -509,8 +523,9 @@ MATERIALS = {   # name: (diffuse, roughness, metallic, opacity)
     "glass": ((0.55, 0.60, 0.62), 0.05, 0.0, 0.18),
     "tinted_glass": ((0.03, 0.035, 0.04), 0.1, 0.0, 0.85),
     "alu_black": ((0.035, 0.035, 0.04), 0.4, 0.6, 1.0),
+    "fascia_recess": ((0.55, 0.55, 0.53), 0.5, 0.0, 1.0),
     "white_plate": ((0.85, 0.85, 0.85), 0.3, 0.3, 1.0),
-    "lamp": ((0.30, 0.30, 0.31), 0.1, 0.6, 1.0),
+    "lamp": ((0.70, 0.70, 0.70), 0.15, 0.7, 1.0),
     "amber": ((0.95, 0.45, 0.02), 0.3, 0.0, 1.0),
     "lidar_body": ((0.42, 0.47, 0.55), 0.4, 0.3, 1.0),
     "lidar_cap": ((0.10, 0.32, 0.72), 0.35, 0.2, 1.0),

@@ -57,11 +57,13 @@ Estimates, from the photos (01-10) at the wheels' scale:
 | Part | Estimate |
 |---|---|
 | Body half width 0.635, box half width 0.68 | photos 01, 07, 08, 09 |
-| Hood: top sloping from 0.96 at the windshield to 0.78 at the nose; the bonnet's front edge a U seen from the front, 0.72 over the headlamps and 0.555 across the middle (the user's sketch on the front photo, 2026-11-07), the headlamps under it; two raised panels either side of a narrow centre groove; sides sloping out to a fender line; flared front arches, radius 0.40 | photos 05, 07, 08 |
+| Hood: top sloping from 0.98 at the windshield to 0.75 at the nose; the bonnet's front edge a U seen from the front, 0.70 over the headlamps and 0.55 across the middle (flat to y +-0.28) (the user's sketch on the front photo, 2026-11-07), the headlamps under it; two raised panels either side of a narrow centre groove; sides sloping out to a fender line; front arches hugging the tyres, radius 0.32 with a thin black lip | photos 05, 07, 08 |
 | Windshield base x 1.55 base_link, front posts raked 0.24 m over their height | photo 05 |
 | Canopy x 0.42 to 1.54, top 1.80; roof rack 5 cm above it | photos 05, 06; the canopy sits under the VLP-32C |
 | Cargo box x -0.821 to 0.47, z 0.73 to 1.90, doors in two rows of two each side | photos 05, 06 |
-| Bench seat, seat base, dashboard, steering wheel (right-hand drive) | photos 02, 05, 06, 08 |
+| Bench seat, seat base, the dark cockpit console (side profile), steering wheel (right-hand drive) | photos 02, 05, 06, 08 |
+| Front: black bumper, a low centre piece (z 0.25 to 0.44) and corner pieces up to 0.47; white fascia under the bonnet edge with its recess; headlamps 0.11 m across with a dark bezel at (+-0.45, 0.61) | front photo, 2026-11-07; photos 07, 08 |
+| Mirrors at the windshield's top corners, z 1.47 to 1.66 | front photo, 2026-11-07 |
 | GNSS antenna puck on the box at x -0.52 base_link, y 0 | photos 05, 06 (see below) |
 | VLP-32C 103 mm across, 88 mm tall, origin 38 mm above its base | the Velodyne family's drawings |
 | Falcon housing 0.16 x 0.27 x 0.09 m, centred on its origin | photos 04, 10 |
