@@ -14,8 +14,8 @@
       <CatalogReference catalogName="vehicles" entryName="newslab_golfcart">
         <ParameterAssignments>
           <ParameterAssignment parameterRef="maxSpeed" value="3.0" />
-          <ParameterAssignment parameterRef="maxAcceleration" value="2.0" />
-          <ParameterAssignment parameterRef="maxDeceleration" value="3.0" />
+          <ParameterAssignment parameterRef="maxAcceleration" value="3.0" />
+          <ParameterAssignment parameterRef="maxDeceleration" value="6.0" />
           <ParameterAssignment parameterRef="maxSteering" value="0.52" />
         </ParameterAssignments>
       </CatalogReference>

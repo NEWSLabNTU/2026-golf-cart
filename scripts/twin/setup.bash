@@ -50,7 +50,7 @@ export ROS_DOMAIN_ID=$TWIN_DOMAIN
 # bridge on TWIN_SCENARIO_DOMAIN (default TWIN_DOMAIN + 1); its ports, when twin.env moves them
 export EGO_ROS_DOMAIN_ID=$TWIN_DOMAIN
 export SCENARIO_ROS_DOMAIN_ID=${TWIN_SCENARIO_DOMAIN:-$((TWIN_DOMAIN + 1))}
-for _v in SSV2_PORT AGENT_PORT ISAAC_PORT SWB_LOG_ROOT; do [ -n "${!_v:-}" ] && export "$_v"; done
+for _v in SSV2_PORT AGENT_PORT ISAAC_PORT SWB_LOG_ROOT SWB_VEHICLE_USD; do [ -n "${!_v:-}" ] && export "$_v"; done
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 # The twin's loopback-unicast profile: needs no multicast on lo (which the cart's loopback.xml does)
 export CYCLONEDDS_URI="file://$(ros2 pkg prefix golfcart_twin)/share/golfcart_twin/config/cyclonedds-unicast-lo.xml"

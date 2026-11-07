@@ -17,7 +17,8 @@ import yaml
 PKG = Path(__file__).resolve().parent.parent
 SPEED = 2.5  # m/s, the cart's ceiling (the sim's motor)
 # SSv2 refuses an entity faster than its declared maxSpeed; the motor holds 2.5 within a few
-# hundredths (2.51 seen), so the scenarios declare a margin above it
+# hundredths (2.51 seen), so the scenarios declare a margin above it; likewise the
+# accelerations (a stop for a pedestrian braked at 3.06 m/s^2): bounds, not commands
 MAX_SPEED = 3.0
 
 
@@ -40,8 +41,8 @@ def scenario(name, r):
       <CatalogReference catalogName="vehicles" entryName="newslab_golfcart">
         <ParameterAssignments>
           <ParameterAssignment parameterRef="maxSpeed" value="{MAX_SPEED}" />
-          <ParameterAssignment parameterRef="maxAcceleration" value="2.0" />
-          <ParameterAssignment parameterRef="maxDeceleration" value="3.0" />
+          <ParameterAssignment parameterRef="maxAcceleration" value="3.0" />
+          <ParameterAssignment parameterRef="maxDeceleration" value="6.0" />
           <ParameterAssignment parameterRef="maxSteering" value="0.52" />
         </ParameterAssignments>
       </CatalogReference>

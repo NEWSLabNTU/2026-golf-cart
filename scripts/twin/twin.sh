@@ -68,10 +68,11 @@ generate() {
     local cat=(env PYTHONPATH="$svs" python3 -m sim_vehicle_spec.gen
                --spec "$pkg/vehicle/newslab_golfcart.yaml"
                --catalog "$pkg/catalogs/vehicles.xosc" --spec-hash "$pkg/isaac/spec_hash.yaml")
-    if [ "${1:-}" = --check ]; then "${gen[@]}" --check && "${cat[@]}" --check && python3 "$pkg/scripts/make_scenarios.py" --check; return; fi
+    if [ "${1:-}" = --check ]; then "${gen[@]}" --check && "${cat[@]}" --check && python3 "$pkg/scripts/make_scenarios.py" --check && python3 "$pkg/scripts/make_showcase.py" --check; return; fi
     "${gen[@]}"
     "${cat[@]}"
     python3 "$pkg/scripts/make_scenarios.py"
+    python3 "$pkg/scripts/make_showcase.py"
     need ISAAC_ROOT
     py="$ISAAC_ROOT/venv/bin/python"
     [ -x "$py" ] || die "no $py (ISAAC_ROOT: swb's install_isaac.sh)"

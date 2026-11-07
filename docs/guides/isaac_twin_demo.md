@@ -52,6 +52,35 @@ play_launch launch golfcart_twin twin.launch.py scenario:=route1  # SSv2 runs a 
 - The scenarios are made from `config/routes.yaml` by `scripts/make_scenarios.py`, and the
   cart's catalog and spec hash from its spec (`just twin generate`).
 
+### Showcase scenarios
+
+Route 1 with what an OpenSCENARIO script adds (`scripts/make_showcase.py`, `just twin generate`):
+
+| `scenario:=` | What happens | Passes when |
+|---|---|---|
+| `showcase_pedestrian` | A pedestrian steps off the kerb of the north road when the cart is 20 m away, stops in the cart's lane for 5 s, then walks on across | The cart stops for it, waits, and reaches the goal without coming within 1 m of it |
+| `showcase_lead_vehicle` | A car pulls out ahead and drives the same way at 1.5 m/s, on past the goal | The cart follows it without contact and reaches the goal |
+| `showcase_traffic` | An oncoming car down the north road, a parked car, two pedestrians on the north road's sidewalks | The cart reaches the goal without contact |
+
+On 118 (2026-11-08) all three passed. In `showcase_pedestrian` the cart braked from 2.5 m/s
+to a stop about 5.6 m before the pedestrian and pulled away once the pedestrian was about
+4.5 m clear. In `showcase_lead_vehicle` it slowed to the car's 1.5 m/s and kept about 10 m
+behind it.
+
+These need the cart's perception: CenterPoint on the lidars, tracking and prediction
+(Autoware data in `AUTOWARE_DATA`). `twin.launch.py` runs it (`perception:=true`, the default),
+as `logging_simulation.launch.yaml` does. The cart's own `golfcart.launch.yaml` defaults
+`launch_perception` to `false`, publishing empty objects; on the cart, add
+`launch_perception:=true` (and a `perception_preset`, default `lidar_only`).
+
+Writing your own: a pedestrian or car that must cross the cart's path regardless needs the
+controller property `isBlind` set to `true`, or SSv2 stops it for the cart. Walk pedestrians
+with `WalkStraightAction` and speed actions rather than a timed trajectory: one started by a
+trigger did not move here. An `Action` holds one `PrivateAction`. The cart's declared limits
+(`maxSpeed` 3.0, `maxAcceleration` 3.0, `maxDeceleration` 6.0 m/s^2) are bounds SSv2 checks,
+not commands: below what the cart does, SSv2 aborts the run. NPC bodies come from the CARLA
+catalogue in `SWB_VEHICLE_USD` (twin.env).
+
 The sections below run the pieces apart instead: Isaac's stand-alone runner, the cart's
 Autoware, and `twin_go.py`, each in its own terminal.
 
