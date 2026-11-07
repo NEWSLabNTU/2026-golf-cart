@@ -39,9 +39,9 @@ because they show bystanders' licence plates.
 
 The body carries a `headlights` variant set on `/Vehicle`: `off` (the default) and `on`. With
 `on`, the headlamps' material glows and a light shines from each lamp: a UsdLux SphereLight,
-0.03 m across, shaped to a 32 degree cone and aimed 4 degrees down. Its intensity is 7e5 nits,
-about 2000 cd on the axis, an estimate for an LED golf cart lamp; tune `HEADLIGHT_INTENSITY` in
-`make_body.py` after seeing it in Isaac.
+0.03 m across, shaped to a 40 degree cone and aimed 4 degrees down, at 5e6 nits. That value was
+chosen in Isaac Sim 6.1 on 2026-11-07, in a night scene with a wall 8 m ahead: 7e5 nits barely
+showed, and 2e7 washed out the wall. It is `HEADLIGHT_INTENSITY` in `make_body.py`.
 
 Switch it in the Isaac editor: select the vehicle's `model` prim (the prim that references
 this asset), then Property panel, Variants, `headlights`. From code:

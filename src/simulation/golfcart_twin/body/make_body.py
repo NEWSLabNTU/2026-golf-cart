@@ -332,12 +332,13 @@ def surface_x(y, z):
 
 HEADLAMPS = []          # each headlamp's light origin in base_link, filled by build()
 # Headlights (the `headlights` variant set). A SphereLight per lamp, shaped to a cone along the
-# lamp's axis. Intensity is the light's luminance in nits: a 0.03 m sphere at 7e5 nits gives
-# about 2000 cd on the axis, an LED golf cart lamp's order (an estimate; tune in Isaac).
+# lamp's axis. Intensity is the light's luminance in nits. Chosen in Isaac Sim 6.1 (2026-11-07,
+# a night scene, a wall 8 m ahead): 7e5 nits, about 2000 cd on paper, barely showed; 5e6 nits
+# with a 40 degree cone lights the road and the wall clearly without washing them out.
 HEADLIGHT_RADIUS = 0.03
-HEADLIGHT_INTENSITY = 7.0e5
+HEADLIGHT_INTENSITY = 5.0e6
 HEADLIGHT_COLOR = (1.0, 0.96, 0.90)
-HEADLIGHT_CONE_DEG = 32.0
+HEADLIGHT_CONE_DEG = 40.0
 HEADLIGHT_CONE_SOFTNESS = 0.3
 HEADLIGHT_DOWN_DEG = 4.0       # aimed slightly down at the road
 LAMP_EMISSIVE_ON = (3.0, 2.9, 2.7)
