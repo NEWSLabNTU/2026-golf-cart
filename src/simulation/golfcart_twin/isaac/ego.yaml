@@ -1,0 +1,9 @@
+# The cart in Isaac Sim: aib's ego config (scenario-world-bridge's autoware_isaac_bridge,
+# docs/vehicle-from-another-repository.md). Paths are relative to this file.
+#   rig   generated from ../vehicle/newslab_golfcart.yaml by aib.gen (just twin generate)
+#   body  the cart's look, made by ../body/make_body.py (just twin generate)
+# No domain: the ego joins the starting terminal's ROS_DOMAIN_ID, which the cart's Autoware
+# shares (scripts/twin/setup.bash).
+rig: newslab_golfcart.rig.yaml
+node_name: isaac_vehicle
+body: body/vehicle.newslab.golfcart/entry.json

@@ -52,9 +52,14 @@ ego newslab_golfcart ... at (480.25, 148.25, 11.93); sensors warm
 ```
 
 Its arguments: `route` (1 to 4), `render` (`auto`: a window when `DISPLAY` is set; `window`
-or `headless`), `map_path` (default `$TWIN_MAP`), `gpu` (default `$TWIN_GPU`), `assets`
-(default `$TWIN_ASSETS`). The first start builds the cart's body and lidar profiles into
-`assets`.
+or `headless`), `map_path` (default `$TWIN_MAP`), `gpu` (default `$TWIN_GPU`).
+
+The cart is this repository's: `golfcart_twin/vehicle/newslab_golfcart.yaml` (its spec) and
+`golfcart_twin/isaac/` (aib's ego config, the rig generated from the spec, the body and the
+lidar profiles, all committed). scenario-world-bridge provides only the Isaac runner
+(`aib_launch isaac_vehicle.launch.xml`). After changing the spec, `make_lidars.py` or the
+body tools, run `just twin generate` and commit what it writes; `just twin generate --check`
+tells whether the rig is stale.
 
 **Terminal 2: the cart's Autoware and RViz** (about 1 min)
 
@@ -149,7 +154,9 @@ just twin stop        # Autoware, then Isaac Sim
 | Symptom | Likely cause | What to do |
 |---|---|---|
 | The cart does not move | No route, no engage, or localization not initialized | Set the goal again; press AUTO; wait until the state panel shows localization initialized |
-| RViz shows nothing, or no cart | RViz and the sim do not see each other: a different ROS domain or DDS profile | Source `scripts/twin/setup.bash` in both terminals: it gives both swb's `cyclonedds-localhost.xml` and `TWIN_DOMAIN` |\n| `Web server error: Address already in use` | Two play_launch on one web port | Harmless: the launch runs without its web UI. Give the second one `--web-addr 127.0.0.1:8081` |\n| Localization stays uninitialized | No GNSS fix or no map: terminal 1 not up, or a different domain | Check `ros2 topic hz /sensing/gnss/ublox/nav_sat_fix` (about 1 Hz) in terminal 3 |
+| RViz shows nothing, or no cart | RViz and the sim do not see each other: a different ROS domain or DDS profile | Source `scripts/twin/setup.bash` in both terminals: it gives both the package's `cyclonedds-unicast-lo.xml` and `TWIN_DOMAIN` |
+| `Web server error: Address already in use` | Two play_launch on one web port | Harmless: the launch runs without its web UI. Give the second one `--web-addr 127.0.0.1:8081` |
+| Localization stays uninitialized | No GNSS fix or no map: terminal 1 not up, or a different domain | Check `ros2 topic hz /sensing/gnss/ublox/nav_sat_fix` (about 1 Hz) in terminal 3 |
 | The sim runs slowly | Host load | Check `uptime` and `nvidia-smi`; wait for the other job |
 | `world` takes over 10 min | The first start on a host compiles shaders | Let it finish once; later starts are quick |
 | The cart goes faster than 2.5 m/s | The sim's speed ceiling is missing. Like the cart's VCU, it is the motor's top speed in swb's `newslab_golfcart` spec (sim_vehicle_spec 62ac087 or later). Autoware itself plans up to 4.17 m/s: its 2.5 default does not reach the planner (roadmap 10) | In `TWIN_SWB`, `git pull` and `git submodule update --init --recursive`, then restart the world |
@@ -176,7 +183,6 @@ Each play_launch logs to `play_log/<time>/` of the directory it was started in (
    TWIN_DOMAIN=1                                  # ROS domain for both sides, at most 57
    TWIN_DISPLAY=:9                                # Isaac's window; empty runs headless
    TWIN_GPU=0                                     # the GPU Isaac renders on
-   TWIN_ASSETS=$HOME/.cache/golfcart_twin         # where `just twin assets` writes
    AUTOWARE_DATA=$HOME/autoware_data              # Autoware's models, writable
    AUTOWARE_TENSORRT_LIB=/path/to/tensorrt-10.8.0/lib   # swb's setting; avoids engine rebuilds
    ```
@@ -184,6 +190,6 @@ Each play_launch logs to `play_log/<time>/` of the directory it was started in (
    ```bash
    just build
    ```
-5. The first world launch builds the body and the lidar profiles and compiles Isaac's
+5. The first world launch compiles Isaac's
    shaders. The first Autoware launch builds the CenterPoint engines in `AUTOWARE_DATA`. Both
    take minutes, once.

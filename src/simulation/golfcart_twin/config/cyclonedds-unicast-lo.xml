@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Cyclone DDS (0.10, Humble) on one machine with no multicast: discovery by unicast to the
+  loopback peer, so it works where multicast on lo is off (newslab-118-server) and stays off
+  the LAN. The twin demo's two sides, Isaac Sim and the cart's Autoware, both use it
+  (scripts/twin/setup.bash); every process on the domain must use the same profile.
+
+  MaxAutoParticipantIndex bounds the unicast port probe: every process takes an index and the
+  cart's Autoware alone runs well over a hundred. With DomainGain 1000 and ParticipantGain 2
+  it must stay under 494 to keep clear of the next domain; 450 leaves headroom. The interface
+  is pinned with NetworkInterfaceAddress, which Cyclone 0.10 understands (it warns that the
+  element is deprecated).
+-->
+<CycloneDDS xmlns="https://cdds.io/config">
+  <Domain Id="any">
+    <General>
+      <NetworkInterfaceAddress>lo</NetworkInterfaceAddress>
+      <AllowMulticast>false</AllowMulticast>
+    </General>
+    <Discovery>
+      <ParticipantIndex>auto</ParticipantIndex>
+      <MaxAutoParticipantIndex>450</MaxAutoParticipantIndex>
+      <Peers>
+        <Peer address="127.0.0.1"/>
+      </Peers>
+    </Discovery>
+  </Domain>
+</CycloneDDS>

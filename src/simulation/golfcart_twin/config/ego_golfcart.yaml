@@ -1,9 +1,0 @@
-# The cart in Isaac Sim (aib's EgoConfig; swb's autoware_isaac_bridge, src/aib/aib/rig.py), for
-# `just twin world`. The rig is generated in swb from sim_vehicle_spec's newslab_golfcart (the
-# cart's own geometry and calibration); the body is this package's body/make_body.py, built by
-# `just twin assets`. aib expands the environment variables, which `just twin` sets.
-rig: ${AIB_CONFIG}/newslab_golfcart.rig.yaml
-# Replaced by TWIN_DOMAIN when `just twin world` runs.
-domain: 1
-node_name: isaac_vehicle
-body: ${GOLFCART_BODY}/vehicle.newslab.golfcart/entry.json

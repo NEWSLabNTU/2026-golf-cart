@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # The cart in the NTU twin on Isaac Sim (docs/roadmaps/10-isaac-twin-demo.md), behind `just twin`.
 #
-#   twin.sh assets            build the lidar profiles and the body (once, and after a change)
+#   twin.sh generate [--check]  regenerate the cart's Isaac files (the rig from the spec, the
+#                             lidar profiles, the body) into the package; --check: rig only, exit 1 if stale
 #   twin.sh world [ROUTE]     Isaac Sim with the twin and the cart at ROUTE's start (default 1)
 #   twin.sh autoware          the cart's own Autoware on the twin's map, with RViz
 #   twin.sh go [ROUTE]        set ROUTE's goal and engage, then report until it arrives
@@ -16,13 +17,12 @@
 #   TWIN_DOMAIN   ROS domain for both sides (default 1; at most 57)
 #   TWIN_DISPLAY  X display for Isaac's window (default $DISPLAY; empty: headless)
 #   TWIN_GPU      the GPU Isaac renders on (default 0)
-#   TWIN_ASSETS   where `assets` writes (default ~/.cache/golfcart_twin)
 #   AUTOWARE_DATA Autoware's model data (default ~/autoware_data)
 #   AUTOWARE_TENSORRT_LIB  a TensorRT 10.8 runtime put first for Autoware (swb's setting:
 #                 Autoware 1.5.0's engines must be built by 10.8, or they rebuild at every start)
 #
-# Both sides use swb's loopback-unicast Cyclone profile (swb_launch's
-# cyclonedds-localhost.xml): it needs no multicast on lo, which the cart's loopback.xml does.
+# Both sides use the package's loopback-unicast Cyclone profile (config/cyclonedds-unicast-lo.xml):
+# it needs no multicast on lo, which the cart's loopback.xml does.
 set -eo pipefail
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 pkg="$root/src/simulation/golfcart_twin"
@@ -31,11 +31,10 @@ TWIN_SWB=${TWIN_SWB:-$HOME/repos/carla-scenario-bridge}
 TWIN_DOMAIN=${TWIN_DOMAIN:-1}
 TWIN_DISPLAY=${TWIN_DISPLAY-${DISPLAY:-}}
 TWIN_GPU=${TWIN_GPU:-0}
-TWIN_ASSETS=${TWIN_ASSETS:-$HOME/.cache/golfcart_twin}
 AUTOWARE_DATA=${AUTOWARE_DATA:-$HOME/autoware_data}
 run="$root/log/twin"
 mkdir -p "$run"
-dds="file://$TWIN_SWB/src/swb_launch/config/cyclonedds-localhost.xml"
+dds="file://$pkg/config/cyclonedds-unicast-lo.xml"
 
 die() { echo "twin: $*" >&2; exit 1; }
 need() { [ -n "${!1:-}" ] || die "$1 is not set (environment or config/twin.env)"; }
@@ -54,13 +53,22 @@ print(p["x"], p["y"], p["z"], p["yaw"])
 EOF
 }
 
-assets() {
+generate() {
+    # The rig is swb's aib.gen on this package's spec; the lidar profiles and the body need
+    # Isaac's own Python (pxr). All of them are committed: run this after changing the spec,
+    # make_lidars.py or the body tools, and commit what it writes.
+    local aib="$TWIN_SWB/src/autoware_isaac_bridge/src/aib"
+    [ -d "$aib" ] || die "no $aib (TWIN_SWB)"
+    local gen=(env PYTHONPATH="$aib" python3 -m aib.gen --spec "$pkg/vehicle/newslab_golfcart.yaml"
+               -o "$pkg/isaac/newslab_golfcart.rig.yaml")
+    if [ "${1:-}" = --check ]; then "${gen[@]}" --check; return; fi
+    "${gen[@]}"
     need ISAAC_ROOT
     py="$ISAAC_ROOT/venv/bin/python"
     [ -x "$py" ] || die "no $py (ISAAC_ROOT: swb's install_isaac.sh)"
-    "$py" "$pkg/isaac/make_lidars.py" "$TWIN_ASSETS/lidars"
-    "$py" "$pkg/body/make_body.py" "$TWIN_ASSETS/vehicles"
-    echo "twin: assets in $TWIN_ASSETS"
+    "$py" "$pkg/isaac/make_lidars.py" "$pkg/isaac/lidars"
+    "$py" "$pkg/body/make_body.py" "$pkg/isaac/body"
+    echo "twin: generated into $pkg/isaac; commit the changes"
 }
 
 world() {
@@ -124,6 +132,6 @@ stop() {
 
 cmd=${1:-}; shift || true
 case "$cmd" in
-    assets|world|autoware|go|status|stop) "$cmd" "$@" ;;
-    *) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+    generate|world|autoware|go|status|stop) "$cmd" "$@" ;;
+    *) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

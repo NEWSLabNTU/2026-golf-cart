@@ -8,9 +8,9 @@ set working-directory := '..'
 default:
     @just --list twin
 
-# Build the lidar profiles and the body (once, and after a change to them)
-assets:
-    ./scripts/twin/twin.sh assets
+# Regenerate the cart's Isaac files (rig, lidar profiles, body) after a change; --check: the rig only
+generate *args:
+    ./scripts/twin/twin.sh generate {{args}}
 
 # Isaac Sim with the twin and the cart at a route's start, its window following the cart
 world ROUTE="1":

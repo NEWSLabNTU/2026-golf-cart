@@ -1,0 +1,95 @@
+{
+ "id": "vehicle.newslab.golfcart",
+ "base_type": "car",
+ "wheels_n": 4,
+ "usd": "vehicle.newslab.golfcart/vehicle.newslab.golfcart.usda",
+ "prim": "/Vehicle",
+ "render_min": [
+  -1.6422,
+  -0.7682,
+  0.0
+ ],
+ "render_max": [
+  1.844,
+  0.7682,
+  1.9379
+ ],
+ "render_size": [
+  3.4862,
+  1.5365,
+  1.9379
+ ],
+ "carla_bbox": {
+  "center": [
+   0.0,
+   0.0,
+   1.0025
+  ],
+  "extent": [
+   1.644,
+   0.68,
+   1.0025
+  ]
+ },
+ "wheels": [
+  {
+   "name": "Wheel_Front_Left",
+   "path": "/Vehicle/Wheels/Wheel_Front_Left",
+   "pos": [
+    1.238,
+    0.6065,
+    0.265
+   ],
+   "radius": 0.265,
+   "width": 0.14,
+   "max_steer_deg": 30.0,
+   "usd": "vehicle.newslab.golfcart/wheels.usda",
+   "usd_prim": "/Wheel_Front_Left"
+  },
+  {
+   "name": "Wheel_Front_Right",
+   "path": "/Vehicle/Wheels/Wheel_Front_Right",
+   "pos": [
+    1.238,
+    -0.6065,
+    0.265
+   ],
+   "radius": 0.265,
+   "width": 0.14,
+   "max_steer_deg": 30.0,
+   "usd": "vehicle.newslab.golfcart/wheels.usda",
+   "usd_prim": "/Wheel_Front_Right"
+  },
+  {
+   "name": "Wheel_Rear_Left",
+   "path": "/Vehicle/Wheels/Wheel_Rear_Left",
+   "pos": [
+    -0.823,
+    0.6065,
+    0.265
+   ],
+   "radius": 0.265,
+   "width": 0.14,
+   "max_steer_deg": 0.0,
+   "usd": "vehicle.newslab.golfcart/wheels.usda",
+   "usd_prim": "/Wheel_Rear_Left"
+  },
+  {
+   "name": "Wheel_Rear_Right",
+   "path": "/Vehicle/Wheels/Wheel_Rear_Right",
+   "pos": [
+    -0.823,
+    -0.6065,
+    0.265
+   ],
+   "radius": 0.265,
+   "width": 0.14,
+   "max_steer_deg": 0.0,
+   "usd": "vehicle.newslab.golfcart/wheels.usda",
+   "usd_prim": "/Wheel_Rear_Right"
+  }
+ ],
+ "rear_axle_x": -0.823,
+ "wheel_base": 2.061,
+ "track": 1.213
+}

@@ -10,9 +10,9 @@
   (8080 by default; scripts/twin/setup.bash shows the commands).
 
   The DDS settings are the caller's, not this file's: ROS_DOMAIN_ID, RMW_IMPLEMENTATION and
-  CYCLONEDDS_URI come from scripts/twin/setup.bash, and both sides must share them (on 118, swb's
-  cyclonedds-localhost.xml: loopback multicast is off there, so the cart's loopback.xml
-  discovers nothing).
+  CYCLONEDDS_URI come from scripts/twin/setup.bash, and both sides must share them (this
+  package's config/cyclonedds-unicast-lo.xml: loopback multicast is off on 118, so the cart's
+  loopback.xml discovers nothing there).
 -->
 <launch>
   <arg name="map_path" default="$(env TWIN_MAP '')"
