@@ -218,18 +218,18 @@ POST_Y = 0.60
 FLOOR_Z = 0.30
 HOOD_REAR_X = 1.55    # windshield base (estimate: photo 05)
 HOOD_TOP = 0.98       # the hood's top at the windshield (estimate: photo 05)
-HOOD_NOSE_TOP = 0.75  # ... where the nose starts (estimate: photo 05)
-FRONT_FACE_TOP = 0.74      # the front face, between the nose and the bumper (estimate: photos 05, 08)
+SHOULDER_FRONT = 0.765 # the shoulders' top at the front, before the edge rolls over (0.70 after)
+SINK_FRONT = 0.15      # the centre panel's depth at the front: the U's middle at 0.55
+SINK_HALF = 0.22       # the sunken panel's flat half width (the user's sketch)
+SLOPE_OUT = 0.44       # where the side slopes reach the shoulders
+NOSE_R = 0.065         # the front edge's roll-over radius
 FRONT_FACE_BOTTOM = 0.50
-BONNET_EDGE_MID = 0.55    # the bonnet's front edge at the centre line (sketch; README)
-BONNET_EDGE_CORNER = 0.70  # ... over the headlamps
 HOOD_SKIRT = 0.45     # the white fender's lower edge away from the wheel (estimate: photo 05)
 # the left and right cameras' origins, from the photos (front view, 2026-11-07): outside the
 # front posts, just above the windshield's base. The calibration has them at (1.366, 0.539,
 # 0.800) and (1.403, -0.474, 0.807), behind the hood (README).
 CAMERA_PHOTO = {"camera_left": (1.50, 0.665, 0.99), "camera_right": (1.50, -0.665, 0.99)}
 DECK_DZ = 0.155      # the front deck above its calibrated height, from the photos (README)
-NOSE_X = 2.18        # where the hood's top starts rounding down to its front face (estimate: photo 05)
 ARCH_R = 0.32         # the front wheel arch about the wheel centre: the flare hugs the tyre (photos 05, 09)
 CANOPY = (0.42, 1.54, 1.72, 1.80)         # x0, x1, z0, z1 (estimate; the VLP-32C on the rack fixes the top)
 BOX_X = (X_REAR, 0.47)
@@ -239,13 +239,6 @@ BOX_Z = (0.73, 1.90)
 def post_x(z):
     """The front post's line, from the floor to the canopy (photo 05)."""
     return 1.60 - (z - FLOOR_Z) * (0.24 / 1.42)
-
-
-def bonnet_edge(y):
-    """The bonnet's front edge, seen from the front (the user's sketch on the front photo,
-    2026-11-07): high over each headlamp, low across the middle, just under the Falcon."""
-    u = min(max((abs(y) - 0.28) / 0.20, 0.0), 1.0)          # flat to +-0.28, up by +-0.48
-    return BONNET_EDGE_MID + (BONNET_EDGE_CORNER - BONNET_EDGE_MID) * u * u * (3 - 2 * u)
 
 
 def _smooth(pts, n=3):
@@ -260,38 +253,47 @@ def _smooth(pts, n=3):
 
 
 def hood_ring(x, m=None):
-    """The hood's cross-section at x (photos 05, 07, 08). The top slopes from HOOD_TOP at the
-    windshield down to HOOD_NOSE_TOP before the nose. Two raised panels sit either side of a
-    centre groove. The sides slope out from the panels' shoulders to the fender line, the
-    widest point, then drop to the skirt, which follows the wheel arch."""
-    s = min(max((x - HOOD_REAR_X) / (NOSE_X - HOOD_REAR_X), 0.0), 1.0)
-    zt = HOOD_TOP + (HOOD_NOSE_TOP - HOOD_TOP) * s
-    ws, wb = 0.50 - 0.02 * s, HALF_W - 0.01 * s            # shoulder and fender half widths
-    zf = zt - (0.25 - 0.13 * s)                             # the fender line
+    """The bonnet's cross-section at x, from the user's two sketches on the front photo
+    (2026-11-07). The bonnet is bounded by the windshield (rear), its two near-vertical outer
+    edges and the U at its front. Its centre is a sunken panel, flat across +-SINK_HALF, that
+    sinks deeper towards the front. The two sides are slopes rising from it to raised
+    shoulders along the outer edges. At the front the cross-section is the U itself: low and
+    flat in the middle, high over the headlamps. Below the shoulders the side walls drop to
+    the skirt, which follows the wheel arch."""
+    s = min(max((x - HOOD_REAR_X) / (X_FRONT - HOOD_REAR_X), 0.0), 1.0)
+    zs = HOOD_TOP + (SHOULDER_FRONT - HOOD_TOP) * s            # the shoulders' top line
+    sink = SINK_FRONT * s ** 1.3                               # the centre panel's depth
+    wb = HALF_W * (0.91 + 0.07 * s)                            # the outer edges widen forwards
+    # the front edge rolls over: everything above the face drops by a quarter circle
+    r = NOSE_R
+    d = x - (X_FRONT - r)
+    roll = r - math.sqrt(max(r * r - d * d, 0.0)) if d > 0 else 0.0
     zb = HOOD_SKIRT
     dx = x - WHEEL_BASE
     if abs(dx) < ARCH_R:
         zb = max(zb, WHEEL_RADIUS + math.sqrt(ARCH_R ** 2 - dx ** 2))
-    k = 0.0                                                 # 0 behind the nose, 1 at the front face
-    if x > NOSE_X:
-        k = min((x - NOSE_X) / (X_FRONT - NOSE_X), 1.0)
-        c = 1 - math.sqrt(max(1 - k * k, 0.0))              # quarter-circle nose in plan and side
-        zt -= (HOOD_NOSE_TOP - FRONT_FACE_TOP) * c
-        zf = min(zf, zt - 0.06)
-        ws *= 1 - 0.25 * c
-        wb *= 1 - 0.03 * c
+    if x > X_FRONT - 0.30:
         zb = max(zb, FRONT_FACE_BOTTOM)
+    zc = zs - sink
     half = [np.array(p, float) for p in (
-        (0.0, zt - 0.008), (0.012, zt + 0.002), (0.05, zt + 0.012), ((0.05 + ws) / 2, zt + 0.03), (ws - 0.08, zt + 0.012),
-        (ws, zt - 0.012), (ws + 0.05, zt - 0.045), (wb - 0.015, zf + 0.015), (wb, zf - 0.02),
-        (wb, zb + 0.03), (wb - 0.02, zb), (0.0, zb))]
-    half = half[:2] + _smooth(half[1:-1], 3)[1:] + [half[-1]]
-    if k > 0:   # the nose's top comes down to the bonnet's front edge, a U across the front
-        c = k ** 1.5
-        half = [np.array([y, z - c * max(0.0, z - bonnet_edge(y))]) if z > zb + 0.02 else np.array([y, z])
-                for y, z in half]
+        (0.0, zc - 0.006), (0.010, zc), (SINK_HALF, zc),                  # the sunken panel, its crease
+        (SINK_HALF + 0.05, zc + 0.15 * (zs - zc)),
+        (SLOPE_OUT - 0.04, zs - 0.10 * (zs - zc)), (SLOPE_OUT, zs),         # the slope up to the shoulder
+        (wb - 0.04, zs - 0.004), (wb - 0.01, zs - 0.025), (wb, zs - 0.07),  # the rounded shoulder edge
+        (wb + 0.004, zb + 0.06), (wb, zb + 0.02), (wb - 0.02, zb), (0.0, zb))]
+    half = half[:2] + _smooth(half[1:-1], 2)[1:] + [half[-1]]
+    if roll > 0:
+        half = [np.array([y, max(z - roll, zb + 0.01)]) if z > zb + 0.03 else np.array([y, z]) for y, z in half]
     ring = [np.array([x, y, z]) for y, z in half] + [np.array([x, -y, z]) for y, z in reversed(half[1:-1])]
     return ring
+
+
+def bonnet_edge(y):
+    """The bonnet's front edge (the U), as the top of its last cross-section."""
+    ring = hood_ring(X_FRONT - 0.002)
+    top = sorted((abs(p[1]), p[2]) for p in ring if p[2] > FRONT_FACE_BOTTOM + 0.03)
+    ys, zs = np.array([t[0] for t in top]), np.array([t[1] for t in top])
+    return float(np.interp(abs(y), ys, zs))
 
 
 def _inside(poly, y, z):
@@ -320,7 +322,7 @@ def build():
 
     xf, xr = WHEEL_BASE, 0.0
     # body
-    xs = list(np.linspace(HOOD_REAR_X, NOSE_X, 22)) + list(NOSE_X + (X_FRONT - NOSE_X) * np.linspace(0.06, 1.0, 16))
+    xs = list(np.linspace(HOOD_REAR_X, X_FRONT - 0.10, 28)) + list(X_FRONT - 0.10 + 0.10 * np.sin(np.linspace(0.1, math.pi / 2, 10)))
     part("Body/Hood", "white_body").add(*loft([hood_ring(x) for x in xs]))
     part("Body/FrontLower", "black_plastic").add(*rbox((1.52, 2.36), (-0.50, 0.50), (0.24, 0.55), 0.04, 2))
     for sgn in (1, -1):     # the black panel behind each front wheel, floor to fender (photo 05)
@@ -339,10 +341,10 @@ def build():
     for y in (0.45, -0.45):           # on the front face, right under the bonnet's edge
         xl = surface_x(y, 0.61)
         nrm = np.array([1.0, 0.6 * y, 0.0])
-        lamps.add(*disc((xl - 0.006, y, 0.61), nrm, 0.055, 0.03))
-        part("Body/HeadlampBezels", "black_plastic").add(*disc(np.array([xl - 0.012, y, 0.61]), nrm, 0.066, 0.03))
+        lamps.add(*disc((xl + 0.004, y, 0.61), nrm, 0.055, 0.02))
+        part("Body/HeadlampBezels", "black_plastic").add(*disc(np.array([xl - 0.002, y, 0.61]), nrm, 0.066, 0.02))
     seam = part("Body/BonnetSeam", "dark_plastic")   # the bonnet's front edge, as a dark line
-    ys = np.linspace(-0.58, 0.58, 41)
+    ys = np.linspace(-0.56, 0.56, 41)
     pts = [np.array([surface_x(y, bonnet_edge(y) - 0.008) + 0.003, y, bonnet_edge(y) - 0.008]) for y in ys]
     for p0, p1 in zip(pts[:-1], pts[1:]):
         seam.add(*bar(p0, p1, 0.008, 0.006))
