@@ -85,7 +85,7 @@ def generate_launch_description():
         arg("map_path", default_value=os.environ.get("TWIN_MAP", ""), description="the NTU twin's map directory (default $TWIN_MAP)"),
         arg("render", default_value="auto", description="auto (a window on $DISPLAY), window or headless"),
         arg("rviz", default_value="true", description="the demo RViz"),
-        arg("follow", default_value="false", description="false: Isaac's editor UI; true: no UI, the viewport chases the cart"),
+        arg("follow", default_value="editor", description="editor: Isaac's editor UI, the viewport chasing the cart; true: the chase without the UI; false: the editor's own camera"),
         arg("gpu", default_value=os.environ.get("TWIN_GPU", "0"), description="the GPU Isaac renders on"),
         OpaqueFunction(function=_setup),
     ])
