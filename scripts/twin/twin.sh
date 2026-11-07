@@ -80,13 +80,18 @@ world() {
     [ -d "$aib" ] || die "no $aib (TWIN_SWB)"
     echo "twin: Isaac Sim, route $route's start at $pose (world frame), domain $TWIN_DOMAIN," \
          "window ${TWIN_DISPLAY:-none}; log $run/world.log"
-    ( cd "$aib" && dds_env && \
-      AIB_CONFIG="$aib/src/aib/config" GOLFCART_LIDARS="$TWIN_ASSETS/lidars" \
-      GOLFCART_BODY="$TWIN_ASSETS/vehicles" OMNI_KIT_ACCEPT_EULA=YES ISAAC_ROOT="$ISAAC_ROOT" \
-      ISAAC_KIT_ARGS="--/renderer/multiGpu/enabled=false --/renderer/activeGpu=$TWIN_GPU" \
-      DISPLAY="$TWIN_DISPLAY" \
+    (
+      cd "$aib"; dds_env
+      export AIB_CONFIG="$aib/src/aib/config" GOLFCART_LIDARS="$TWIN_ASSETS/lidars" \
+          GOLFCART_BODY="$TWIN_ASSETS/vehicles" OMNI_KIT_ACCEPT_EULA=YES ISAAC_ROOT="$ISAAC_ROOT" \
+          ISAAC_KIT_ARGS="--/renderer/multiGpu/enabled=false --/renderer/activeGpu=$TWIN_GPU" \
+          DISPLAY="$TWIN_DISPLAY"
+      # Its own process group (setsid), whose leader's pid is the one written: `stop` signals
+      # the group. Only setsid is backgrounded, with every descriptor away from the caller's.
       setsid just isaac-ego ego:="$ego" world:="$TWIN_MAP/isaac/world.yaml" pose:="$pose" \
-          realtime:=true > "$run/world.log" 2>&1 < /dev/null & echo $! > "$run/world.pgid" )
+          realtime:=true > "$run/world.log" 2>&1 < /dev/null &
+      echo $! > "$run/world.pgid"
+    )
     for _ in $(seq 1 120); do
         grep -q 'sensors warm after' "$run/world.log" && { echo "twin: the world is up"; return; }
         alive world || { tail -20 "$run/world.log"; die "the world exited"; }
@@ -104,7 +109,8 @@ autoware() {
       if [ -n "${AUTOWARE_TENSORRT_LIB:-}" ] && [ -d "$AUTOWARE_TENSORRT_LIB" ]; then
           export LD_LIBRARY_PATH="$AUTOWARE_TENSORRT_LIB:${LD_LIBRARY_PATH:-}"
       fi
-      DISPLAY="${DISPLAY:-$TWIN_DISPLAY}" setsid play_launch launch --web-addr 0.0.0.0:${TWIN_WEB_PORT:-8096} \
+      export DISPLAY="${DISPLAY:-$TWIN_DISPLAY}"
+      setsid play_launch launch --web-addr 0.0.0.0:${TWIN_WEB_PORT:-8096} \
           --log-dir "$run/play_log" golfcart_twin twin_autoware.launch.xml \
           map_path:="$TWIN_MAP" data_path:="$AUTOWARE_DATA" > "$run/autoware.log" 2>&1 < /dev/null &
       echo $! > "$run/autoware.pgid" )
