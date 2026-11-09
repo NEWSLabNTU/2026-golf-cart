@@ -35,14 +35,23 @@ exits non-zero.
 
 ## Scopes
 
+A scope says what a session records: which topic classes (below) go into the
+ROS bag, which CAN buses, which Ethernet captures.
+
 | scope | ROS | CAN | Ethernet (pcapng) |
 |---|---|---|---|
-| `drive` (default) | the topic lists | every bus | none |
+| `drive` (default) | first-hand + `sensing_derived`, `diagnostics`, `vehicle_cmd`, `localization` | every bus | none |
+| `localize` | same as `drive` (the name from before topic classes) | every bus | none |
+| `autonomy` | `drive` + `planning`, `control`, `perception` | every bus | none |
 | `all` | every topic (`ros2 bag record -a`) | every bus | sensor NICs + cart LAN |
-| `localize` | the topic lists + localization outputs (NDT pose and scores, EKF, `/tf`; `localize_topics.txt`), master only | every bus | none |
 | `raw` | none | every bus | sensor NICs + cart LAN |
 | `can` | none | every bus | none |
-| `ros` | the topic lists | none | none |
+| `ros` | the first-hand classes only | none | none |
+
+`drive` records everything it did before topic classes, plus the localization
+outputs: the NDT pose and its scores (NVTL, transform probability, iterations,
+execution time), the EKF pose and twist, the initialization state and the board
+pose. They are a few kB/s.
 
 Interfaces per machine:
 
@@ -56,11 +65,57 @@ missing or down at start is skipped and noted; the rest of the session still
 records. `just record scopes` shows what each scope records on this machine.
 
 The scopes live in [config/recording/scopes.yaml](../config/recording/scopes.yaml).
-The topic lists are
-[config/recording/master_topics.txt](../config/recording/master_topics.txt) and
-[orin_topics.txt](../config/recording/orin_topics.txt): sensor and driver output
-only, because replay recomputes the rest. A broken sensor's topic stays on the
-list and records zero messages, which shows it was expected and silent.
+
+## Topic classes
+
+Every recorded topic is in one class, in
+[config/recording/topics.yaml](../config/recording/topics.yaml). Each class is
+**first-hand** or **computed**:
+
+- **first-hand**: a driver or a person produced it: sensor output, the vehicle's
+  own reports. A replay plays it into the stack.
+- **computed**: a node of our stack computed it from other topics. Recorded so
+  you can look at what the stack did; a replay into a running stack leaves it
+  out, because the stack computes it again (see "Replaying a bag" below).
+
+| class | kind | master | orin | what |
+|---|---|---|---|---|
+| `lidar` | first-hand | 3 | 0 | VLP-32C points and packets, Falcon points |
+| `camera` | first-hand | 6 | 6 | GMSL compressed images and camera_info; ZED X image, H.264, health |
+| `imu` | first-hand | 1 | 1 | Xsens raw (broken, listed anyway); ZED X IMU |
+| `gnss` | first-hand | 4 | 0 | u-blox fix, NMEA, RTCM status, NTRIP corrections |
+| `vehicle` | first-hand | 8 | 0 | `/vehicle/status/*`, the driver's e-stop |
+| `tf` | first-hand | 2 | 1 | `/tf` (master), `/tf_static` |
+| `sensing_derived` | computed | 4 | 0 | the concatenator's synchronized VLP-32C cloud, gnss_poser's pose |
+| `diagnostics` | computed | 1 | 0 | `/diagnostics` |
+| `vehicle_cmd` | computed | 5 | 0 | `/control/command/*`, what the gate sends the vehicle |
+| `localization` | computed | 15 | 0 | NDT pose and scores, EKF, twist, initialization, board pose |
+| `planning` | computed | 2 | 0 | route, trajectory |
+| `control` | computed | 3 | 0 | the controller's command, operation mode |
+| `perception` | computed | 3 | 0 | objects, occupancy grid, obstacle cloud |
+
+`just record scopes` prints this table from the file, then every scope's
+classes and topic count on each machine. Each machine records its own half of
+a class: the LiDARs and the GMSL cameras are cabled to the master, the ZED X to
+the orin, and nothing large crosses the link.
+
+A broken sensor's topic stays listed and records zero messages, which shows it
+was expected and silent.
+
+**To add a topic**, put it under its class in `topics.yaml`, on the machine that
+has it (`master:`, `orin:`, or `both:`). **To add a class**, add a key with
+`kind:` and `description:`; then name it in a scope's `ros:` list in
+`scopes.yaml`. A new first-hand class joins every scope that lists
+`first-hand` without further edits. Check the names against a running stack:
+
+```bash
+ros2 topic list > /tmp/live.txt
+python3 scripts/recording/session.py topics --role master \
+  | while read -r t; do grep -qx "$t" /tmp/live.txt || echo "MISSING $t"; done
+```
+
+`session.yaml` records, for the bag, which classes were asked for and how many
+topics each had on that machine.
 
 ## Before you record
 
@@ -132,10 +187,49 @@ proprietary and only on the machines it was copied to.
 
 ```bash
 ros2 bag info recordings/<ID>/master/bag
-just bag play                   # newest session bag (merged first)
+just bag play                   # newest session bag (merged first), into a running stack
 just bag play <ID>
-just bag replay <ID> "start_offset:=40.0"      # with RViz
+just bag play <ID> computed=on  # every topic, as recorded
+just bag replay <ID> "start_offset:=40.0"      # with RViz, every topic
 ```
+
+## Replaying a bag
+
+A replay into a running stack (a logging simulation: `just sim logging`, the
+`ntu-test` and `indoor-test` sequences) leaves out what the stack computes
+itself. Otherwise each such topic would have two publishers, the bag's and the
+stack's, and the stack's results would be mixed with the recorded ones.
+
+`just bag play`, `just bag play-ntu`, `just ntu-test bag`, `just indoor-test bag`
+and `scripts/testing/board_check.sh` all play through
+`scripts/recording/play.py`, which leaves out:
+
+- every topic of a computed class;
+- every topic in no class that matches `replay.stack_patterns` in `topics.yaml`.
+  A bag of scope `all` is mostly the stack's own topics (`/planning/...`,
+  `/api/...`, the preprocessed clouds); these are left out the same way.
+  An unclassified topic that matches none (a driver's extra output) plays.
+
+`/tf` is a special case. On the master it carries the ZED's IMU frame, which the
+logging simulation needs and does not publish, and the stack's own
+`map -> base_link` (EKF) and `map -> ndt_base_link` (NDT), which it does. Before
+topic classes it replayed whole, so the replayed stack had two
+`map -> base_link` publishers. Now `play.py` plays `/tf` under another name and
+republishes it without the transforms listed in `replay.tf_computed`.
+`/tf_static` replays as recorded.
+
+ROS 2 Humble's `ros2 bag play` can only include topics (`--topics`), not exclude
+them, so `play.py` builds the include list from the bag's `metadata.yaml`. A
+bag with nothing to leave out plays exactly as before. See what it would do:
+
+```bash
+python3 scripts/recording/play.py --dry-run recordings/<ID>/master/bag
+```
+
+`computed=on` (`just bag play`), `--computed` (`play.py`) or
+`GOLFCART_REPLAY_COMPUTED=on` (the other wrappers) plays everything. `just bag
+replay` always plays everything: it runs only RViz, so the recorded
+localization is the only one there is.
 
 ## A recording for a vendor bug report
 
@@ -162,7 +256,7 @@ These record this machine only, in the foreground; Ctrl-C stops and closes the
 files. They write the same session layout.
 
 ```bash
-just bag record              # scope ros: recordings/<ts>/<machine>/bag
+just bag record              # scope ros (first-hand classes): recordings/<ts>/<machine>/bag
 just bag record campus_loop  # with a name
 just can record              # scope can, every bus
 just can record can0         # one bus

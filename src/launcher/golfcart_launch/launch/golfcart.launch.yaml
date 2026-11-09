@@ -608,7 +608,7 @@ launch:
             namespace: perception
 
 # H.264 left/right rectified ZED X streams, encoded on the orin's NVENC and
-# recorded there (zed.launch.xml, config/recording/orin_topics.txt). Needs the
+# recorded there (zed.launch.xml, config/recording/topics.yaml, class camera). Needs the
 # isaac-h264-encoder setup step on the orin; off, nothing references Isaac ROS.
 - arg:
     name: zed_stereo_video

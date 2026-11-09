@@ -13,11 +13,20 @@ set working-directory := '..'
 default:
     @just --list bag
 
-# Play a bag (default: newest in recordings/, then $GOLFCART_BAG_DIR). BAG: session id or path
-play BAG="":
+# Play a bag into a running stack (default: newest in recordings/, then $GOLFCART_BAG_DIR),
+# without the computed topics the stack recomputes. BAG: session id or path. OPTS: computed=on
+play BAG="" *OPTS="":
     #!/usr/bin/env bash
     set -eo pipefail
     GOLFCART_ENV_QUIET=1 source scripts/env.sh
+    PLAY_OPTS=()
+    for opt in {{OPTS}}; do
+        case "$opt" in
+            computed=on|computed=true)   PLAY_OPTS+=(--computed) ;;
+            computed=off|computed=false) ;;
+            *) echo "Usage: just bag play [BAG] [computed=on|off]" >&2; exit 2 ;;
+        esac
+    done
     if [ -n "{{BAG}}" ]; then
         LATEST=$(python3 scripts/recording/session.py resolve-bag "{{BAG}}") || {
             [ -d "${GOLFCART_BAG_DIR:-${HOME}/rosbags}/{{BAG}}" ] && LATEST="${GOLFCART_BAG_DIR:-${HOME}/rosbags}/{{BAG}}"; }
@@ -42,7 +51,9 @@ play BAG="":
         exit 1
     fi
     echo "Playing: ${LATEST}"
-    ros2 bag play "${LATEST}" --clock
+    # play.py leaves out the topics of computed classes (config/recording/topics.yaml)
+    # and filters the stack's own frames out of /tf; computed=on plays all of it.
+    exec python3 scripts/recording/play.py "${PLAY_OPTS[@]}" "${LATEST}" --clock
 
 # ============================================================================
 # Multi-machine services (systemd user units, one role per machine)
@@ -75,9 +86,9 @@ play-ntu SET="CSIE-1" ARGS="":
 #   just bag record campus_loop  ->  recordings/<YYYYmmdd_HHMMSS>_campus_loop/<role>/bag
 #
 # Same runner, scopes and layout as `just record start`, which runs it under
-# systemd on both hosts. The topics live in config/recording/<role>_topics.txt
-# and nowhere else.
-# Record this host's topic list (config/recording/) in the foreground, as a session
+# systemd on both hosts. The topics live in config/recording/topics.yaml and
+# nowhere else; scope `ros` is this host's half of the first-hand classes.
+# Record this host's first-hand topics (scope ros) in the foreground, as a session
 record NAME="":
     ./scripts/recording/record_foreground.sh {{NAME}}
 
@@ -98,6 +109,8 @@ merge ARGS="":
 
 # BAG: session id, bag path, or a name in $GOLFCART_BAG_DIR; default the newest
 # session (merged, else master), then the newest legacy bag.
+# Plays EVERY topic, computed ones included, unlike `bag play`: no stack runs
+# here, so the recorded localization is the only localization RViz can show.
 # Replay a bag in RViz. ARGS: rate:=2.0 start_offset:=40.0 play_args:=--loop rviz:=false
 replay BAG="" ARGS="":
     #!/usr/bin/env bash

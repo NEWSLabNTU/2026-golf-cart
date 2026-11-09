@@ -56,5 +56,10 @@ echo
 # loses track for reasons that have nothing to do with what is being tested;
 # 2026-10-22, one GPU at 100 %, even the full basement map lost track at 1x and
 # held at 0.25. A slow replay tests the map and the matcher, not the timing.
-exec ros2 bag play "${BAG}" --clock --start-paused --read-ahead-queue-size 200 \
+#
+# play.py plays the bag's topics minus the computed classes (config/recording/
+# topics.yaml), which the stack recomputes; GOLFCART_REPLAY_COMPUTED=on plays all.
+# The basement bag has one first-hand topic, so for it this is plain ros2 bag play.
+exec python3 "${REPO_ROOT}/scripts/recording/play.py" "${BAG}" \
+    --clock --start-paused --read-ahead-queue-size 200 \
     --rate "${GOLFCART_INDOOR_BAG_RATE:-1.0}" "$@"

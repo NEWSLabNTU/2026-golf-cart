@@ -1,0 +1,270 @@
+# Recorded ROS topics, sorted into CLASSES. The single source of every topic a
+# recording session asks `ros2 bag record` for; scopes.yaml says which classes a
+# scope records, scripts/recording/session.py is the reader, and
+# scripts/recording/topics.sh the shell entry point.
+#
+#   just record scopes                      classes, kinds, topics per host, scopes
+#   python3 scripts/recording/session.py topics --role master --scope drive
+#
+# Per class:
+#   description  one line
+#   kind         first-hand | computed
+#                  first-hand: a driver or a person produced it (sensor output,
+#                    the vehicle's own reports). A replay feeds it to the stack.
+#                  computed: a node of OUR stack computed it from other topics.
+#                    The logging simulation recomputes it, with today's parameters,
+#                    so every replay path (scripts/recording/play.py) leaves it out
+#                    by default: played into a running stack it would be a second
+#                    publisher on the stack's own topic. computed=on plays it.
+#   master / orin / both   the topics, per host. `both` is recorded on each host.
+#                  A host records its own sensors; nothing large crosses the
+#                  link. A role that is neither (a single-machine checkout)
+#                  records the union.
+#
+# A topic that is expected but dead stays listed and records zero messages: an
+# empty topic says "this device was expected and was silent"; an absent one
+# says nothing. A commented-out topic is one we decided NOT to record, with the
+# reason beside it; keep it in its class.
+#
+# Topic names verified against a running stack (master 2026-08-10, ZED X on the
+# orin 2026-08-07, GNSS 2026-09-24) or, for the computed classes, against the
+# launch files that remap them (golfcart_autoware.launch.xml, the installed
+# autoware_launch / tier4_*_launch, cuda_ndt_matcher's scripts/ndt_topics.sh).
+# The flat lists this file replaced (master_topics.txt, orin_topics.txt,
+# localize_topics.txt) were inherited with the Velodyne under a `top/` namespace
+# and the GNSS under `ublox/`; NEITHER EXISTS HERE, and those entries recorded
+# zero messages while looking right in `ros2 bag info`. Re-check with the audit
+# in docs/multi-machine.md after any sensor kit change.
+#
+# To add a topic: put it in the class it belongs to, on the host that has it.
+# To add a class: a new key below with kind and description; scopes.yaml names
+# it in a scope's `ros:` list (or picks it up through `first-hand`).
+
+classes:
+
+  # ── first-hand ─────────────────────────────────────────────────────────────
+
+  lidar:
+    kind: first-hand
+    description: driver clouds and packets, VLP-32C and Seyond Falcon
+    # Both LiDARs are cabled to the master, ~30 MB/s each, far past the shared
+    # 100 Mb/s LAN, so the master records them.
+    master:
+      # Velodyne VLP-32C (namespace is vlp32, NOT top)
+      - /sensing/lidar/vlp32/velodyne_points
+      - /sensing/lidar/vlp32/velodyne_packets
+      # Seyond Falcon
+      - /sensing/lidar/falcon/iv_points
+
+  camera:
+    kind: first-hand
+    description: compressed images and camera_info; GMSL on the master, ZED X on the orin
+    master:
+      # GMSL cameras, compressed only: the raw streams are far too large.
+      #
+      # camera_info IS published. gmslcam loads the calibration from
+      # camera_info_url and publishes camera_info beside every image, at the
+      # frame rate, 30 Hz; checked 2026-09-21 against synthetic sources. It has
+      # to be recorded: without intrinsics a bag cannot be replayed through
+      # anything that computes a pose from an image (the ArUco detector blocks
+      # waiting for a CameraInfo), and it costs ~1 kB a message against 300 kB
+      # of JPEG. All three calibration files are one calibration copied three
+      # times: blocker 2 in docs/roadmaps/2-camera-image-pipeline.md.
+      - /sensing/camera/left/image_raw/compressed
+      - /sensing/camera/left/camera_info
+      - /sensing/camera/right/image_raw/compressed
+      - /sensing/camera/right/camera_info
+      - /sensing/camera/rear/image_raw/compressed
+      - /sensing/camera/rear/camera_info
+    orin:
+      # ZED X, zed-ros2-wrapper v5 names (rgb/color/rect/image), NOT v4
+      # (rgb/image_rect_color). Compressed RGB only: the raw stream is
+      # ~276 MB/s. The ZED is cabled to the orin and recorded on its disk.
+      # Depth is off (depth.depth_mode NONE in config/zed.param.yaml).
+      - /sensing/camera/zed/rgb/color/rect/image/compressed
+      - /sensing/camera/zed/rgb/color/rect/camera_info
+      # Stereo video, H.264 (NVENC), only with zed_stereo_video:=true; empty in
+      # a bag recorded without it. The left camera_info is the RGB one above
+      # (RGB is the left camera); the right one carries the stereo baseline.
+      # Each message's data is an Annex-B access unit.
+      - /sensing/camera/zed/left/color/rect/image/h264
+      - /sensing/camera/zed/right/color/rect/image/h264
+      - /sensing/camera/zed/right/color/rect/camera_info
+      # ZED driver health
+      - /sensing/camera/zed/status/health
+
+  imu:
+    kind: first-hand
+    description: raw IMU, the ZED X's (live) and the Xsens (broken, listed anyway)
+    master:
+      # The Xsens is BROKEN and publishes nothing; it stays listed (see the
+      # rule at the top of this file).
+      - /sensing/imu/xsens/imu_raw
+    orin:
+      # The live IMU (imu_source:=zed, golfcart.launch.yaml's default).
+      - /sensing/camera/zed/imu/data
+
+  gnss:
+    kind: first-hand
+    description: u-blox ZED-F9P driver output and the NTRIP corrections
+    master:
+      # nav_sat_fix is what gnss_poser reads. rxmrtcm is the receiver's own
+      # account of which corrections it accepted, ntrip/rtcm what the caster
+      # sent; both silent without use_ntrip:=true. This used to name
+      # /sensing/gnss/mti/fix, from an Xsens GNSS not on the vehicle.
+      - /sensing/gnss/ublox/nav_sat_fix
+      - /sensing/gnss/ublox/nmea_sentence
+      - /sensing/gnss/ublox/rxmrtcm
+      - /sensing/gnss/ntrip/rtcm
+
+  vehicle:
+    kind: first-hand
+    description: the VCU's reports through the vehicle interface, and the driver's e-stop
+    # Published on the orin (the interface runs there) and bridged to the master,
+    # which records them. NDT needs velocity_status, so the interface must run
+    # while recording.
+    master:
+      - /vehicle/emergency_stop
+      - /vehicle/status/actuation_status
+      - /vehicle/status/control_mode
+      - /vehicle/status/gear_status
+      - /vehicle/status/hazard_lights_status
+      - /vehicle/status/steering_status
+      - /vehicle/status/turn_indicators_status
+      - /vehicle/status/velocity_status
+
+  tf:
+    kind: first-hand
+    description: /tf_static on each host, /tf on the master
+    # /tf is MIXED: the ZED's dynamic zed_left_camera_frame -> zed_imu_link
+    # (first-hand, bridged from the orin; gyro_odometer needs it) and the
+    # stack's own map -> base_link (EKF) and map -> ndt_base_link (NDT). One
+    # topic cannot be split by `ros2 bag play`, so the class is first-hand and
+    # the replay drops the computed frames instead: replay.tf_computed below.
+    master:
+      - /tf
+      - /tf_static
+    orin:
+      # The orin publishes no dynamic transforms of its own except the ZED's,
+      # which crosses the link and lands in the master's /tf.
+      - /tf_static
+
+  # ── computed ───────────────────────────────────────────────────────────────
+
+  sensing_derived:
+    kind: computed
+    description: sensing outputs our stack computes (concatenator's synchronized VLP-32C cloud, gnss_poser)
+    master:
+      # Published by /sensing/lidar/concatenate_data (synchronized_pointcloud_
+      # postfix: pointcloud), NOT by the preprocessor and NOT by Nebula. See
+      # docs/research/sensing/vlp32-pointcloud-rate-drop.md.
+      - /sensing/lidar/vlp32/pointcloud
+      # Concatenated cloud: OFF. The largest topic on the vehicle, and a replay
+      # rebuilds it. Uncomment only to debug the concatenation node itself.
+      # - /sensing/lidar/concatenated/pointcloud
+      # Corrected IMU: OFF. imu_corrector's output; the replay recomputes it
+      # with whatever correction parameters are current.
+      # - /sensing/imu/imu_data
+      # gnss_poser output: small, and the pose the initializer was actually
+      # handed. gnss_poser runs in the logging simulation too.
+      - /sensing/gnss/fixed
+      - /sensing/gnss/pose
+      - /sensing/gnss/pose_with_covariance
+
+  diagnostics:
+    kind: computed
+    description: /diagnostics, every node's status messages
+    # Computed by the whole stack. Played into a logging simulation it would
+    # feed the live diagnostic graph a second, stale set of statuses.
+    master:
+      - /diagnostics
+
+  localization:
+    kind: computed
+    description: NDT pose and scores, EKF output, twist, initialization, board pose
+    # The NDT trajectory of a drive, to measure a lane or judge localization
+    # (NVTL sets ndt_divergence_nvtl_median_gate from a run's own distribution:
+    # a good lock on the dense Ming-Da cloud scored about 2.5, 2026-10-28),
+    # without the ~200 MB/s of scope `all`. Small: a few kB/s.
+    master:
+      - /localization/kinematic_state
+      - /localization/pose_twist_fusion_filter/kinematic_state
+      - /localization/pose_twist_fusion_filter/pose
+      - /localization/pose_twist_fusion_filter/biased_pose_with_covariance
+      - /localization/pose_estimator/pose
+      - /localization/pose_estimator/pose_with_covariance
+      - /localization/pose_estimator/nearest_voxel_transformation_likelihood
+      - /localization/pose_estimator/transform_probability
+      - /localization/pose_estimator/iteration_num
+      - /localization/pose_estimator/exe_time_ms
+      - /localization/pose_estimator/initial_to_result_relative_pose
+      - /localization/twist_estimator/twist_with_covariance
+      - /localization/acceleration
+      - /localization/initialization_state
+      - /localization/board_detector/board_pose
+
+  vehicle_cmd:
+    kind: computed
+    description: the commands the stack sends the vehicle interface (vehicle_cmd_gate)
+    # The logging simulation runs control (launch_control true), so its own
+    # vehicle_cmd_gate publishes these.
+    master:
+      - /control/command/control_cmd
+      - /control/command/emergency_cmd
+      - /control/command/gear_cmd
+      - /control/command/hazard_lights_cmd
+      - /control/command/turn_indicators_cmd
+
+  planning:
+    kind: computed
+    description: route and the trajectory control follows
+    master:
+      - /planning/mission_planning/route
+      # What control follows. /planning/scenario_planning/trajectory is a
+      # topic_tools relay of it (golfcart_autoware.launch.xml), not recorded.
+      - /planning/trajectory
+
+  control:
+    kind: computed
+    description: the controller's command before the gate, and the operation mode
+    master:
+      - /control/trajectory_follower/control_cmd
+      - /system/operation_mode/state
+      - /api/operation_mode/state
+
+  perception:
+    kind: computed
+    description: tracked objects, the occupancy grid and the obstacle cloud
+    master:
+      - /perception/object_recognition/objects
+      - /perception/occupancy_grid_map/map
+      - /perception/obstacle_segmentation/pointcloud
+
+replay:
+  # Topics in NO class, which a bag of scope `all` is mostly made of: a replay
+  # leaves out every one that fully matches one of these regular expressions,
+  # because the stack under a logging simulation publishes them itself. An
+  # unclassified topic that matches none plays (a driver's extra output, like
+  # /sensing/gnss/ublox/navpvt or Nebula's aw_points). Checked against the
+  # 446-topic bag of session 20261109_220723_vcu-right-turn (scope all).
+  stack_patterns:
+    - /(localization|planning|control|perception|system|api|map|autoware)(/.*)?
+    - /(diagnostics_graph|system_monitor|external|simulation|rviz|logging_diag_graph)/.*
+    - /(rosout|parameter_events|robot_description|initialpose|initialpose3d)
+    - /(client_count|connected_clients|service_log|events/write_split)
+    # The sensing stage: preprocessing, concatenation, IMU correction, twist.
+    - /sensing/lidar/(concatenated|output|concatenate_data_synchronizer|cuda_pointcloud_preprocessor)/.*
+    - /sensing/lidar/[^/]+/pointcloud(_before_sync)?(/.*)?
+    - /sensing/lidar/[^/]+/(self_cropped|rectified|outlier_filtered)/.*
+    - /sensing/lidar/[^/]+/[^/]+/cuda(/.*)?
+    - /sensing/imu/(imu_data|imu_scaled|gyro_bias|gyro_scale)
+    - /sensing/vehicle_velocity_converter/.*
+  # Transforms on /tf that the stack computes. A replay that leaves out the
+  # computed classes plays /tf through a filter (scripts/recording/play.py)
+  # that drops these and passes everything else: the bag of 20261109_223127
+  # carries map -> base_link 1826 times and map -> ndt_base_link 366 times
+  # beside the ZED's zed_left_camera_frame -> zed_imu_link, and the logging
+  # simulation's EKF and NDT publish the first two themselves.
+  tf_computed:
+    - {parent: map, child: base_link}
+    - {parent: map, child: ndt_base_link}

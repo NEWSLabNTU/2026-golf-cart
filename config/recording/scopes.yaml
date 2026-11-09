@@ -2,19 +2,27 @@
 # scripts/recording/session.py is the only reader.
 #
 #   just record start [SCOPE] [NAME]     both hosts, SCOPE defaults to `default:`
+#   just record scopes                   classes, topic counts per host, each scope
 #
-# Per scope and role:
-#   ros:  all   ros2 bag record -a (every topic, hidden ones included)
-#         list  config/recording/<role>_topics.txt (first-hand topics only)
-#         none  no bag
+# Per scope (and per role, where a role entry overrides the scope's own `ros`):
+#   ros:  all              ros2 bag record -a (every topic, hidden ones included)
+#         [class, ...]     the topics of these classes, config/recording/topics.yaml.
+#                          `first-hand` stands for every class of that kind, so
+#                          a first-hand class added later joins without an edit
+#                          here; `computed` likewise.
+#         none             no bag (the default when nothing says otherwise)
 #   can:  CAN interfaces, each recorded with `candump -L` to <iface>.log
 #   pcap: Ethernet interfaces, each captured with rootless tshark to <iface>.pcapng;
 #         per entry `iface`, optional `filter` (capture filter), optional `snaplen`
 #
-# An interface that is missing or DOWN when the session starts is skipped and
-# recorded as skipped in session.yaml; the rest of the session goes ahead. A
-# role this file does not name (a single-machine checkout) records the union of
-# master and orin, and both topic lists.
+# A role's topics are its own half of each class (topics.yaml `master:` / `orin:`
+# / `both:`). An interface that is missing or DOWN when the session starts is
+# skipped and recorded as skipped in session.yaml; the rest of the session goes
+# ahead. A role this file does not name (a single-machine checkout) records the
+# union of master and orin.
+#
+# Replay leaves the computed classes out by default (scripts/recording/play.py),
+# so recording them never pins a logging simulation to the values frozen here.
 
 default: drive
 
@@ -35,6 +43,14 @@ interfaces:
     - iface: eno1                        # cart LAN
       filter: "not tcp port 22"
 
+# Class lists, referenced below. Everything `drive` recorded before topic
+# classes is still in it (first-hand + sensing_derived + diagnostics +
+# vehicle_cmd); localization is what it adds.
+class_sets:
+  drive: &drive [first-hand, sensing_derived, diagnostics, vehicle_cmd, localization]
+  autonomy: &autonomy [first-hand, sensing_derived, diagnostics, vehicle_cmd, localization,
+                       planning, control, perception]
+
 scopes:
   all:
     description: every topic, every CAN bus, every sensor NIC and the cart LAN
@@ -43,14 +59,22 @@ scopes:
     orin:   {ros: all, can: *orin_can,   pcap: *orin_pcap}
 
   drive:
-    description: the topic lists plus every CAN bus (the everyday drive)
-    master: {ros: list, can: *master_can}
-    orin:   {ros: list, can: *orin_can}
+    description: sensors, vehicle reports and commands, TF, diagnostics and the localization outputs (NDT, EKF), plus every CAN bus; the everyday drive
+    ros: *drive
+    master: {can: *master_can}
+    orin:   {can: *orin_can}
 
   localize:
-    description: the topic lists, the localization outputs (NDT, EKF, TF; localize_topics.txt) and every CAN bus; for measuring a lane or judging localization
-    master: {ros: list, extra_topics: [localize_topics.txt], can: *master_can}
-    orin:   {ros: list, can: *orin_can}
+    description: same as drive; the name from before topic classes, kept so old commands work
+    ros: *drive
+    master: {can: *master_can}
+    orin:   {can: *orin_can}
+
+  autonomy:
+    description: drive plus what the stack decided (route, trajectory, controller, operation mode, objects, occupancy grid); for an engaged run
+    ros: *autonomy
+    master: {can: *master_can}
+    orin:   {can: *orin_can}
 
   raw:
     description: raw packets only, CAN and Ethernet, no ROS
@@ -63,6 +87,5 @@ scopes:
     orin:   {can: *orin_can}
 
   ros:
-    description: the topic lists only (what `just record start` did before sessions)
-    master: {ros: list}
-    orin:   {ros: list}
+    description: the first-hand classes only (sensors, vehicle reports, TF), no CAN; what `just bag record` records
+    ros: [first-hand]

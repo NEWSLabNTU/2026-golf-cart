@@ -129,7 +129,7 @@ unit per message:
     /sensing/camera/zed/right/color/rect/image/h264
 
 The orin records both plus the right `camera_info`
-(`config/recording/orin_topics.txt`); nothing crosses the link. Encoder settings
+(`config/recording/topics.yaml`, class `camera`); nothing crosses the link. Encoder settings
 are Isaac's defaults (qp 20, an I-frame every 5 frames). It needs the
 `isaac-h264-encoder` setup step on the orin (the Isaac ROS apt repository
 first); with the switch off nothing references Isaac ROS.

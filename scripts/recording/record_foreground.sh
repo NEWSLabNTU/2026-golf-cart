@@ -2,7 +2,7 @@
 # record_foreground.sh - a one-host recording session in this terminal.
 #
 # Usage: scripts/recording/record_foreground.sh [NAME] [SCOPE] [--can IFACE...]
-#        just bag record [NAME]          scope ros: this host's topic list
+#        just bag record [NAME]          scope ros: this host's first-hand topics
 #        just can record [IFACE]         scope can: CAN only
 #
 # The terminal counterpart of golfcart-record.service (`just record start`):
@@ -12,7 +12,7 @@
 #
 # The role is the one scripts/env.sh resolves for this checkout (config/host).
 # Under master or orin it records that host's half of the scope. Any other role
-# is one machine running everything, so it records the union (both topic lists).
+# is one machine running everything, so it records the union (both hosts' topics).
 #
 # Ctrl-C stops it: the runner sends each recorder one SIGINT and waits for the
 # bag to finalize. Ctrl-C once, then wait.

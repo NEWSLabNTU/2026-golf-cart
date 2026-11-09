@@ -2,7 +2,12 @@
 """Recording sessions: ROS bags and raw packets (CAN, Ethernet) under one ID.
 
     session.py new-id [NAME]                 print a fresh session id
-    session.py scopes                        list config/recording/scopes.yaml
+    session.py scopes [-v]                   list config/recording/scopes.yaml
+                                             (-v: classes, kinds, topic counts per host)
+    session.py classes                       the topic classes of config/recording/topics.yaml
+    session.py topics [--role R] [--scope S | CLASS ...]
+                                             print the topics, one per line
+    session.py computed                      topics of every computed class (replay leaves them out)
     session.py is-scope WORD                 exit 0 if WORD names a scope
     session.py plan [--scope S] [--role R]   what this host would record
     session.py preflight [--scope S]         free space under recordings/; exit 3 = refuse
@@ -53,11 +58,12 @@ import yaml
 
 REPO = Path(__file__).resolve().parents[2]
 SCOPES_FILE = REPO / "config" / "recording" / "scopes.yaml"
-TOPICS_SH = REPO / "scripts" / "recording" / "topics.sh"
+TOPICS_FILE = REPO / "config" / "recording" / "topics.yaml"
 ENSURE_SH = REPO / "scripts" / "rmw" / "ensure.sh"
 ARGS_FILE = REPO / ".golfcart-record.args"
 LAUNCH_ARGS_FILE = REPO / ".golfcart-launch.args"
 ROLES = ("master", "orin")
+KINDS = ("first-hand", "computed")
 
 ID_RE = re.compile(r"^\d{8}_\d{6}(_[A-Za-z0-9-]+)?$")
 NAME_RE = re.compile(r"^[A-Za-z0-9-]+$")
@@ -110,7 +116,130 @@ def resolve_role(explicit: str | None = None) -> str:
     return word if word in ROLES else "local"
 
 
-def load_scopes(path: Path = SCOPES_FILE) -> dict:
+def load_topics(path: Path = TOPICS_FILE) -> dict:
+    """config/recording/topics.yaml, validated: {classes: {name: {...}}, replay: {...}}."""
+    data = yaml.safe_load(path.read_text()) or {}
+    classes = data.get("classes") or {}
+    if not classes:
+        raise ValueError(f"{path}: no classes")
+    for name, body in classes.items():
+        if name in KINDS or name in ("all", "none"):
+            raise ValueError(f"{path}: '{name}' is reserved, not a class name")
+        body = body or {}
+        if body.get("kind") not in KINDS:
+            raise ValueError(f"{path}: class {name}: kind is '{body.get('kind')}', "
+                             f"want {' | '.join(KINDS)}")
+        for key in body:
+            if key not in ("kind", "description", "master", "orin", "both"):
+                raise ValueError(f"{path}: class {name}: unknown key '{key}'")
+        for role in ("master", "orin", "both"):
+            for t in body.get(role) or []:
+                if not isinstance(t, str) or not t.startswith("/"):
+                    raise ValueError(f"{path}: class {name}.{role}: '{t}' is not a topic")
+        classes[name] = body
+    for pat in (data.get("replay") or {}).get("stack_patterns") or []:
+        try:
+            re.compile(pat)
+        except re.error as e:
+            raise ValueError(f"{path}: replay.stack_patterns '{pat}': {e}") from e
+    for f in (data.get("replay") or {}).get("tf_computed") or []:
+        if not isinstance(f, dict) or not {"parent", "child"} <= set(f):
+            raise ValueError(f"{path}: replay.tf_computed entries need parent: and child:")
+    data["classes"] = classes
+    return data
+
+
+def expand_classes(topics: dict, spec: list[str]) -> list[str]:
+    """Class names, in order, from a scope's list; `first-hand`/`computed` expand."""
+    out: list[str] = []
+    for word in spec:
+        if word in KINDS:
+            names = [n for n, b in topics["classes"].items() if b["kind"] == word]
+        elif word in topics["classes"]:
+            names = [word]
+        else:
+            raise ValueError(f"unknown topic class '{word}'; classes: "
+                             f"{', '.join(topics['classes'])} (or {' | '.join(KINDS)})")
+        out += [n for n in names if n not in out]
+    return out
+
+
+def class_topics(topics: dict, name: str, role: str) -> list[str]:
+    """One class's topics for role; a role that is neither records the union."""
+    body = topics["classes"][name]
+    roles = [role] if role in ROLES else list(ROLES)
+    out: list[str] = []
+    for r in [*roles, "both"]:
+        out += [t for t in body.get(r) or [] if t not in out]
+    return out
+
+
+def topics_by_class(topics: dict, classes: list[str], role: str) -> dict[str, list[str]]:
+    """{class: its topics for role}, each topic under the first class that names it."""
+    seen: set[str] = set()
+    out: dict[str, list[str]] = {}
+    for c in classes:
+        out[c] = [t for t in class_topics(topics, c, role) if t not in seen]
+        seen.update(out[c])
+    return out
+
+
+def computed_topics(topics: dict) -> list[str]:
+    """Every topic of a computed class, on any host: what a replay leaves out."""
+    out: list[str] = []
+    for name in expand_classes(topics, ["computed"]):
+        out += [t for t in class_topics(topics, name, "local") if t not in out]
+    return out
+
+
+def bag_topics(bag: Path) -> list[str]:
+    """Topic names from a finalized bag's metadata.yaml."""
+    meta = yaml.safe_load((bag / "metadata.yaml").read_text())["rosbag2_bagfile_information"]
+    return [t["topic_metadata"]["name"] for t in meta.get("topics_with_message_count") or []]
+
+
+def replay_plan(in_bag: list[str], topics: dict, computed: bool) -> dict:
+    """What a replay into a running stack plays: everything but what the stack computes.
+
+    Left out: the topics of computed classes, and topics in no class that fully
+    match replay.stack_patterns (what a bag of scope `all` is mostly made of).
+    Everything else plays: first-hand classes, and unclassified driver output.
+    include is None when every topic plays (no --topics needed, as before
+    classes). tf_filter: play /tf through scripts/recording/play.py's filter,
+    which drops replay.tf_computed (map -> base_link and the like) and passes
+    the rest, the ZED's dynamic IMU frame among them.
+    """
+    if computed:
+        return {"include": None, "exclude": [], "exclude_computed": [],
+                "exclude_pattern": [], "tf_filter": False}
+    replay = topics.get("replay") or {}
+    drop = set(computed_topics(topics))
+    known = {t for c in topics["classes"] for t in class_topics(topics, c, "local")}
+    pats = [re.compile(p) for p in replay.get("stack_patterns") or []]
+    by_class = [t for t in in_bag if t in drop]
+    by_pattern = [t for t in in_bag if t not in known and any(p.fullmatch(t) for p in pats)]
+    exclude = by_class + by_pattern
+    include = [t for t in in_bag if t not in exclude]
+    tf_filter = "/tf" in include and bool(replay.get("tf_computed"))
+    return {"include": include if exclude else None, "exclude": exclude,
+            "exclude_computed": by_class, "exclude_pattern": by_pattern,
+            "tf_filter": tf_filter}
+
+
+def _ros_spec(value, where: str):
+    """'all' | 'none' | [class, ...]. `list` is the pre-class form: first-hand."""
+    if value is None or value == "none":
+        return "none"
+    if value == "all":
+        return "all"
+    if value == "list":
+        return ["first-hand"]
+    if isinstance(value, list) and all(isinstance(x, str) for x in value):
+        return list(value)
+    raise ValueError(f"{where}.ros is '{value}', want all | none | [class, ...]")
+
+
+def load_scopes(path: Path = SCOPES_FILE, topics_path: Path = TOPICS_FILE) -> dict:
     data = yaml.safe_load(path.read_text()) or {}
     scopes = data.get("scopes") or {}
     if not scopes:
@@ -118,50 +247,59 @@ def load_scopes(path: Path = SCOPES_FILE) -> dict:
     default = data.get("default")
     if default not in scopes:
         raise ValueError(f"{path}: default '{default}' is not a scope")
+    topics = load_topics(topics_path)
     for name, body in scopes.items():
+        body = body or {}
         for role in ROLES:
-            entry = (body or {}).get(role) or {}
-            ros = entry.get("ros", "none")
-            if ros not in ("all", "list", "none"):
-                raise ValueError(f"{path}: scope {name}.{role}.ros is '{ros}', "
-                                 "want all | list | none")
-            for x in entry.get("extra_topics") or []:
-                if ros != "list":
-                    raise ValueError(f"{path}: scope {name}.{role}.extra_topics needs ros: list")
-                if not (REPO / "config" / "recording" / x).is_file():
-                    raise ValueError(f"{path}: scope {name}.{role}.extra_topics: "
-                                     f"config/recording/{x} not found")
+            entry = body.get(role) or {}
+            if "extra_topics" in entry:
+                raise ValueError(f"{path}: scope {name}.{role}.extra_topics is gone; "
+                                 "name topic classes in ros: (config/recording/topics.yaml)")
+            ros = _ros_spec(entry.get("ros", body.get("ros")), f"{path}: scope {name}.{role}")
+            if isinstance(ros, list):
+                expand_classes(topics, ros)          # raises on an unknown class
             for p in entry.get("pcap") or []:
                 if not isinstance(p, dict) or "iface" not in p:
                     raise ValueError(f"{path}: scope {name}.{role}.pcap entries need iface:")
+    data["topics"] = topics
     return data
 
 
 def scope_entry(data: dict, scope: str, role: str) -> dict:
-    """The scope's recorders for role, normalised. Unknown role: master ∪ orin."""
+    """The scope's recorders for role, normalised. Unknown role: master ∪ orin.
+
+    ros is 'all', 'none' or 'classes'; with 'classes', `classes` lists them and
+    `topics_by_class` maps each to this role's topics.
+    """
     if scope not in data["scopes"]:
         raise ValueError(f"unknown scope '{scope}'; scopes: {', '.join(data['scopes'])}")
     body = data["scopes"][scope] or {}
     roles = [role] if role in ROLES else list(ROLES)
-    ros, can, pcap, extra = "none", [], [], []
+    ros, spec, can, pcap = "none", [], [], []
     for r in roles:
         e = body.get(r) or {}
-        for x in e.get("extra_topics") or []:
-            f = REPO / "config" / "recording" / x
-            if f not in extra:
-                extra.append(f)
-        rr = e.get("ros", "none")
-        if rr == "all" or (rr == "list" and ros == "none"):
-            ros = rr
+        rr = _ros_spec(e.get("ros", body.get("ros")), f"scope {scope}.{r}")
+        if rr == "all":
+            ros = "all"
+        elif isinstance(rr, list):
+            if ros == "none":
+                ros = "classes"
+            spec += [c for c in rr if c not in spec]
         for c in e.get("can") or []:
             if c not in can:
                 can.append(c)
         for p in e.get("pcap") or []:
             if p["iface"] not in [q["iface"] for q in pcap]:
                 pcap.append(dict(p))
-    topic_files = [REPO / "config" / "recording" / f"{r}_topics.txt" for r in roles] + extra
-    return {"ros": ros, "can": can, "pcap": pcap, "topic_files": topic_files,
+    classes = expand_classes(data["topics"], spec) if ros == "classes" else []
+    by_class = topics_by_class(data["topics"], classes, role) if classes else {}
+    return {"ros": ros, "classes": classes, "topics_by_class": by_class,
+            "can": can, "pcap": pcap,
             "disk": body.get("disk", "warn"), "description": body.get("description", "")}
+
+
+def scope_topics(entry: dict) -> list[str]:
+    return [t for ts in entry["topics_by_class"].values() for t in ts]
 
 
 # ── host probes ──────────────────────────────────────────────────────────────
@@ -259,16 +397,6 @@ def launch_args() -> list[str] | None:
         return None
 
 
-def read_topics(files: list[Path]) -> list[str]:
-    r = subprocess.run(
-        ["bash", "-c", 'source "$1"; shift; golfcart_recording_topics "$@"', "_",
-         str(TOPICS_SH), *map(str, files)],
-        capture_output=True, text=True, check=False)
-    if r.returncode != 0:
-        raise ValueError(r.stderr.strip() or "topic list unreadable")
-    return [t for t in r.stdout.splitlines() if t]
-
-
 def path_size(p: Path) -> int:
     if p.is_file():
         return p.stat().st_size
@@ -303,13 +431,14 @@ def plan(data: dict, scope: str, role: str, out: Path,
         if e["ros"] == "all":
             cmd += ["-a", "--include-hidden-topics"]
         else:
-            try:
-                topics = read_topics(e["topic_files"])
-            except ValueError as err:
-                topics, rec["reason"] = [], str(err)
-            if not topics and "reason" not in rec:
-                rec["reason"] = "topic list is empty"
-            rec["topic_list"] = [str(f.relative_to(REPO)) for f in e["topic_files"]]
+            topics = scope_topics(e)
+            if not topics:
+                rec["reason"] = f"no topics on {role} in classes {', '.join(e['classes'])}"
+            rec["topic_source"] = str(TOPICS_FILE.relative_to(REPO))
+            # Which classes, and how many topics each asked for on this host.
+            rec["classes"] = {c: {"kind": data["topics"]["classes"][c]["kind"],
+                                  "topics": len(ts)}
+                              for c, ts in e["topics_by_class"].items()}
             rec["topics_requested"] = len(topics)
             cmd += topics
         rec["cmd"] = cmd
@@ -745,12 +874,44 @@ def write_args_file(sid: str, scope: str, path: Path = ARGS_FILE) -> None:
     os.replace(tmp, path)
 
 
+def print_classes(topics: dict) -> None:
+    print(f"{'class':<16} {'kind':<11} {'master':>6} {'orin':>5}  description")
+    for name, body in topics["classes"].items():
+        n = {r: len(class_topics(topics, name, r)) for r in ROLES}
+        print(f"{name:<16} {body['kind']:<11} {n['master']:>6} {n['orin']:>5}  "
+              f"{body.get('description', '')}")
+
+
+def cmd_scopes_verbose(data: dict) -> int:
+    """Classes, then each scope's classes and topic counts on each host."""
+    print_classes(data["topics"])
+    print()
+    for name, body in data["scopes"].items():
+        mark = " (default)" if name == data["default"] else ""
+        print(f"{name}{mark}: {(body or {}).get('description', '')}")
+        for role in ROLES:
+            e = scope_entry(data, name, role)
+            if e["ros"] == "classes":
+                ros = (f"{len(scope_topics(e))} topics = "
+                       + " + ".join(f"{c} {len(ts)}" for c, ts in e["topics_by_class"].items() if ts))
+            else:
+                ros = {"all": "every topic (-a)", "none": "no bag"}[e["ros"]]
+            extra = (f"; can {','.join(e['can'])}" if e["can"] else "") + \
+                    (f"; pcap {','.join(p['iface'] for p in e['pcap'])}" if e["pcap"] else "")
+            print(f"  {role:<6} {ros}{extra}")
+    return 0
+
+
 # ── cli ──────────────────────────────────────────────────────────────────────
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("new-id"); s.add_argument("name", nargs="?", default="")
-    sub.add_parser("scopes")
+    s = sub.add_parser("scopes"); s.add_argument("-v", "--verbose", action="store_true")
+    sub.add_parser("classes")
+    s = sub.add_parser("topics"); s.add_argument("--role"); s.add_argument("--scope")
+    s.add_argument("classes", nargs="*")
+    sub.add_parser("computed")
     s = sub.add_parser("is-scope"); s.add_argument("word")
     for name in ("plan", "preflight"):
         s = sub.add_parser(name); s.add_argument("--scope"); s.add_argument("--role")
@@ -776,9 +937,30 @@ def main(argv: list[str] | None = None) -> int:
             print(new_id(a.name))
         elif a.cmd == "scopes":
             data = load_scopes()
+            if a.verbose:
+                return cmd_scopes_verbose(data)
             for name, body in data["scopes"].items():
                 mark = " (default)" if name == data["default"] else ""
-                print(f"{name:<6} {(body or {}).get('description', '')}{mark}")
+                print(f"{name:<8} {(body or {}).get('description', '')}{mark}")
+        elif a.cmd == "classes":
+            print_classes(load_topics())
+        elif a.cmd == "topics":
+            if a.scope and a.classes:
+                raise ValueError("topics: --scope or CLASS..., not both")
+            role = resolve_role(a.role)
+            if a.classes:
+                topics = load_topics()
+                by = topics_by_class(topics, expand_classes(topics, a.classes), role)
+                out = [t for ts in by.values() for t in ts]
+            else:
+                data = load_scopes()
+                e = scope_entry(data, a.scope or data["default"], role)
+                if e["ros"] == "all":
+                    raise ValueError(f"scope {a.scope or data['default']} records every topic (ros: all)")
+                out = scope_topics(e)
+            print("\n".join(out))
+        elif a.cmd == "computed":
+            print("\n".join(computed_topics(load_topics())))
         elif a.cmd == "is-scope":
             return 0 if a.word in load_scopes()["scopes"] else 1
         elif a.cmd == "plan":
@@ -787,7 +969,9 @@ def main(argv: list[str] | None = None) -> int:
             out = recordings_dir() / "<id>" / role
             for r in plan(data, scope, role, out):
                 what = {"ros": f"ros2 bag ({r.get('mode')}"
-                               + (f", {r.get('topics_requested')} topics)" if r.get("mode") == "list" else ")"),
+                               + (f", {r.get('topics_requested')} topics: "
+                                  + " ".join(f"{c} {v['topics']}" for c, v in r["classes"].items()) + ")"
+                                  if r.get("mode") == "classes" else ")"),
                         "can": "candump -L", "pcap": "tshark"
                                + (f" -f '{r['filter']}'" if r.get("filter") else "")}[r["kind"]]
                 st = "" if r["status"] == "planned" else f"  SKIP: {r['reason']}"

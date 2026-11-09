@@ -8,7 +8,8 @@
 #   just record nuke [host=both|master|orin]  DELETE every session, after typing `nuke`
 #
 # Files land in recordings/<id>/<role>/ on each host (gitignored). Scopes are
-# config/recording/scopes.yaml; docs/recording.md is the user guide.
+# config/recording/scopes.yaml, the topics config/recording/topics.yaml (classes);
+# docs/recording.md is the user guide.
 #
 # Recipes here run from the REPO ROOT, not from just/. Without this a module
 # recipe runs with its cwd set to this directory, and every `./scripts/...` path
@@ -23,7 +24,7 @@ set working-directory := '..'
 default:
     @just --list record
 
-# Start a session on both hosts. SCOPE: all|drive|raw|can|ros (default drive); NAME: [A-Za-z0-9-]+
+# Start a session on both hosts. SCOPE: drive (default)|autonomy|all|raw|can|ros|localize; NAME: [A-Za-z0-9-]+
 [positional-arguments]
 start *ARGS:
     #!/usr/bin/env bash
@@ -98,14 +99,12 @@ collect ID="" *OPTS="":
     esac
     exec ./scripts/recording/collect.sh "{{ID}}" {{OPTS}}
 
-# Show the scopes and what each records on this host
+# Show the topic classes, each scope's classes and topic counts per host, and this host's plan
 scopes:
     #!/usr/bin/env bash
-    python3 scripts/recording/session.py scopes || exit 1
-    for s in $(python3 scripts/recording/session.py scopes | awk '{print $1}'); do
-        echo; echo "$s on $(hostname):"
-        python3 scripts/recording/session.py plan --scope "$s"
-    done
+    python3 scripts/recording/session.py scopes -v || exit 1
+    echo; echo "default scope on $(hostname), as it would start now:"
+    python3 scripts/recording/session.py plan
 
 # Asks every time: lists both hosts, then wants the word `nuke` typed at the
 # terminal. Only recordings/ is touched; old bags in $GOLFCART_BAG_DIR and

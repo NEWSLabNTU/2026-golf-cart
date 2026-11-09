@@ -47,7 +47,7 @@ Grouped families live in `just/*.just` and are reached as `just <module> <recipe
 | `indoor-test` | indoor cold start from the reflective board, init-only replay of the basement bag — `just indoor-test` for the sequence |
 | `pose` | initial pose per map without an RViz click: `capture MAP SPOT` once, then `init MAP SPOT`; `list` |
 | `bag` | rosbag record, play, merge, fetch |
-| `record` | recording sessions on both hosts (ROS bags + CAN + pcapng, one ID): `start [SCOPE] [NAME]`, `status`, `stop`, `collect [ID]`, `list`, `nuke` (deletes all, asks); independent of the launch |
+| `record` | recording sessions on both hosts (ROS bags + CAN + pcapng, one ID): `start [SCOPE] [NAME]`, `status`, `stop`, `collect [ID]`, `list`, `scopes` (topic classes, counts per host), `nuke` (deletes all, asks); independent of the launch |
 | `service` | multi-machine systemd units, `doctor`, `host-status` |
 | `vehicle` | vehicle interface bring-up, manual control, control tests |
 | `can` | CAN record, replay, decode; `vcu-status` is a receive-only live readout of the VCU and our commands |
@@ -178,7 +178,7 @@ no script hardcodes any of it. See [config/README.md](config/README.md).
 |---|---|
 | `config/host` | which machine this checkout is (`master`/`orin`). **Gitignored** |
 | `config/multi_machine.conf` | the other host's `user@addr`, repo path, ssh key, master IP |
-| `config/recording/*_topics.txt` | what each host records |
+| `config/recording/topics.yaml`, `scopes.yaml` | what is recorded: topic classes, and the scopes that pick them |
 | `config/cyclonedds/*.xml` | DDS profiles, one per role |
 
 `scripts/env.sh` is the matching single source for the *environment* — Autoware
@@ -257,18 +257,39 @@ which `just clean` deletes): `bag/`, `<can>.log` (`candump -L`), `<nic>.pcapng`
 (rootless `tshark`), `session.yaml` (commit, launch args, chrony offset, each
 recorder's status/size/exit). `just record collect [ID]` rsyncs the orin's half
 over `on_orin.sh`. What a session records is its **scope**,
-`config/recording/scopes.yaml` (`drive` default, `all`, `raw`, `can`, `ros`);
+`config/recording/scopes.yaml` (`drive` default, `autonomy`, `all`, `raw`, `can`,
+`ros`; `localize` = `drive`);
 `scripts/recording/session.py` is the one runner, under `golfcart-record.service`
 (id and scope via `.golfcart-record.args`, rewritten on every start) and in the
 foreground for `just bag record` / `just can record`. A missing or DOWN interface
 is skipped and noted, never fatal. `GOLFCART_BAG_DIR` now only holds bags from
 before sessions. User guide: [docs/recording.md](docs/recording.md).
 
-`config/recording/*_topics.txt` (the `drive` and `ros` scopes) record **driver output**. Topics a node computed
-from other topics — the concatenated cloud, the corrected IMU — are commented out,
-because replay is a logging simulation: the single-machine stack runs with drivers
-disabled against the merged bag and recomputes them with current parameters
-instead of the ones frozen at record time.
+**Topics are classes**, `config/recording/topics.yaml`, the one topic source
+(`scripts/recording/topics.sh` / `session.py topics` print them). Each class has
+per-host topics (`master:` / `orin:` / `both:`) and a kind: **first-hand** (driver
+or vehicle output: `lidar`, `camera`, `imu`, `gnss`, `vehicle`, `tf`) or
+**computed** (our stack's output: `sensing_derived`, `diagnostics`,
+`vehicle_cmd`, `localization`, `planning`, `control`, `perception`). A scope's
+`ros:` is `all`, `none` or a class list, where `first-hand` / `computed` stand
+for every class of that kind. `drive` = first-hand + sensing_derived +
+diagnostics + vehicle_cmd + localization (NDT pose and scores, EKF);
+`ros` = first-hand only; `autonomy` adds planning, control, perception.
+`session.yaml` lists the classes and topic count per class. To add a topic, put
+it in its class; never in a script.
+
+**Replay leaves computed topics out.** Replay is a logging simulation: the stack
+runs with drivers disabled and recomputes those topics with current parameters,
+so played as well they would have two publishers. Every path that plays into a
+stack (`just bag play`, `play-ntu`, `ntu-test bag`, `indoor-test bag`,
+`board_check.sh`) goes through `scripts/recording/play.py`: Humble's `ros2 bag
+play` has no exclude, so it passes `--topics` = the bag's metadata minus computed
+classes minus unclassified topics matching `replay.stack_patterns` (what an `all`
+bag is mostly made of). `/tf` mixes the ZED's IMU frame (needed) with the stack's
+`map -> base_link` / `map -> ndt_base_link`, so it is played remapped and
+republished without `replay.tf_computed`. `computed=on` / `--computed` /
+`GOLFCART_REPLAY_COMPUTED=on` plays everything; `just bag replay` (RViz only, no
+stack) always does. The concatenated cloud and corrected IMU stay unrecorded.
 
 A topic that is expected but dead stays listed and records zero messages. An empty
 topic says "this device was expected and was silent"; an absent one says nothing.

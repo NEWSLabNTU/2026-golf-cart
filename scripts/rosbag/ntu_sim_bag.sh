@@ -46,4 +46,8 @@ echo
 
 # read-ahead raised because the default queue starves on this bag and delays
 # messages, which shows up later as a jittery scan rate rather than as an error.
-exec ros2 bag play "${BAG}" --clock --start-paused --read-ahead-queue-size 5000 "$@"
+#
+# play.py plays the bag's topics minus the computed classes (config/recording/
+# topics.yaml), which the stack recomputes; GOLFCART_REPLAY_COMPUTED=on plays all.
+exec python3 "${REPO_ROOT}/scripts/recording/play.py" "${BAG}" \
+    --clock --start-paused --read-ahead-queue-size 5000 "$@"

@@ -1,35 +1,32 @@
-# topics.sh — the one reader of config/recording/*_topics.txt. Source it.
+# topics.sh — the shell entry point to the recorded topics. Source it.
 #
-# Every recorder in the repo takes its topics from those lists through this
-# function: the session runner (scripts/recording/session.py, for the `drive`
-# and `ros` scopes, under the unit and from `just bag record`) and the link
-# simulation. Before
-# this, two scripts carried their own inline topic arrays that drifted from the
-# lists — the Velodyne under a `top/` namespace that does not exist, its packets
-# at /sensing/lidar/velodyne_packets instead of /sensing/lidar/vlp32/... — and
-# recorded empty channels that still looked right in `ros2 bag info`.
+# The topics live in config/recording/topics.yaml, sorted into classes, and
+# scripts/recording/session.py is their one reader; this only calls it, so a
+# shell recorder cannot drift from what a session records. Before the lists had
+# one reader, two scripts carried their own inline topic arrays that drifted —
+# the Velodyne under a `top/` namespace that does not exist — and recorded empty
+# channels that still looked right in `ros2 bag info`.
 #
-#   golfcart_recording_topics FILE...   print one topic per line
+#   golfcart_recording_topics ROLE [SCOPE | CLASS...]
+#       print one topic per line. ROLE: master | orin (anything else: the union).
+#       With no second word, the default scope's (config/recording/scopes.yaml);
+#       a word naming a scope selects that scope; otherwise each word is a class
+#       or a kind (first-hand, computed).
 #
-# `#` starts a comment, whole-line or trailing; surrounding whitespace and blank
-# lines are dropped. A topic listed in more than one FILE is printed once.
+#   golfcart_recording_topics orin              # what the orin records by default
+#   golfcart_recording_topics master ros        # the first-hand topics
+#   golfcart_recording_topics master localization tf
 
 golfcart_recording_topics() {
-    local file line
-    # Checked up front: inside the loop below a failure would be the exit status
-    # of the left side of a pipe, and the function would return awk's 0.
-    for file in "$@"; do
-        if [ ! -f "${file}" ]; then
-            echo "golfcart_recording_topics: topic list not found: ${file}" >&2
-            return 1
-        fi
-    done
-    for file in "$@"; do
-        while IFS= read -r line || [ -n "${line}" ]; do
-            line="${line%%#*}"
-            line="${line#"${line%%[![:space:]]*}"}"
-            line="${line%"${line##*[![:space:]]}"}"
-            [ -n "${line}" ] && echo "${line}"
-        done < "${file}"
-    done | awk '!seen[$0]++'
+    local role="${1:?golfcart_recording_topics ROLE [SCOPE | CLASS...]}"
+    shift
+    local py
+    py="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/session.py"
+    if [ $# -eq 1 ] && python3 "${py}" is-scope "$1"; then
+        python3 "${py}" topics --role "${role}" --scope "$1"
+    elif [ $# -eq 0 ]; then
+        python3 "${py}" topics --role "${role}"
+    else
+        python3 "${py}" topics --role "${role}" "$@"
+    fi
 }

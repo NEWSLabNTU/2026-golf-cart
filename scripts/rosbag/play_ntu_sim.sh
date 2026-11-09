@@ -31,4 +31,6 @@ echo "  the stack must already be up: ros2 launch golfcart_launch ntu_logging_si
 echo "  NDT needs an initial pose — set one in RViz (2D Pose Estimate) before or"
 echo "  shortly after starting playback; GNSS was off for these runs."
 echo
-exec ros2 bag play "${BAG}" --clock "$@"
+# play.py: the bag's topics minus the computed classes (config/recording/
+# topics.yaml), which this stack recomputes; GOLFCART_REPLAY_COMPUTED=on plays all.
+exec python3 "${REPO_ROOT}/scripts/recording/play.py" "${BAG}" --clock "$@"

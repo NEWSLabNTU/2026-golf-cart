@@ -172,15 +172,9 @@ with exit codes, sizes, packet counts and the bag's topic count. In the
 foreground (`just bag record`, `just can record`) the runner forwards exactly one
 SIGINT to each recorder on Ctrl-C.
 
-Scopes are `config/recording/scopes.yaml`; the `drive` and `ros` scopes record
-the plain topic lists:
-
-```
-config/recording/master_topics.txt
-config/recording/orin_topics.txt
-```
-
-Edit those rather than any script. The split is deliberate: both LiDARs are
+Scopes are `config/recording/scopes.yaml`; a scope names topic classes, and the
+classes, with each host's topics, are `config/recording/topics.yaml`. Edit that
+rather than any script (docs/recording.md, "Topic classes"). The split is deliberate: both LiDARs are
 cabled to the master at ~30 MB/s each, and only the ZED's *compressed* stream is
 small enough to cross the shared 100 Mb/s LAN, so each host records its own
 sensors locally.
@@ -541,12 +535,11 @@ quiet", not "the name is wrong". Audit against a running stack:
 
 ```bash
 ros2 topic list > /tmp/live.txt
-grep -vE '^\s*(#|$)' config/recording/master_topics.txt \
-  | tr -d ' ' \
+python3 scripts/recording/session.py topics --role master \
   | while read -r t; do grep -qx "$t" /tmp/live.txt || echo "MISSING $t"; done
 ```
 
-Same for `config/recording/orin_topics.txt`, run on the orin.
+Same with `--role orin`, run on the orin.
 
 This caught the Velodyne being under `vlp32/` rather than `top/`, the GNSS being
 the Xsens MTi rather than a u-blox, and the USB cameras publishing no

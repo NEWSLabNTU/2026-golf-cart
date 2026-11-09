@@ -68,7 +68,7 @@ orin_to_master:
 
   # Intrinsics for whatever on the master consumes the ZED image later. Small,
   # 30 Hz; the image itself stays on the orin (recorded there, see
-  # config/recording/orin_topics.txt). At the camera's 30 Hz the compressed
+  # config/recording/topics.yaml, class camera). At the camera's 30 Hz the compressed
   # image is 7.0 MB/s payload = 55 Mbit/s of the 100 Mbit/s link, measured
   # (docs/research/system/domain-split-link-pressure.md), and at that rate it
   # already costs the IMU samples. To look at it on the master, add

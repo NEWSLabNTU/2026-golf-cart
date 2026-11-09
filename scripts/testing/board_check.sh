@@ -83,7 +83,9 @@ fi
 
 "${CHECK[@]}" &
 CHECKER=$!
-setsid ros2 bag play "$BAG" --clock \
+# play.py: without the computed topics (board_pose among them, which the
+# detector under test publishes itself); GOLFCART_REPLAY_COMPUTED=on plays all.
+setsid python3 "$REPO_ROOT/scripts/recording/play.py" "$BAG" --clock \
     > >(sed -u 's/^/[bag] /') 2>&1 &
 PLAYER=$!
 PIDS+=("$PLAYER")

@@ -160,7 +160,7 @@ script hardcodes it. See [config/README.md](config/README.md).
 | `config/launch/*.args` | named launch argument sets (`@name`) |
 | `config/link/topics.yaml` | which topics cross between the machines |
 | `config/recording/scopes.yaml` | recording scopes: ROS / CAN / pcap per machine |
-| `config/recording/*_topics.txt` | the topics the `drive` and `ros` scopes record |
+| `config/recording/topics.yaml` | the recorded topics, in classes (first-hand / computed), per host |
 | `config/cyclonedds/*.xml` | DDS profiles, one per role |
 
 `scripts/env.sh` sets up the environment from these files: ROS and Autoware

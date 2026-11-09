@@ -10,12 +10,13 @@
 #            host:=master`, drivers off, CPU NDT and CPU preprocessing (this box
 #            has no colcon cargo extension for the Rust matcher; the DDS graph
 #            is the same). ~157 nodes, ~620 topics. Plus the REAL recorder,
-#            `ros2 bag record` on config/recording/master_topics.txt, because
+#            `ros2 bag record` on the master's topics of the default recording
+#            scope (config/recording/topics.yaml), because
 #            the recorder is a second reader of every raw cloud and runs on
 #            every test drive.
 #   orin     synthetic_sensors.py orin (the ZED X's topics at the ZED's rates,
 #            sizes from the wrapper config and cart bags), the REAL recorder on
-#            config/recording/orin_topics.txt, and under `split` the bridge.
+#            the orin's topics of that scope, and under `split` the bridge.
 #   drivers  synthetic_sensors.py master: VLP-32C, Falcon, three GMSL cameras,
 #            vehicle status, on the real topic names with the real point and
 #            frame sizes. Read that file's header for where each number is
@@ -265,12 +266,12 @@ PY
 fi
 
 # The recorder, invoked as scripts/recording/record_unit_exec.sh invokes it
-# (same list parsing, same `ros2 bag record -o DIR TOPICS...`), but with this
-# run's profile rather than the one env.sh would resolve.
+# (the default scope's topics, same `ros2 bag record -o DIR TOPICS...`), but with
+# this run's profile rather than the one env.sh would resolve.
 # shellcheck source=../../recording/topics.sh
 source scripts/recording/topics.sh
-mapfile -t MASTER_TOPICS < <(golfcart_recording_topics config/recording/master_topics.txt)
-mapfile -t ORIN_TOPICS < <(golfcart_recording_topics config/recording/orin_topics.txt)
+mapfile -t MASTER_TOPICS < <(golfcart_recording_topics master)
+mapfile -t ORIN_TOPICS < <(golfcart_recording_topics orin)
 
 # ── instruments first, so startup is in the numbers ──────────────────────────
 TOTAL=$((STARTUP + STEADY))

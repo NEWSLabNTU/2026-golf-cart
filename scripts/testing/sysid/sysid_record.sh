@@ -26,7 +26,7 @@
 #         tick. CAN_HOST: auto (default: local if this machine has can0, else
 #         the orin over ssh, like `just can vcu-status`), local, orin, none.
 #
-# The vehicle topics are also in config/recording/master_topics.txt; this list
+# The vehicle topics are also in config/recording/topics.yaml (class vehicle); this list
 # is the small one, so a sysid bag is megabytes, not the LiDAR's gigabytes.
 set -euo pipefail
 
