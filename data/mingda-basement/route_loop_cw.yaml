@@ -77,29 +77,38 @@
 #   python3 scripts/map/centerline_to_lanelet.py data/mingda-basement/route_loop_cw.yaml \
 #       --map-dir data/mingda-basement --width 2.5 --ele 0.0 --speed-limit 7 --smoothing 0 \
 #       > data/mingda-basement/lanelet2_map_loop.osm
-- {x: 11.979, y: -6.288, width: 2.50}
-- {x: 11.479, y: -6.281, width: 2.50}
-- {x: 10.978, y: -6.269, width: 2.50}
-- {x: 10.478, y: -6.250, width: 2.50}
-- {x: 9.979, y: -6.210, width: 2.50}
-- {x: 9.483, y: -6.145, width: 2.50}
-- {x: 8.989, y: -6.065, width: 2.50}
-- {x: 8.498, y: -5.968, width: 2.50}
-- {x: 8.014, y: -5.841, width: 2.50}
-- {x: 7.541, y: -5.677, width: 2.50}
-- {x: 7.083, y: -5.475, width: 2.50}
-- {x: 6.645, y: -5.234, width: 2.50}
-- {x: 6.229, y: -4.956, width: 2.50}
-- {x: 5.838, y: -4.644, width: 2.50}
-- {x: 5.482, y: -4.292, width: 2.50}
-- {x: 5.171, y: -3.900, width: 2.50}
-- {x: 4.902, y: -3.478, width: 2.50}
-- {x: 4.669, y: -3.035, width: 2.50}
-- {x: 4.468, y: -2.577, width: 2.50}
-- {x: 4.303, y: -2.104, width: 2.50}
-- {x: 4.173, y: -1.621, width: 2.50}
-- {x: 4.060, y: -1.133, width: 2.50}
-- {x: 3.965, y: -0.642, width: 2.50}
+#
+# Reworked 2026-11-09, bottom straight (x 9.3 .. 15.5) from a measured drive:
+# the cart reversed along the real lane (session 20261109_223127, map->base_link
+# from the EKF, NVTL >= 2.40 throughout) and its 8.4 m track fits
+# y = -4.324 + 0.00567 x within 0.056 m. The 2026-10-22/23 fit had sagged to
+# y -6.29 here, 1.9-2.0 m south of where the cart drives, which put the parked
+# cart outside the lane ("out of route", "goal's footprint exceeds lane").
+# Width 1.9 m on it (the curb line at y -3.2 is 0.12 m off the north edge).
+# Joined to the old corners by tangent-continuous fillets: west, x 9.3 to the
+# old point (3.894, -0.147); east, the old point (19.778, -0.531) to x 15.5.
+# Widths taper back to the old ones only past the curb's assumed x 7.5-16.
+# Known: at x ~7.85 the west fillet's north edge overlaps the ASSUMED curb end
+# by a few cm (3 grid cells). INTERIM until a full clockwise lap is measured.
+- {x: 11.979, y: -4.256, width: 1.90}
+- {x: 11.443, y: -4.259, width: 1.90}
+- {x: 10.907, y: -4.262, width: 1.90}
+- {x: 10.372, y: -4.265, width: 1.90}
+- {x: 9.836, y: -4.268, width: 1.90}
+- {x: 9.300, y: -4.271, width: 1.90}
+- {x: 8.800, y: -4.258, width: 1.90}
+- {x: 8.303, y: -4.210, width: 1.90}
+- {x: 7.810, y: -4.126, width: 1.90}
+- {x: 7.325, y: -4.005, width: 1.90}
+- {x: 6.851, y: -3.845, width: 1.96}
+- {x: 6.393, y: -3.645, width: 2.02}
+- {x: 5.956, y: -3.402, width: 2.08}
+- {x: 5.546, y: -3.117, width: 2.14}
+- {x: 5.169, y: -2.789, width: 2.20}
+- {x: 4.831, y: -2.420, width: 2.26}
+- {x: 4.540, y: -2.015, width: 2.32}
+- {x: 4.298, y: -1.577, width: 2.38}
+- {x: 4.110, y: -1.114, width: 2.44}
 - {x: 3.894, y: -0.147, width: 2.50}
 - {x: 3.849, y: 0.352, width: 2.50}
 - {x: 3.827, y: 0.852, width: 2.50}
@@ -215,25 +224,22 @@
 - {x: 19.942, y: 0.458, width: 2.50}
 - {x: 19.862, y: -0.037, width: 2.50}
 - {x: 19.778, y: -0.531, width: 2.50}
-- {x: 19.685, y: -1.023, width: 2.50}
-- {x: 19.577, y: -1.513, width: 2.50}
-- {x: 19.445, y: -1.997, width: 2.50}
-- {x: 19.281, y: -2.472, width: 2.50}
-- {x: 19.078, y: -2.930, width: 2.50}
-- {x: 18.829, y: -3.361, width: 2.50}
-- {x: 18.542, y: -3.750, width: 2.50}
-- {x: 18.224, y: -4.093, width: 2.50}
-- {x: 17.880, y: -4.394, width: 2.50}
-- {x: 17.508, y: -4.656, width: 2.50}
-- {x: 17.114, y: -4.880, width: 2.50}
-- {x: 16.695, y: -5.068, width: 2.50}
-- {x: 16.257, y: -5.232, width: 2.50}
-- {x: 15.812, y: -5.393, width: 2.50}
-- {x: 15.372, y: -5.592, width: 2.50}
-- {x: 14.922, y: -5.796, width: 2.50}
-- {x: 14.455, y: -5.980, width: 2.50}
-- {x: 13.972, y: -6.130, width: 2.50}
-- {x: 13.479, y: -6.229, width: 2.50}
-- {x: 12.980, y: -6.262, width: 2.50}
-- {x: 12.480, y: -6.285, width: 2.50}
-- {x: 11.979, y: -6.288, width: 2.50}
+- {x: 19.668, y: -1.019, width: 2.45}
+- {x: 19.513, y: -1.494, width: 2.39}
+- {x: 19.310, y: -1.951, width: 2.34}
+- {x: 19.059, y: -2.383, width: 2.28}
+- {x: 18.760, y: -2.783, width: 2.23}
+- {x: 18.415, y: -3.145, width: 2.17}
+- {x: 18.028, y: -3.460, width: 2.12}
+- {x: 17.604, y: -3.724, width: 2.06}
+- {x: 17.150, y: -3.934, width: 2.01}
+- {x: 16.675, y: -4.087, width: 1.95}
+- {x: 16.185, y: -4.186, width: 1.90}
+- {x: 15.500, y: -4.236, width: 1.90}
+- {x: 14.997, y: -4.239, width: 1.90}
+- {x: 14.494, y: -4.242, width: 1.90}
+- {x: 13.991, y: -4.245, width: 1.90}
+- {x: 13.488, y: -4.248, width: 1.90}
+- {x: 12.985, y: -4.250, width: 1.90}
+- {x: 12.482, y: -4.253, width: 1.90}
+- {x: 11.979, y: -4.256, width: 1.90}

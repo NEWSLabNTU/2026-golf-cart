@@ -33,163 +33,173 @@
     <tag k="area" v="yes" />
   </way>
   <node id="100000" visible="true">
-    <tag k="local_x" v="17.6000" />
-    <tag k="local_y" v="-6.1000" />
+    <tag k="local_x" v="17.6054" />
+    <tag k="local_y" v="-5.1740" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100001" visible="true">
-    <tag k="local_x" v="17.6000" />
-    <tag k="local_y" v="-3.7000" />
+    <tag k="local_x" v="17.5946" />
+    <tag k="local_y" v="-3.2740" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100002" visible="true">
-    <tag k="local_x" v="16.6000" />
-    <tag k="local_y" v="-6.1000" />
+    <tag k="local_x" v="16.6679" />
+    <tag k="local_y" v="-5.1793" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100003" visible="true">
-    <tag k="local_x" v="16.6000" />
-    <tag k="local_y" v="-3.7000" />
+    <tag k="local_x" v="16.6571" />
+    <tag k="local_y" v="-3.2793" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100004" visible="true">
-    <tag k="local_x" v="15.6000" />
-    <tag k="local_y" v="-6.1000" />
+    <tag k="local_x" v="15.7304" />
+    <tag k="local_y" v="-5.1846" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100005" visible="true">
-    <tag k="local_x" v="15.6000" />
-    <tag k="local_y" v="-3.7000" />
+    <tag k="local_x" v="15.7196" />
+    <tag k="local_y" v="-3.2846" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100006" visible="true">
-    <tag k="local_x" v="14.6000" />
-    <tag k="local_y" v="-6.1000" />
+    <tag k="local_x" v="14.7929" />
+    <tag k="local_y" v="-5.1899" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100007" visible="true">
-    <tag k="local_x" v="14.6000" />
-    <tag k="local_y" v="-3.7000" />
+    <tag k="local_x" v="14.7821" />
+    <tag k="local_y" v="-3.2900" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100008" visible="true">
-    <tag k="local_x" v="13.6000" />
-    <tag k="local_y" v="-6.1000" />
+    <tag k="local_x" v="13.8554" />
+    <tag k="local_y" v="-5.1952" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100009" visible="true">
-    <tag k="local_x" v="13.6000" />
-    <tag k="local_y" v="-3.7000" />
+    <tag k="local_x" v="13.8446" />
+    <tag k="local_y" v="-3.2953" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100010" visible="true">
-    <tag k="local_x" v="12.6000" />
-    <tag k="local_y" v="-6.1000" />
+    <tag k="local_x" v="12.9179" />
+    <tag k="local_y" v="-5.2005" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100011" visible="true">
-    <tag k="local_x" v="12.6000" />
-    <tag k="local_y" v="-3.7000" />
+    <tag k="local_x" v="12.9071" />
+    <tag k="local_y" v="-3.3006" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100012" visible="true">
-    <tag k="local_x" v="11.6000" />
-    <tag k="local_y" v="-6.1000" />
+    <tag k="local_x" v="11.9804" />
+    <tag k="local_y" v="-5.2059" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100013" visible="true">
-    <tag k="local_x" v="11.6000" />
-    <tag k="local_y" v="-3.7000" />
+    <tag k="local_x" v="11.9696" />
+    <tag k="local_y" v="-3.3059" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100014" visible="true">
-    <tag k="local_x" v="10.6000" />
-    <tag k="local_y" v="-6.1000" />
+    <tag k="local_x" v="11.0429" />
+    <tag k="local_y" v="-5.2112" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100015" visible="true">
-    <tag k="local_x" v="10.6000" />
-    <tag k="local_y" v="-3.7000" />
+    <tag k="local_x" v="11.0321" />
+    <tag k="local_y" v="-3.3112" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100016" visible="true">
-    <tag k="local_x" v="9.6000" />
-    <tag k="local_y" v="-6.1000" />
+    <tag k="local_x" v="10.1054" />
+    <tag k="local_y" v="-5.2165" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100017" visible="true">
-    <tag k="local_x" v="9.6000" />
-    <tag k="local_y" v="-3.7000" />
+    <tag k="local_x" v="10.0946" />
+    <tag k="local_y" v="-3.3165" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100018" visible="true">
-    <tag k="local_x" v="8.6000" />
-    <tag k="local_y" v="-6.1000" />
+    <tag k="local_x" v="9.1679" />
+    <tag k="local_y" v="-5.2218" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100019" visible="true">
-    <tag k="local_x" v="8.6000" />
-    <tag k="local_y" v="-3.7000" />
+    <tag k="local_x" v="9.1571" />
+    <tag k="local_y" v="-3.3218" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100020" visible="true">
-    <tag k="local_x" v="7.6000" />
-    <tag k="local_y" v="-6.1000" />
+    <tag k="local_x" v="8.2304" />
+    <tag k="local_y" v="-5.2271" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100021" visible="true">
-    <tag k="local_x" v="7.6000" />
-    <tag k="local_y" v="-3.7000" />
+    <tag k="local_x" v="8.2196" />
+    <tag k="local_y" v="-3.3271" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100022" visible="true">
-    <tag k="local_x" v="6.6000" />
-    <tag k="local_y" v="-6.1000" />
+    <tag k="local_x" v="7.2929" />
+    <tag k="local_y" v="-5.2324" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100023" visible="true">
-    <tag k="local_x" v="6.6000" />
-    <tag k="local_y" v="-3.7000" />
+    <tag k="local_x" v="7.2821" />
+    <tag k="local_y" v="-3.3325" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100024" visible="true">
-    <tag k="local_x" v="5.6000" />
-    <tag k="local_y" v="-6.1000" />
+    <tag k="local_x" v="6.3554" />
+    <tag k="local_y" v="-5.2377" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100025" visible="true">
-    <tag k="local_x" v="5.6000" />
-    <tag k="local_y" v="-3.7000" />
+    <tag k="local_x" v="6.3446" />
+    <tag k="local_y" v="-3.3378" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100026" visible="true">
-    <tag k="local_x" v="4.6000" />
-    <tag k="local_y" v="-6.1000" />
+    <tag k="local_x" v="5.4179" />
+    <tag k="local_y" v="-5.2430" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100027" visible="true">
-    <tag k="local_x" v="4.6000" />
-    <tag k="local_y" v="-3.7000" />
+    <tag k="local_x" v="5.4071" />
+    <tag k="local_y" v="-3.3431" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100028" visible="true">
-    <tag k="local_x" v="3.6000" />
-    <tag k="local_y" v="-6.1000" />
+    <tag k="local_x" v="4.4804" />
+    <tag k="local_y" v="-5.2484" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100029" visible="true">
-    <tag k="local_x" v="3.6000" />
-    <tag k="local_y" v="-3.7000" />
+    <tag k="local_x" v="4.4696" />
+    <tag k="local_y" v="-3.3484" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100030" visible="true">
-    <tag k="local_x" v="2.6000" />
-    <tag k="local_y" v="-6.1000" />
+    <tag k="local_x" v="3.5429" />
+    <tag k="local_y" v="-5.2537" />
     <tag k="ele" v="0.0000" />
   </node>
   <node id="100031" visible="true">
-    <tag k="local_x" v="2.6000" />
-    <tag k="local_y" v="-3.7000" />
+    <tag k="local_x" v="3.5321" />
+    <tag k="local_y" v="-3.3537" />
+    <tag k="ele" v="0.0000" />
+  </node>
+  <node id="100032" visible="true">
+    <tag k="local_x" v="2.6054" />
+    <tag k="local_y" v="-5.2590" />
+    <tag k="ele" v="0.0000" />
+  </node>
+  <node id="100033" visible="true">
+    <tag k="local_x" v="2.5946" />
+    <tag k="local_y" v="-3.3590" />
     <tag k="ele" v="0.0000" />
   </node>
   <way id="200000" visible="true">
@@ -233,6 +243,7 @@
     <tag k="speed_limit" v="7" />
   </relation>
   <way id="200002" visible="true">
+    <nd ref="100032" />
     <nd ref="100030" />
     <nd ref="100028" />
     <nd ref="100026" />
@@ -243,6 +254,7 @@
     <tag k="subtype" v="solid" />
   </way>
   <way id="200003" visible="true">
+    <nd ref="100033" />
     <nd ref="100031" />
     <nd ref="100029" />
     <nd ref="100027" />

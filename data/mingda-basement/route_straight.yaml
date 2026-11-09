@@ -13,5 +13,9 @@
 # Build with:
 #   python3 scripts/map/centerline_to_lanelet.py data/mingda-basement/route_straight.yaml \
 #       --map-dir data/mingda-basement --width 2.4 --ele 0.0 --speed-limit 7 --smoothing 0 --write
-- [17.6, -4.9]
-- [2.6, -4.9]
+# Moved 2026-11-09 onto the measured lane line y = -4.324 + 0.00567 x (session
+# 20261109_223127, see route_loop_cw.yaml), 0.6-0.7 m north of y -4.9; width
+# 1.9 (was 2.4) so the north edge stays 0.12 m off the curb line at y -3.2.
+# Build with --width 1.9 (the command above otherwise unchanged).
+- [17.6, -4.224]
+- [2.6, -4.309]
