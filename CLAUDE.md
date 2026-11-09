@@ -189,6 +189,14 @@ of that in a new script; source `scripts/env.sh` and let it resolve.
 Units state their role with `GOLFCART_ENV_ROLE`, which outranks `config/host`: a
 unit must not depend on a file someone can edit underneath it.
 
+The hosts' own `/etc` configuration (NetworkManager cart profiles, CAN networkd,
+udev rules, chrony, linuxptp, sysctl, the SSD's fstab line) lives in
+`setup/host/{common,master,orin}/`, a tree mirroring target paths, with
+`setup/host/manifest.yaml` as the allow-list. `just host diff` (`--orin` for the
+orin, read only) shows drift, `just host capture` copies live into the tree with
+secrets stripped, and the setup step `host-config` restores it. Edit a cart
+system file there, never only in `/etc`.
+
 ### The master/orin link is a separate ROS domain
 
 Under `host:=master` / `host:=orin`, `config/cyclonedds/{master,orin}.xml` bind
@@ -425,7 +433,33 @@ it is Python, and all of it is standard library.
 ./setup.sh --dry-run --json      # the resolved selection, machine-readable
 ./setup.sh --rerun opencv        # forget one step's state, run it again
 ./setup.sh --plain               # numbered menu, for a dumb terminal
+./setup.sh --role master         # two-host install: one command per machine
+./setup.sh --run --role orin -y  # the same, unattended, on the orin
+./setup.sh --checklist [--json]  # only the still-to-do-by-hand list; exit 1 if any
 ```
+
+**Two-host install is three commands plus two vendor files**: `./setup.sh
+--role master` on the master, `./setup.sh --role orin` on the orin, then `just
+service pair` on the master. `--role` writes `config/host` (refusing to replace
+a different value without `--force-role`, which also forgets the role steps'
+state), implies `--profile vehicle` unless one is given, and adds that role's
+steps: `chrony-master` + `host-services` on the master, `chrony-orin` +
+`orin-can0` + `host-services` on the orin. Steps tagged for the other role
+(`hardware-config` is the master's LiDAR NICs) drop out. `Step.roles` says which
+roles select a step, `Requires.role` where it applies; `--list` shows the reason
+("orin host only, this host is master"). Without `--role`, `config/host` is the
+role when it says master/orin, so a later plain `./setup.sh` keeps the role steps.
+`host-services` runs `setup/scripts/install-host-service.sh` with no argument; it
+reads the role from `config/host`.
+
+**What setup cannot do is a checklist**, `setup/golfcart_setup/checklist.py`
+(stdlib, read-only), printed after every run, by `--status`, by `--checklist`,
+in `scripts/doctor.sh`, and on both hosts by `just service pair`. Each line has
+its fix: `config/host` unset; on the orin the Turing Drive DBC and the ZED SDK
+(whose installer lowers `net.core.rmem_max`, so `--rerun cyclonedds-sysctl`
+after it); `rmem_max` below the profiles' `SocketReceiveBufferSize min`, read
+from `config/cyclonedds/*.xml`; units missing, for another role or checkout, or
+lingering off. Tests: `python3 -m unittest discover -s setup/tests`.
 
 **Every step is declared in `setup/golfcart_setup/registry.py` and nowhere
 else.** Adding one means adding a `Step(...)` there; there is no wrapper recipe
@@ -854,27 +888,23 @@ twist_source:=gyro_odom|eagleye|rigloc     # Override preset twist source
 
 ## Documentation
 
-### Main Documentation Book (MkDocs)
-- **Framework**: MkDocs with Material theme (following Autoware conventions)
-- **Setup**: `cd book && just setup` (installs dependencies)
-- **Build**: `cd book && just build` (builds to `site/`)
-- **Serve**: `cd book && just serve` (http://localhost:3000)
-- **Source**: `book/src/` (Markdown files)
-- **Config**: `book/mkdocs.yml`
+### Where documentation lives
+README.md is for people operating the cart; keep internals out of it.
 
-**Features**:
-- ✅ Material Design theme
-- ✅ Mermaid diagram support
-- ✅ Multi-language (English + 繁體中文)
-- ✅ Math rendering (MathJax)
-- ✅ Search, dark mode, mobile responsive
+| file | audience | covers |
+|---|---|---|
+| [README.md](README.md) | users | what the cart is, hardware at a glance, the daily routine |
+| [docs/hardware.md](docs/hardware.md) | users | both machines, every peripheral and link (Mermaid diagram), IPs, the VCU's known limits |
+| [docs/setup.md](docs/setup.md) | installers | `./setup.sh --role master\|orin`, `just build`, `just service pair`, the DBC and ZED SDK by hand |
+| [docs/operating.md](docs/operating.md) | users | `just up`/`down`, `@name` arg files, map and initial pose, RViz, logs, troubleshooting |
+| [docs/recording.md](docs/recording.md) | users | record, fetch, merge, replay; where bags land |
+| [docs/maps.md](docs/maps.md) | users | map download, layout, checking a new map |
+| [DEVELOPMENT.md](DEVELOPMENT.md) | developers | `just run`, build skips, simulators, project layout, deprecated aliases |
+| [docs/README.md](docs/README.md) | developers | index of roadmaps, research, guides, archive |
+| [docs/multi-machine.md](docs/multi-machine.md) | developers | the two-host internals: domains, link bridge, units |
 
-**Key Guides** (in book):
-- **Sensor Integration**: `book/src/guides/sensor-integration/`
-  - Simple usage guide, sensor-specific details
-- **Vehicle Control**: `book/src/guides/vehicle-control/`
-  - Overview, hardware, control details, tuning & testing
-  - Multi-mode controllers, PCA9685 I2C, hall effect sensor, PID tuning
+There is no MkDocs book in this repository; earlier revisions of this file
+described one under `book/`.
 
 ### Legacy Guides (docs/)
 | Guide | Description |
@@ -980,8 +1010,12 @@ Both hosts run the same units, installed per machine with a role:
 | `golfcart-watchdog.service` | orin | stops everything if the master vanishes |
 
 ```bash
-just service install master            # this machine
-just service install-orin              # the orin, over ssh
+./setup.sh --role master               # on the master: steps + units (host-services)
+./setup.sh --role orin                 # on the orin: the same for the orin
+just service pair                      # on the master, once: ssh key, orin checks, checklists, doctor
+just service pair --check              # the same checks, read-only, no prompts
+just service install master            # units alone, this machine (what host-services runs)
+just service install-orin              # units alone, the orin, over ssh
 just up [ARGS...]                   # starts both; returns immediately
 just down                           # stops both; leaves recording alone
 just logs
@@ -992,6 +1026,14 @@ just service doctor                            # when topics do not show up
 Units are installed but never enabled: they start on demand, not at boot.
 Lingering is required and the installer enables it — without it the user manager
 exits with the last session and takes the units with it.
+
+`just service pair` (`scripts/multi_machine/pair.sh`) refuses unless this
+checkout is the master, installs the ssh key through `setup_ssh.sh` when
+BatchMode ssh fails, then checks the orin's checkout at `ORIN_WORKSPACE`, its
+`config/host` and its units (from the orin's own `--checklist --json`), printing
+what to run on the orin for each miss. On a terminal it offers to run
+`./setup.sh --run --role orin -y` there with `on_orin.sh --tty`, behind a y/N.
+A different commit on the two checkouts is a warning. Exit 0 means paired.
 
 See [docs/multi-machine.md](docs/multi-machine.md) for operation and
 [docs/design/orin_provisioning_implementation_plan.md](docs/design/orin_provisioning_implementation_plan.md)
@@ -1040,11 +1082,33 @@ The golf cart uses Velodyne VLP-32C as the sole LiDAR sensor:
 ### First Run Behavior
 On first launch, TensorRT will compile ONNX models to optimized CUDA engines:
 - This process can take 10-30 minutes depending on hardware
-- Compiled engines are cached in `./data/` directory
+- Compiled engines are written beside the ONNX in `data/autoware_data/` (gitignored)
 - Key models:
   - `lidar_centerpoint/pts_voxel_encoder_centerpoint_tiny.engine`
   - `lidar_centerpoint/pts_backbone_neck_head_centerpoint_tiny.engine`
   - Traffic light classifiers (if enabled)
+
+### Engine packs in git (`just engines`)
+Built engines are cached in the repo as `data/engines/<key>/` (engines as
+`<stem>.engine.zst`, Autoware `.json` sidecars, `manifest.yaml`), key = Autoware release + full
+TensorRT version + board, e.g. `aw1.5.0-trt10.3.0.30-agx-orin-64gb` (both
+hosts today). L4T, CUDA, hostname are recorded, not keyed.
+- `just engines key | list | install | verify | save`; all take `--data-dir`.
+- `install` decompresses to a temp file beside the target, checks the
+  uncompressed `engine_sha256`, renames into place (a real file, never a
+  symlink: Autoware writes through the path on a rebuild), and only where the target ONNX sha256 matches the manifest; mismatch,
+  missing ONNX or no pack is skipped with a reason, exit 0, built on first
+  launch as before. A differing local engine is kept unless `--force`.
+- The `tensorrt-engines` setup step runs `engines install`, then
+  `build-engines`, which loads (does not rebuild) a valid engine: measured
+  5 s for CenterPoint tiny from an installed pack.
+- **zstd -19 (CLI, `apt install zstd`), plain git blobs, no LFS**: ~9.2 MB
+  per key today, nearly all the CenterPoint-tiny backbone, which barely
+  compresses. Each save of a changed engine adds its packed size to history
+  permanently: `just engines
+  save` only after a build that really changed an engine (it writes nothing
+  for byte-identical ones).
+- Design: [docs/research/perception/tensorrt-engine-prebuild.md](docs/research/perception/tensorrt-engine-prebuild.md).
 
 ### Optimized Perception Configuration
 For faster startup and LiDAR-only operation, configure in `golfcart.launch.yaml`:

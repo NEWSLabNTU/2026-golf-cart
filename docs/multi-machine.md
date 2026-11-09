@@ -1,16 +1,21 @@
 # Multi-Machine Operation (master + orin)
 
-How to run the golf cart stack across its two machines. For why it is built this
-way, see [design/multi_machine_deployment.md](design/multi_machine_deployment.md).
+How the golf cart stack runs across its two machines: the domain split, the link
+bridge, the systemd units, time sync and the recording internals. For why it is
+built this way, see [design/multi_machine_deployment.md](design/multi_machine_deployment.md).
+
+For day-to-day use start with the user docs: [setup.md](setup.md) (install),
+[operating.md](operating.md) (up/down, arguments, logs), [recording.md](recording.md)
+and [hardware.md](hardware.md).
 
 ## The two hosts
 
 | | address | interface | runs |
 |---|---|---|---|
-| master | `192.168.125.100` | `enP5p3s0` | the whole Autoware stack, plus the wired sensors (Velodyne, Falcon, GNSS, IMU, USB cameras) |
+| master | `192.168.125.100` | `enP5p3s0` | the whole Autoware stack, plus the wired sensors (Velodyne, Falcon, GNSS, three GMSL cameras) |
 | orin | `jetson@192.168.125.101` | `eno1` | the ZED X camera, and the CAN vehicle interface on `can0` |
 
-Both sit on the shared 4G LAN, which negotiates **100 Mb/s**. That is the reason
+Both sit on the shared 4G LAN, which negotiates **100 Mb/s**. Peripherals and addresses: [hardware.md](hardware.md). That is the reason
 each host records to its own disk instead of streaming images across.
 
 ## What crosses the link
@@ -51,8 +56,9 @@ What follows from that:
 - **Engage crosses the link as a service.** The bridge proxies
   `/control/control_mode_request`; if the orin side is down the request goes
   unanswered and Autoware's engage times out.
-- `just check vehicle can` reads the bus on the orin over ssh
-  (`CAN_HOST=orin`, the default; `CAN_HOST=local` on the machine with the bus).
+- `scripts/check/vehicle.sh` (and `just can vcu-status`) read the bus on the
+  orin over ssh (`CAN_HOST=orin`, the default; `CAN_HOST=local` on the machine
+  with the bus).
 
 ```bash
 just link topics        # ros2 topic list in the link domain: what is on the wire
@@ -89,18 +95,8 @@ split brings master → orin down to ~2 kB/s and orin → master to ~90 kB/s
 
 ## Daily operation
 
-Everything runs from the master:
-
-```bash
-just up            # both hosts: this stack + the orin's ZED, over ssh
-just up @mingda    # ...with config/launch/mingda.args; later args win
-just logs          # follow this host's log
-just down          # stop both hosts, orin first
-```
-
-Both hosts run under systemd now, so `just up` **returns immediately** and
-nothing occupies a terminal. Closing your ssh session no longer stops the cart;
-`just down` is the stop verb, and there is no Ctrl-C to press.
+The commands (`just up`, `just up @name`, `just logs`, `just down`) and the
+argument files are in [operating.md](operating.md). What happens underneath:
 
 Arguments reach each unit through `.golfcart-launch.args` in that host's
 checkout (gitignored). `just up` expands `@name` arg files once on the master,
@@ -142,6 +138,8 @@ still wins.
 
 ## Recording
 
+The commands are in [recording.md](recording.md). The internals:
+
 Recording is independent of the launch. Start it whenever you want, with the
 stack up, down, or half-up:
 
@@ -163,8 +161,7 @@ another session and nothing is merged. Nor is an orin bag holding nothing but
 The collection runs as a transient user unit (`golfcart-collect-<ts>`), so
 `record stop` returns as soon as both bags are finalized, and closing the
 terminal does not kill a half-written merge. Its output goes to
-`$GOLFCART_BAG_DIR/golfcart-collect-<ts>.log`, which `record stop` prints; the
-user journal is not persistent on every host. If either host failed to stop,
+`$GOLFCART_BAG_DIR/golfcart-collect-<ts>.log`, which `record stop` prints. If either host failed to stop,
 nothing is collected and the stop exits non-zero. Re-run the collection with:
 
 ```bash
@@ -211,12 +208,11 @@ bags could be half a second apart with nothing to reveal it.
 The master therefore serves time and the orin follows it:
 
 ```bash
-# On the master:
-cd setup && just chrony-master
-
-# On the orin:
-cd setup && just chrony-orin
+./setup.sh --only chrony-master   # on the master
+./setup.sh --only chrony-orin     # on the orin
 ```
+
+`./setup.sh --role master|orin` selects these for you (see [setup.md](setup.md)).
 
 Verify from the orin — the master should be the selected source (`^*`):
 
@@ -241,7 +237,7 @@ Two deliberate choices in the config:
 `chronyc clients` on the master needs root; checking the orin's `^*` selection is
 the easier confirmation that the master is answering.
 
-**PTP:** the master also runs `phc2sys -s CLOCK_REALTIME -c enP5p5s0`, pushing the
+**PTP:** the master also runs `ptp4l` on `enP5p5s0` and `phc2sys -s CLOCK_REALTIME -c enP5p5s0` (setup step `linuxptp`), pushing the
 system clock out to the Falcon LiDAR's NIC. Chrony disciplines `CLOCK_REALTIME`,
 so the two compose — chrony sets the system clock, phc2sys propagates it to the
 LiDAR. Do not reverse phc2sys's direction while chrony is running.
@@ -390,25 +386,15 @@ launches its ZED with no master to talk to is just a warm camera.
 
 ## One-time provisioning
 
-Once per machine, from its own checkout:
-
-Most of it is driven from the master:
+The procedure is in [setup.md](setup.md): `./setup.sh --role master|orin` on each
+machine (its `host-services` step installs the units and lingering), then
+`just service pair` once on the master. The pieces it is made of, for when one
+needs redoing by hand:
 
 ```bash
-# On the master:
-echo master > config/host              # picks the DDS profile; gitignored
-just service install master               # units + lingering (sudo)
-just service ssh-setup                            # dedicated key, copied to the orin
-just service install-orin                 # runs the orin's own installer over ssh
-
-# On the orin, once (its own checkout, its own clock and buffers):
-echo orin > config/host
-./setup/scripts/configure-cyclonedds-sysctl.sh
-(cd setup && just chrony-orin)            # follow the master's clock
-just build
-
-# Back on the master:
-(cd setup && just chrony-master)          # serve time to the orin
+just service install master   # or orin: units + lingering (sudo), this host
+just service ssh-setup        # dedicated key, copied to the orin
+just service install-orin     # runs the orin's own installer over ssh
 ```
 
 `just service install` writes a drop-in per unit carrying the resolved repo path
@@ -484,7 +470,7 @@ receive buffer size`.** The ZED SDK installs
 `/etc/sysctl.d/60-zed-buffers.conf` with `net.core.rmem_max=1048576`, which sorts
 after and undercuts our setting. Our DDS profiles require a 10 MB minimum, so
 CycloneDDS refuses to start at all — on every profile, loopback included. Re-run
-`./setup/scripts/configure-cyclonedds-sysctl.sh`, which writes
+`./setup.sh --rerun cyclonedds-sysctl`, which writes
 `99-cyclonedds-max.conf`. Re-run it any time the SDK is reinstalled.
 
 **`InvalidHandle: cannot use Destroyable because destruction was requested`.**
@@ -561,4 +547,4 @@ Check `chronyc tracking` on the orin. If `Reference ID` is anything other than
 be hundreds of milliseconds apart. Causes, in order of likelihood: the master's
 chrony is not running, `/etc/chrony/conf.d/golfcart-master.conf` is missing there,
 or the LAN was down when the orin last polled. Re-running
-`cd setup && just chrony-orin` on the orin forces a re-select.
+`./setup.sh --rerun chrony-orin` on the orin forces a re-select.

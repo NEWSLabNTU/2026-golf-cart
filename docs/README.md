@@ -1,5 +1,27 @@
 # Golf Cart Documentation
 
+Index for developers. Users start at the [top-level README](../README.md).
+
+## Using the cart
+
+- [Hardware](hardware.md) — the two machines, sensors, addresses, the CAN path to the VCU, known-broken devices
+- [Setup](setup.md) — installing a machine, once
+- [Operating](operating.md) — up/down, argument files, map and initial pose, RViz, logs, troubleshooting
+- [Recording](recording.md) — recording, fetching and merging bags, replay
+- [Maps](maps.md) — downloading, layout, checking a new map
+- [Control testing](guides/control_testing.md) — first supervised autonomous drive: roles, pre-drive checks, engage order
+
+## Active
+
+- [ROADMAP.md](../ROADMAP.md) — the development plan
+- [DEVELOPMENT.md](../DEVELOPMENT.md) — build, single-machine runs, simulators, project layout, deprecated recipes
+- [CONTRIBUTING.md](../CONTRIBUTING.md) — branching convention (`2026-golfcart`), submodule table, and workflow
+- [Multi-machine operation](multi-machine.md) — the deep dive: domain split, link bridge, systemd units, time sync, recording internals
+- [Phase 7: reflective board cold start](roadmaps/7-reflective-board-cold-start.md)
+- [Phase 8: autonomous driving](roadmaps/8-autonomous-driving.md)
+- [Phase 9: Ming-Da autonomous driving](roadmaps/9-mingda-autonomous-driving.md) — VCU findings, steering report, open issues
+- [Phase 10: Isaac twin demo](roadmaps/10-isaac-twin-demo.md)
+
 ## Handover
 
 - [CUDA NDT on the Orin](handover/2026-08-30-cuda-ndt-on-orin.md) — measured on the target: why the CUDA build failed everywhere and how the floor is pinned now, the harness fault that made empty replays look like non-convergence, and the A/B against Autoware's NDT that traced 94% of the frame to a redundant CPU NVTL pass
@@ -16,6 +38,8 @@
 - [LiDAR Integration](guides/lidar_integration.md) — Velodyne VLP-32C driver setup and network configuration
 - [MRM Configuration](guides/mrm_configuration.md) — Minimal Risk Maneuver (emergency stop) parameter configuration
 - [MRM Troubleshooting](guides/mrm_troubleshooting.md) — MRM diagnostics and troubleshooting procedures
+- [Sphere Sensor View](guides/sphere_sensor_view.md) — checking sensor extrinsics on one sphere
+- [Isaac Twin Demo](guides/isaac_twin_demo.md) — the cart in the NTU twin on Isaac Sim
 
 ## Research
 

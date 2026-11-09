@@ -104,7 +104,7 @@ which reads as "the sensor was quiet" rather than "the name is wrong".
 ## What crosses the link
 
 `link/topics.yaml`. Under the `master` and `orin` profiles the stack runs in
-ROS domain 0 bound to `lo`, so nothing in it can reach the wire; only the link
+its own ROS domain bound to `lo` (50 on the master, 60 on the orin), so nothing in it can reach the wire; only the link
 domain (`GOLFCART_LINK_DOMAIN_ID` in `runtime.conf`, 10) is on the LAN, and its
 only participant per host is `golfcart_domain_bridge`, which copies the topics
 in this file across in the direction the file gives them. The wire therefore

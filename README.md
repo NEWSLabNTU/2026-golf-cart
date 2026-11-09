@@ -1,463 +1,113 @@
-# Golf Cart Autonomous Driving System
+# Golf Cart Autonomous Driving
 
-This project implements an autonomous driving system for a golf cart, based on the [Golf Cart](https://github.com/NEWSLabNTU/Golf Cart) platform and powered by [Autoware](https://github.com/autowarefoundation/autoware).
+Autonomous driving for an electric golf cart, built on
+[Autoware](https://github.com/autowarefoundation/autoware) 1.5.0 and ROS 2 Humble.
+The cart localizes against a point cloud map (NDT), plans along a Lanelet2 map,
+and drives through a Turing Drive vehicle control unit (VCU) over CAN.
 
-## Overview
+It is developed at NEWSLab, National Taiwan University, and is in active
+development. Autonomous runs are supervised: a driver is always aboard.
 
-This system provides a complete autonomous driving software stack for golf cart applications, supporting:
+## Hardware at a glance
 
-- **Navigation**: GPS-based waypoint following and localization
-- **Perception**: LiDAR-based obstacle detection and camera-based vision
-- **Control**: Drive-by-wire interface for steering, throttle, and braking
-- **Mapping**: 3D map-based localization using NDT scan matching
+The cart has two computers on one LAN.
 
-## System Configuration
-
-### Target Platform
-- **Hardware**: two NVIDIA AGX Orin machines (master + orin) — see [The cart is two machines](#the-cart-is-two-machines)
-- **OS**: JetPack 6.x (Ubuntu 22.04)
-- **ROS**: ROS 2 Humble
-- **Autoware**: 1.5.0, installed at `/opt/autoware/1.5.0/`
-
-### Sensor Configuration
-- **LiDAR**: Velodyne VLP-32C
-- **GNSS**: u-blox receiver
-- **IMU**: Tamagawa IMU (Autoware recommended)
-- **Cameras**: Multiple USB cameras (future upgrade to Tier IV cameras)
-
-## The cart is two machines
-
-This is the part to get straight before anything else. The vehicle runs on **two**
-computers, and the normal deployment uses both:
-
-| | runs | records |
+| | master | orin |
 |---|---|---|
-| **master** | the whole Autoware stack and the wired sensors (Velodyne, Falcon, GNSS, IMU, USB cameras) | its own bag, to the external SSD when mounted — [see below](#where-the-bag-lands) |
-| **orin** | the ZED X camera only | its own bag, locally in `~/rosbags` |
+| computer | Advantech AFE-R750 (Jetson AGX Orin) | Jetson AGX Orin dev kit |
+| address | `192.168.125.100` | `192.168.125.101` |
+| runs | the Autoware stack | ZED X camera, CAN vehicle interface |
+| sensors | Velodyne VLP-32C, Seyond Falcon, u-blox ZED-F9P GNSS, 3 TIER IV GMSL cameras | ZED X stereo camera (its IMU is the IMU in use) |
+| records to | external SSD, `/mnt/external/rosbags` | `~/rosbags` (NVMe) |
 
-They split because the shared LAN negotiates 100 Mb/s and a single LiDAR stream is
-~30 MB/s. Neither machine records the other's topics.
-
-Both carry the **same repository and the same recipes**. `just up` / `just down`
-act on both, by running the private per-host recipe (`_up-local` /
-`_down-local`) here and then, over ssh, on the orin's copy of the repository. There is no
-separate remote vocabulary to learn.
-
-Running on one machine is also supported, and is covered under
-[Single machine](#single-machine-development-and-bench-testing) below — but it is
-the bench case, not the vehicle.
-
-## Setup
-
-Prerequisites on **both** machines: JetPack 6.x on an AGX Orin, and Autoware 1.5.0
-at `/opt/autoware/1.5.0/`.
-
-### 1. Prepare each machine
-
-Do this on the master **and** on the orin, in each machine's own checkout:
-
-```bash
-git clone --recurse-submodules https://github.com/NEWSLabNTU/2026-golf-cart.git
-cd 2026-golf-cart
-./setup.sh                  # dependencies (interactive)
-echo master > config/host   # on the orin: echo orin > config/host
-just build
+```mermaid
+flowchart LR
+  subgraph MASTER["master: Advantech AFE-R750"]
+    M["Autoware stack"]
+  end
+  subgraph ORIN["orin: AGX Orin dev kit"]
+    O["ZED + vehicle interface"]
+  end
+  VLP["Velodyne VLP-32C"] ---|"Ethernet"| M
+  FAL["Seyond Falcon"] ---|"Ethernet + PTP"| M
+  GNSS["u-blox ZED-F9P"] ---|"USB"| M
+  CAMS["3x GMSL camera"] ---|"GMSL2"| M
+  M <-->|"LAN, 100 Mbit/s"| O
+  ZED["ZED X"] ---|"GMSL2"| O
+  O ---|"CAN 500 kbit/s"| VCU["Turing Drive VCU"]
 ```
 
-`config/host` is gitignored — it states which machine this checkout is on, and
-selects the DDS profile. Without it a shell falls back to `loopback` and sees no
-cross-machine topics.
+Full details, known-broken devices and VCU limits: [docs/hardware.md](docs/hardware.md).
 
-### 2. Vendor CAN database — master only, by hand
+## Daily use
 
-`golfcart_vehicle_interface` generates its CAN bindings from Turing Drive's
-`CAX_ADS_CAN.dbc` at build time. The file is proprietary, gitignored, and cannot
-be fetched automatically — obtain it from Turing Drive and copy it into the crate
-root **on the master**:
+Run everything on the **master**, in the repository directory. It starts and
+stops the orin for you.
+
+Start the cart's software (both machines):
 
 ```bash
-cp /path/to/CAX_ADS_CAN.dbc \
-   src/vehicle/golfcart_vehicle_launch/golfcart_vehicle_interface/
+just up
 ```
 
-`CAX_ADS_DBC=/absolute/path/to/file.dbc` works instead, if you would rather keep
-it outside the tree.
-
-**The orin does not need it.** Only the machine wired to the CAN bus runs the
-vehicle interface. `just build` skips `golfcart_vehicle_interface` when no DBC is
-present, rather than failing the whole build — so the orin builds cleanly without
-the vendor file, and starts building the package the moment one appears.
-
-### 3. ZED SDK — orin only, by hand
-
-The orin needs the ZED SDK at `/usr/local/zed`, installed from the Stereolabs
-`.run` installer. **This is not automated** — the installer does not script
-cleanly, so it stays a manual step. Currently installed: SDK 5.2.3.
-
-Two consequences that are easy to miss:
-
-- `just build` **silently skips** the ZED packages when `/usr/local/zed` is
-  absent. The build succeeds and the camera simply never appears.
-- The SDK drops `/etc/sysctl.d/60-zed-buffers.conf`, which lowers
-  `net.core.rmem_max` below the 10 MB our DDS profiles require. CycloneDDS then
-  refuses to start on *every* profile, loopback included. Re-run
-  `./setup/scripts/configure-cyclonedds-sysctl.sh` after installing or upgrading
-  the SDK, then `just build` again to pick the ZED packages up.
-
-### 4. Wire the two together, from the master
+Start it with a saved set of arguments, for example the Ming-Da basement loop:
 
 ```bash
-just service install master     # systemd units + lingering (sudo)
-just service ssh-setup                  # dedicated key, copied to the orin
-just service install-orin       # runs the orin's own installer over ssh
-just service doctor && just service doctor-orin # confirm both sides
-```
-
-Time sync matters as much as the rest — two bags cannot be merged if the clocks
-disagree. See *Time sync* in [docs/multi-machine.md](docs/multi-machine.md).
-
-## Daily operation
-
-From the master:
-
-```bash
-just up            # both hosts; returns immediately
-just logs          # follow this host's log
-just down          # stop both hosts
-just service doctor        # when topics do not show up
-```
-
-There is no Ctrl-C to press. Both hosts run under systemd, so closing the terminal
-or dropping the ssh session does not stop the cart — `just down` is the stop
-verb.
-
-### Choosing the map and the initial pose
-
-Launch arguments follow the recipe and are passed to both hosts. `@name` expands
-in place to the arguments in `config/launch/<name>.args`, and later arguments
-win. The recipe prints the final list before anything starts:
-
-```bash
-# NTU campus, route 01 (default map: ./data/COSS-map-planning)
-just up map_path:=./data/ntu-campus-planning/r01
-
-# Ming-Da basement, the clockwise loop lane: board init, no GNSS, 2.0 m/s
 just up @mingda-loop
-
-# ...the same, slower
-just up @mingda-loop planning_speed_limit:=0.5
-
-# Basement, indoor: no GNSS, initial pose from the reflective board
-just up @basement
 ```
 
-`pose_initializer:=` picks what seeds the initial pose:
-
-| value | seeds from |
-|---|---|
-| `gnss` (default) | the GNSS fix |
-| `board` | the reflective board in view (indoor; use with `use_gnss:=false`) |
-| `none` | nothing: click *2D Pose Estimate* in RViz |
-
-When GNSS puts the cart somewhere wrong, seed it from a spot captured once instead
-of clicking in RViz:
+Follow the log, and stop everything:
 
 ```bash
-just pose capture ntu-r02 gate   # first time: click in RViz, let NDT settle, then save the spot
-just pose init ntu-r02 gate      # every time after, parked on that spot
-just pose list                   # maps and saved spots
+just logs
+just down
 ```
 
+`just up` returns at once and the stack keeps running in the background.
+Closing the terminal does not stop it; `just down` does.
 
-Full operational guide: [docs/multi-machine.md](docs/multi-machine.md).
-
-## Recording
-
-Independent of the launch — start it any time, stack up or down:
+Record a session (both machines; stop merges the two bags into one):
 
 ```bash
-just record start      # both hosts record to their own disk
-just record status
+just record start
 just record stop
-
-just bag fetch-orin    # copy the orin's bags over
-just bag merge "master_<ts> orin_<ts>"
-just bag replay
 ```
 
-Or record in the foreground, this host only, from a terminal — Ctrl-C stops it
-and finalizes the bag:
+Check free disk before recording: see [docs/recording.md](docs/recording.md).
+
+**Before any autonomous drive**, follow
+[docs/guides/control_testing.md](docs/guides/control_testing.md). The driver puts
+the cart in AUTO on the dashboard (brake pedal held, then the AUTO button) before
+Autoware engages.
+
+When something does not work:
 
 ```bash
-just bag record                # $GOLFCART_BAG_DIR/master_<ts>
-just bag record campus_loop    # $GOLFCART_BAG_DIR/master_<ts>_campus_loop
-just bag record-indoor         # pre-drive checklist, then the same recording
-just bag play                  # newest finalized bag in $GOLFCART_BAG_DIR
+just service doctor
 ```
-
-Topics recorded are plain lists, one per line — edit these, not any script:
-
-```
-config/recording/master_topics.txt
-config/recording/orin_topics.txt
-```
-
-These are the only lists. `just record start`, `just bag record` and `just bag
-record-indoor` all read them through `scripts/recording/topics.sh`; no recorder
-carries its own copy. A host whose role is neither `master` nor `orin` (one
-machine running everything) records both. `just bag record-aruco` is the
-exception: it records a purpose-built set including the detector's output, for
-one analysis script.
-
-### Where the bag lands
-
-Each host writes to its own disk, into `$GOLFCART_BAG_DIR`, one directory per
-run named `<role>_<YYYYmmdd_HHMMSS>`:
-
-| host | directory | example |
-|---|---|---|
-| master | external SSD if mounted, else `~/rosbags` | `/mnt/external/rosbags/master_20260814_152605` |
-| orin | `~/rosbags` (it has no SSD) | `~/rosbags/orin_20260814_152603` |
-
-`scripts/env.sh` resolves `GOLFCART_BAG_DIR`: `/mnt/external/rosbags` when
-`/mnt/external` is mounted and writable, otherwise `~/rosbags`. An explicit
-`GOLFCART_BAG_DIR` still wins.
-
-**Check which one you got before a long run.** The root filesystem has a couple
-of GB free and recording runs at roughly 15–30 MB/s, so a bag fills it in
-minutes — and the fallback to `~/rosbags` is silent:
-
-```bash
-source scripts/env.sh; echo "$GOLFCART_BAG_DIR"   # what the next run will use
-df -h "$GOLFCART_BAG_DIR"
-```
-
-The recorder also logs its exact output path on the line it starts with:
-
-```bash
-systemctl --user status golfcart-record.service | grep record_unit_exec:
-# record_unit_exec: role=master writing /home/ubuntu/rosbags/master_20260814_152605 (27 topics)
-
-just record status                       # active/inactive, both hosts
-ls -dt "$GOLFCART_BAG_DIR"/*_*  | head    # most recent bags, newest first
-```
-
-Use `systemctl --user status`, not `journalctl --user -u golfcart-record.service`
-— on this machine the latter prints `-- No entries --` for these units.
-
-A finished bag is a directory holding `metadata.yaml` plus one or more
-`<name>_N.db3` files (sqlite3, the ROS 2 Humble default). `ros2 bag info <dir>`
-is the check that it finalized — see [docs/roadblocks.md](docs/roadblocks.md) if
-`metadata.yaml` is 0 bytes.
-
-### Getting both halves onto one machine
-
-```bash
-just bag fetch-orin        # rsync the orin's orin_* bags into this host's $GOLFCART_BAG_DIR
-just bag merge "master_20260814_152605 orin_20260814_152603"
-```
-
-`bag-merge` writes `merged_<timestamp>` next to the first input unless you pass
-`-o /path/to/output`. The merged bag is roughly the sum of its inputs, so point
-`-o` at the SSD if the inputs are large.
-
-`just down` deliberately leaves a recording running; stopping the stack and
-stopping a recording are separate decisions.
-
-**The vehicle interface must be running while you record.** NDT needs a velocity
-signal, which reaches it as
-`/vehicle/status/velocity_status` → `vehicle_velocity_converter` →
-`gyro_odometer` → `ekf_localizer`. Without that topic in the bag, a replay has no
-twist and localization will not converge.
-
-The VCU does **not** need to be in autonomous mode for this. `VelocityReport` is
-published from the decoded MTR frame and does not depend on the control mode —
-but the VCU sends that frame only while it hears the rolling counter in our
-frames, so the interface has to be transmitting. It always is:
-
-```bash
-just vehicle interface     # real bus, can0
-```
-
-Confirm before a long run — the report is gated on frame freshness, so a silent
-VCU yields a silent topic:
-
-```bash
-ros2 topic hz /vehicle/status/velocity_status
-```
-
-We record first-hand driver output only. Derived topics — the concatenated cloud,
-the corrected IMU — are commented out of the lists, because replay is a logging
-simulation: the single-machine stack runs with drivers disabled against the merged
-bag and recomputes them with current parameters rather than the ones frozen at
-record time.
-
-## Single machine (development and bench testing)
-
-For working at a desk, or driving the master alone with no orin attached. This
-runs play_launch in the foreground with the `loopback` DDS profile and involves no
-systemd and no ssh:
-
-```bash
-just run                                 # web UI at http://localhost:8081
-just run use_gnss:=false                 # indoor, no GNSS
-just run @basement use_gnss:=true        # an arg file, then an override
-```
-
-Launch arguments are positional, not `ARGS=...`; `@name` arg files work here too.
-
-To drive the master alone but still through its systemd unit:
-
-```bash
-GOLFCART_USE_ORIN=0 just up
-```
-
-`just --list` shows every recipe.
-
-## Development Status
-
-This project is currently in development. See [ROADMAP.md](ROADMAP.md) for the active development plan and [docs/](docs/) for archived documentation.
-
-## Project Structure
-
-```
-.
-├── src/
-│   ├── launcher/          # Main launch files
-│   ├── sensor_kit/        # Sensor integration
-│   ├── vehicle/           # Vehicle interface
-│   ├── param/             # Configuration parameters
-│   ├── sensor_component/  # External sensor drivers
-│   └── system/            # System monitoring
-├── data/                  # Maps and ML models
-├── docs/                  # Documentation archive
-├── ROADMAP.md             # Active development roadmap
-└── CONTRIBUTING.md        # Branching convention and workflow
-```
-
-## Maps Download
-
-Download the NTU campus map into `data/ntu-campus-planning/`:
-https://newslabn.csie.ntu.edu.tw/drive/d/s/17udXr7jE0y1uVZuITDKMHFdhprfnH8l/y7cT2BSRT_5RUSI5bp4blXm8MI8qlp-3-iLCA3n5hIg0
-
-### Map directory layout
-
-Every map is one directory holding exactly these three files, with these exact
-names. Autoware looks them up by name, so a renamed file (`map.osm`,
-`pointcloud_map.pcd.pcd`) is not found:
-
-```
-data/
-└── ntu-campus-planning/
-    ├── r01/                          # route 01
-    │   ├── lanelet2_map.osm          # Lanelet2 vector map (lanes, routes)
-    │   ├── map_projector_info.yaml   # how map coordinates relate to lat/lon
-    │   └── pointcloud_map.pcd        # point cloud, for NDT localization
-    └── r02/                          # route 02, same three files
-        ├── lanelet2_map.osm
-        ├── map_projector_info.yaml
-        └── pointcloud_map.pcd
-```
-
-Do not add an extra folder level. After unzipping, the files must sit directly in
-`r02/`, not in `r02/r02/` or `r02/map/`.
-
-### Checking a new map
-
-Example: you have just put a new route at `data/ntu-campus-planning/r03`.
-
-**1. All three files are there and not empty:**
-
-```bash
-MAP=data/ntu-campus-planning/r03
-for f in lanelet2_map.osm map_projector_info.yaml pointcloud_map.pcd; do
-  [ -s "$MAP/$f" ] && echo "ok       $f" || echo "MISSING  $f"
-done
-```
-
-A correct map prints three `ok` lines:
-
-```
-ok       lanelet2_map.osm
-ok       map_projector_info.yaml
-ok       pointcloud_map.pcd
-```
-
-**2. The files have the right contents.** Each one starts like this (values
-differ per map):
-
-```bash
-cat $MAP/map_projector_info.yaml
-# projector_type: MGRS
-# mgrs_grid: 51RUH           <- NTU campus is in grid 51RUH
-# vertical_datum: WGS84
-
-head -3 $MAP/lanelet2_map.osm
-# <?xml version="1.0" encoding="UTF-8"?>
-# <osm generator="VMB">
-#   <MetaInfo format_version="1" map_version="4" validation_version="1"/>
-
-grep -a -m3 -E '^(FIELDS|POINTS|DATA)' $MAP/pointcloud_map.pcd
-# FIELDS x y z intensity
-# POINTS 2493616
-# DATA binary
-```
-
-**3. Autoware loads it.** Start the planning simulator on it:
-
-```bash
-just sim planning map_path:=./data/ntu-campus-planning/r03
-```
-
-The map loaded if RViz shows the point cloud and the lanes. Node output goes to
-`play_log/`, not the terminal; the map loader's log should say:
-
-```bash
-grep lanelet2_map_loader "$(ls -td play_log/*/ | head -1)"node/map_container/err
-# [map.lanelet2_map_loader]: Succeeded to load lanelet2_map. Map is published.
-```
-
-Once it loads here, use the same path on the cart:
-`just up map_path:=./data/ntu-campus-planning/r03`.
-
 
 ## Documentation
 
-### Active
-- [ROADMAP.md](ROADMAP.md) — Five-phase development plan with parallel tracks (cleanup, sensors, DBW, planning, integration)
-- [CONTRIBUTING.md](CONTRIBUTING.md) — Branching convention (`2026-golfcart`), submodule table, and workflow
-- [docs/multi-machine.md](docs/multi-machine.md) — Two-machine operation: provisioning, launch, recording, troubleshooting
+| | |
+|---|---|
+| [docs/hardware.md](docs/hardware.md) | what is on the cart, addresses, CAN, known-broken devices |
+| [docs/setup.md](docs/setup.md) | installing a machine (once) |
+| [docs/operating.md](docs/operating.md) | start/stop, argument files, map and initial pose, RViz, logs, troubleshooting |
+| [docs/recording.md](docs/recording.md) | recording, fetching and merging bags, replay |
+| [docs/maps.md](docs/maps.md) | downloading and checking maps |
+| [docs/guides/control_testing.md](docs/guides/control_testing.md) | supervised autonomous drive: roles, checks, engage order |
+| [DEVELOPMENT.md](DEVELOPMENT.md) | for developers: build, single-machine runs, simulators, project layout |
+| [docs/README.md](docs/README.md) | index of design notes, roadmaps and research |
+| [ROADMAP.md](ROADMAP.md) | the development plan |
 
-### Roadblocks
-- [docs/roadblocks.md](docs/roadblocks.md) — Open issues blocking setup, build, or test (JetPack mismatch, duplicate package, missing drivers)
-
-### Guides
-- [docs/guides/lidar_integration.md](docs/guides/lidar_integration.md) — Velodyne VLP-32C driver setup and network configuration
-- [docs/guides/mrm_configuration.md](docs/guides/mrm_configuration.md) — Minimal Risk Maneuver (emergency stop) parameter configuration
-- [docs/guides/mrm_troubleshooting.md](docs/guides/mrm_troubleshooting.md) — MRM diagnostics and troubleshooting procedures
-
-### Research
-- [docs/research/localization/ndt_parameter_tuning_coss_map.md](docs/research/localization/ndt_parameter_tuning_coss_map.md) — NDT scan matcher parameter tuning results for VLP-32C on COSS map
-- [docs/research/indoor_localization.md](docs/research/indoor_localization.md) — Survey of ROS 2 indoor localization methods (historical, AutoSDV era)
-- [docs/research/nvidia_isaac_ros.md](docs/research/nvidia_isaac_ros.md) — Isaac ROS Visual SLAM analysis and integration notes (historical, AutoSDV era)
-- [docs/research/lidar_marker_localization.md](docs/research/lidar_marker_localization.md) — LiDAR-based landmark localization research (historical, AutoSDV era)
-
-### Archived Roadmaps
-- [docs/roadmaps/0-migration.md](docs/roadmaps/0-migration.md) — Original 11-phase migration plan from AutoSDV/Golf Cart to golf cart (superseded by ROADMAP.md)
-- [docs/roadmaps/1-track-a.md](docs/roadmaps/1-track-a.md) — Sensor cleanup (done), VLP-32C & u-blox (software ready), Tamagawa IMU (blocked)
-- [docs/roadmaps/1-track-b.md](docs/roadmaps/1-track-b.md) — Phase 1 Track B tooling & infrastructure progress (partial: setup gaps, no submodule branch tracking)
-- [docs/roadmaps/0-autosdv-to-golfcart-rename.md](docs/roadmaps/0-autosdv-to-golfcart-rename.md) — AutoSDV→golfcart naming rename status (completed)
-- [docs/roadmaps/2-vehicle-interface-hardening.md](docs/roadmaps/2-vehicle-interface-hardening.md) — golfcart_vehicle_interface fixes vs Autoware pacmod_interface reference
-- [docs/roadmaps/2-vehicle-interface-fault-handling.md](docs/roadmaps/2-vehicle-interface-fault-handling.md) — ROS-sub / CAN-msg drop handling
-- [docs/design/vehicle_interface_standalone.md](docs/design/vehicle_interface_standalone.md) — one `just vehicle interface` recipe for standalone bench testing, with `tx=` / `keyboard=` options
-- [docs/roadmaps/2-xsens-driver-hardening.md](docs/roadmaps/2-xsens-driver-hardening.md) — Xsens MTi CAN driver hardening
+`just --list` shows every command.
 
 ## License
 
-This project is based on [Golf Cart](https://github.com/NEWSLabNTU/Golf Cart) and inherits its Apache 2.0 license. See [LICENSE.txt](LICENSE.txt) for details.
+Apache 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
 ## Acknowledgments
 
-This project is built upon:
-- **Golf Cart**: Software-Defined Vehicle platform by NEWSLab, National Taiwan University
-- **Autoware**: Open-source autonomous driving software by the Autoware Foundation
+Built on [Autoware](https://github.com/autowarefoundation/autoware) by the
+Autoware Foundation, and on NEWSLab's Golf Cart / AutoSDV platform at National
+Taiwan University.
