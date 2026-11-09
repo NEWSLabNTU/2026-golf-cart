@@ -88,7 +88,12 @@ from:
 | `none` | you: click *2D Pose Estimate* in RViz |
 
 With `board`, if the first try fails, stop the cart with the board in view and
-run `just pose board` to try again.
+run `just pose board` to try again, or press **Initialize with GNSS** in RViz's
+Autoware panel: in board mode that button re-runs the board initialization
+instead of asking for GNSS. It waits up to 30 s for the board; if none is seen
+(or the cart is moving) the request fails with that reason in the log, and the
+initializer stays armed, so it still initializes once the board is in view with
+the cart stopped. *2D Pose Estimate* works as in every other mode.
 
 ### Saved start spots
 

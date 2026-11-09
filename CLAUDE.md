@@ -850,6 +850,22 @@ them as arguments. Config lives in
 VLP-32C's raw driver topic `/sensing/lidar/vlp32/velodyne_points` because that
 is the one still in frame `velodyne` with intensity intact.
 
+**In board mode the RViz panel's "Initialize with GNSS" button re-runs the
+board.** The button calls the AD API `/api/localization/initialize` with an
+empty pose (default_adapi's `LocalizationNode` would forward that to
+`/localization/initialize`, which has no GNSS here). Under
+`pose_initializer:=board` a scoped `set_remap` in the API group of
+`golfcart_autoware.launch.xml` moves default_adapi's server to
+`/api/localization/initialize_default`, and `board_pose_initializer` serves the
+public name (`adapi_initialize_service` in both policy files): an empty request
+re-arms it like `just pose board` and answers when the pose initializer took a
+board pose, or with an error after `adapi_board_timeout` (30 s: no board in
+view, cart moving). A request carrying a pose (`scripts/testing/*`) is
+forwarded unchanged to `_default`. RViz *2D Pose Estimate* is untouched:
+`initial_pose_adaptor` is in the same remapped group and calls `_default`
+directly. In `gnss` mode the resolved launch is identical to before. The
+Trigger `/localization/board_pose_initializer/reinitialize` still works.
+
 `just indoor-test` replays the basement bag against `data/basement-indoor/`
 through `indoor_logging_sim.launch.xml` (`bag` paused, `up`, `rviz`, `resume`,
 `down`; `fake-tf` only for the standalone detector). The bag has one topic and

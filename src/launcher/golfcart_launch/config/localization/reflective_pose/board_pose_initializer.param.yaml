@@ -64,3 +64,17 @@
     ready_pointcloud_topic: /localization/util/downsample/pointcloud
     # How recent the last VelocityReport / cloud must be [s].
     ready_timeout: 1.0
+
+    # The RViz panel's "Initialize with GNSS" button, re-pointed at the board.
+    # The button calls /api/localization/initialize with no pose; this node
+    # serves that name and re-runs the board initialization, answering when the
+    # pose initializer took a board pose or adapi_board_timeout passed. It works
+    # only together with the set_remap in golfcart_autoware.launch.xml (API
+    # group, board mode only) that moves default_adapi's server to
+    # adapi_forward_service; requests carrying a pose are forwarded there
+    # unchanged, and RViz 2D Pose Estimate reaches it directly through
+    # initial_pose_adaptor, which the same remap covers.
+    adapi_initialize_service: /api/localization/initialize
+    adapi_forward_service: /api/localization/initialize_default
+    # [s]. Long enough for the stop check (stopped_for) and a few detections.
+    adapi_board_timeout: 30.0

@@ -343,6 +343,17 @@
 
   <!-- API -->
   <group if="$(var launch_api)">
+    <!-- pose_initializer:=board: the RViz panel's "Initialize with GNSS" button
+         calls /api/localization/initialize with an empty pose, which on a board
+         map has no GNSS to use. board_pose_initializer serves that name instead
+         (adapi_initialize_service in its policy file) and re-runs the board
+         initialization; default_adapi's LocalizationNode moves to
+         /api/localization/initialize_default, where the board node forwards any
+         request that carries a pose. The remap covers this group only, which
+         also holds initial_pose_adaptor, so RViz 2D Pose Estimate keeps calling
+         default_adapi directly, exactly as in gnss mode. -->
+    <set_remap from="/api/localization/initialize" to="/api/localization/initialize_default"
+               if="$(eval '\'$(var pose_initializer)\' == \'board\'')"/>
     <include file="$(find-pkg-share autoware_launch)/launch/components/tier4_autoware_api_component.launch.xml">
       <arg name="use_sim_time" value="$(var use_sim_time)"/>
       <arg name="vehicle_model" value="$(var vehicle_model)"/>

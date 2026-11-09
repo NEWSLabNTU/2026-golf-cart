@@ -71,6 +71,23 @@ def test_vehicle_policy_waits_for_the_stack_to_take_a_pose():
     )
 
 
+def test_board_policy_takes_the_ad_api_initialize_entry_point():
+    """The RViz initialize button re-runs the board; default_adapi is forwarded to.
+
+    The forward name must be what golfcart_autoware.launch.xml remaps
+    default_adapi's server to, or a request with a pose goes nowhere.
+    """
+    policy = _policy('board_pose_initializer.param.yaml')
+    launch = (POLICY_ROOT.parents[2] / 'launch' / 'golfcart_autoware.launch.xml').read_text()
+
+    assert policy['adapi_initialize_service'] == '/api/localization/initialize'
+    assert policy['adapi_board_timeout'] > policy['stopped_for']
+    assert (
+        f'<set_remap from="{policy["adapi_initialize_service"]}" '
+        f'to="{policy["adapi_forward_service"]}"'
+    ) in launch
+
+
 def test_no_velocity_policy_differs_only_in_require_velocity():
     vehicle = _policy('board_pose_initializer.param.yaml')
     replay = _policy('board_pose_initializer.no_velocity.param.yaml')
