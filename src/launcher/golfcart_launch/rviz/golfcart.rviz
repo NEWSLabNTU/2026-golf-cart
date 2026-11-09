@@ -69,7 +69,7 @@ Visualization Manager:
           Value: false
         - Class: rviz_common/Group
           Displays:
-            - Alpha: 0.30000001192092896
+            - Alpha: 0.8
               Class: rviz_default_plugins/RobotModel
               Collision Enabled: false
               Description File: ""
@@ -152,7 +152,7 @@ Visualization Manager:
               TF Prefix: ""
               Update Interval: 0
               Value: true
-              Visual Enabled: false
+              Visual Enabled: true
             - Class: rviz_plugins/PolarGridDisplay
               Color: 255; 255; 255
               Delta Range: 10

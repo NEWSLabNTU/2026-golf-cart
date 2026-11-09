@@ -15,21 +15,21 @@ default:
 
 # Launch RViz with Golf Cart configuration
 rviz:
-    rviz2 -d ./src/launcher/golfcart_launch/rviz/golfcart.rviz
+    scripts/rviz/rviz.sh ./src/launcher/golfcart_launch/rviz/golfcart.rviz
 
 # RViz for driving: fixed frame AND camera on the map, so the vehicle moves over
 # the map instead of the map scrolling past a vehicle that stays put, plus a green
-# arrow along the EKF heading (the vehicle model is a symmetric box). golfcart.rviz
+# arrow along the EKF heading (shown with the golf cart mesh). golfcart.rviz
 # follows base_link, which makes forward motion look like the map moving backward.
 rviz-drive:
-    rviz2 -d ./src/launcher/golfcart_launch/rviz/golfcart_drive.rviz
+    scripts/rviz/rviz.sh ./src/launcher/golfcart_launch/rviz/golfcart_drive.rviz
 
 # Check sensor transforms: cameras and LiDARs on one sphere at base_link
 sphere:
     # Read-only. LCTK computes the extrinsics; this shows what the running
     # system believes them to be, so a wrong one is visible rather than
     # computed. docs/guides/sphere_sensor_view.md says how to read it.
-    rviz2 -d ./src/tools/golfcart_sphere_view/config/sphere_view.rviz
+    scripts/rviz/rviz.sh ./src/tools/golfcart_sphere_view/config/sphere_view.rviz
 
 # The sphere view against synthetic sensors, with no vehicle attached
 sphere-demo:
@@ -46,7 +46,7 @@ sphere-demo:
     # Kill the publishers however RViz exits, including a Ctrl-C that lands on
     # the whole process group.
     trap 'kill $CAMERAS $LIDAR 2>/dev/null || true' EXIT
-    rviz2 -d "$PACKAGE/test/sphere_view_demo.rviz"
+    scripts/rviz/rviz.sh "$PACKAGE/test/sphere_view_demo.rviz"
 
 # Launch PlotJuggler for data visualization
 plotjuggler:

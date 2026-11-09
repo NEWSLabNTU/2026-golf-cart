@@ -261,7 +261,7 @@ _rviz-desktop:
         echo "rviz: already open"; exit 0
     fi
     mkdir -p "${REPO}/log"
-    setsid -f bash -c 'GOLFCART_ENV_QUIET=1 source "$1/scripts/env.sh"; exec rviz2 -d "$2"' _ "${REPO}" "${CFG}" \
+    setsid -f bash -c 'GOLFCART_ENV_QUIET=1 source "$1/scripts/env.sh"; exec "$1/scripts/rviz/rviz.sh" "$2"' _ "${REPO}" "${CFG}" \
         > "${REPO}/log/rviz-up.log" 2>&1 < /dev/null
     echo "rviz: opened on ${DISPLAY} (log: log/rviz-up.log; rviz:=false skips it)"
 

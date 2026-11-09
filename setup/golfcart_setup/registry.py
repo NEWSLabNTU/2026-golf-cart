@@ -377,6 +377,17 @@ STEPS: list[Step] = [
         inputs=_tree("common/etc/sysctl.d/99-cyclonedds-max.conf", "manifest.yaml"),
     ),
     Step(
+        id="rviz-theme",
+        label="Autoware's RViz theme for this user (qt5ct)",
+        why="The Autoware apt install ships the theme in /opt/autoware/<ver>/theme "
+            "but not the per-user qt5ct config, so RViz drew stock Qt and the "
+            "stock splash. Writes ~/.config/qt5ct/ (stylesheet + conf); no sudo.",
+        group="Kernel and network",
+        run=[str(REPO_ROOT / "scripts" / "rviz" / "install_theme.sh")],
+        profiles=_on(*DEV),
+        inputs=(str(REPO_ROOT / "scripts" / "rviz" / "install_theme.sh"),),
+    ),
+    Step(
         id="multicast-lo",
         label="Multicast on loopback (persistent)",
         why="Installs multicast-lo.service. Without it lo loses MULTICAST across "
