@@ -134,11 +134,21 @@ class DisabledUnits:
 
 
 @dataclass
+class AbsentFiles:
+    """Files a host must NOT have: retired config that a restore deletes."""
+    targets: tuple[str, ...]
+    roles: tuple[str, ...]
+    reload: tuple[str, ...] = ()
+    why: str = ""
+
+
+@dataclass
 class Manifest:
     files: list[FileEntry] = field(default_factory=list)
     lines: list[LineEntry] = field(default_factory=list)
     generated: list[GeneratedEntry] = field(default_factory=list)
     disabled: list[DisabledUnits] = field(default_factory=list)
+    absent: list[AbsentFiles] = field(default_factory=list)
     strip_profiles: dict[str, StripProfile] = field(default_factory=dict)
 
     def for_role(self, role: str | None, step: str | None = None,
@@ -166,6 +176,9 @@ class Manifest:
             disabled=[d for d in self.disabled
                       if step in (None, "host-config") and targets is None
                       and (role is None or role in d.roles)],
+            absent=[a for a in self.absent
+                    if step in (None, "host-config") and targets is None
+                    and (role is None or role in a.roles)],
             strip_profiles=self.strip_profiles,
         )
         seen: dict[str, str] = {}
@@ -305,6 +318,15 @@ def parse_manifest(data: dict) -> Manifest:
                           why=str(raw.get("why", "")).strip())
         _check_roles(d.roles, f"units_disabled[{i}]")
         m.disabled.append(d)
+    for i, raw in enumerate(data.get("files_absent") or []):
+        a = AbsentFiles(targets=_tuple(raw["targets"]), roles=_tuple(raw["roles"]),
+                        reload=_tuple(raw.get("reload")),
+                        why=str(raw.get("why", "")).strip())
+        _check_roles(a.roles, f"files_absent[{i}]")
+        for t in a.targets:
+            if not t.startswith("/"):
+                raise ManifestError(f"files_absent[{i}]: {t} is not an absolute path")
+        m.absent.append(a)
     return m
 
 
@@ -703,6 +725,7 @@ def _paths(m: Manifest) -> list[str]:
         paths += [e.target, *e.legacy]
     paths += sorted({e.target for e in m.lines})
     paths += [e.target for e in m.generated]
+    paths += [t for a in m.absent for t in a.targets]
     return list(dict.fromkeys(paths))
 
 
@@ -734,6 +757,12 @@ def cmd_diff(args) -> int:
         here = "present" if live.get(g.target) and live[g.target].exists else "MISSING"
         print(f"  {'generated':<16} {g.target}  ({here}; source is {g.by})")
         drift += here != "present"
+    for a in m.absent:
+        for t in a.targets:
+            gone = not (live.get(t) and live[t].exists)
+            print(f"  {'absent' if gone else 'PRESENT':<16} {t}  (retired"
+                  + (f": {a.why}" if a.why and not gone else "") + ")")
+            drift += not gone
     units = [u for d in m.disabled for u in d.units]
     if units:
         states = reader.unit_states(units)
@@ -907,6 +936,15 @@ def install(m: Manifest, inst: Installer, reader=None, reload: bool = True,
                  cur.owner or "root:root")
         changed += 1
         inst.queue(e.reload)
+    for a in m.absent:
+        for t in a.targets:
+            if not (live.get(t) and live[t].exists):
+                log(f"  unchanged  {t} (absent)")
+                continue
+            log(f"  remove     {t} (retired{': ' + a.why if a.why else ''})")
+            inst.run(["rm", "-f", "--", t])
+            changed += 1
+            inst.queue(a.reload)
     for d in m.disabled:
         for u in d.units:
             state = reader.unit_states([u])[u]
@@ -936,7 +974,7 @@ def cmd_install(args) -> int:
     if args.target:
         full.check_allowed(args.target)
     m = full.for_role(role, step=args.step, targets=args.target or None)
-    if not (m.files or m.lines or m.disabled):
+    if not (m.files or m.lines or m.disabled or m.absent):
         print(f"  nothing for role {role}"
               + (f", step {args.step}" if args.step else ""))
         return 0
@@ -972,6 +1010,8 @@ def cmd_list(args) -> int:
         print(f"{','.join(g.roles):<13} generated      {g.target} (by {g.by})")
     for d in m.disabled:
         print(f"{','.join(d.roles):<13} disabled       {' '.join(d.units)}")
+    for a in m.absent:
+        print(f"{','.join(a.roles):<13} absent         {' '.join(a.targets)}")
     return 0
 
 

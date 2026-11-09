@@ -124,11 +124,6 @@ files:
     roles: [master]
     reload: [udev-reload]
     step: ublox-udev
-  - repo: master/etc/udev/rules.d/99-tier4-camera.rules
-    target: /etc/udev/rules.d/99-tier4-camera.rules
-    roles: [master]
-    reload: [udev-reload]
-    step: tier4-camera
   - repo: master/etc/modprobe.d/otocam.conf
     target: /etc/modprobe.d/otocam.conf
     roles: [master]
@@ -195,3 +190,14 @@ units_disabled:
     why: >-
       linuxptp is the master's (its units are bound to enP5p5s0, which the
       orin does not have); on the orin they only ever fail.
+
+files_absent:
+  - targets: [/etc/udev/rules.d/99-tier4-camera.rules]
+    roles: [master]
+    reload: [udev-reload]
+    why: >-
+      the GMSL2-to-USB converter kit is retired: the three imx390 cameras are
+      direct GMSL on tegra-capture-vi, and gmslcam addresses them by
+      /dev/v4l/by-path name (camera_{left,right,rear}.yaml). The rule's
+      tier4-cam-* links had no consumer, and it mapped two ports to
+      front-left and none to front-right.

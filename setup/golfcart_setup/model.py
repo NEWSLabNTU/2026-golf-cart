@@ -253,8 +253,6 @@ class Machine:
             return any(Path("/sys/class/net").glob("can*"))
         if capability == "ublox-gnss":
             return self._usb_present("1546")            # u-blox AG
-        if capability == "tier4-camera":
-            return self._usb_present("2560") or self._usb_present("0525")
         if capability == "ptp-nic":
             return bool(list(Path("/sys/class/ptp").glob("ptp*")))
         if capability == "display":
@@ -280,7 +278,7 @@ class Machine:
         machine and a Jetson in the cart is the vehicle, and the difference
         visible from here is whether the sensors and the bus are attached.
         """
-        if self.has("can") or self.has("ublox-gnss") or self.has("tier4-camera"):
+        if self.has("can") or self.has("ublox-gnss"):
             return "vehicle"
         if self.role in ROLES:
             return ROLE_PROFILE

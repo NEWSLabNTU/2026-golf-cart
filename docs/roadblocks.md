@@ -671,7 +671,7 @@ ros2 → ros2-dev-tools → gdown → geographiclib → pacmod → dev-tools
 | `cyclonedds-sysctl` | Yes (if selected) | sysctl configuration |
 | `turbovnc-virtualgl` | Yes (if selected) | Adds repos, installs, configures VirtualGL |
 | `tamagawa-imu` | Stub | Prints warning, creates marker — does not install anything |
-| `tier4-camera` | Yes | Installs `ros-humble-usb-cam`, `v4l-utils`, udev rules template |
+| `tier4-camera` | Yes | Installs `ros-humble-usb-cam`, `v4l-utils`, udev rules template. **Retired 2026-11-09**: the cameras are direct GMSL, not the USB kit (see `setup/golfcart_setup/registry.py`) |
 | `ros-deps` | Yes | Fixed by `COLCON_IGNORE` (see Resolved section) |
 
 All steps pass on JetPack 6.2. The Autoware Debian step installs `autoware-full-1-5-0`, which includes Nebula and u-blox drivers as transitive dependencies.

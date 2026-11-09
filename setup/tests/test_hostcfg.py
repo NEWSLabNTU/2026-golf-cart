@@ -407,10 +407,39 @@ class Steps(unittest.TestCase):
 
     def test_moved_steps_hash_their_tree_files(self) -> None:
         for sid in ("host-config", "linuxptp", "hardware-config", "ublox-udev",
-                    "tier4-camera", "chrony-master", "chrony-orin",
+                    "chrony-master", "chrony-orin",
                     "cyclonedds-sysctl", "otocam"):
             for item in BY_ID[sid].inputs:
                 self.assertTrue(Path(item).exists(), f"{sid}: {item}")
+
+
+class Absent(unittest.TestCase):
+    RULE = "/etc/udev/rules.d/99-old.rules"
+
+    def manifest(self) -> h.Manifest:
+        return h.parse_manifest({"files_absent": [
+            {"targets": [self.RULE], "roles": ["master"], "reload": ["udev-reload"]}]})
+
+    def test_parse_rejects_relative_path(self) -> None:
+        with self.assertRaises(h.ManifestError):
+            h.parse_manifest({"files_absent": [{"targets": ["etc/x"], "roles": ["master"]}]})
+
+    def test_install_removes_present_file(self) -> None:
+        m = self.manifest().for_role("master")
+        inst = FakeInstaller()
+        n = h.install(m, inst, FakeReader({self.RULE: ("x\n", "644", "root:root")}),
+                      reload=False)
+        self.assertEqual(n, 1)
+        self.assertIn(["rm", "-f", "--", self.RULE], inst.ran)
+
+    def test_install_leaves_absent_file_alone(self) -> None:
+        m = self.manifest().for_role("master")
+        inst = FakeInstaller()
+        self.assertEqual(h.install(m, inst, FakeReader({}), reload=False), 0)
+        self.assertEqual(inst.ran, [])
+
+    def test_other_role_does_not_carry_it(self) -> None:
+        self.assertEqual(self.manifest().for_role("orin").absent, [])
 
 if __name__ == "__main__":
     unittest.main()

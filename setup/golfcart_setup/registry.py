@@ -39,6 +39,13 @@ Dropped from the previous system, by decision on 2026-09-02:
   `ros-humble-nebula-ros-1-5-0` from the Autoware localrepo -- but it needs
   none: `autoware-full-1-5-0` pulls it through `autoware-ros-packages-1-5-0`,
   which is why all eight nebula packages are already marked auto-installed.
+* `tier4-camera` (2026-11-09) -- `ros-humble-usb-cam`, `v4l-utils` and
+  `99-tier4-camera.rules` for TIER IV's GMSL2-to-USB converter kit. The cart's
+  three imx390 cameras are direct GMSL on tegra-capture-vi, addressed by
+  `/dev/v4l/by-path` names in the sensor kit's camera_*.yaml, so the rule's
+  `tier4-cam-*` links had no consumer (and mapped two ports to front-left and
+  none to front-right). The manifest lists the rule under `files_absent`, so
+  host-config deletes it from a master that still has it.
 * `isaac-ros` -- cuVSLAM/cuVGL are out of the plan, and `pose_source` has
   already lost its `isaac` and `visual` options.
 
@@ -403,17 +410,6 @@ STEPS: list[Step] = [
         profiles=_on(*VEHICLE),
         inputs=_tree("master/etc/udev/rules.d/99-ublox-gps.rules", "manifest.yaml"),
         note="Log out and back in for the dialout group to take effect.",
-    ),
-    Step(
-        id="tier4-camera",
-        label="TIER IV camera udev rules + usb_cam",
-        why="Stable naming for the C1 cameras over GMSL2-USB.",
-        group="System config",
-        run=[_S("install-tier4-camera.sh")],
-        requires=Requires(sudo=True, hardware="tier4-camera"),
-        after=("ros2", "host-config"),
-        profiles=_on(*VEHICLE),
-        inputs=_tree("master/etc/udev/rules.d/99-tier4-camera.rules", "manifest.yaml"),
     ),
     Step(
         id="hardware-config",

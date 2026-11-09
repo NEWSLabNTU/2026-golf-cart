@@ -40,7 +40,7 @@ ROS 2 Humble, Autoware 1.5.0). It runs the whole Autoware stack.
 | Velodyne VLP-32C LiDAR | Ethernet `enP5p4s0` (`192.168.7.1`) | `192.168.7.10` | main LiDAR for localization |
 | Seyond Falcon LiDAR | Ethernet `enP5p5s0` (`172.168.1.1`) | `172.168.1.10`, port 8010 | time synced over PTP (`ptp4l` + `phc2sys` on `enP5p5s0`) |
 | u-blox ZED-F9P GNSS | USB serial | `/dev/ublox-gps` | RTK over NTRIP is optional: `use_ntrip:=true` |
-| 3 TIER IV GMSL cameras | GMSL2 | left, right, rear | driver `gmslcam` |
+| 3 TIER IV GMSL cameras (imx390) | GMSL2, direct to the Jetson capture unit | left, right, rear | driver `gmslcam`; addressed by `/dev/v4l/by-path/platform-tegra-capture-vi-video-index{12,0,10}` (left, right, rear) in the sensor kit's `camera_*.yaml` |
 | Xsens MTi IMU | CAN `can0` | | **broken**, publishes nothing |
 | external SSD | | `/mnt/external` | bags go to `/mnt/external/rosbags` |
 

@@ -369,7 +369,7 @@ def _flash(stdscr, message: str) -> None:
 
 
 def _machine_line(machine: Machine) -> str:
-    caps = [name for name in ("cuda", "can", "ublox-gnss", "tier4-camera", "ptp-nic")
+    caps = [name for name in ("cuda", "can", "ublox-gnss", "ptp-nic")
             if machine.has(name)]
     bits = [machine.os_name, machine.arch]
     if machine.is_jetson:
