@@ -125,6 +125,12 @@ def load_scopes(path: Path = SCOPES_FILE) -> dict:
             if ros not in ("all", "list", "none"):
                 raise ValueError(f"{path}: scope {name}.{role}.ros is '{ros}', "
                                  "want all | list | none")
+            for x in entry.get("extra_topics") or []:
+                if ros != "list":
+                    raise ValueError(f"{path}: scope {name}.{role}.extra_topics needs ros: list")
+                if not (REPO / "config" / "recording" / x).is_file():
+                    raise ValueError(f"{path}: scope {name}.{role}.extra_topics: "
+                                     f"config/recording/{x} not found")
             for p in entry.get("pcap") or []:
                 if not isinstance(p, dict) or "iface" not in p:
                     raise ValueError(f"{path}: scope {name}.{role}.pcap entries need iface:")
@@ -137,9 +143,13 @@ def scope_entry(data: dict, scope: str, role: str) -> dict:
         raise ValueError(f"unknown scope '{scope}'; scopes: {', '.join(data['scopes'])}")
     body = data["scopes"][scope] or {}
     roles = [role] if role in ROLES else list(ROLES)
-    ros, can, pcap = "none", [], []
+    ros, can, pcap, extra = "none", [], [], []
     for r in roles:
         e = body.get(r) or {}
+        for x in e.get("extra_topics") or []:
+            f = REPO / "config" / "recording" / x
+            if f not in extra:
+                extra.append(f)
         rr = e.get("ros", "none")
         if rr == "all" or (rr == "list" and ros == "none"):
             ros = rr
@@ -149,7 +159,7 @@ def scope_entry(data: dict, scope: str, role: str) -> dict:
         for p in e.get("pcap") or []:
             if p["iface"] not in [q["iface"] for q in pcap]:
                 pcap.append(dict(p))
-    topic_files = [REPO / "config" / "recording" / f"{r}_topics.txt" for r in roles]
+    topic_files = [REPO / "config" / "recording" / f"{r}_topics.txt" for r in roles] + extra
     return {"ros": ros, "can": can, "pcap": pcap, "topic_files": topic_files,
             "disk": body.get("disk", "warn"), "description": body.get("description", "")}
 

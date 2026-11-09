@@ -954,12 +954,14 @@ described one under `book/`.
 
 ## Known Issues
 
-- **The VCU speed signals are whole km/h, not m/s** (measured 2026-10-28). `Vcu_Ads_Vehicle_Speed` (the
-  report) is floored to whole km/h, each value 0.001 short, and has no sign; `Ads_Vcu_Target_Speed`
-  (the setpoint) is km/h too (inferred, consistent with the first autonomous run). The vehicle
-  interface converts both (`dbc::vcu_speed_mps`, `dbc::vcu_target_speed_raw`), signs the report by
-  gear, and adds half a step back to the floored report. Do not read either DBC "m/s" literally. See
-  [docs/research/system/vcu-speed-report.md](docs/research/system/vcu-speed-report.md).
+- **The VCU speed signals are m/s since the vendor's November 2026 update** (were whole km/h).
+  `Vcu_Ads_Vehicle_Speed` (the report) now reads m/s in fine steps, unsigned: on 2026-11-09 our km/h
+  reading came out 3.5-3.8x low against NDT (session `20261109_220723_vcu-right-turn`, 0.45 m
+  reported vs 1.83 m travelled). `Ads_Vcu_Target_Speed` (the setpoint) is **assumed** m/s with it,
+  not yet observed in AUTO; if wrong, the cart runs 3.6x slower than asked, never faster. One factor
+  in the interface, `dbc::VCU_SPEED_UNIT_TO_MPS` (golfcart_vehicle_launch f0abd26), for both; the
+  report is still signed by gear. Before the update both were km/h whatever the DBC said; the
+  history is in [docs/research/system/vcu-speed-report.md](docs/research/system/vcu-speed-report.md).
 - **`min_speed_mps: 1.5` in `vehicle_interface.param.yaml`** raises any nonzero speed setpoint to 5.4 km/h,
   the least that overcomes the cart's friction (it stalls on a bump at a crawl). The planner's range is
   1.5 to `max_speed_mps` (2.5 since 2026-11-02; at 1.5 the cart ran at one fixed speed). The Ming-Da

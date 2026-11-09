@@ -39,6 +39,7 @@ exits non-zero.
 |---|---|---|---|
 | `drive` (default) | the topic lists | every bus | none |
 | `all` | every topic (`ros2 bag record -a`) | every bus | sensor NICs + cart LAN |
+| `localize` | the topic lists + localization outputs (NDT pose and scores, EKF, `/tf`; `localize_topics.txt`), master only | every bus | none |
 | `raw` | none | every bus | sensor NICs + cart LAN |
 | `can` | none | every bus | none |
 | `ros` | the topic lists | none | none |

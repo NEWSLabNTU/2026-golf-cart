@@ -47,6 +47,11 @@ scopes:
     master: {ros: list, can: *master_can}
     orin:   {ros: list, can: *orin_can}
 
+  localize:
+    description: the topic lists, the localization outputs (NDT, EKF, TF; localize_topics.txt) and every CAN bus; for measuring a lane or judging localization
+    master: {ros: list, extra_topics: [localize_topics.txt], can: *master_can}
+    orin:   {ros: list, can: *orin_can}
+
   raw:
     description: raw packets only, CAN and Ethernet, no ROS
     master: {ros: none, can: *master_can, pcap: *master_pcap}

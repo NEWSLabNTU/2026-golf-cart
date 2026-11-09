@@ -34,7 +34,7 @@ def test_new_id_rejects_bad_names(bad):
 def test_repo_scopes_parse():
     data = session.load_scopes()
     assert data['default'] == 'drive'
-    assert set(data['scopes']) == {'all', 'drive', 'raw', 'can', 'ros'}
+    assert set(data['scopes']) == {'all', 'drive', 'localize', 'raw', 'can', 'ros'}
     allm = session.scope_entry(data, 'all', 'master')
     assert allm['ros'] == 'all' and allm['disk'] == 'refuse'
     assert {'can0', 'can1'} <= set(allm['can'])
@@ -144,3 +144,12 @@ def test_latest_and_resolve(tmp_path, monkeypatch):
     (tmp_path / '20261102_100000_b' / 'master' / 'can0.log').write_text('')
     assert session.latest('can') == log
     assert session.newest_id(None) == '20261103_100000'
+
+
+def test_localize_scope_adds_localization_topics_on_master_only():
+    data = session.load_scopes()
+    m = session.scope_entry(data, "localize", "master")
+    o = session.scope_entry(data, "localize", "orin")
+    assert m["ros"] == "list"
+    assert any(f.name == "localize_topics.txt" for f in m["topic_files"])
+    assert not any(f.name == "localize_topics.txt" for f in o["topic_files"])

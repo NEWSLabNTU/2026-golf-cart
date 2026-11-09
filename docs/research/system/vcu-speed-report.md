@@ -1,5 +1,14 @@
 # The VCU speed report: km/h, whole steps, no sign
 
+> **Superseded 2026-11-09 by a vendor firmware update.** The report now reads
+> **m/s** in fine steps (0.01 ... 0.37 on a creep), still unsigned. Against NDT
+> on the 2026-11-09 creep (session `20261109_220723_vcu-right-turn`) the km/h
+> reading below came out 3.5-3.8x low: 0.45 m of reported travel where NDT
+> measured 1.83 m, per-second ratios 3.2-3.8. The interface now reads it as m/s
+> and drops the half-step correction, and sends the setpoint in m/s too, which
+> is assumed, not yet observed in AUTO (golfcart_vehicle_launch f0abd26). What
+> follows describes the firmware before the update.
+
 Measured 2026-10-28 on the cart, Ming-Da basement, with the vehicle interface
 running. Closes roadmap item **L5** (wheel speed scale and reverse sign) for the
 VCU's own report; what it leaves open is at the end.
