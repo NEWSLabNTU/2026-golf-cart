@@ -27,7 +27,10 @@ fi
 sudo apt-get update -qq
 
 for pkg in "${PACKAGES[@]}"; do
-    if ! apt-cache policy "$pkg" | grep -q 'Candidate: [0-9]'; then
+    # Read the policy first: under pipefail, `apt-cache policy | grep -q` fails
+    # whenever grep exits on the first match and apt-cache dies of SIGPIPE.
+    policy=$(apt-cache policy "$pkg")
+    if ! grep -q 'Candidate: [0-9]' <<<"$policy"; then
         printf "${RED}Error:${NC} %s has no apt candidate.\n" "$pkg"
         printf "Add the Isaac ROS apt repository first:\n"
         printf "  https://nvidia-isaac-ros.github.io/getting_started/isaac_apt_repository.html\n"
