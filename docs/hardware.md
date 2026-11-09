@@ -73,6 +73,20 @@ loses the master for about 42 s, it stops itself.
 
 Details: [multi-machine.md](multi-machine.md).
 
+### Names on the LAN (mDNS)
+
+Each box announces itself over mDNS (avahi), so on the cart LAN, and from a
+laptop plugged into it, the names work without DNS:
+
+| name | address |
+|---|---|
+| `advantech.local` | 192.168.125.100 (master) |
+| `orin.local` | 192.168.125.101 (orin) |
+
+`ssh jetson@orin.local` works from the master. The name is each box's
+`/etc/hostname`; it and the avahi / nsswitch settings are kept in
+`setup/host/` and restored by the `host-config` setup step.
+
 ### 4G router
 
 Both hosts take the cart LAN by DHCP: the master's "4G LAN" profile and the

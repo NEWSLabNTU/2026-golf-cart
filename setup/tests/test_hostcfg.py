@@ -441,5 +441,20 @@ class Absent(unittest.TestCase):
     def test_other_role_does_not_carry_it(self) -> None:
         self.assertEqual(self.manifest().for_role("orin").absent, [])
 
+
+class HostnameReload(unittest.TestCase):
+    def test_hostname_runs_before_avahi_restart(self) -> None:
+        inst = FakeInstaller()
+        inst.queue(["restart:avahi-daemon.service", "hostname"])
+        inst.reload()
+        joined = [" ".join(a) for a in inst.ran]
+        hn = next(i for i, a in enumerate(joined) if "hostnamectl" in a)
+        rs = next(i for i, a in enumerate(joined) if "restart avahi-daemon" in a)
+        self.assertLess(hn, rs)
+
+    def test_manifest_accepts_hostname_reload(self) -> None:
+        h.parse_manifest({"files": [{"repo": "master/etc/hostname", "target": "/etc/hostname",
+                                     "roles": ["master"], "reload": ["hostname"]}]})
+
 if __name__ == "__main__":
     unittest.main()

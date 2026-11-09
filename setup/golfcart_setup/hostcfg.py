@@ -55,7 +55,7 @@ MANIFEST = HOST_DIR / "manifest.yaml"
 ON_ORIN = model.REPO_ROOT / "scripts" / "multi_machine" / "on_orin.sh"
 
 RELOADS = ("nmcli-reload", "udev-reload", "sysctl", "networkd-reload",
-           "systemd-daemon-reload", "none")
+           "systemd-daemon-reload", "hostname", "none")
 RELOAD_PREFIXES = ("enable:", "restart:")
 
 # Lines in the tree that look like a credential. `-flags` keys only say who
@@ -855,8 +855,10 @@ class Installer:
                 self.actions.append(a)
 
     def reload(self) -> None:
+        # hostname before the restart:<unit> actions, so avahi-daemon restarts
+        # with the new name and publishes <name>.local.
         order = ["systemd-daemon-reload", "networkd-reload", "nmcli-reload",
-                 "udev-reload", "sysctl"]
+                 "udev-reload", "sysctl", "hostname"]
         ranked = sorted(self.actions, key=lambda a: (order.index(a) if a in order
                                                     else len(order), a))
         for a in ranked:
@@ -872,6 +874,9 @@ class Installer:
                 self.run(["udevadm", "trigger"])
             elif a == "sysctl":
                 self.run(["sysctl", "--system"], check=False)
+            elif a == "hostname":
+                # /etc/hostname was just installed; make it the running name too.
+                self.run(["sh", "-c", 'hostnamectl set-hostname "$(cat /etc/hostname)"'])
             elif a.startswith("enable:"):
                 self.run(["systemctl", "enable", a.split(":", 1)[1]])
             elif a.startswith("restart:"):

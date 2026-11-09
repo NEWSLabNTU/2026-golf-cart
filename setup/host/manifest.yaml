@@ -164,7 +164,46 @@ files:
 
 # Lines in files that are not ours as a whole. Ensure-line: exactly one line
 # matches `match`, and it equals `line` (whitespace-insensitive).
+  # mDNS: <hostname>.local (advantech.local, orin.local) resolves between the
+  # two boxes and from laptops on the cart LAN. Ubuntu's stock avahi-daemon +
+  # libnss-mdns (`hosts: ... mdns4_minimal` in nsswitch.conf, under lines:);
+  # tracked so a fresh flash gets the same names. The name IS /etc/hostname.
+  - repo: common/etc/avahi/avahi-daemon.conf
+    target: /etc/avahi/avahi-daemon.conf
+    roles: [master, orin]
+    reload: [enable:avahi-daemon.service, restart:avahi-daemon.service]
+    why: Stock Ubuntu config; publishes <hostname>.local on every interface.
+  - repo: master/etc/hostname
+    target: /etc/hostname
+    roles: [master]
+    reload: [hostname, restart:avahi-daemon.service]
+    why: The master's name, so it is advantech.local over mDNS.
+  - repo: orin/etc/hostname
+    target: /etc/hostname
+    roles: [orin]
+    reload: [hostname, restart:avahi-daemon.service]
+    why: The orin's name, so it is orin.local over mDNS.
+
 lines:
+  - target: /etc/nsswitch.conf
+    roles: [master, orin]
+    match: '^hosts:'
+    line: "hosts:          files mdns4_minimal [NOTFOUND=return] dns"
+    why: >-
+      Resolve *.local over mDNS (libnss-mdns) before DNS. Ubuntu's default when
+      libnss-mdns is installed; a minimal image may lack it.
+  - target: /etc/hosts
+    roles: [master]
+    match: '^127\.0\.1\.1\s'
+    line: "127.0.1.1\tadvantech"
+    why: The host's own name resolves locally (sudo, avahi) without DNS.
+  - target: /etc/hosts
+    roles: [orin]
+    match: '^127\.0\.1\.1\s'
+    line: "127.0.1.1\torin"
+    why: >-
+      The host's own name resolves locally. The orin had the flash default
+      `127.0.1.1 ubuntu` while its hostname is orin.
   - target: /etc/fstab
     roles: [master]
     match: '^\S+\s+/mnt/external\s'
