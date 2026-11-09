@@ -68,7 +68,7 @@ Legend: ✅ done and evidenced · 🟡 partly done or done on the desk only ·
 | Entering AUTO | ✅ | Dashboard: brake + button. All four subsystems reported Autonomous; `Veh_Auto_En` claimed |
 | V2 steering sign | ✅ | Keyboard left (+5 deg) turned wheels and steering wheel CCW (left); interface sends -4.98 deg to the VCU, so `invert_steering` is right |
 | V3 steering range | 🟡 | Left: wheels kept turning to the 0.52 rad command (>= 29.8 deg). **Right: mechanical stop at ~22 deg** (VCU report plateaus 22.1-22.7 deg, wheels stop at the 23rd 1-deg step). `max_steer_angle` is still 0.52, which the right side cannot reach. **The clockwise loop is all right turns.** Planning sim 2026-10-23, one lap per case on the refitted loop: with 0.52 rad, steering peaked at -28.7 deg (NE corner) but only transiently; capped at 0.384 rad (22 deg), and again with the wheels slewing at the cart's ~0.13 rad/s, every leg arrived and the footprint stayed >= 0.11 m from every obstacle cell, the same as uncapped (0.12 m). The planner uses the lane width for wider arcs. **But steering sat at 22 deg for 14% of moving time (NW and NE corners): no reserve**, and the simulator's steering feedback is perfect |
-| Steering angle feedback | ❌ | VCU `0x102 Vcu_Ads_Tire_Angle` is live **only in AUTO and only for right turns**: left reads 0.000, manual steering reads a frozen +0.210 deg over a full sweep. Autoware's lateral controller has no usable feedback. **Vendor**. Decided 2026-10-22: no change for the straight lane, where the command stays under `converged_steer_rad` (0.1 rad) so the convergence hold clears against a 0 report; see open issue 4a before any left turn |
+| Steering angle feedback | ❌ | VCU `0x102 Vcu_Ads_Tire_Angle` is live **only for right turns**: left reads 0.000 (raw bytes zero, so the VCU clamps it, not our decode), and `Tire_Angular_Speed` is always 0. On 2026-10-22 manual steering read a frozen +0.210 deg; on 2026-11-06 the right side tracked in Manual up to +18.05 deg (`can_can0_20261106_161744.log`, sent to the vendor). Autoware's lateral controller has no usable feedback. **Vendor**. Decided 2026-10-22: no change for the straight lane, where the command stays under `converged_steer_rad` (0.1 rad) so the convergence hold clears against a 0 report; see open issue 4a before any left turn |
 | VCU state after leaving AUTO | ⏸ | `Driving_State` (and earlier `Brake_State`) read `Invalid`, not `Manual`, after the first AUTO session. The interface treats it as hands off. **Vendor question** |
 | Mode request honesty | ✅ | golfcart_vehicle_launch 960a2be: MANUAL now refused while the VCU is still Autonomous (was answered success). Live: MANUAL accepted / AUTONOMOUS refused with the cart in manual; the AUTO-side refusal is unit-tested only |
 | Steering slew | ✅ | Command ramps at the interface limit (1 deg per ~0.7 s per key; -29.6 -> 0 deg in 1.29 s); right-side report returns 22.7 -> 0 deg in ~3 s (~7-8 deg/s at the wheels) |
@@ -107,8 +107,10 @@ Legend: ✅ done and evidenced · 🟡 partly done or done on the desk only ·
 Who has to move, so nothing waits on the wrong person.
 
 **Turing Drive (vendor)**
-1. `Vcu_Ads_Tire_Angle` (0x102) live only in AUTO and only for right turns; left
-   reads 0, manual reads a frozen value. Blocks closed-loop lateral control.
+1. `Vcu_Ads_Tire_Angle` (0x102) live only for right turns; left reads 0 (raw
+   bytes zero) and `Tire_Angular_Speed` is always 0. Manual read frozen on
+   2026-10-22 but tracked right turns on 2026-11-06. Blocks closed-loop lateral
+   control. Log sent 2026-11-06: `can_can0_20261106_161744.log`.
 2. Right steering stops mechanically at ~22 deg against the 30 deg spec; left
    reaches the 29.8 deg command.
 3. `Driving_State` reads `Invalid` in manual after an AUTO session.

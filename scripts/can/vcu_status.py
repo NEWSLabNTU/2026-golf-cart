@@ -240,9 +240,10 @@ def render(state: State, host: str, iface: str) -> str:
     if veh is not None and raw.get(0x103, "").strip("0") == "" and raw.get(0x101, "").strip("0") == "":
         notes.append("VCU frames are all zero (state Invalid): it has not heard our 0x43F rolling"
                      " counter, so VelocityReport and the control mode are meaningless")
-    if eps is not None and str(g(eps, "Vcu_Ads_EPS_State")) == "Manual":
-        notes.append("EPS state Manual: VCU quirk - the reported tire angle is frozen in Manual"
-                     " and does not follow the wheel")
+    if (eps is not None and str(g(eps, "Vcu_Ads_EPS_State")) == "Manual"
+            and isinstance(ang, (int, float)) and ang == 0):
+        notes.append("EPS state Manual, tire angle 0: VCU quirk - left angles are reported as 0"
+                     " (right turns do show, in Manual too, since 2026-11-06)")
     if (isinstance(tgt, (int, float)) and tgt < -0.5 and isinstance(ang, (int, float))
             and ang == 0 and str(g(c_eps, "Ads_Vcu_Eps_En")) == "enable"):
         notes.append("left (negative) target but tire angle reads 0: VCU quirk - left angles"

@@ -882,7 +882,7 @@ twist_source:=gyro_odom|eagleye|rigloc     # Override preset twist source
   1.5 to `max_speed_mps` (2.5 since 2026-11-02; at 1.5 the cart ran at one fixed speed). The Ming-Da
   lanes are 7 km/h, 5.4 past the hanging board; `just launch-drive-mingda` cruises at 2.0 m/s.
 
-- **Steering sign verified on the cart 2026-10-22** (Phase 8 V2): `invert_steering` (vehicle interface, 2026-08-12) is right; keyboard left (+5 deg) went out as -4.98 deg and turned the wheels left. The VCU's steering *report* is not usable yet (live only in AUTO and only for right turns; vendor), see [Phase 9](docs/roadmaps/9-mingda-autonomous-driving.md).
+- **Steering sign verified on the cart 2026-10-22** (Phase 8 V2): `invert_steering` (vehicle interface, 2026-08-12) is right; keyboard left (+5 deg) went out as -4.98 deg and turned the wheels left. The VCU's steering *report* is not usable yet: `0x102 Vcu_Ads_Tire_Angle` never goes negative, so every left angle reads 0.000 (raw bytes `00 00`, the VCU's doing, not our DBC decode), and `Vcu_Ads_Tire_Angular_Speed` is always 0. On 2026-11-06 the right side was live **in Manual** too (to +18.05 deg, `rosbags/can/can_can0_20261106_161744.log` on the master), so the earlier "live only in AUTO, frozen in Manual" (2026-10-22) no longer holds; reported to the vendor. Record with `just can record` **on the orin**, where the bus is. See [Phase 9](docs/roadmaps/9-mingda-autonomous-driving.md).
 - **Network monitor errors**: AWS Greengrass socket errors (non-critical, ignore)
 - **Isaac ROS GXF libraries**: If `pose_source:=visual` or `pose_source:=isaac` fails with "libgxf_*.so not found", the GXF library paths are not in `LD_LIBRARY_PATH`. Re-source the setup files:
   ```bash
