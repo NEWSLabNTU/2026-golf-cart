@@ -25,8 +25,12 @@ This is a golf cart autonomous driving system for 華夏科大 campus deployment
 ./setup.sh status       # Check installation status
 just build              # Build all packages
 just test               # Run tests
-just launch             # Launch system (web UI: http://localhost:8081)
-just launch "..."  # Launch with parameters
+just up                 # Start both hosts as systemd units; returns at once
+just up @mingda a:=1    # ...with an arg file (config/launch/*.args) + overrides
+just down               # Stop both hosts (recording left alone)
+just run                # This host only, foreground (web UI: http://localhost:8081)
+just run "..."          # ...with parameters
+just logs               # Follow this host's unit
 just clean              # Remove build artifacts
 just checkout           # Update git submodules
 just --list             # Show all available commands
@@ -51,10 +55,29 @@ Grouped families live in `just/*.just` and are reached as `just <module> <recipe
 | `diag` | diagnostic graph: QoS checks, leaf listing, fault injection |
 | `gnss` | F9P / RTK: `check` the setup, `test` the receiver against the NTRIP caster, `launch` it standalone (`ntrip=off` for driver only) |
 | `link` | the master/orin wire: what crosses it, `pressure`, the two-host `sim` |
+| `sim` | simulators: `planning`, `logging`, `aruco`, `coss-park`, the `loop-drive` / `mrm-check` tests; synthetic `cameras` |
 
-`build`, `test`, `clean`, `launch*`, `stop-all` and `logs` stay at the root —
+`build`, `test`, `clean`, `up`, `down`, `run` and `logs` stay at the root —
 they are the daily verbs, and a module may not share a name with a recipe
-(`mod launch` beside `launch:` is a hard error that breaks the whole justfile).
+(`mod sim` beside `sim:` is a hard error that breaks the whole justfile).
+
+### Launching: `up`, `down`, `run`
+
+| recipe | where | how |
+|---|---|---|
+| `just up [ARGS...]` | both hosts | `golfcart-launch.service` here and on the orin (over ssh); returns at once |
+| `just down` | both hosts | stops the orin first, then this host; recording keeps running |
+| `just run [ARGS...]` | this host | play_launch in the foreground; Ctrl-C stops it |
+
+ARGS are launch arguments plus `@name`, which expands in place to
+`config/launch/<name>.args` (`@basement`, `@mingda`, `@mingda-loop`,
+`@sim-*`); later args win, so `just up @mingda-loop planning_speed_limit:=0.5`
+overrides the file. `scripts/launch/args.py` does the expansion for every
+launcher, adds `host:=`, `master_ip:=` and `link_topics:=` for the host's
+role, and prints the final list before anything starts. The unit gets its args
+from `.golfcart-launch.args` (gitignored), which `up` rewrites on every start,
+so no flag outlives the start that asked for it. `_up-local` / `_down-local`
+are the private per-host halves that `up` / `down` run on each machine.
 
 `just --list` expands modules because the default recipe passes
 `--list-submodules`; without it each module collapses to one line.
@@ -95,9 +118,11 @@ just bag play           # Play most recent recording in $GOLFCART_BAG_DIR
 
 ### Simulation
 ```bash
-just launch-sim-planning  # Autoware planning simulator
-just launch-sim-logging   # Logging simulation (rosbag replay)
-just sim-coss-park        # Full COSS Park simulation scenario
+just sim planning @sim-ntu-r01      # Autoware planning simulator (map_path:= or an @sim-* file)
+just sim planning @sim-mingda-loop  # ...on the Ming-Da loop, slow_indoor
+just sim logging                    # Logging simulation (rosbag replay)
+just sim aruco                      # ArUco localization driving the planning simulator
+just sim coss-park                  # Full COSS Park simulation scenario
 ```
 
 ### Manual Build
@@ -153,7 +178,6 @@ no script hardcodes any of it. See [config/README.md](config/README.md).
 |---|---|
 | `config/host` | which machine this checkout is (`master`/`orin`). **Gitignored** |
 | `config/multi_machine.conf` | the other host's `user@addr`, repo path, ssh key, master IP |
-| `config/sensors.conf` | `IMU_SOURCE`, `CAMERA_MODEL` — env vars, not launch args |
 | `config/recording/*_topics.txt` | what each host records |
 | `config/cyclonedds/*.xml` | DDS profiles, one per role |
 
@@ -338,47 +362,50 @@ files are unaffected — `#` comments have no such restriction, which is why
 #### LiDAR Configuration
 ```bash
 # Velodyne VLP-32C (golf cart standard)
-just launch "lidar_model:=vlp32c"
+just run "lidar_model:=vlp32c"
 ```
 
 #### Camera Configuration
-`camera.launch.xml` is the single entry point for every camera. The Autoware
-sensing launch chain forwards only a fixed set of arguments, so through `just
-launch` the selection is made by environment variable:
+`camera.launch.xml` is the single entry point for every camera. Through the
+stack the selection is the `camera_model` launch argument (and `capture_profile`
+for the GMSL capture path), passed down by name:
 
 ```bash
 # Three GMSL cameras on the Advantech (default)
-CAMERA_MODEL=gmslcam just launch
+just run
 
 # ZED X — set automatically for the orin host; also selectable directly
 ros2 launch golfcart_sensor_kit_launch camera.launch.xml camera_model:=zedx
 
 # No camera
-CAMERA_MODEL=none just launch
+just run "camera_model:=none"
+
+# Another GMSL capture profile (a directory in the sensor kit's config/camera_capture/)
+just run "capture_profile:=v4l2-mmap"
 ```
 
 #### GNSS Configuration
 ```bash
 # u-blox GNSS (golf cart standard)
-just launch "gnss_receiver:=ublox"
+just run "gnss_receiver:=ublox"
 ```
 
 **Usage:**
 ```bash
 # Full visual localization (requires visual map)
-just launch "pose_source:=visual visual_map_dir:=/path/to/visual_map"
+just run "pose_source:=visual visual_map_dir:=/path/to/visual_map"
 
 # Visual odometry only (no global init, manual pose required)
-just launch "pose_source:=isaac"
+just run "pose_source:=isaac"
 ```
 
 **Creating Visual Maps:**
 ```bash
 # Golf cart standard configuration
-just launch "lidar_model:=vlp32c camera_model:=usb gnss_receiver:=ublox"
+just run "lidar_model:=vlp32c camera_model:=usb gnss_receiver:=ublox"
 
 # Indoor testing without GNSS
-just launch "lidar_model:=vlp32c camera_model:=usb use_gnss:=false"
+just run "lidar_model:=vlp32c camera_model:=usb use_gnss:=false"
 ```
 
 ### Python Packages
@@ -499,7 +526,7 @@ launch:
 
 1. Copy existing preset: `cp lidar_only_preset.yaml custom_preset.yaml`
 2. Modify parameter defaults in the new file
-3. Use with: `just launch perception_preset:=custom`
+3. Use with: `just run perception_preset:=custom`
 
 **Note**: Preset files must use `<name>_preset.yaml` naming convention.
 
@@ -519,7 +546,7 @@ launch:
 - `slow_indoor` - the 1 m/s cart on indoor lanelets: no avoidance, lane change,
   crosswalk, traffic-light or intersection modules; no reversing manoeuvres
   (start/goal planner back-out and freespace off); 3.5 m stop margins;
-  `max_vel` 2.5. The drive recipes and `just sim-drive-basement` use it. Unlike
+  `max_vel` 2.5. The drive arg files and `just sim planning @sim-basement` use it. Unlike
   upstream's planning presets it can change parameter files, through our copy
   of `tier4_planning_component.launch.xml`; `test_planning_preset.py` pins both.
 
@@ -542,7 +569,7 @@ localization_preset:=eagleye            # GNSS-based odometry (requires GNSS)
 localization_preset:=rigloc             # NDT pose + rig_localization twist (ZED + IMU + wheel)
 
 # Example: Use camera-lidar fusion
-just launch perception_preset:=camera_lidar_fusion
+just run perception_preset:=camera_lidar_fusion
 ```
 
 #### Sensor Configuration
@@ -552,9 +579,11 @@ sensor_suite:=vlp32c             # Velodyne VLP-32C
 
 # Individual sensor overrides
 lidar_model:=vlp32c
-camera_model:=gmslcam|zedx|none # env ONLY - see below
-imu_source:=xsens|zed           # env ONLY - see below
+camera_model:=gmslcam|zedx|none # default gmslcam
+capture_profile:=nvv4l2camerasrc # GMSL capture path
+imu_source:=zed|xsens           # default zed (the Xsens is broken)
 gnss_receiver:=ublox|septentrio|none
+use_ntrip:=false|true
 ```
 
 #### GPU acceleration: one coarse switch, two fine ones
@@ -563,9 +592,9 @@ gnss_receiver:=ublox|septentrio|none
 environment by a user.
 
 ```bash
-just launch                          # CUDA preprocessing + concatenation (default)
-just launch use_cuda:=false          # both back on CPU
-just launch pointcloud_backend:=cpu  # same, spelled out
+just run                          # CUDA preprocessing + concatenation (default)
+just run use_cuda:=false          # both back on CPU
+just run pointcloud_backend:=cpu  # same, spelled out
 ```
 
 `use_cuda` sets the default for `pointcloud_backend` (`cpu|cuda`) and nothing
@@ -579,8 +608,8 @@ switch meant `use_cuda:=false` silently rewrote a deliberate `yabloc` or
 `eagleye` choice to `ndt`. It now has its own default, `cuda_ndt`:
 
 ```bash
-just launch pose_source:=ndt      # CPU NDT; the fallback if init hangs
-just launch use_cuda:=false       # CPU preprocessing, still cuda_ndt
+just run pose_source:=ndt      # CPU NDT; the fallback if init hangs
+just run use_cuda:=false       # CPU preprocessing, still cuda_ndt
 ```
 
 The same pair exists in `logging_simulation.launch.yaml` and
@@ -610,23 +639,26 @@ is still the first thing to suspect and `pose_source:=ndt` is still the control
 run that isolates it. See
 [docs/handover/2026-08-30-cuda-pipeline-to-orin.md](docs/handover/2026-08-30-cuda-pipeline-to-orin.md).
 
-**`camera_model` and `imu_source` do NOT work as launch arguments.** They reach
-`golfcart_autoware.launch.xml`, but the path onwards runs through
-`tier4_sensing_component.launch.xml` and `tier4_sensing_launch/sensing.launch.xml`
-— installed Autoware files that forward a fixed set of arguments and drop the
-rest. The sensor kit reads `$(env IMU_SOURCE xsens)` / `$(env CAMERA_MODEL gmslcam)`
-instead, so `just launch "imu_source:=zed"` looks like it works and does nothing.
-Set them in `config/sensors.conf`, which `scripts/env.sh` sources for both shells
-and units.
+**Sensor choices are launch arguments, never environment variables.**
+`camera_model`, `capture_profile`, `imu_source`, `gnss_receiver`, `use_ntrip`
+and `pointcloud_backend` are declared in `golfcart.launch.yaml` with real
+defaults and passed by name all the way to the sensor kit, through our own copy
+`golfcart_launch/launch/components/tier4_sensing_component.launch.xml`. The
+installed Autoware pair (`tier4_sensing_component.launch.xml` and
+`tier4_sensing_launch/sensing.launch.xml`) forwards four arguments and drops the
+rest; until 2026-11 that forced these through the environment (`CAMERA_MODEL`,
+`IMU_SOURCE`, `GNSS_RECEIVER`, `USE_NTRIP`, `POINTCLOUD_BACKEND`, and
+`config/sensors.conf`), so a forgotten export silently picked a different
+sensor. All of that is gone, and the sensor kit reads no `$(env ...)` but
+`VEHICLE_ID`. Do not reintroduce an env side channel: if a new argument has to
+reach the sensor kit, add it to the component copy. Example:
+`just run "imu_source:=xsens camera_model:=none"`.
 
-**`use_cuda`, `pointcloud_backend` and `pose_source` ARE real launch arguments**,
-and cross that same gap without becoming config knobs. `golfcart.launch.yaml`
-declares them and `set_env`s `POINTCLOUD_BACKEND` immediately before the include,
-so the value reaches the sensor kit through the environment while the interface
-stays `key:=value`. Forwarding it as an argument would appear to work under
-play_launch, whose parser does not scope includes the way `ros2 launch` does, and
-would then silently stop working under stock `ros2 launch`; the environment
-survives both. Nothing needs `POINTCLOUD_BACKEND` set in a shell.
+`master_ip` and `link_topics` are likewise plain arguments with no default.
+Under `host:=master` / `host:=orin` an empty one stops the launch with
+`Undefined variable: 'MISSING_ARG_master_ip_required_under_host_master_or_orin'`
+(or the `link_topics` twin, checked only when the link bridge starts);
+`scripts/launch/args.py` passes both for the recipes and the units.
 
 `pointcloud_backend` picks where the **whole preprocessing and concatenation
 stage** runs, not just the concatenator:
@@ -752,8 +784,9 @@ no velocity, so the replay proves initialization only. Design and status:
 #### Driving autonomously (Phase 8)
 
 ```bash
-just launch-drive-basement          # both hosts, basement map, board init, no GNSS, 1.0 m/s planning default
-just launch-drive-mingda            # same, on the re-anchored Ming-Da map (data/mingda-basement)
+just up @basement      # both hosts, basement map, board init, no GNSS, 1.0 m/s planning default
+just up @mingda        # same, on the re-anchored Ming-Da map (data/mingda-basement), 2.0 m/s
+just up @mingda-loop   # @mingda on the clockwise loop lane
 ```
 
 `planning_speed_limit:=<m/s>` is the startup planning speed default (empty keeps
@@ -851,7 +884,7 @@ twist_source:=gyro_odom|eagleye|rigloc     # Override preset twist source
 | [docs/guides/lidar_integration.md](docs/guides/lidar_integration.md) | Velodyne VLP-32C, TensorRT |
 | [docs/guides/control_testing.md](docs/guides/control_testing.md) | First supervised autonomous drive: roles, pre-drive checks, engage order, stopping |
 | [docs/guides/mrm_configuration.md](docs/guides/mrm_configuration.md) | MRM (emergency stop) configuration |
-| [docs/multi-machine.md](docs/multi-machine.md) | Two-machine operation: `just launch-all`, per-host DDS profiles, orin lifecycle, recording |
+| [docs/multi-machine.md](docs/multi-machine.md) | Two-machine operation: `just up` / `just down`, per-host DDS profiles, orin lifecycle, recording |
 | [docs/design/zed_camera_integration.md](docs/design/zed_camera_integration.md) | ZED X launch structure, published topics, TF ownership split between the ZED driver and Autoware, IMU source selection |
 | [docs/roadmaps/2-zed-camera-integration.md](docs/roadmaps/2-zed-camera-integration.md) | ZED integration phase: work items, acceptance criteria, deferred field measurements |
 | [docs/guides/isaac_vslam_testing.md](docs/guides/isaac_vslam_testing.md) | Isaac SLAM testing |
@@ -880,7 +913,7 @@ twist_source:=gyro_odom|eagleye|rigloc     # Override preset twist source
 - **`min_speed_mps: 1.5` in `vehicle_interface.param.yaml`** raises any nonzero speed setpoint to 5.4 km/h,
   the least that overcomes the cart's friction (it stalls on a bump at a crawl). The planner's range is
   1.5 to `max_speed_mps` (2.5 since 2026-11-02; at 1.5 the cart ran at one fixed speed). The Ming-Da
-  lanes are 7 km/h, 5.4 past the hanging board; `just launch-drive-mingda` cruises at 2.0 m/s.
+  lanes are 7 km/h, 5.4 past the hanging board; `just up @mingda` cruises at 2.0 m/s.
 
 - **Steering sign verified on the cart 2026-10-22** (Phase 8 V2): `invert_steering` (vehicle interface, 2026-08-12) is right; keyboard left (+5 deg) went out as -4.98 deg and turned the wheels left. The VCU's steering *report* is not usable yet: `0x102 Vcu_Ads_Tire_Angle` never goes negative, so every left angle reads 0.000 (raw bytes `00 00`, the VCU's doing, not our DBC decode), and `Vcu_Ads_Tire_Angular_Speed` is always 0. On 2026-11-06 the right side was live **in Manual** too (to +18.05 deg, `rosbags/can/can_can0_20261106_161744.log` on the master), so the earlier "live only in AUTO, frozen in Manual" (2026-10-22) no longer holds; reported to the vendor. Record with `just can record` **on the orin**, where the bus is. See [Phase 9](docs/roadmaps/9-mingda-autonomous-driving.md).
 - **Network monitor errors**: AWS Greengrass socket errors (non-critical, ignore)
@@ -935,8 +968,8 @@ All dependencies must be ready before localization can work.
 
 ### Systemd Service Integration
 
-Applies to the two-machine deployment. `just launch` (single machine) is
-unaffected and still runs play_launch in the foreground.
+Applies to the two-machine deployment. `just run` (this host only) is
+unaffected and runs play_launch in the foreground.
 
 Both hosts run the same units, installed per machine with a role:
 
@@ -949,8 +982,8 @@ Both hosts run the same units, installed per machine with a role:
 ```bash
 just service install master            # this machine
 just service install-orin              # the orin, over ssh
-just launch-all                     # starts both; returns immediately
-just stop-all                       # stops both; leaves recording alone
+just up [ARGS...]                   # starts both; returns immediately
+just down                           # stops both; leaves recording alone
 just logs
 just record start / record stop        # recording, independent of the launch; stop fetches + merges the orin bag
 just service doctor                            # when topics do not show up
@@ -966,13 +999,13 @@ for why it is built this way.
 
 **Note**: earlier revisions of this file described a `golfcart` CLI with
 `golfcart status` / `golfcart enable`, and a service auto-installed on first
-`just launch`. That was inherited from the AutoSDV system and never existed in
-this repository.
+`just launch`. It lived in the `golfcart_runtime` submodule, inherited from the
+AutoSDV system and never wired in; the submodule was removed 2026-11-09.
 
 ### Process Management
-- `just launch` (single machine): Ctrl-C stops it; a second Ctrl-C forces it
-- `just launch-all` (two machines): nothing to Ctrl-C — it returns
-  immediately, and `just stop-all` is the stop verb
+- `just run` (this host only): Ctrl-C stops it; a second Ctrl-C forces it
+- `just up` (two machines): nothing to Ctrl-C — it returns
+  immediately, and `just down` is the stop verb
 - `KillMode=control-group` in the units is what keeps orphans from surviving
 - play_launch ignores SIGTERM, so the units stop it with `KillSignal=SIGINT`
 
@@ -1076,8 +1109,8 @@ fork's dependencies instead.
 
 ### Launch and configuration
 - `golfcart_sensor_kit_launch/launch/gnss.launch.xml`: `gnss_receiver`
-  (`ublox` | `septentrio` | `none`, env `GNSS_RECEIVER`), `use_ntrip`
-  (env `USE_NTRIP`), `ntrip_param_file`
+  (`ublox` | `septentrio` | `none`), `use_ntrip`, `ntrip_param_file`, all launch
+  arguments of `golfcart.launch.yaml` passed down by name
 - `golfcart_sensor_kit_launch/config/ublox_f9p.yaml`: the receiver, as a rover
   (`tmode3: 0`, `/dev/ublox-gps`, `frame_id: gps`, 1 Hz). The driver's own
   `zed_f9p.yaml` is a base-station survey-in profile; do not copy it.
@@ -1098,12 +1131,11 @@ types the RTCM topic as `rtcm_msgs/Message`, which this driver does not use.
 
 ### RTK over NTRIP
 ```bash
-just launch use_ntrip:=true        # needs the sensor kit's config/ntrip_client.param.yaml
+just run use_ntrip:=true           # needs the sensor kit's config/ntrip_client.param.yaml
 scripts/testing/ntrip/check_ntrip_setup.sh   # everything the line above needs
 ```
-`use_ntrip` is a real launch argument that crosses the sensing-chain gap the
-same way `pointcloud_backend` does (a `set_env` of `USE_NTRIP` before the
-include). It defaults to **false**: it did nothing until 2026-09-19, and live
+`use_ntrip` is a plain launch argument, passed by name to the sensor kit like
+`pointcloud_backend`. It defaults to **false**: it did nothing until 2026-09-19, and live
 without an account the client exits on start and respawns every 5 s.
 
 Known from the bring-up log, not yet fixed in the fork: the driver's NMEA
@@ -1119,13 +1151,13 @@ NEWSLabNTU/ublox_f9p_ws.
 
 ## IMU Integration
 
-Two sources, selected by `imu_source` (env `IMU_SOURCE`). Both feed the same
+Two sources, selected by the `imu_source` launch argument. Both feed the same
 Autoware chain — `imu_corrector` then `gyro_bias_estimator` — which always runs
 on the Advantech regardless of source. Launch file:
 `golfcart_sensor_kit_launch/launch/imu.launch.xml`.
 
-**Currently `IMU_SOURCE=zed`** (`config/sensors.conf`): the Xsens MTi is broken
-and publishes nothing. Its raw topic stays in the recorded topic list on purpose —
+**The default is `imu_source:=zed`** (`golfcart.launch.yaml`): the Xsens MTi is
+broken and publishes nothing; `just run "imu_source:=xsens"` once it is repaired. Its raw topic stays in the recorded topic list on purpose —
 an empty topic in a bag records that the device was expected and silent, which an
 absent topic does not.
 
@@ -1214,7 +1246,7 @@ One ZED X stereo camera, driven as a composable node:
 - **The RGB channel is the left camera.** Images are stamped
   `zed_left_camera_frame_optical` (Z forward, X right, Y down), so any pose
   computed from them is in that frame — transform with tf2, never by hand.
-- Stereo video: `just launch-all "zed_stereo_video:=true"` H.264-encodes the
+- Stereo video: `just up zed_stereo_video:=true` H.264-encodes the
   rectified left and right on the orin's NVENC (Isaac ROS) into the orin's bag,
   `/sensing/camera/zed/{left,right}/color/rect/image/h264`. Needs the
   `isaac-h264-encoder` setup step there; untested on the orin as of 2026-10-27.

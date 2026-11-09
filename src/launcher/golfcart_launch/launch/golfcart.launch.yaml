@@ -55,22 +55,21 @@ launch:
     name: vehicle_interface_here
     value: $(eval "'$(var host)' in ('all', '$(var vehicle_host)')")
 
-# Address of the master, resolved from the environment rather than written here.
+# Address of the master. A plain argument with no default: the caller passes it
+# (the launch recipes and the unit read it from config/multi_machine.conf, the
+# only file that spells out either machine's address). Anything in the launch
+# tree that needs it takes $(var master_ip) from here - today that is the orin's
+# ntp_monitor, which measures its clock offset against the master.
 #
-# scripts/env.sh exports GOLFCART_MASTER_IP by sourcing config/multi_machine.conf,
-# which is the only file in the repository that spells out either machine's
-# address. Anything in the launch tree that needs it takes $(var master_ip) from
-# here - today that is the orin's ntp_monitor, which measures its clock offset
-# against the master.
-#
-# No fallback literal on purpose: a second copy of an address is exactly what
-# this avoids. If it is unset the launch fails loudly, which beats silently
-# measuring against the wrong machine. `.envrc` and the systemd units both
-# source scripts/env.sh, so it is set on every path that starts this stack.
+# No fallback literal and no environment default, on purpose: a second copy of
+# an address is exactly what this avoids, and an export someone forgot is a
+# surprise. Under host:=master or host:=orin an empty value stops the launch,
+# naming the argument (the check is beside the link bridge, below); under
+# host:=all nothing reads it.
 - arg:
     name: master_ip
-    default: $(env GOLFCART_MASTER_IP)
-    description: "Master's address; from config/multi_machine.conf via scripts/env.sh"
+    default: ""
+    description: "Master's address, from config/multi_machine.conf. Required under host:=master and host:=orin"
 
 - arg:
     name: is_simulation
@@ -89,36 +88,39 @@ launch:
     default: ""
     description: "LiDAR model (vlp32c) - empty string uses suite default"
 
-# camera_model and imu_source default from the ENVIRONMENT, not "".
+# Sensor choices: plain launch arguments with real defaults, never "" and never
+# the environment.
 #
-# Both are forwarded unconditionally to golfcart_autoware.launch.xml below. An
-# empty default was survivable only by accident: the installed Autoware sensing
-# files forward a fixed set of arguments and dropped these, so the sensor kit
-# fell back to its own $(env ...) default and got the right answer anyway.
+# They reach the sensor kit by name, through golfcart_autoware.launch.xml and our
+# own copy of tier4_sensing_component.launch.xml. Until that copy existed the
+# installed Autoware sensing files dropped them, and the sensor kit read
+# CAMERA_MODEL / IMU_SOURCE / GNSS_RECEIVER / USE_NTRIP / POINTCLOUD_BACKEND from
+# the environment (config/sensors.conf) instead - so a shell that forgot an
+# export silently got a different sensor. Now what the command line does not say,
+# the defaults below say, everywhere.
 #
-# play_launch 0.8.2's Rust parser resolves the chain without that drop, so the
-# empty string reaches the sensor kit and wins over the env default. imu_source
-# then builds a parameter path with a hole in it and the launch dies before any
-# node starts:
+# Never "": an empty imu_source builds a parameter path with a hole in it
+# ('.../imu_corrector_.param.yaml') and the launch dies before any node starts.
 #
-#   Failed to load and resolve parameter file '.../imu_corrector_.param.yaml'
-#
-# Reading the same environment here makes the forwarded value correct whether or
-# not the chain drops it. config/sensors.conf remains the single source; see
-# config/README.md.
+# imu_source defaults to zed because the Xsens MTi is broken and publishes
+# nothing; `imu_source:=xsens` once it is repaired.
 - arg:
     name: camera_model
-    default: "$(env CAMERA_MODEL gmslcam)"
-    description: "Camera driver: gmslcam | zedx | none. Defaults to $CAMERA_MODEL (config/sensors.conf)"
+    default: "gmslcam"
+    description: "Camera driver on the master: gmslcam | zedx | none (the orin always runs zedx)"
+
+- arg:
+    name: capture_profile
+    default: "nvv4l2camerasrc"
+    description: "GMSL capture profile: a directory in the sensor kit's config/camera_capture/"
 
 - arg:
     name: imu_source
-    default: "$(env IMU_SOURCE xsens)"
-    description: "IMU source: xsens | zed. Defaults to $IMU_SOURCE (config/sensors.conf)"
+    default: "zed"
+    description: "IMU source: zed | xsens. zed while the Xsens is broken"
 
 # gnss_receiver defaults to a REAL receiver, not "", for the same reason
-# camera_model and imu_source do above — and this one was not survivable by
-# accident. `""` is forwarded unconditionally and reaches the sensor kit, whose
+# camera_model and imu_source do above. `""` is forwarded unconditionally and reaches the sensor kit, whose
 # gnss.launch.xml resolves the topic with a dict lookup:
 #
 #   $(eval "{'ublox': ..., 'septentrio': ..., 'none': ...}['$(var gnss_receiver)']")
@@ -130,8 +132,8 @@ launch:
 # sensor kit's own `default="ublox"` rather than deferring to it.
 - arg:
     name: gnss_receiver
-    default: "$(env GNSS_RECEIVER ublox)"
-    description: "GNSS receiver: ublox | septentrio | none. Defaults to $GNSS_RECEIVER."
+    default: "ublox"
+    description: "GNSS receiver: ublox | septentrio | none"
 
 - arg:
     name: use_gnss
@@ -140,7 +142,7 @@ launch:
 
 # false, not true, although the receiver benefits from it: this argument did
 # nothing until 2026-09-19 (it reached golfcart_autoware.launch.xml and stopped
-# there, see the set_env below), so "true" was never exercised. Live, it starts
+# there), so "true" was never exercised. Live, it starts
 # the NTRIP client, which needs an account (the sensor kit's gitignored config/ntrip_client.param.yaml)
 # and otherwise exits on start and respawns every 5 s. Opt in per run.
 - arg:
@@ -158,10 +160,10 @@ launch:
 # One coarse switch, and a fine switch per stage that defaults from it. Both are
 # launch arguments; nothing here is set from the environment by a user.
 #
-#   just launch                                  # CUDA everywhere (the default)
-#   just launch use_cuda:=false                  # CPU everywhere
-#   just launch pointcloud_backend:=cpu          # CUDA NDT, CPU preprocessing
-#   just launch pose_source:=ndt                 # CUDA preprocessing, CPU NDT
+#   just run                                  # CUDA everywhere (the default)
+#   just run use_cuda:=false                  # CPU everywhere
+#   just run pointcloud_backend:=cpu          # CUDA NDT, CPU preprocessing
+#   just run pose_source:=ndt                 # CUDA preprocessing, CPU NDT
 #
 # A fine argument given explicitly wins over the coarse one, because launch
 # argument defaults are only consulted when the caller did not supply a value.
@@ -225,23 +227,6 @@ launch:
       NDT input preprocessing: cpu | cuda. Whole-stage, like
       pointcloud_backend; the halves cannot be mixed.
 
-# The sensor kit is reached through tier4_sensing_component.launch.xml and
-# tier4_sensing_launch/sensing.launch.xml, installed Autoware files that forward
-# a fixed set of arguments and drop the rest, so the value crosses that gap in
-# the environment. That is transport, not interface: the knob above is a launch
-# argument and nobody needs to set POINTCLOUD_BACKEND by hand.
-- set_env:
-    name: POINTCLOUD_BACKEND
-    value: "$(var pointcloud_backend)"
-
-# use_ntrip crosses the same gap the same way. gnss.launch.xml reads
-# $(env USE_NTRIP false); this is what makes `use_ntrip:=true` on the command
-# line reach it. The caster and credentials file are resolved by the sensor
-# kit from its own gitignored config/ntrip_client.param.yaml.
-- set_env:
-    name: USE_NTRIP
-    value: "$(var use_ntrip)"
-
 # Localization preset, included BEFORE pose_source is declared.
 #
 # Order is the whole point. A preset that names pose_source (aruco does) only
@@ -283,7 +268,7 @@ launch:
 # 14.0 s in the batched startup phase plus 9.1 s in TPE. If the stack comes up
 # and never localizes, that is this, and the one-argument fallback is:
 #
-#   just launch pose_source:=ndt
+#   just run pose_source:=ndt
 #
 # Re-measure on the Orin before assuming the number still holds: the per-frame
 # path already improved 10x there and the align path may have moved with it.
@@ -305,7 +290,7 @@ launch:
       Hand-surveyed ArUco board map. Required when pose_source:=aruco, ignored
       otherwise. The localizer refuses to start without it: with no map it is
       not a degraded localizer, it is a silent one.
-      Example: just launch "pose_source:=aruco aruco_tag_map_path:=./data/<site>/aruco_tag_map.yaml"
+      Example: just run "pose_source:=aruco aruco_tag_map_path:=./data/<site>/aruco_tag_map.yaml"
       There is no such file in this repository yet; survey a site and write one.
 
 # What seeds /localization/initialize, orthogonal to pose_source (what tracks
@@ -314,7 +299,7 @@ launch:
 # and forces the pose initializer's gnss_enabled off; it needs a map anchored to
 # the board (data/basement-indoor):
 #
-#   just launch "pose_initializer:=board map_path:=./data/basement-indoor use_gnss:=false"
+#   just run "pose_initializer:=board map_path:=./data/basement-indoor use_gnss:=false"
 #
 # Composes with ndt and cuda_ndt alike, which is why it is not a pose_source
 # value. See golfcart_autoware.launch.xml and docs/roadmaps/7-reflective-board-cold-start.md.
@@ -372,7 +357,7 @@ launch:
 # Median-NVTL divergence gate for cuda_ndt (Phase 8, L6): scan_matching_status
 # latches ERROR when the median NVTL of the last 10 scans falls below it, until
 # a re-initialization. Per map and per input, so 0.0 (off) here and set by the
-# map's drive recipe: 2.5 for Ming-Da (just launch-drive-mingda). Write a float.
+# map's drive recipe: 2.1 for Ming-Da (`just up @mingda`, config/launch/mingda.args). Write a float.
 # Detector 1 (5 consecutive unpublished scans) is always on and needs no value.
 - arg:
     name: ndt_divergence_nvtl_median_gate
@@ -566,6 +551,12 @@ launch:
       name: use_ntrip
       value: $(var use_ntrip)
     -
+      name: pointcloud_backend
+      value: $(var pointcloud_backend)
+    -
+      name: capture_profile
+      value: $(var capture_profile)
+    -
       name: sensor_suite
       value: $(var sensor_suite)
     -
@@ -715,13 +706,35 @@ launch:
 # one domain, and nothing to bridge; a bridge there would copy every listed
 # topic back into the domain it came from.
 #
-# The role and the file come from the environment scripts/env.sh exports
-# (GOLFCART_HOST, GOLFCART_LINK_TOPICS), the same way master_ip does above; the
-# domain ids are read from ROS_DOMAIN_ID and GOLFCART_LINK_DOMAIN_ID inside the
-# node. Nothing here spells out a value that lives in config/.
+# The role is host; the topic file is the link_topics argument, which the
+# caller passes (config/link/topics.yaml, or the link simulation's own copy).
+# The domain ids are read from ROS_DOMAIN_ID and GOLFCART_LINK_DOMAIN_ID inside
+# the node. Nothing here spells out a value that lives in config/.
+- arg:
+    name: link_topics
+    default: ""
+    description: "Path to the link topic list (config/link/topics.yaml). Required under host:=master and host:=orin"
+
 - let:
     name: is_two_machine
     value: $(eval "'$(var host)' in ('master', 'orin')")
+
+# Required-argument checks for the two-machine profiles (link_topics has its
+# twin below launch_link_bridge). Launch has no "raise", so each reads a
+# configuration that does not exist, named after the missing argument; both
+# play_launch parsers and stock ros2 launch then stop with
+#
+#   Undefined variable: 'MISSING_ARG_master_ip_required_under_host_master_or_orin'
+#
+# before any node starts. Without them an empty value would reach the orin's
+# ntp_monitor as an address and the bridge as a path, and each would fail alone
+# while the rest of the stack came up looking healthy.
+- group:
+    if: $(eval "$(var is_two_machine) and '$(var master_ip)' == ''")
+    children:
+    - let:
+        name: master_ip_check
+        value: $(var MISSING_ARG_master_ip_required_under_host_master_or_orin)
 
 # launch_link_bridge exists for one caller: the link simulation's baseline
 # leg, which runs the pre-split profiles and must not have a bridge in the
@@ -734,6 +747,15 @@ launch:
 
 # is_two_machine is a Python bool from its eval; launch_link_bridge is the
 # string a user typed, so it is compared as one.
+#
+# link_topics is required only when the bridge actually starts, so the link
+# simulation's bridgeless baseline need not name a file it will not read.
+- group:
+    if: $(eval "$(var is_two_machine) and '$(var launch_link_bridge)'.lower() in ('true', '1') and '$(var link_topics)' == ''")
+    children:
+    - let:
+        name: link_topics_check
+        value: $(var MISSING_ARG_link_topics_required_under_host_master_or_orin)
 - group:
     if: $(eval "$(var is_two_machine) and '$(var launch_link_bridge)'.lower() in ('true', '1')")
     children:
@@ -741,7 +763,7 @@ launch:
         pkg: golfcart_domain_bridge
         exec: domain_bridge
         name: link_bridge
-        args: --role $(var host) --config $(env GOLFCART_LINK_TOPICS)
+        args: --role $(var host) --config $(var link_topics)
 
 # Rosbag recording used to live here, as one `node:` entry per host. It is now a
 # separate systemd unit (golfcart-record.service ->
@@ -754,12 +776,12 @@ launch:
 
 # System Monitor, on http://localhost:8080/
 #
-# `just launch` puts play_launch's own web UI on 8081 (justfile), which only
+# `just run` puts play_launch's own web UI on 8081 (justfile), which only
 # makes sense as a reservation of 8080 for this. It was commented out on
 # 2026-04-24 by 286fac6, whose entire message is "disable system monitor
 # temporary" and which records no reason. Four months and a package rename
 # later, the mode availability strip and failing-path view live here and are
-# unreachable from `just launch` while this stays off, so it is back on.
+# unreachable from `just run` while this stays off, so it is back on.
 #
 # It brings up rosbridge on 9090 with it, because the strip reads Autoware's
 # diagnostic graph straight from the browser. Turn both off together with

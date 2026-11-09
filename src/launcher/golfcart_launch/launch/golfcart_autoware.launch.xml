@@ -63,6 +63,16 @@
   <arg name="lidar_detection_model" default="centerpoint" description="type/name, e.g. centerpoint/centerpoint_tiny; a bare type takes perception.launch.xml's default name"/>
   <arg name="use_lidar_rule_detector" default="true" description="lidar mode: also run the clustering detector"/>
   <arg name="use_perception_analytics_publisher" default="true"/>
+  <!-- Sensor kit choices, passed by name to our tier4_sensing_component copy.
+       Plain defaults, no environment; the same values golfcart.launch.yaml
+       declares, so a caller that names none of them gets the vehicle as it
+       is today (ZED IMU because the Xsens is broken). -->
+  <arg name="camera_model" default="gmslcam" description="gmslcam | zedx | none"/>
+  <arg name="capture_profile" default="nvv4l2camerasrc" description="GMSL capture profile: a directory in the sensor kit's config/camera_capture/"/>
+  <arg name="imu_source" default="zed" description="xsens | zed"/>
+  <arg name="gnss_receiver" default="ublox" description="ublox | septentrio | none"/>
+  <arg name="use_ntrip" default="false" description="launch the NTRIP client and feed RTCM to the u-blox"/>
+  <arg name="pointcloud_backend" default="cuda" description="LiDAR preprocessing and concatenation: cpu | cuda"/>
   <!-- Auto mode setting-->
   <arg name="enable_all_modules_auto_mode" default="false" description="enable all module's auto mode"/>
   <arg name="is_simulation" default="false" description="Autoware's behavior will change depending on whether this is a simulation or not."/>
@@ -149,13 +159,23 @@
   </group>
 
   <!-- Sensing -->
+  <!-- Ours, not autoware_launch's: upstream's component and
+       tier4_sensing_launch drop every argument but four on the way to the
+       sensor kit, which is why these used to travel in the environment. Our
+       copy passes them by name. -->
   <group if="$(var launch_sensing)">
-    <include file="$(find-pkg-share autoware_launch)/launch/components/tier4_sensing_component.launch.xml">
+    <include file="$(find-pkg-share golfcart_launch)/launch/components/tier4_sensing_component.launch.xml">
       <arg name="pointcloud_container_name" value="$(var pointcloud_container_name)"/>
       <arg name="launch_sensing_driver" value="$(var launch_sensing_driver)"/>
       <arg name="sensor_model" value="$(var sensor_model)"/>
       <arg name="use_sim_time" value="$(var use_sim_time)"/>
       <arg name="vehicle_model" value="$(var vehicle_model)"/>
+      <arg name="camera_model" value="$(var camera_model)"/>
+      <arg name="capture_profile" value="$(var capture_profile)"/>
+      <arg name="imu_source" value="$(var imu_source)"/>
+      <arg name="gnss_receiver" value="$(var gnss_receiver)"/>
+      <arg name="use_ntrip" value="$(var use_ntrip)"/>
+      <arg name="pointcloud_backend" value="$(var pointcloud_backend)"/>
     </include>
   </group>
 
@@ -258,8 +278,8 @@
          under it. Included from THIS file so config_file and the two param
          files reach the nodes as arguments; an installed Autoware include
          between here and the nodes would drop them (CLAUDE.md, the
-         camera_model / imu_source story), and the env-var route is the
-         fallback if this ever has to move. Nodes come up as
+         camera_model / imu_source story, since fixed by our own
+         tier4_sensing_component copy). Nodes come up as
          /localization/board_detector and /localization/board_pose_initializer. -->
     <group if="$(eval '\'$(var pose_initializer)\' == \'board\'')">
       <let name="reflective_pose_config_path"

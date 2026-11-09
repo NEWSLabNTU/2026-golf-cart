@@ -65,9 +65,9 @@
 
     Overriding one field rather than shipping a second param file keeps the
     address out of this tree entirely: it arrives as $(var master_ip), which
-    golfcart.launch.yaml resolves from $(env GOLFCART_MASTER_IP), which
-    scripts/env.sh exports from config/multi_machine.conf. That conf is the only
-    file in the repository with either machine's address in it.
+    golfcart.launch.yaml takes as its own master_ip argument, which the launch
+    recipes and the unit read from config/multi_machine.conf. That conf is the
+    only file in the repository with either machine's address in it.
 
     The order matters: this <param> comes after <param from=...>, and later
     parameters override earlier ones.
@@ -102,7 +102,7 @@
       That is not a theoretical concern: it is how this file's gating came to be
       believed working while it was not. `if=` on the composable node resolves
       correctly under `ros2 launch` and under play_launch's Python parser, and
-      is dropped by the Rust parser that `just launch` and the systemd units
+      is dropped by the Rust parser that `just run` and the systemd units
       actually use - so the resolved model kept all eight monitors and the three
       that cannot succeed on an Orin would still have run on the vehicle.
 

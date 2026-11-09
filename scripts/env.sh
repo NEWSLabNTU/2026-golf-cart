@@ -38,7 +38,7 @@ export GOLFCART_REPO_ROOT
 # A marker-derived multi-machine role is then DEMOTED to loopback if the other
 # machine does not answer a ping. The master profile binds Cyclone to the shared
 # 192.168.125.0/24 LAN and puts every topic on it, including two LiDARs' worth of
-# PointCloud2. That segment is 100 Mb/s: measured 2026-09-21, a solo `just launch`
+# PointCloud2. That segment is 100 Mb/s: measured 2026-09-21, a solo `just run`
 # on the master pushed 11993 KiB/s against a 12800 KiB/s ceiling and took ssh to
 # the orin down with it, which is a miserable thing to debug because the symptom
 # (cannot reach the orin) looks nothing like the cause (the profile assumes it is
@@ -47,7 +47,7 @@ export GOLFCART_REPO_ROOT
 #
 # Only a `marker` role is demoted. A GOLFCART_ENV_ROLE is a statement of intent
 # from a caller that knows better: the systemd units in particular must not
-# change transport because a ping happened to drop, so `just launch-all` keeps
+# change transport because a ping happened to drop, so `just up` keeps
 # the profile it was installed with.
 #
 # GOLFCART_DDS_PROBE=0 is the override, and it is deliberately NOT
@@ -239,8 +239,8 @@ golfcart_resolve_dds_profile() {
             # Only the TRANSPORT changes. `profile` stays the machine role, so
             # GOLFCART_HOST below still says `master`.
             #
-            # Conflating the two broke `just launch` outright while this was
-            # being written. The justfile derives `host:=` from GOLFCART_HOST;
+            # Conflating the two broke `just run` outright while this was
+            # being written. scripts/launch/args.py derives `host:=` from GOLFCART_HOST;
             # anything that is not master or orin falls through to `host:=all`,
             # which puts the is_orin group in scope, which includes
             # camera.launch.xml with camera_model:=zedx, which resolves
@@ -268,7 +268,7 @@ golfcart_resolve_dds_profile() {
 
     # `loopback` names a TRANSPORT, never a machine, so selecting it explicitly
     # must not rewrite which machine this is either. Without this,
-    # `GOLFCART_DDS_PROFILE=loopback just launch` - the natural way to keep a
+    # `GOLFCART_DDS_PROFILE=loopback just run` - the natural way to keep a
     # solo run off the shared LAN - set GOLFCART_HOST=loopback, which the
     # justfile turns into `host:=all`, which pulls in the is_orin group and
     # kills the launch on a missing zed_wrapper. That is the same trap the
@@ -658,46 +658,33 @@ if [ "$rmem_max" -lt 2147483647 ] || \
     fi
 fi
 
-# ── Sensor selection ─────────────────────────────────────────────────────────
-# IMU_SOURCE / CAMERA_MODEL / GNSS_RECEIVER reach the sensor kit only as
-# environment variables:
-# the launch-argument path is swallowed by two installed Autoware files that
-# forward a fixed set of arguments. See config/sensors.conf.
-#
-# POINTCLOUD_BACKEND crosses the same gap but is NOT set here. It is a per-run
-# choice rather than a per-machine one, so golfcart.launch.yaml declares it as a
-# launch argument and set_env's it just before the include. Nothing needs to
-# resolve it at shell level.
-if [ -f "${GOLFCART_REPO_ROOT}/config/sensors.conf" ]; then
-    # shellcheck source=/dev/null
-    . "${GOLFCART_REPO_ROOT}/config/sensors.conf"
-    export IMU_SOURCE CAMERA_MODEL GNSS_RECEIVER
-fi
+# Sensor selection is NOT here. camera_model, imu_source, gnss_receiver,
+# use_ntrip, pointcloud_backend and capture_profile are launch arguments of
+# golfcart.launch.yaml with real defaults, passed to the sensor kit by name
+# (golfcart_launch's own tier4_sensing_component copy). config/sensors.conf and
+# the IMU_SOURCE / CAMERA_MODEL / GNSS_RECEIVER exports it fed are gone: a
+# forgotten export silently picked a different sensor.
 
 # ── Multi-machine addresses ──────────────────────────────────────────────────
 # config/multi_machine.conf is the only place either machine's address is
-# written down. It was already the single source for the ssh-based scripts in
-# scripts/multi_machine/, which each source it directly; exporting the master's
-# address here extends that to the launch tree.
+# written down. It is sourced here for this shell's own use (MASTER_IP,
+# ORIN_SSH, ...), but nothing is exported to the launch tree any more:
+# golfcart.launch.yaml takes `master_ip:=` as a plain argument with no
+# environment default, the launch recipes and launch_unit_exec.sh pass it from
+# this file, and under host:=master / host:=orin an empty value stops the launch
+# naming the argument.
 #
-# golfcart.launch.yaml declares a `master_ip` argument defaulting to
-# $(env GOLFCART_MASTER_IP), which is how ntp_monitor on the orin learns which
-# host to measure its clock against. Deliberately no fallback literal in the
-# launch file: a second copy of an address is exactly what this avoids, and an
-# unset variable fails loudly at launch rather than silently measuring against
-# the wrong machine.
-#
-# The conf assigns MASTER_IP from ${GOLFCART_MASTER_IP:-...}, so an address
-# exported before this point still wins and the round-trip is stable.
+# The conf still assigns MASTER_IP from ${GOLFCART_MASTER_IP:-...}, so an
+# address exported before this point still overrides it for the scripts that
+# read the conf (watchdog.sh among them).
 if [ -f "${GOLFCART_REPO_ROOT}/config/multi_machine.conf" ]; then
     # shellcheck source=/dev/null
     . "${GOLFCART_REPO_ROOT}/config/multi_machine.conf"
-    export GOLFCART_MASTER_IP="${MASTER_IP}"
 fi
 
 # ── play_launch runtime ──────────────────────────────────────────────────────
 # GOLFCART_CONTAINER_MODE picks how composable nodes are run. It is resolved
-# here rather than baked into each caller so that `just launch`, the systemd
+# here rather than baked into each caller so that `just run`, the systemd
 # units and the replay scripts cannot disagree about it. See config/runtime.conf
 # for what each mode costs.
 if [ -f "${GOLFCART_REPO_ROOT}/config/runtime.conf" ]; then
@@ -711,11 +698,12 @@ fi
 # the master, 60 on the orin) bound to `lo`, and only the link domain (10)
 # reaches the LAN, with golfcart_domain_bridge copying config/link/topics.yaml
 # across. The values live in config/runtime.conf; the CycloneDDS profiles
-# expand them in their <Domain Id>, the bridge reads them, golfcart.launch.yaml
-# passes the topic file to the bridge as $(env ...). golfcart_resolve_domains,
+# expand them in their <Domain Id>, the bridge reads them. golfcart_resolve_domains,
 # called at the bottom once the role is known, exports ROS_DOMAIN_ID.
+#
+# The topic list is not exported: every bridge is started with an explicit
+# --config (golfcart.launch.yaml's link_topics:=, `just link bridge`).
 export GOLFCART_LINK_DOMAIN_ID="${GOLFCART_LINK_DOMAIN_ID:-10}"
-export GOLFCART_LINK_TOPICS="${GOLFCART_LINK_TOPICS:-${GOLFCART_REPO_ROOT}/config/link/topics.yaml}"
 
 # RMW_IMPLEMENTATION is resolved below by golfcart_resolve_rmw, together with
 # the matching transport config. It must happen after Autoware's setup.bash,
@@ -733,7 +721,7 @@ unset ROS_LOCALHOST_ONLY
 #   orin      slave Jetson:   domain 60 on lo, link domain 10 on 192.168.125.101
 # The profile normally comes from the gitignored `config/host` marker; see
 # golfcart_resolve_dds_profile above. The systemd units derive their own URI from
-# GOLFCART_HOST, so this only affects plain shells and `just launch`.
+# GOLFCART_HOST, so this only affects plain shells and `just run`.
 #
 # No `ros2 daemon stop` here on purpose: a daemon's DDS context is fixed when it
 # starts, so this file cannot repair a running one, and stopping it would be a

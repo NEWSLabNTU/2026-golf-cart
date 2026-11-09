@@ -37,20 +37,38 @@ launch:
     default: ""
     description: "LiDAR model (vlp32c) - empty string uses suite default"
 
+# Real defaults, never "" and never the environment: these reach the sensor kit
+# by name now (our tier4_sensing_component copy), and an empty imu_source or
+# gnss_receiver aborts the launch. Same values as golfcart.launch.yaml.
 - arg:
     name: camera_model
-    default: ""
-    description: "Camera model (usb or none) - empty string uses suite default"
+    default: "gmslcam"
+    description: "Camera driver on the master: gmslcam | zedx | none"
+
+- arg:
+    name: capture_profile
+    default: "nvv4l2camerasrc"
+    description: "GMSL capture profile: a directory in the sensor kit's config/camera_capture/"
 
 - arg:
     name: imu_source
-    default: ""
-    description: "IMU source (tamagawa) - empty string uses suite default"
+    default: "zed"
+    description: "IMU source: zed | xsens. zed while the Xsens is broken"
 
 - arg:
     name: gnss_receiver
-    default: "$(env GNSS_RECEIVER ublox)"
-    description: "GNSS receiver: ublox | septentrio | none. Defaults to $GNSS_RECEIVER."
+    default: "ublox"
+    description: "GNSS receiver: ublox | septentrio | none"
+
+- arg:
+    name: use_cuda
+    default: "true"
+    description: "Coarse GPU switch; sets the default for pointcloud_backend"
+
+- arg:
+    name: pointcloud_backend
+    default: $(eval "'cuda' if '$(var use_cuda)'.lower() in ('true','1','yes') else 'cpu'")
+    description: "LiDAR preprocessing and concatenation: cpu | cuda. Defaults from use_cuda."
 
 - arg:
     name: use_gnss
@@ -59,7 +77,7 @@ launch:
 
 # false, not true, although the receiver benefits from it: this argument did
 # nothing until 2026-09-19 (it reached golfcart_autoware.launch.xml and stopped
-# there, see the set_env below), so "true" was never exercised. Live, it starts
+# there), so "true" was never exercised. Live, it starts
 # the NTRIP client, which needs an account (the sensor kit's gitignored config/ntrip_client.param.yaml)
 # and otherwise exits on start and respawns every 5 s. Opt in per run.
 - arg:
@@ -109,15 +127,6 @@ launch:
 # Include localization preset (defines twist_source)
 - include:
     file: "$(find-pkg-share golfcart_launch)/config/localization/preset/$(var localization_preset)_preset.yaml"
-
-# use_ntrip reaches the sensor kit only through the environment: the installed
-# Autoware sensing chain forwards a fixed argument list and drops the rest.
-# gnss.launch.xml reads $(env USE_NTRIP false); this is what makes
-# `use_ntrip:=true` on the command line reach it. The caster and credentials file are resolved by the sensor
-# kit from its own gitignored config/ntrip_client.param.yaml.
-- set_env:
-    name: USE_NTRIP
-    value: "$(var use_ntrip)"
 
 - include:
     file: "$(find-pkg-share golfcart_launch)/launch/golfcart_autoware.launch.xml"
@@ -222,6 +231,12 @@ launch:
     -
       name: use_ntrip
       value: $(var use_ntrip)
+    -
+      name: pointcloud_backend
+      value: $(var pointcloud_backend)
+    -
+      name: capture_profile
+      value: $(var capture_profile)
     -
       name: sensor_suite
       value: $(var sensor_suite)

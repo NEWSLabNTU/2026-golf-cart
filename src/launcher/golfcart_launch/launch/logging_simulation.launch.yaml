@@ -20,8 +20,8 @@ launch:
     default: ""
     description: "LiDAR model (vlp32c) - empty string uses suite default"
 
-# Defaulted from the environment, not "", for the reason golfcart.launch.yaml
-# spells out at length: an <arg> forwarded with value="" OVERRIDES the sensor
+# Real defaults, not "" and not the environment, for the reason
+# golfcart.launch.yaml spells out at length: an <arg> forwarded with value="" OVERRIDES the sensor
 # kit's own default rather than deferring to it, and the kit resolves both with
 # a dict lookup. An empty key is a KeyError that aborts the whole launch.
 #
@@ -32,18 +32,18 @@ launch:
 # description was never true.
 - arg:
     name: camera_model
-    default: "$(env CAMERA_MODEL gmslcam)"
-    description: "Camera driver: gmslcam | zedx | none. Defaults to $CAMERA_MODEL."
+    default: "gmslcam"
+    description: "Camera driver: gmslcam | zedx | none"
 
 - arg:
     name: imu_source
-    default: "$(env IMU_SOURCE xsens)"
-    description: "IMU source: xsens | zed. Defaults to $IMU_SOURCE."
+    default: "zed"
+    description: "IMU source: zed | xsens. zed while the Xsens is broken"
 
 - arg:
     name: gnss_receiver
-    default: "$(env GNSS_RECEIVER ublox)"
-    description: "GNSS receiver: ublox | septentrio | none. Defaults to $GNSS_RECEIVER."
+    default: "ublox"
+    description: "GNSS receiver: ublox | septentrio | none"
 
 - arg:
     name: use_gnss
@@ -87,18 +87,6 @@ launch:
     name: localization_pointcloud_backend
     default: "cpu"
     description: "NDT input preprocessing: cpu | cuda"
-
-- set_env:
-    name: POINTCLOUD_BACKEND
-    value: "$(var pointcloud_backend)"
-
-# use_ntrip crosses the same gap the same way. gnss.launch.xml reads
-# $(env USE_NTRIP false); this is what makes `use_ntrip:=true` on the command
-# line reach it. The caster and credentials file are resolved by the sensor
-# kit from its own gitignored config/ntrip_client.param.yaml.
-- set_env:
-    name: USE_NTRIP
-    value: "$(var use_ntrip)"
 
 # Not derived from use_cuda: pose_source picks a localization METHOD, and only
 # two of its values are the same algorithm on different hardware. Same reasoning
@@ -165,7 +153,7 @@ launch:
 #
 # Replaying the Autoware sample bag (3 LiDARs as velodyne_packets):
 #
-#   just launch-sim-logging "vehicle_model:=sample_vehicle \
+#   just sim logging "vehicle_model:=sample_vehicle \
 #     sensor_model:=sample_bag_sensor_kit \
 #     map_path:=./src/localization/cuda_ndt_matcher/data/sample-map"
 #
@@ -351,6 +339,9 @@ launch:
     -
       name: use_ntrip
       value: $(var use_ntrip)
+    -
+      name: pointcloud_backend
+      value: $(var pointcloud_backend)
     -
       name: sensor_suite
       value: $(var sensor_suite)

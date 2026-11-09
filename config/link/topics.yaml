@@ -42,7 +42,7 @@
 # same rule holds: never in both directions.
 
 orin_to_master:
-  # The vehicle's IMU while IMU_SOURCE=zed (config/sensors.conf). RELIABLE on
+  # The vehicle's IMU while imu_source:=zed (the default). RELIABLE on
   # both ends, because both ends are: the ZED wrapper publishes every topic
   # with rclcpp::QoS(10) (zed_camera_component_main.cpp, mQos), and Autoware's
   # imu_corrector subscribes reliable. A best_effort lane here matched the

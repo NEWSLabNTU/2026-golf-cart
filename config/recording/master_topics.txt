@@ -59,7 +59,7 @@
 # ── IMU ─────────────────────────────────────────────────────────────────────
 #
 # The live IMU is the ZED X's, recorded on the orin as
-# /sensing/camera/zed/imu/data (see config/sensors.conf, IMU_SOURCE=zed).
+# /sensing/camera/zed/imu/data (imu_source:=zed, golfcart.launch.yaml's default).
 #
 # The Xsens raw topic stays listed even though the device is currently BROKEN and
 # publishes nothing. A topic present with zero messages says "this device was

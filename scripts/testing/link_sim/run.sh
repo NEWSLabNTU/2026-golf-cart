@@ -132,11 +132,11 @@ set +u
 set -u
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 unset ROS_DOMAIN_ID
-# The sensor kit reads these from the environment (config/sensors.conf). No
-# camera driver: gscam with no device hangs, and the GMSL topics come from the
-# synthetic drivers anyway. IMU from the ZED, as the cart runs today.
-export CAMERA_MODEL=none IMU_SOURCE=zed
-export GOLFCART_LINK_TOPICS="${REPO_ROOT}/config/link/topics.yaml"
+# Passed to the master's launch below as arguments (camera_model:=none
+# imu_source:=zed): no camera driver, since gscam with no device hangs and the
+# GMSL topics come from the synthetic drivers anyway; IMU from the ZED, as the
+# cart runs today. The topic file goes to both bridges as an argument too.
+LINK_TOPICS="${REPO_ROOT}/config/link/topics.yaml"
 LINK_DOMAIN="${GOLFCART_LINK_DOMAIN_ID:-10}"
 MASTER_DOMAIN="${GOLFCART_MASTER_DOMAIN_ID:-50}"
 ORIN_DOMAIN="${GOLFCART_ORIN_DOMAIN_ID:-60}"
@@ -170,7 +170,7 @@ case "$MODE" in
         if [ "$ZED_IMAGE" = 1 ]; then
             # The real list plus the image lane, full rate: what an operator who
             # wants the ZED in RViz on the master would add.
-            cp "$GOLFCART_LINK_TOPICS" "$OUT/topics.yaml"
+            cp "$LINK_TOPICS" "$OUT/topics.yaml"
             python3 - "$OUT/topics.yaml" <<'PY'
 import sys
 p = sys.argv[1]
@@ -183,7 +183,7 @@ s = s.replace("master_to_orin: []", """  - topic: /sensing/camera/zed/rgb/color/
 master_to_orin: []""")
 open(p, "w").write(s)
 PY
-            export GOLFCART_LINK_TOPICS="$OUT/topics.yaml"
+            LINK_TOPICS="$OUT/topics.yaml"
         fi
         ;;
 esac
@@ -284,7 +284,7 @@ mark start
 spawn_orin python3 "$SCRIPT_DIR/synthetic_sensors.py" orin > "$OUT/orin_sensors.log" 2>&1
 spawn_orin ros2 bag record -o "$OUT/bags/orin" "${ORIN_TOPICS[@]}" > "$OUT/orin_record.log" 2>&1
 if [ "$MODE" = split ]; then
-    spawn_orin "$BRIDGE" --role orin > "$OUT/orin_bridge.log" 2>&1
+    spawn_orin "$BRIDGE" --role orin --config "$LINK_TOPICS" > "$OUT/orin_bridge.log" 2>&1
 fi
 
 # ── master ───────────────────────────────────────────────────────────────────
@@ -292,6 +292,8 @@ spawn_master python3 "$SCRIPT_DIR/synthetic_sensors.py" master > "$OUT/master_se
 spawn_master ros2 launch golfcart_launch golfcart.launch.yaml host:=master \
     launch_sensing_driver:=false launch_vehicle_interface:=false \
     use_cuda:=false pose_source:=ndt use_gnss:=false rviz:=false "$BRIDGE_ARG" \
+    camera_model:=none imu_source:=zed \
+    "master_ip:=${MASTER_IP}" "link_topics:=${LINK_TOPICS}" \
     > "$OUT/master_stack.log" 2>&1
 sleep 20  # let the containers exist before the recorder's discovery burst
 spawn_master ros2 bag record -o "$OUT/bags/master" "${MASTER_TOPICS[@]}" > "$OUT/master_record.log" 2>&1

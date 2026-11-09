@@ -1,0 +1,73 @@
+<?xml version="1.0"?>
+<!--
+  Our copy of autoware_launch's tier4_sensing_component.launch.xml (Autoware
+  1.5.0), with tier4_sensing_launch/sensing.launch.xml folded into it.
+
+  Why it exists: upstream goes component, then tier4_sensing_launch, then the
+  sensor kit, and each of the two installed files forwards a fixed set of
+  arguments (launch_driver, sensor_model, vehicle_mirror_param_file,
+  pointcloud_container_name) and drops the rest. Every choice the sensor kit
+  makes beyond those had to cross in the environment instead: CAMERA_MODEL,
+  IMU_SOURCE, GNSS_RECEIVER, USE_NTRIP, POINTCLOUD_BACKEND. A forgotten export
+  then silently picked a sensor. Here the sensor kit is included directly, in
+  the same `sensing` namespace upstream pushes, and every argument it takes is
+  passed by name.
+
+  Everything else is upstream's: the global parameter loader and the optional
+  pointcloud container. The include is still resolved from sensor_model, so a
+  replay with sample_bag_sensor_kit keeps working; a kit that does not declare
+  the extra arguments simply never reads them.
+-->
+<launch>
+  <arg
+    name="launch_pointcloud_container"
+    default="false"
+    description="if true, launch pointcloud container. Please note that it is not intended to launch pointcloud_container_name with the same name in other launch files."
+  />
+  <arg name="pointcloud_container_name" description="name of pointcloud container"/>
+  <arg name="launch_sensing_driver" default="true"/>
+  <arg name="sensor_model" default="sample_sensor_kit"/>
+  <arg name="use_sim_time" default="false"/>
+  <arg name="vehicle_model" default="sample_vehicle"/>
+
+  <!-- The sensor kit's own choices. Plain defaults, no environment: what the
+       command line does not say, these say. Same values as golfcart.launch.yaml. -->
+  <arg name="camera_model" default="gmslcam" description="gmslcam | zedx | none"/>
+  <arg name="capture_profile" default="nvv4l2camerasrc" description="GMSL capture profile, a directory in the sensor kit's config/camera_capture/"/>
+  <arg name="imu_source" default="zed" description="xsens | zed"/>
+  <arg name="gnss_receiver" default="ublox" description="ublox | septentrio | none"/>
+  <arg name="use_ntrip" default="false" description="launch the NTRIP client (ublox only)"/>
+  <arg name="pointcloud_backend" default="cuda" description="cpu | cuda"/>
+
+  <!-- Global parameters -->
+  <group scoped="false">
+    <include file="$(find-pkg-share autoware_global_parameter_loader)/launch/global_params.launch.py">
+      <arg name="use_sim_time" value="$(var use_sim_time)"/>
+      <arg name="vehicle_model" value="$(var vehicle_model)"/>
+    </include>
+  </group>
+
+  <!-- Pointcloud container -->
+  <group if="$(var launch_pointcloud_container)">
+    <include file="$(find-pkg-share autoware_launch)/launch/pointcloud_container.launch.py">
+      <arg name="use_multithread" value="true"/>
+      <arg name="container_name" value="$(var pointcloud_container_name)"/>
+    </include>
+  </group>
+
+  <!-- What tier4_sensing_launch/sensing.launch.xml did, minus its argument filter. -->
+  <group>
+    <push-ros-namespace namespace="sensing"/>
+    <include file="$(find-pkg-share $(var sensor_model)_launch)/launch/sensing.launch.xml">
+      <arg name="launch_driver" value="$(var launch_sensing_driver)"/>
+      <arg name="vehicle_mirror_param_file" value="$(find-pkg-share $(var vehicle_model)_description)/config/mirror.param.yaml"/>
+      <arg name="pointcloud_container_name" value="$(var pointcloud_container_name)"/>
+      <arg name="camera_model" value="$(var camera_model)"/>
+      <arg name="capture_profile" value="$(var capture_profile)"/>
+      <arg name="imu_source" value="$(var imu_source)"/>
+      <arg name="gnss_receiver" value="$(var gnss_receiver)"/>
+      <arg name="use_ntrip" value="$(var use_ntrip)"/>
+      <arg name="pointcloud_backend" value="$(var pointcloud_backend)"/>
+    </include>
+  </group>
+</launch>

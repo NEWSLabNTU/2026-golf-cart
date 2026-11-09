@@ -56,7 +56,7 @@ pressure IFACE="enP5p3s0" SECS="60":
 
 # Run the link bridge standalone for this host's role (from config/host)
 bridge:
-    ros2 run golfcart_domain_bridge domain_bridge --role "${GOLFCART_HOST}"
+    ros2 run golfcart_domain_bridge domain_bridge --role "${GOLFCART_HOST}" --config {{justfile_directory()}}/config/link/topics.yaml
 
 # Two hosts, one wire, on this machine: network namespaces joined by a veth
 # shaped to 100 Mbit/s, the real profiles, the real topic list, the REAL

@@ -8,10 +8,10 @@ changing a value here changes it for every consumer on both hosts.
 |---|---|---|
 | `host` | one word (`master` or `orin`) | which machine this checkout is on. Selects the DDS profile. **Gitignored** — it is a property of the machine, not the branch |
 | `multi_machine.conf` | shell assignments | the other host's `user@addr`, its repo path, the ssh key, the master's IP |
-| `sensors.conf` | shell assignments | which IMU and camera driver the sensor kit uses (`IMU_SOURCE`, `CAMERA_MODEL`) |
 | `ntrip_credentials.txt` | plain text | the NTRIP caster account, kept to paste from. **Gitignored**, it is a secret. The launch reads the account from the sensor kit's own gitignored `config/ntrip_client.param.yaml`, not from here |
 | `runtime.conf` | shell assignments | how play_launch runs composable nodes (`GOLFCART_CONTAINER_MODE`), which middleware this host uses (`GOLFCART_RMW`), and the three ROS domain ids: master stack 50, orin stack 60, wire 10 |
 | `recording/master_topics.txt`<br>`recording/orin_topics.txt` | one topic per line, `#` comments | what each host records |
+| `launch/<name>.args` | `key:=value` per line, `#` comments, `@other` includes | named launch argument sets: `just up @mingda-loop`, `just run @basement`, `just sim planning @sim-ntu-r02`. Expanded in place by `scripts/launch/args.py`; later args win |
 | `link/topics.yaml` | YAML | what crosses the master/orin wire, in which direction, with what QoS. One file, read by both hosts' bridges |
 | `cyclonedds/{master,orin,loopback}.xml` | CycloneDDS XML | DDS network profiles, one per role. `master` and `orin` bind the stack domain (50 / 60) to `lo` and only the link domain (10) to the LAN |
 | `zenoh/{master,orin}-session.json5` | Zenoh JSON5 | Zenoh session profiles, used only when `GOLFCART_RMW=zenoh`. **Generated** — see [`zenoh/README.md`](zenoh/README.md) |
@@ -52,16 +52,20 @@ the *remote* shell, since this machine's `$HOME` is the wrong answer.
 
 ## Changing the IMU or camera
 
-`sensors.conf` holds `IMU_SOURCE` and `CAMERA_MODEL`. They are **environment
-variables, not launch arguments**, and that is forced rather than chosen:
-`golfcart.launch.yaml`'s `imu_source:=` reaches `golfcart_autoware.launch.xml`,
-but the path onwards runs through two installed Autoware files that forward a
-fixed set of arguments and drop the rest. So `just launch "imu_source:=zed"`
-looks like it works and does nothing; `IMU_SOURCE=zed` is what the sensor kit
-actually reads.
+Not here. `sensors.conf` is gone. `camera_model`, `imu_source`, `gnss_receiver`,
+`use_ntrip`, `pointcloud_backend` and `capture_profile` are ordinary launch
+arguments of `golfcart.launch.yaml`, with real defaults, and reach the sensor kit
+by name through golfcart_launch's own copy of `tier4_sensing_component.launch.xml`
+(the installed one dropped them, which is why they used to travel as environment
+variables, and why a forgotten export silently picked a different sensor):
 
-Currently `IMU_SOURCE=zed` — the ZED X's built-in IMU, published by the orin —
-because the Xsens MTi is broken.
+```bash
+just run "imu_source:=xsens camera_model:=none"
+```
+
+The default is `imu_source:=zed` — the ZED X's built-in IMU, published by the
+orin — because the Xsens MTi is broken. Change the default in
+`golfcart.launch.yaml` when that changes.
 
 ## There is no CAN TX switch
 
@@ -146,7 +150,7 @@ participant count, which is why the per-node mode is not a linear cost.
 you *which* node died instead of which container. Turn it on for that run only:
 
 ```bash
-GOLFCART_CONTAINER_MODE=isolated just launch
+GOLFCART_CONTAINER_MODE=isolated just run
 ```
 
 Like every other key here, an already-set value wins, so that override needs no

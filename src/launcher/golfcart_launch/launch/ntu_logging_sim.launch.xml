@@ -51,7 +51,6 @@
   <arg name="pointcloud_backend"
        default="$(eval &quot;'cuda' if '$(var use_cuda)'.lower() in ('true','1','yes') else 'cpu'&quot;)"
        description="cpu or cuda. Defaults from use_cuda."/>
-  <set_env name="POINTCLOUD_BACKEND" value="$(var pointcloud_backend)"/>
 
   <!-- Which recorded cloud NDT matches against. The bag carries two VLP32
        topics and they are NOT interchangeable:
@@ -98,6 +97,7 @@
     <arg name="launch_dummy_diag_publisher" value="false"/>
 
     <arg name="pose_source" value="$(var pose_source)"/>
+    <arg name="pointcloud_backend" value="$(var pointcloud_backend)"/>
     <arg name="twist_source" value="gyro_odom"/>
     <arg name="imu_source" value="zed"/>
 
