@@ -36,11 +36,8 @@
 # every leg ARRIVED (see Phase 8 M6 / Phase 9 "Loop route" for the numbers).
 # The route TUI reads this file: scripts/testing/drive/run.py --poses <this>.
 
-# 2026-11-09: start moved onto the measured lane line with route_loop_cw.yaml
-# (y -6.27 was the old, sagging fit). The bottom straight is 1.9 m wide now,
-# under this file's 2.0 m goal rule, so its goal moved to the east side just
-# before the south-east corner; west and east goals nudged off the rebuilt
-# lanelet seams. Placed with sim_loop_drive.check_goal_placement.
+# 2026-11-09: start and goals re-placed on the lane refitted from three driven
+# laps (route_loop_cw.yaml), with sim_loop_drive.check_goal_placement.
 frame_id: map
 lanelet2_map_file: lanelet2_map_loop.osm
 centreline: route_loop_cw.yaml
@@ -48,9 +45,9 @@ centreline: route_loop_cw.yaml
 # spot, finds no shoulder and holds the cart at distance 0 forever (Phase 8 M2).
 allow_goal_modification: false
 
-start: {name: start (bottom straight), x: 10.98, y: -4.26, yaw_deg: 180.3}
+start: {name: start (bottom straight), x: 10.98, y: -4.26, yaw_deg: -179.7}
 
 goals:
-  - {name: west side, x: 3.37, y: 10.94, yaw_deg: 87.0}
-  - {name: east side, x: 19.65, y: 10.29, yaw_deg: -81.9}
-  - {name: south-east corner, x: 19.66, y: -1.04, yaw_deg: -108.1}
+  - {name: west side, x: 4.20, y: 10.92, yaw_deg: 88.8}
+  - {name: east side, x: 18.55, y: 10.10, yaw_deg: -84.0}
+  - {name: south-east corner, x: 20.53, y: -0.36, yaw_deg: -95.4}
