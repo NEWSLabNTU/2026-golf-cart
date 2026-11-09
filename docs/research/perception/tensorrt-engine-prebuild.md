@@ -3,6 +3,19 @@
 Status: study, 2026-11-05. Nothing is built yet. The Orins were offline, so
 no fleet inventory was taken and nothing here was measured on an Orin.
 
+Update 2026-11-09: the engine-pack design below is implemented in this
+repository, `just engines` (`scripts/engines/engines.py`), and supersedes
+"its own project". Packs are committed as plain git blobs (no LFS) under
+`data/engines/<key>/`, each engine as `<stem>.engine.zst` (zstd -19, the
+CLI; xz -9 was ~3% smaller but the user chose zstd), key
+`aw<autoware>-trt<full TensorRT>-<board>`; the first is
+`aw1.5.0-trt10.3.0.30-agx-orin-64gb`, the two CenterPoint-tiny engines built
+on the master: 13.1 MB raw, about 9.2 MB packed. Nearly all of that is the
+backbone (10.46 MB -> 9.18 MB; the voxel encoder 2.66 MB -> 54 kB). Each
+re-save of a changed engine adds its packed size to history, so save only on
+a real change. On the master,
+Autoware loaded the installed (unpacked) engines in 4-5 s with "Loading engine" and no build.
+
 ## The problem
 
 Every Autoware perception node that runs an ML model compiles its ONNX file
@@ -110,6 +123,10 @@ printf '%s | %s | TensorRT %s | Autoware %s\n' \
 
 ## Proposed design: engine packs
 
+Status: implemented in-repo 2026-11-09 as `just engines`, with git (plain
+blobs, not LFS) as the store instead of a separate project; see the update
+at the top.
+
 A pack is the engines for one key: (Autoware version, TensorRT version, GPU
 model). It is built once per release on one Orin of each group and shipped to
 the rest.
@@ -129,7 +146,7 @@ the rest.
 4. **Key.** A command that prints the machine's key, so an operator can see
    which pack an Orin needs.
 
-Where it lives: **not in autoware-localrepo.** That repository packages
+Where it lives (superseded 2026-11-09: in this repo, plain git): **not in autoware-localrepo.** That repository packages
 Autoware releases and carries patches only for bugs and friction. The tool
 gets its own project (a new repository is the likely home, so it serves any
 Autoware fleet; undecided).

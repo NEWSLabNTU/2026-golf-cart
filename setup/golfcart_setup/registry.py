@@ -269,14 +269,22 @@ STEPS: list[Step] = [
     ),
     Step(
         id="tensorrt-engines",
-        label="Pre-compile TensorRT engines",
-        why="~11 min on an Orin, mostly the YOLOX traffic-light detector, and "
-            "paid once here instead of inside each node's constructor on the "
-            "first launch, where perception is down until it finishes.",
+        label="TensorRT engines: install the cached pack, build the rest",
+        why="Copies this host's engine pack from data/engines/<key> (key = "
+            "Autoware + TensorRT + board; `just engines key`) wherever the ONNX "
+            "matches, then compiles whatever is still missing: ~11 min on an "
+            "Orin with no pack, mostly the YOLOX traffic-light detector. Paid "
+            "here instead of inside each node's constructor on the first "
+            "launch, where perception is down until it finishes.",
         group="Autoware",
+        # `engines install` exits 0 whatever it skips. build-engines then runs
+        # every model with build_only:=true; Autoware loads an engine that is
+        # already there and valid instead of rebuilding it, so an installed
+        # engine costs a load, not a compile.
         run=_BASH(
             f"{_REQUIRE_ROS}{_REQUIRE_AUTOWARE}{_LOCAL_BIN_ON_PATH}"
-            f"cd {REPO_ROOT} && just build-engines"
+            f"cd {REPO_ROOT} && just setup-autoware-data && just engines install"
+            f" && just build-engines"
         ),
         requires=Requires(hardware="cuda"),
         after=("autoware-data", "just"),

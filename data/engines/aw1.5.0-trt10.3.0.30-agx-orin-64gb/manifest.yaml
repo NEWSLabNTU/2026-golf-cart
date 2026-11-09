@@ -1,0 +1,37 @@
+# TensorRT engine pack. Written by `just engines save`; see scripts/engines/engines.py.
+key: aw1.5.0-trt10.3.0.30-agx-orin-64gb
+autoware: 1.5.0
+tensorrt: 10.3.0.30
+board: agx-orin-64gb
+recorded:
+  tensorrt_package: 10.3.0.30-1+cuda12.5
+  l4t: R36.4.7
+  cuda: 12.6.11
+  jetpack: null
+  model: NVIDIA Jetson AGX Orin Developer Kit
+  compatible: nvidia,p3737-0000+p3701-0005 nvidia,p3701-0005 nvidia,tegra234
+built_on: advantech
+saved_at: '2026-11-09T12:33:31+00:00'
+engines:
+- path: lidar_centerpoint/pts_backbone_neck_head_centerpoint_tiny.engine
+  onnx: lidar_centerpoint/pts_backbone_neck_head_centerpoint_tiny.onnx
+  onnx_sha256: 9bb0b634f3664bd098ce7d6a3d8a9fb7cc8d9b8252b27f302c71e43316bab551
+  engine_sha256: 701c90964d2ec34b05c27f370f819838b17346d73cf82d194d3adca94ca79578
+  size: 10462316
+  compression: zstd-19
+  packed: lidar_centerpoint/pts_backbone_neck_head_centerpoint_tiny.engine.zst
+  packed_sha256: 37fb9b031a899bcf18db79e901e4c453c1d6f0e1310adb26a994c1592edaa968
+  packed_size: 9180603
+  sidecar: lidar_centerpoint/pts_backbone_neck_head_centerpoint_tiny.json
+  sidecar_sha256: 4d937138763e637ad2d7c2d701f93a7aebd5cae4b90f73398d3026dfe10169d6
+- path: lidar_centerpoint/pts_voxel_encoder_centerpoint_tiny.engine
+  onnx: lidar_centerpoint/pts_voxel_encoder_centerpoint_tiny.onnx
+  onnx_sha256: 2c53465715c1fd2e9dc5727ef3fca74f4cdf0538f74286b0946e219d0ca5693b
+  engine_sha256: 8f8dc40a546974a27dbdb456e277aae67bf5212bd0c6d1698dd7dcd45df04100
+  size: 2660380
+  compression: zstd-19
+  packed: lidar_centerpoint/pts_voxel_encoder_centerpoint_tiny.engine.zst
+  packed_sha256: 098b670094fd9d567f36a56987e1e3d73d3156b5c53616a99aa6ade7d38f9ab8
+  packed_size: 53837
+  sidecar: lidar_centerpoint/pts_voxel_encoder_centerpoint_tiny.json
+  sidecar_sha256: ca28e002c8df8cdd3c0cc2f9e2aa093d529162ec40fe1d9881336b06000123dd

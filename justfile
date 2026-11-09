@@ -47,6 +47,8 @@ mod rmw 'just/rmw.just'
 mod link 'just/link.just'
 # CPU / kernel profiling of the running stack
 mod profile 'just/profile.just'
+# TensorRT engine packs in git, keyed by Autoware + TensorRT + board: key, save, install
+mod engines 'just/engines.just'
 # Host /etc config tracked in setup/host: diff, capture; restore is the host-config setup step
 mod host 'just/host.just'
 
