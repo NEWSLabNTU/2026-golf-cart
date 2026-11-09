@@ -6,7 +6,7 @@
 #
 # Handover 2026-10-22, open item 2: NDT jumps 14-25 m whenever the cart moves,
 # while the board detector still has it right. The suspect is the VCU speed
-# report. Run on the MASTER with `just launch-drive-mingda` up and the cart
+# report. Run on the MASTER with `just up @mingda` up and the cart
 # localized, start this, have the driver creep about 1 m forward along the
 # lane in manual, stop, wait 5 s, Ctrl-C.
 #

@@ -117,7 +117,7 @@ Tk GUIs are not wired into the standalone path.
 Why not the GUIs: `control_test/keyboard_control.py` was built for the full stack —
 it publishes `GateMode` and calls `/api/autoware/set/engage`
 (`keyboard_control.py:15-17`), and neither `vehicle_cmd_gate` nor adapi runs
-standalone. It stays in the tree for use with `just launch`. `teleop_gui.py` and
+standalone. It stays in the tree for use with `just run`. `teleop_gui.py` and
 its `teleop_bench.launch.xml` are superseded by the terminal controller plus the
 fork fixes below.
 
@@ -140,7 +140,7 @@ just vehicle manual-control           # terminal 2
 
 `manual-control` runs the node directly, so it owns the terminal it is typed in —
 no wrapper, no session management, nothing to tear down, and it composes with any
-way of starting the interface (`vehicle-interface`, `just launch`, or a launch
+way of starting the interface (`vehicle-interface`, `just run`, or a launch
 file of your own). It passes the golf cart's limits and the standalone topic and
 mode settings:
 
@@ -212,7 +212,7 @@ controller can override that.
 - The standalone launch file requires one `just build`: `--symlink-install` only
   covers files present at configure time.
 - Teleop is one recipe regardless of how the interface was started — standalone,
-  `just launch`, or a launch file of your own — because it is not bound to any of
+  `just run`, or a launch file of your own — because it is not bound to any of
   them.
 
 ## Status

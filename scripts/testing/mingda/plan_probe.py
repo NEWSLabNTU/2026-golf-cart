@@ -6,7 +6,7 @@
     just tool plan-probe                                         # the same, environment sourced
 
 Run on the MASTER, in a terminal (never on the driver's display), while
-`just launch-drive-mingda` is up. It never initializes localization and never
+`just up @mingda` is up. It never initializes localization and never
 changes the operation mode. Unless --no-route, it clears any route and sets
 one to --goal with allow_goal_modification false, as the handover asks.
 

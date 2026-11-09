@@ -4,7 +4,7 @@ Sensor kit for replaying the **Autoware sample rosbag** through this repo's
 logging simulation:
 
 ```bash
-just launch-sim-logging "vehicle_model:=sample_vehicle \
+just sim logging "vehicle_model:=sample_vehicle \
   sensor_model:=sample_bag_sensor_kit \
   map_path:=./src/localization/cuda_ndt_matcher/data/sample-map"
 ```
@@ -22,7 +22,7 @@ the same `pointcloud_backend:=cpu|cuda` split as `golfcart_sensor_kit_launch`,
 so the two modes can be compared against a bag anyone can obtain:
 
 ```bash
-just launch-sim-logging "vehicle_model:=sample_vehicle \
+just sim logging "vehicle_model:=sample_vehicle \
   sensor_model:=sample_bag_sensor_kit \
   map_path:=./src/localization/cuda_ndt_matcher/data/sample-map \
   pointcloud_backend:=cuda"

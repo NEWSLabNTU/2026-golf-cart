@@ -259,8 +259,8 @@ else
     echo "  Take the first one that works on the ladder. For one run:"
     echo "      ros2 launch golfcart_sensor_kit_launch camera.launch.xml \\"
     echo "          camera_model:=gmslcam capture_profile:=${best}"
-    echo "  To make it what the vehicle runs, change capture_profile's default"
-    echo "  in camera.launch.xml: \`just launch\` cannot pass the argument through."
+    echo "  On the vehicle it is a launch argument:  just up capture_profile:=${best}"
+    echo "  (or put it in a config/launch/*.args file and pass @name)."
 fi
 
 hdr "Devices"

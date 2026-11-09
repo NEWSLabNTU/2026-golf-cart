@@ -76,12 +76,14 @@ fi
 # argument vector into one space-separated string, so the far side re-splits it
 # on spaces and a single argument that CONTAINS spaces arrives as several:
 #
-#   on_orin.sh just launch-up "use_gnss:=false rviz:=false"
-#     $*   -> just launch-up use_gnss:=false rviz:=false   # two arguments, just errors out
-#     "$@" -> just launch-up use_gnss\:\=false\ rviz\:\=false
+#   on_orin.sh just record up "a b"
+#     $*   -> just record up a b        # two arguments where one was meant
+#     "$@" -> just record up a\ b
 #
-# That is the whole reason `just launch-all "<several args>"` did nothing on the
-# orin while working on the master. No caller passes a shell snippet expecting it
+# That is the whole reason the old two-host launch recipe, given "<several args>"
+# as one string, did nothing on the orin while working on the master. `just up`
+# now passes each argument separately (`just _up-local a:=1 b:=2`), which this
+# quoting delivers intact. No caller passes a shell snippet expecting it
 # to be parsed remotely, so quoting every argument costs nothing.
 printf -v REMOTE_ARGV '%q ' "$@"
 REMOTE_CMD='export PATH="$HOME/.local/bin:$PATH"; '"${REMOTE_CD} && ${REMOTE_ARGV% }"

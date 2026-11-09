@@ -421,9 +421,9 @@ ros2 launch golfcart_sensor_kit_launch camera.launch.xml \
 
 That argument is the whole selection mechanism. It was also read from
 `CAMERA_CAPTURE_PROFILE` at first, so a profile could be chosen per run of
-`just launch`; the variable is gone, and `just launch` reaches this file through
+`just run`; the variable is gone, and `just run` reaches this file through
 two installed Autoware sensing files that forward a fixed set of arguments and
-not this one. Through `just launch`, the default below is what runs, and changing
+not this one. Through `just run`, the default below is what runs, and changing
 what the vehicle runs is an edit to that default.
 
 `golfcart_sensor_kit_launch/config/camera_capture/`:

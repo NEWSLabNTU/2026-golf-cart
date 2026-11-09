@@ -89,3 +89,7 @@ setup/.venv/
 setup/.state.json
 setup/.markers/
 config/twin.env
+
+# Launch args for the systemd unit, rewritten by every `just up` / _up-local.
+.golfcart-launch.args
+.golfcart-launch.args.tmp

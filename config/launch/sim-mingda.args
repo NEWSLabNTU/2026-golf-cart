@@ -1,0 +1,4 @@
+# Planning simulator on the Ming-Da map: `just sim planning @sim-mingda`.
+# What `just sim mrm-check` runs against.
+map_path:=./data/mingda-basement
+planning_preset:=slow_indoor

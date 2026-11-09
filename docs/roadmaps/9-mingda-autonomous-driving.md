@@ -47,7 +47,7 @@ Legend: ✅ done and evidenced · 🟡 partly done or done on the desk only ·
 |---|---|---|
 | Ming-Da map package | ✅ | Map loader takes it: 3,995,308 points in `map`, lanelet `format_version 1`, no metadata file needed for one PCD (2026-10-22) |
 | Lanelet for the first drive | ✅ | 2.4 m straight lane; nothing at 0.3-1.8 m inside it, 2.36 m to the nearest pillar; floor returns at z 0.09-0.16 m only |
-| `just launch-drive-mingda` | ✅ | Dump of the master launch: 147 nodes, `pose_initializer` with `gnss_enabled: false`, no `automatic_pose_initializer`, board detector + board initializer, `fallback_to_user_defined_pose: false` |
+| `just up @mingda` | ✅ | Dump of the master launch: 147 nodes, `pose_initializer` with `gnss_enabled: false`, no `automatic_pose_initializer`, board detector + board initializer, `fallback_to_user_defined_pose: false` |
 | Board detector, live | 🟡 | `just tool board-detector` runs on the cart: VLP-32C at 9.95 Hz, calibrated TF, detector at 1 Hz. **Not yet seen detecting the board on the cart**; the cart has not been parked with the board in view |
 | Board detection range | 🟡 desk | L10 (2026-10-24, both loop bags): 100 % to the 18 m gate when facing the board, failing above 35 deg aspect. The lane start (17.6, -4.9) is 17.84 m, at the edge: start at (16.0, -4.9, 180). A false board at (15.2, 21.7) on the top aisle. Item 15 confirms on the cart |
 | L8 board init vs map load race | ✅ desk | Failures before the matcher has a map no longer count (a83b3f8); the cart check is item 16 |
@@ -74,8 +74,8 @@ Legend: ✅ done and evidenced · 🟡 partly done or done on the desk only ·
 | Steering slew | ✅ | Command ramps at the interface limit (1 deg per ~0.7 s per key; -29.6 -> 0 deg in 1.29 s); right-side report returns 22.7 -> 0 deg in ~3 s (~7-8 deg/s at the wheels) |
 | V4 steering / longitudinal system ID | 🟡 desk | Tooling done 2026-10-24 (`just vehicle sysid-*`, checked against the simulator and mock_vcu); no cart recording yet, so MPC still carries Lexus delay and time constant |
 | S3 braking below 1.2 m/s2 | ❌ | VCU does not brake below 1.2 m/s2; gentle stops may coast |
-| S4 interface speed ceiling | 🟡 | `max_speed_mps: 1.5`, unit-tested (golfcart_vehicle_launch 9ff59ac). Raised to 2.5 on 2026-11-02 (7e0e337): at 1.5 it equalled `min_speed_mps` and the cart ran at one speed. Planning follows: slow_indoor `max_vel` 2.5, stop margins 3.5 m, Ming-Da lanes 7 km/h (5.4 past the board), `launch-drive-mingda` at 2.0 m/s. A param change: the orin needs `just checkout` and an interface restart, no rebuild |
-| S5 MRM reaches the VCU | 🟡 desk | `just sim-mrm-check` (2026-10-24): NDT leaf forced to ERROR at 0.8 m/s in the planning sim -> EMERGENCY_STOP at +0.15 s, the real interface on vcan0 sends the 3.0 m/s2 safety brake and Veh_Estop at +0.2 s, stopped and MRM_SUCCEEDED at +1.9 s, released 0.2 s after the leaf clears; 7/7 runs plus a control. Not covered: the master/orin bridge hop and the VCU. Cart half: exit criterion 4 in the crawl run, item 18 |
+| S4 interface speed ceiling | 🟡 | `max_speed_mps: 1.5`, unit-tested (golfcart_vehicle_launch 9ff59ac). Raised to 2.5 on 2026-11-02 (7e0e337): at 1.5 it equalled `min_speed_mps` and the cart ran at one speed. Planning follows: slow_indoor `max_vel` 2.5, stop margins 3.5 m, Ming-Da lanes 7 km/h (5.4 past the board), `just up @mingda` at 2.0 m/s. A param change: the orin needs `just checkout` and an interface restart, no rebuild |
+| S5 MRM reaches the VCU | 🟡 desk | `just sim mrm-check` (2026-10-24): NDT leaf forced to ERROR at 0.8 m/s in the planning sim -> EMERGENCY_STOP at +0.15 s, the real interface on vcan0 sends the 3.0 m/s2 safety brake and Veh_Estop at +0.2 s, stopped and MRM_SUCCEEDED at +1.9 s, released 0.2 s after the leaf clears; 7/7 runs plus a control. Not covered: the master/orin bridge hop and the VCU. Cart half: exit criterion 4 in the crawl run, item 18 |
 | Physical e-stop reported | ⏸ | Not tested on the cart today |
 
 ### Planning and control integration
@@ -88,7 +88,7 @@ Legend: ✅ done and evidenced · 🟡 partly done or done on the desk only ·
 | Engage path through the link | 🟡 | All command and status lanes present in `config/link/topics.yaml`, control-mode service bridged; never exercised end to end with Autoware |
 | Software e-stop | 🟡 | `teleop_gui.py` `estop_only` mode publishes only `/vehicle/emergency_stop` (golfcart_vehicle_launch 59dfd2c). Not yet run beside Autoware on the cart |
 | M3 slow-cart planning / control tuning | 🟡 | Planning done on the desk 2026-10-24: `planning_preset:=slow_indoor` (no avoidance or regulatory modules, 3.5 m stop margins, `max_vel` 2.5; 2.0 and 1.5 until 2026-11-02), used by the drive recipes. Control tuning waits on V4; side overhangs still 0.001 placeholders |
-| Loop route (planning sim) | ✅ desk | M6 2026-10-24: `loop_goals_cw.yaml` + `just sim-loop-drive`, 2 laps, 6/6 legs within 0.10 m (one route round the whole loop still fails, hence chained goals). M8: replay-level pose noise + 22 deg cap, min clearance 0.110 -> 0.088 m. The ~1 s stop near (14, 22.8) was path_optimizer's outside-drivable-area check; slow_indoor `extra_width` 0.1 removes it (3 laps, 0 stops). Lane geometry is the real fix (M7 after 4d) |
+| Loop route (planning sim) | ✅ desk | M6 2026-10-24: `loop_goals_cw.yaml` + `just sim loop-drive`, 2 laps, 6/6 legs within 0.10 m (one route round the whole loop still fails, hence chained goals). M8: replay-level pose noise + 22 deg cap, min clearance 0.110 -> 0.088 m. The ~1 s stop near (14, 22.8) was path_optimizer's outside-drivable-area check; slow_indoor `extra_width` 0.1 removes it (3 laps, 0 stops). Lane geometry is the real fix (M7 after 4d) |
 | Vehicle footprint dimensions | ❌ | `left_overhang` / `right_overhang` are 0.001 placeholders (footprint 1.215 m, the wheel tread) and `vehicle_height` 2.005 m is unmeasured. The loop's top aisle leaves the modelled cart 0.28 m each side and the board hangs at 2.15 m: mirrors, the roof or the LiDAR mount sticking out would eat that. Measure width at its widest and height to the top of the LiDAR |
 | M4 obstacle detection | ⏸ | Perception off by default: no obstacle stop; the driver is the only obstacle detector. **2026-10-23, desk:** `launch_perception:=true` with `lidar_only` now runs CenterPoint tiny alone, nothing else: clustering (whose output the lidar-mode tracker never read), traffic lights and the analytics publisher are off, through our copy of the perception launch (`use_lidar_rule_detector`). Resolved launch 156 nodes (perception off 147, unchanged); no TensorRT engine built on the master yet (`just build-engines`), never run. Only CenterPoint's road classes become objects: a box in the aisle does not |
 
@@ -166,7 +166,7 @@ Who has to move, so nothing waits on the wrong person.
     Done below.
 13b. ~~**M6** the loop as chained goals: goal poses beside the map, a tested
     recipe for N laps. Nothing drives the loop without it.~~ Done 2026-10-24:
-    `loop_goals_cw.yaml`, `just sim-loop-drive`, 2 laps PASS; the TUI reads
+    `loop_goals_cw.yaml`, `just sim loop-drive`, 2 laps PASS; the TUI reads
     the same goals.
 13c. **M9** steering limits (decisions 4, 4a) applied in all four places, loop
     sim rerun. Waits on the team's decision; the sim says 0.38 rad costs nothing.
@@ -213,7 +213,7 @@ sim stopped 1.0 m short (root cause found, remedy 4b); 14 `tx=` and "driver
 presses AUTO" removed from the docs (2026-10-22); 13 L8, failed aligns before the
 scan matcher has a map no longer spend the board initializer's budget
 (reflective_pose_detector a83b3f8, 2026-10-23; item 16 checks it on the cart);
-13a S5 desk half, `just sim-mrm-check` follows an injected fault down to the
+13a S5 desk half, `just sim mrm-check` follows an injected fault down to the
 interface's CAN frames (2026-10-24; findings in Phase 8 S5).
 
 **On the cart**
@@ -225,7 +225,7 @@ interface's CAN frames (2026-10-24; findings in Phase 8 S5).
     `/autoware/localization` ERROR. Since 600e418 (2026-10-27, from AutoSDV) the leaf
     times out at 3.0 s: 177 transitions in 200 s of replay became none. Check
     the leaf stays OK on the cart.
-16. Stationary rehearsal: `just launch-drive-mingda`, board init, NDT lock, route
+16. Stationary rehearsal: `just up @mingda`, board init, NDT lock, route
     on the lane, no engage.
 17. L5 speed report (push the cart a metre, forward and reverse), physical e-stop,
     S3 braking, V4 system identification: the four `sysid-steps` profiles on the
@@ -255,4 +255,4 @@ interface's CAN frames (2026-10-24; findings in Phase 8 S5).
   clock fixed, Ming-Da lane widened to 2.4 m. This tracker started.
 - **2026-10-21** Ming-Da map extracted and verified; lanelet elevation fixed
   (was on the ceiling); straight first-drive lane drawn and verified in the
-  planning sim; `just launch-drive-mingda`.
+  planning sim; `just up @mingda`.

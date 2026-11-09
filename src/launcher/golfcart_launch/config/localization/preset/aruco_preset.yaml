@@ -1,6 +1,6 @@
 # ArUco boards as the sole indoor pose source.
 #
-#   just launch "localization_preset:=aruco aruco_tag_map_path:=/path/to/aruco_tag_map.yaml"
+#   just run "localization_preset:=aruco aruco_tag_map_path:=/path/to/aruco_tag_map.yaml"
 #
 # Selecting this preset sets pose_source, which switches the whole localization
 # stack: no scan matcher, no point cloud map loader, no NDT preprocessing. The

@@ -1,0 +1,2 @@
+# Planning simulator on NTU campus route r02: `just sim planning @sim-ntu-r02`.
+map_path:=./data/ntu-campus-planning/r02

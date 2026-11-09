@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Inject a fault while the planning simulator drives, and follow the MRM down to CAN.
 
-    just sim-drive-basement ./data/mingda-basement      # one terminal
+    just sim planning @sim-mingda      # one terminal
     python3 scripts/testing/sim_mrm_check.py \\
         --start 17.6 -2.8 180 --goal 6.5 -2.8 180      # another
 

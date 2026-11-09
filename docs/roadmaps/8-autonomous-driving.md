@@ -40,7 +40,7 @@ Corrected 2026-10-22, on the cart: the mode is the dashboard's alone, entered
 and left with the brake pedal held and the AUTO button. Nothing over CAN moves
 the VCU either way; Autoware reads the mode the VCU reports.
 
-1. `just launch-drive-mingda` (or `just launch-all ...`). The interface always
+1. `just up @mingda` (or `just up ...`). The interface always
    transmits since fc54edb; there is no `tx=on`. Its frames carry the rolling
    counter without which the VCU reports all zeros (`just can vcu-status` shows
    both sides).
@@ -78,7 +78,7 @@ with the node name as `hardware_id`, pinned by a unit test.
 
 `golfcart.launch.yaml` passes `map_path: ./data/COSS-map-planning` as a fixed
 include value and never declares it, while its own header documents
-`just launch "... map_path:=./data/basement-indoor"`.
+`just run "... map_path:=./data/basement-indoor"`.
 
 **Done when:** `map_path` is a declared argument defaulting to the COSS map, and
 the documented override reaches the map loaders (checked in play_launch's dump).
@@ -106,7 +106,7 @@ relaxes has a comment giving the reason, and `just diag list` on a replay shows
 
 ### E4: one command for an autonomous-capable stack (desk)
 
-Today it is `just launch-all` plus an unwritten set: `pose_initializer:=board`,
+Today it is `just up` plus an unwritten set: `pose_initializer:=board`,
 `use_gnss:=false`, a map (E2), perception or not (E3, M4), a speed cap (S4).
 
 **Done when:** one recipe or preset brings it up for the basement, and CLAUDE.md
@@ -170,8 +170,8 @@ Wired by topic name (`emergency_cmd` into the interface's safety brake at
 MRM_OPERATING and the command reaching the interface is an emergency stop; then
 the same on the cart (exit criterion 4).
 
-**Desk half done 2026-10-24: `just sim-mrm-check`** (`scripts/testing/sim_mrm_check.py`),
-against `just sim-drive-basement ./data/mingda-basement`. It runs the real
+**Desk half done 2026-10-24: `just sim mrm-check`** (`scripts/testing/sim_mrm_check.py`),
+against `just sim planning @sim-mingda`. It runs the real
 vehicle interface on vcan0 with `mock_vcu --auto`, inputs wired as on the cart
 and reports kept private (the simulator owns `/vehicle/status/*`), drives the
 straight lane, and at 0.8 m/s sets `ndt_scan_matcher: scan_matching_status` to
@@ -272,14 +272,14 @@ included, meets the same trap.
 
 ### M2: a planning-simulator scenario on the basement map (desk)
 
-No indoor planning scenario exists; `launch-sim-planning`'s map has no PCD and
+No indoor planning scenario exists; the NTU planning maps have no PCD and
 the ArUco planning sim was never run.
 
 **Done when:** `just` has a recipe that brings up the planning simulator on the
 basement map, sets a route, engages, and reaches the goal. This is where E1-E3,
 S4, S5 and M1 are proven together before the cart.
 
-**2026-09-29: the mechanism works.** `just sim-drive-basement MAP=<dir>` plus
+**2026-09-29: the mechanism works.** `just sim planning map_path:=<dir>` plus
 `scripts/testing/sim_route_check.py`. Against a scratch copy of the basement map
 with a straight test lane along x = 7.5 m (built by `centerline_to_lanelet.py`,
 not a chosen route), the golf-cart model drove from (7.5, -11) to (7.5, 6):
@@ -343,14 +343,14 @@ modules by preset but hardcodes every parameter path, hence the copy.
   velocity, no REVERSE gear command): the simulated cart always stops on the
   lane heading, so this guards the cart, where it may not.
 
-The drive recipes and `just sim-drive-basement` use it; the planning simulator
+The drive recipes and `just sim planning @sim-basement` use it; the planning simulator
 goes through `planning_sim.launch.xml` (upstream's, with our planning
 component). Planning sim on the Ming-Da map, stock vs slow_indoor: the straight
 lane and two loop laps arrive alike (0.07-0.10 m, 1.19 m/s, 214 vs 215 s). In
 the lane, a box stops the cart 4.25 -> 1.86 m short, a pedestrian 5.06 ->
 2.08 m; a car 0.4 m into the lane went from "never starts" to "stops 1.85 m
 short, no swerve"; a car 0.1 m outside the lane causes no stop under either.
-`just sim-mrm-check` passes under it. The 2.0 m margin assumes the cart's
+`just sim mrm-check` passes under it. The 2.0 m margin assumes the cart's
 coasting through decelerations below 1.2 m/s2 (S3); re-check on the cart. Not
 in the preset, deliberately: obstacle_stop's raw-pointcloud check
 (`obstacle_filtering.check_inside.pointcloud: false`), which would stop for the
@@ -421,8 +421,8 @@ through the AD API in the planning sim, and the route TUI or the procedure in
 **Done on the desk 2026-10-24.** Goals in `data/mingda-basement/loop_goals_cw.yaml`
 (start plus three goals at s = 1.0 / 22.5 / 57.1 / 77.3 m of the 79.3 m loop:
 on the centreline, at least 1 m from a lanelet seam, the whole cart on 2.5 m of
-lane). `scripts/testing/sim_loop_drive.py` (`just sim-drive-mingda-loop`, then
-`just sim-loop-drive --laps 2`) checks them against the lane offline, then
+lane). `scripts/testing/sim_loop_drive.py` (`just sim planning @sim-mingda-loop`, then
+`just sim loop-drive --laps 2`) checks them against the lane offline, then
 drives N laps through the AD API, 33 tests. Two laps, stock limits: 6/6 legs
 ARRIVED within 0.10 m, 1.19 m/s, footprint at least 0.117 m from every obstacle
 cell. **Autoware drops to STOP on every ARRIVED**, so each leg is engaged again.
@@ -776,7 +776,7 @@ fbf85c6):
   (5, always on). Detector 2 is `divergence.nvtl_median_gate` over
   `divergence.nvtl_window_size` (10); the parent's launch argument
   `ndt_divergence_nvtl_median_gate` defaults to 0.0 (off), and
-  `just launch-drive-mingda` passes 2.1 (2.5 on the 0.30 m map; on the dense cloud a healthy lock scored a median 2.53 and 2.5 latched on it, wrong poses scored 1.5 to 1.66, 2026-10-28). Only a successful `ndt_align` clears
+  `just up @mingda` passes 2.1 (2.5 on the 0.30 m map; on the dense cloud a healthy lock scored a median 2.53 and 2.5 latched on it, wrong poses scored 1.5 to 1.66, 2026-10-28). Only a successful `ndt_align` clears
   the latch; a bare `/initialpose3d` does not. New diagnostic keys:
   `divergence_latched`, `nvtl_window_median`, `nvtl_window_median_gate`.
 - The seed zone is in the board **detector**, not the initializer, which has
@@ -899,7 +899,7 @@ AUTO is entered on the dashboard). The table below is the 2026-09-29 desk state.
 | E1 cuda_ndt diagnostic name | **done**: `"<node>: <category>"`, node name as hardware_id; 2 new tests, crate suite 72/72 |
 | E2 `map_path` | **done**: declared argument; dump shows every loader on the basement map with the override, COSS without |
 | E3 diagnostic graph | **done for perception**: `launch_perception` alone selects the graph. False gives the base graph (upstream or ArUco) with `/autoware/perception` removed by the aggregator's `edits`; true gives the base graph unchanged. All four combinations checked by dump; both overlays load in the aggregator's `tree`. Accuracy leaf kept, pending L1 |
-| E4 one command | **done**: `just launch-drive-basement "tx=on"` (`tx=` removed since, fc54edb: now plain `just launch-drive-basement`) |
+| E4 one command | **done**: `just launch-drive-basement "tx=on"` (`tx=` removed since, fc54edb; the recipe is now `just up @basement`) |
 | E5 procedure | **written**: `docs/guides/control_testing.md`; unexercised |
 | S1 e-stop | **done**: independent driver and MRM flags, OR'd; 4 tests; bench-checked on vcan0 (a driver e-stop held 4 s against `emergency=false` at 20 Hz) |
 | S2 deadband | **done**: `decel_deadband_mps2` 0.2, accepted in [0, 1.2); 5 tests. Small decels are not raised to 1.2 (S3) |
@@ -911,7 +911,7 @@ AUTO is entered on the dashboard). The table below is the 2026-09-29 desk state.
 | M2 planning sim | **real route drives** to 0.09 m of its goal, within 0.30 m of the centreline with steer at 0.52 rad (V3); our launch's pieces still unexercised |
 | L2 EKF | **done**: upstream values; replay check waits on L1 |
 | L3 NDT input | deliberately not switched; see L3 |
-| S5 MRM to the interface | **desk half done** (2026-10-24): `just sim-mrm-check`, injected leaf -> EMERGENCY_STOP -> safety brake and Veh_Estop on vcan0 within 0.21 s; cart half is exit criterion 4 in the crawl run (Phase 9 item 18) |
+| S5 MRM to the interface | **desk half done** (2026-10-24): `just sim mrm-check`, injected leaf -> EMERGENCY_STOP -> safety brake and Veh_Estop on vcan0 within 0.21 s; cart half is exit criterion 4 in the crawl run (Phase 9 item 18) |
 | L8 board init vs map | **done at the desk** (2026-10-23): failures before the matcher's map are free; boot race tested over ROS transport; cart check is Phase 9 item 16 |
 | L1 | **done for NDT** (2026-10-02): both loops tracked end to end from the board, 0 jumps, NVTL never below the gate; the bags have no wheel speed, so EKF fusion waits on the VCU. Found L8 and L9 |
 | everything else | not started |

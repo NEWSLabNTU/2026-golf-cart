@@ -27,7 +27,7 @@ Use the visual-map scripts:
 
 Launch with visual localization:
 ```bash
-just launch pose_source:=visual visual_map_dir:=./data/visual_maps/my_location
+just run pose_source:=visual visual_map_dir:=./data/visual_maps/my_location
 ```
 
 ## Notes

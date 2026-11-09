@@ -51,7 +51,7 @@ Strip out AutoSDV leftovers and establish the golf cart baseline. Both groups wo
 1. **Request Turing Drive DBW package** — Contact Turing Drive to deliver the drive-by-wire interface package. This package provides wheel velocity and steering angle feedback, which are **required** for NDT localization (twist estimation). Block on this.
 2. **Integrate DBW interface** — Replace `golfcart_vehicle_interface` (AutoSDV custom PWM actuator/velocity_report) with Turing Drive package. Update `vehicle_interface.launch.xml`. Verify Autoware-expected topics: `/vehicle/status/velocity_status`, `/vehicle/status/steering_status`, `/vehicle/status/control_mode`.
 3. **Obtain NTU campus maps from Turing Drive** — Request Lanelet2 vector map (`.osm`) and point cloud map (`.pcd`). Place in `data/ntu-campus/`.
-4. **Map audit** — Verify coordinate system, check lanelet connectivity, inspect PCD density and coverage. Run `just launch-sim-planning` with NTU map to verify Autoware plans a valid route.
+4. **Map audit** — Verify coordinate system, check lanelet connectivity, inspect PCD density and coverage. Run `just sim planning` with NTU map to verify Autoware plans a valid route.
 
 **Phase 2 exit criteria**: Three cameras stream images. DBW interface publishes velocity and steering feedback. NTU map loads and passes planning simulation smoke test.
 

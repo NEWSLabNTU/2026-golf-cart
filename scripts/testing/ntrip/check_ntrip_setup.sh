@@ -1,7 +1,7 @@
 #!/bin/bash
 # NTRIP/RTK setup verification for the u-blox ZED-F9P.
 #
-# Checks that the pieces `just launch use_ntrip:=true` needs are in place:
+# Checks that the pieces `just run use_ntrip:=true` needs are in place:
 # the source-built driver (NEWSLabNTU/ublox submodule), the apt NTRIP client,
 # the sensor kit's configuration and its account file, the device, the caster.
 # Nothing here talks to the receiver; run it before a field test, not during.
@@ -129,7 +129,7 @@ echo "Setup verification complete"
 echo "========================================="
 echo ""
 echo "Next:"
-echo "  just launch use_ntrip:=true"
+echo "  just run use_ntrip:=true"
 echo "  ros2 topic hz /sensing/gnss/ntrip/rtcm       # corrections arriving (bursty, ~1 Hz epochs)"
 echo "  ros2 topic echo /sensing/gnss/ublox/rxmrtcm  # flags: 0 means the receiver accepted them"
 echo "  ros2 topic echo /sensing/gnss/ublox/nav_sat_fix --once"

@@ -7,7 +7,7 @@ file, a localization launch file and a Rust package, and reconstructing it from
 those takes longer than reading it here.
 
 ```bash
-just launch pointcloud_backend:=cuda \
+just run pointcloud_backend:=cuda \
             localization_pointcloud_backend:=cuda \
             pose_source:=cuda_ndt
 ```

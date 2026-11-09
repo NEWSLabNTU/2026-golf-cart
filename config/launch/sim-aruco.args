@@ -1,0 +1,4 @@
+# Phase 3D-6 stage 2, ArUco localization driving the planning simulator:
+# `just sim aruco @sim-aruco`. The tag map default in aruco_planning_sim.launch.xml
+# is placed along this map's lanes, so the two travel together.
+map_path:=./data/sample-map-planning

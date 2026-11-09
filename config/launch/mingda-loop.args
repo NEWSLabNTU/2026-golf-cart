@@ -1,0 +1,4 @@
+# The Ming-Da clockwise loop lane (narrows to 1.5 m / 5.4 km/h under the board):
+# `just up @mingda-loop`. Everything in @mingda, on the loop lanelet file.
+@mingda
+lanelet2_map_file:=lanelet2_map_loop.osm

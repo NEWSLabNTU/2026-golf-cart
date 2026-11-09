@@ -49,7 +49,7 @@ publish_rate: 30.0
 
 **Engage workflow** (Golf Cart has no `vehicle_cmd_gate` external selector):
 
-1. Launch system: `just launch`
+1. Launch system: `just run`
 2. Launch keyboard_control: `ros2 launch control_test keyboard_control.launch.xml`
 3. Have the driver switch the vehicle to autonomous on its own controls.
    `golfcart_vehicle_interface` commands nothing until all four VCU subsystem
@@ -118,7 +118,7 @@ just vehicle manual-control                             # second terminal, for t
 
 **Trajectory regression**:
 ```bash
-just launch
+just run
 ros2 launch control_test trajectory_player.launch.xml \
     trajectory_file:=straight_10m.yaml
 ros2 topic echo /vehicle/status/velocity_status

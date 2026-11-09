@@ -169,13 +169,13 @@ ros-humble-rmw-zenoh-cpp`. Without it `scripts/env.sh` falls back to cyclonedds
 
 **4. `GOLFCART_RMW=zenoh`.** The default is `cyclonedds`, here as on main —
 zenoh is what is being evaluated, not what is relied on. Opt in per run with
-`GOLFCART_RMW=zenoh just launch-all`, or edit `config/runtime.conf` on **both**
+`GOLFCART_RMW=zenoh just up`, or edit `config/runtime.conf` on **both**
 machines once they are meant to stay on it. A one-off `GOLFCART_RMW=` on the
 master is not forwarded to the orin.
 
 ### If the orin uses a separate checkout
 
-`just launch-all` reaches the orin at `ORIN_WORKSPACE`, which defaults to
+`just up` reaches the orin at `ORIN_WORKSPACE`, which defaults to
 `~/2026-golf-cart` — the orin's existing checkout. Putting the branch in a
 different directory there means telling the master where:
 
@@ -190,7 +190,7 @@ just service install master       # and: just service install-orin
 just rmw status                   # on each host: role, profile, multicast, daemon
 just service host-status          # confirms BOTH hosts report middleware: zenoh
 just service doctor               # full diagnostic, middleware-aware
-just launch-all
+just up
 ```
 
 Give the graph a few seconds before believing `ros2 topic list`, and read the

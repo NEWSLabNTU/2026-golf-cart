@@ -20,9 +20,9 @@ Default localization preset using gyro odometry for twist estimation.
 
 **Launch**:
 ```bash
-just launch "localization_preset:=default"
+just run "localization_preset:=default"
 # Or omit (it's the default)
-just launch
+just run
 ```
 
 ### `eagleye`
@@ -44,7 +44,7 @@ Uses Eagleye for twist estimation. Eagleye provides GNSS-based odometry.
 
 **Launch**:
 ```bash
-just launch "localization_preset:=eagleye use_gnss:=true gnss_receiver:=ublox"
+just run "localization_preset:=eagleye use_gnss:=true gnss_receiver:=ublox"
 ```
 
 ### `rigloc`
@@ -86,7 +86,7 @@ outages the first lateral-ellipse ERROR comes at 74 s (`gyro_odom` 76-77 s) and 
 
 **Launch**:
 ```bash
-just launch "localization_preset:=rigloc"
+just run "localization_preset:=rigloc"
 ```
 
 ## Usage
@@ -95,7 +95,7 @@ Specify the preset when launching Golf Cart:
 
 ```bash
 # Real hardware mode
-just launch "localization_preset:=<preset_name>"
+just run "localization_preset:=<preset_name>"
 
 # Logging simulation mode
 ros2 launch golfcart_launch logging_simulation.launch.yaml localization_preset:=<preset_name>
@@ -149,22 +149,22 @@ Localization presets work together with other localization parameters:
 
 ### Outdoor with RTK
 ```bash
-just launch "localization_preset:=default pose_source:=ndt use_gnss:=true use_ntrip:=true"
+just run "localization_preset:=default pose_source:=ndt use_gnss:=true use_ntrip:=true"
 ```
 
 ### Indoor without GNSS
 ```bash
-just launch "localization_preset:=default pose_source:=ndt use_gnss:=false use_mapless_mode:=true"
+just run "localization_preset:=default pose_source:=ndt use_gnss:=false use_mapless_mode:=true"
 ```
 
 ### Visual SLAM
 ```bash
-just launch "localization_preset:=default pose_source:=isaac use_gnss:=false"
+just run "localization_preset:=default pose_source:=isaac use_gnss:=false"
 ```
 
 ### Eagleye with GNSS
 ```bash
-just launch "localization_preset:=eagleye pose_source:=ndt use_gnss:=true use_ntrip:=true"
+just run "localization_preset:=eagleye pose_source:=ndt use_gnss:=true use_ntrip:=true"
 ```
 
 ## Notes

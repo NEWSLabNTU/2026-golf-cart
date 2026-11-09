@@ -78,7 +78,7 @@ board-detector ARGS="":
     set -euo pipefail
     source scripts/_env_guard.sh
     if [[ "$(systemctl --user is-active golfcart-launch 2>/dev/null)" == "active" ]]; then
-        echo "golfcart-launch.service is running and holds the VLP-32C: just stop-all first" >&2
+        echo "golfcart-launch.service is running and holds the VLP-32C: just down first" >&2
         exit 1
     fi
     ros2 launch golfcart_launch board_detector_live.launch.xml {{ARGS}}
@@ -125,14 +125,14 @@ board-check *OPTS="":
         esac
     done
     if [[ "$SOURCE" == live && "$(systemctl --user is-active golfcart-launch 2>/dev/null)" == "active" ]]; then
-        echo "golfcart-launch.service is running and holds the VLP-32C: just stop-all first" >&2
+        echo "golfcart-launch.service is running and holds the VLP-32C: just down first" >&2
         exit 1
     fi
     exec scripts/testing/board_check.sh "$SOURCE" "$SCENARIO" "$RVIZ" "$DURATION" "$BAG" "${CHECK[@]}"
 
 # ============================================================================
 # Ming-Da rehearsal (docs/handover/2026-10-22-mingda-rehearsal.md). All three run
-# on the MASTER, in a terminal, with `just launch-drive-mingda` up; none engages.
+# on the MASTER, in a terminal, with `just up @mingda` up; none engages.
 
 # Where does the planning chain stop? Sets the route to the Ming-Da goal
 # (allow_goal_modification false), counts every stage down to control_cmd, and

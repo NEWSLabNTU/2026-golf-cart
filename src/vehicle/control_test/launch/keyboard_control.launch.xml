@@ -14,7 +14,7 @@
         ignored by golfcart_vehicle_interface)
 
     Usage:
-      1. Launch Golf Cart: just launch
+      1. Launch Golf Cart: just run
       2. Run this: ros2 launch control_test keyboard_control.launch.xml
       3. Click on the GUI window to focus it
       4. Have the driver switch the vehicle to autonomous on its own

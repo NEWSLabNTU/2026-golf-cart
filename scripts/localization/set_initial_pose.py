@@ -132,7 +132,7 @@ def main() -> int:
                   file=sys.stderr)
         elif loaded != wanted:
             print(f"the stack loaded {loaded}, but {args.map} is {wanted}", file=sys.stderr)
-            print(f"  just launch map_path:=./{os.path.relpath(wanted, pose_maps.REPO)}",
+            print(f"  just run map_path:=./{os.path.relpath(wanted, pose_maps.REPO)}",
                   file=sys.stderr)
             node.destroy_node(); rclpy.shutdown()
             return 1

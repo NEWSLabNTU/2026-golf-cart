@@ -1,6 +1,6 @@
 # A 1 m/s golf cart on hand-drawn indoor lanelets (Phase 8, M3).
 #
-#   just launch "planning_preset:=slow_indoor ..."
+#   just run "planning_preset:=slow_indoor ..."
 #
 # What it assumes about the map: one-way lanelets with no neighbours and no
 # regulatory elements (the Ming-Da straight lane and loop have none: no

@@ -1,0 +1,11 @@
+# Supervised drive on the basement map (Phase 8): `just up @basement`.
+# Board cold start, no GNSS, 1.0 m/s planning default, slow_indoor planning.
+# Perception stays at golfcart.launch.yaml's default, launch_perception:=false:
+# NO obstacle detection, the driver with the e-stop is it. Engage order:
+# docs/roadmaps/8-autonomous-driving.md.
+pose_initializer:=board
+reflective_pose_scenario:=basement
+map_path:=./data/basement-indoor
+use_gnss:=false
+planning_speed_limit:=1.0
+planning_preset:=slow_indoor

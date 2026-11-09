@@ -396,7 +396,7 @@ reads the submodule's packaged default when launched from this repository.
 and `board_pose_initializer` when asked:
 
 ```
-just launch pose_initializer:=board reflective_pose_scenario:=basement
+just run pose_initializer:=board reflective_pose_scenario:=basement
 ```
 
 `pose_initializer` is a new argument, `gnss | board | none`, default `gnss`,
@@ -426,7 +426,7 @@ Two things the existing launch already teaches, and this must not relearn:
   them as arguments; if that ever moves under an installed Autoware include, the
   env-var route is the established fallback here.
 
-**Done when:** `just launch pose_initializer:=board` brings both nodes up with
+**Done when:** `just run pose_initializer:=board` brings both nodes up with
 our config, `ros2 param get /board_detector config_file` shows the installed
 scenario path, and `pose_initializer:=gnss` (the default) starts neither.
 
@@ -546,7 +546,7 @@ the detector, and each would have read as "the board initializer does not work":
   here: the Rust parser resolves this launch to the same 84 nodes and brings
   the stack up with the service served. The four recipes that pinned
   `--parser python` (`ntu-test up`, `indoor-test up` and their run scripts)
-  now use the default, like `just launch` always did. Parity survey of
+  now use the default, like `just run` always did. Parity survey of
   every entry point, both parsers: indoor sim 83/83, NTU sim 81/81, logging
   sim 130/130, planning sim 118/118, aruco sim 124/124 after its own fix
   (docs/known-config-defects.md #9); `golfcart.launch.yaml` cannot resolve on

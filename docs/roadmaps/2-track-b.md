@@ -94,7 +94,7 @@ Last updated: 2026-04-07 (verified on target machine)
   ├── pointcloud_map.pcd
   └── map_projector_info.yaml
   ```
-- [ ] **Practice with COSS map** — run `just launch-sim-planning` to learn map loading and verify planning works
+- [ ] **Practice with COSS map** — run `just sim planning` to learn map loading and verify planning works
 
 ### Requires real machine (or campus access)
 - [ ] If Turing Drive cannot provide maps: drive the golf cart to collect point cloud data for map creation
@@ -109,7 +109,7 @@ Last updated: 2026-04-07 (verified on target machine)
 - [ ] **Verify coordinate system** — check `map_projector_info.yaml` matches GNSS reference frame
 - [ ] **Check lanelet connectivity** — ensure lane graph is connected for all intended routes
 - [ ] **Inspect PCD density** — verify point cloud coverage for NDT (especially at intersections and turns)
-- [ ] **Run planning simulation** — `just launch-sim-planning` with 華夏科大 map, verify Autoware plans a valid route
+- [ ] **Run planning simulation** — `just sim planning` with 華夏科大 map, verify Autoware plans a valid route
 - [ ] **Verify map origin** — confirm GNSS coordinates align with map coordinate system
 
 ### Requires real machine
@@ -140,7 +140,7 @@ These items can be completed before transferring to the real golf cart:
 - [ ] 華夏科大 campus maps requested (and ideally received)
 - [x] Wheel radius and wheel width measured and added to `vehicle_info.param.yaml` (verify `wheel_radius: 0.53`)
 - [ ] Expected Autoware topic interfaces documented
-- [ ] COSS map planning simulation tested (`just launch-sim-planning`)
+- [ ] COSS map planning simulation tested (`just sim planning`)
 - [ ] Map audit completed (if maps received)
 - [ ] `data/huaxia-campus/` directory created with received maps
 - [ ] Golf cart 3D model replaced (if available)

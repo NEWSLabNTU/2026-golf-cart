@@ -56,7 +56,7 @@ if [ "${GOLFCART_DDS_PROFILE}" != "${HOST}" ]; then
     exit 1
 fi
 
-# Middleware preconditions, the same gate the `just launch` recipes call. It is
+# Middleware preconditions, the same gate `just run` and `just up` call. It is
 # here rather than expressed as a Requires= on the router unit because it has to
 # be CONDITIONAL: under CycloneDDS there is no router to want, and under zenoh a
 # missing one is fatal in total silence - every node starts, publishes, and is
@@ -64,18 +64,31 @@ fi
 # middleware, which otherwise answers every graph query from an empty world.
 "${WORKSPACE}/scripts/rmw/ensure.sh" || exit 1
 
+# Arguments. `just up` (via the private _up-local recipe) rewrites
+# .golfcart-launch.args on every start, empty when there are none; a missing
+# file means the unit was started by hand and gets no extra args. This replaced
+# GOLFCART_LAUNCH_ARGS in the user manager's environment, which persisted until
+# something cleared it, so one day's flags could reach the next day's start.
+#
+# scripts/launch/args.py adds host:=, master_ip:= (config/multi_machine.conf)
+# and link_topics:= (config/link/topics.yaml) for this role - launch arguments,
+# not environment - and prints the final list into the journal.
+#
+# Headless always: RViz stays an interactive tool (`just tool rviz`), since a
+# unit has no display to draw on.
+ARGS_OUT=$(python3 "${WORKSPACE}/scripts/launch/args.py" \
+    --label "launch_unit_exec: ${HOST} args" \
+    --host "${HOST}" --no-rviz \
+    --from "${WORKSPACE}/.golfcart-launch.args") || exit 1
+LAUNCH_ARGS=()
+[ -n "${ARGS_OUT}" ] && mapfile -t LAUNCH_ARGS <<< "${ARGS_OUT}"
+
 # exec so systemd supervises play_launch itself; with a wrapper shell in between,
 # KillMode=control-group still cleans up, but the unit's MainPID would be the
 # shell and its exit status would be the shell's - and KillSignal=SIGINT would
 # reach the shell, not play_launch.
-#
-# Headless always: RViz stays an interactive tool (`just tool rviz`), since a
-# unit has no display to draw on.
-# shellcheck disable=SC2086
 exec play_launch launch \
     --container-mode "${GOLFCART_CONTAINER_MODE:-observable}" \
     --web-addr 0.0.0.0:8081 \
     golfcart_launch golfcart.launch.yaml \
-    "host:=${HOST}" \
-    rviz:=false \
-    ${GOLFCART_LAUNCH_ARGS:-}
+    "${LAUNCH_ARGS[@]}"

@@ -34,9 +34,9 @@ one.
 
 **Launch**:
 ```bash
-just launch "perception_preset:=lidar_only"
+just run "perception_preset:=lidar_only"
 # Or omit (it's the default)
-just launch
+just run
 ```
 
 ### `camera_lidar_fusion`
@@ -62,7 +62,7 @@ Uses both camera and LiDAR for enhanced perception. Enables camera-based feature
 
 **Launch**:
 ```bash
-just launch perception_preset:=camera_lidar_fusion
+just run perception_preset:=camera_lidar_fusion
 ```
 
 ### `minimal`
@@ -82,7 +82,7 @@ Minimal perception configuration for development and debugging.
 
 **Launch**:
 ```bash
-just launch "perception_preset:=minimal"
+just run "perception_preset:=minimal"
 ```
 
 ## Usage
@@ -91,7 +91,7 @@ Specify the preset when launching Golf Cart:
 
 ```bash
 # Real hardware mode
-just launch "perception_preset:=<preset_name>"
+just run "perception_preset:=<preset_name>"
 
 # Logging simulation mode
 ros2 launch golfcart_launch logging_simulation.launch.yaml perception_preset:=<preset_name>

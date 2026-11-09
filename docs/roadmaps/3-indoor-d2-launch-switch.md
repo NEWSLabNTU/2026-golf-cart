@@ -97,7 +97,7 @@ viewer frame, planning) depends on the frame it publishes before dropping it.
 
 ## Acceptance
 
-Run `just launch pose_source:=aruco` with stub nodes and check `ros2 node list`.
+Run `just run pose_source:=aruco` with stub nodes and check `ros2 node list`.
 
 **Present**: three `aruco_detector`, `golfcart_aruco_localizer`,
 `gyro_odometer`, `ekf_localizer`, `pose_initializer`, `lanelet2_map_loader`,

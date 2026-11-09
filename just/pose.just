@@ -4,7 +4,7 @@
 # fix is a 2D Pose Estimate in RViz. This replaces the click with a pose
 # captured once at a known start spot:
 #
-#   just launch map_path:=./data/ntu-campus-planning/r01   # stack on that map
+#   just run map_path:=./data/ntu-campus-planning/r01   # stack on that map
 #   # first time only, at the spot: click once in RViz, let NDT settle, then
 #   just pose capture ntu-r01 gate
 #   # every time after, parked at the same spot:

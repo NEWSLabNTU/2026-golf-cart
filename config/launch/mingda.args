@@ -1,0 +1,11 @@
+# Supervised drive on the Ming-Da map (Phase 9): `just up @mingda`.
+# Re-anchored map (3.46 deg yaw from basement-indoor; old poses don't carry over).
+# Same `basement` scenario: the board defines the map origin in both.
+pose_initializer:=board
+reflective_pose_scenario:=basement
+map_path:=./data/mingda-basement
+use_gnss:=false
+planning_speed_limit:=2.0
+planning_preset:=slow_indoor
+# NVTL gate 2.1: healthy lock ~2.53, wrong poses 1.5-1.66 (bag master_20261028_192241).
+ndt_divergence_nvtl_median_gate:=2.1

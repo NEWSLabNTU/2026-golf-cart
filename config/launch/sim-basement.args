@@ -1,0 +1,7 @@
+# Planning simulator on the basement map: `just sim planning @sim-basement`.
+# Then, from another terminal:
+#   python3 scripts/testing/sim_route_check.py --start X Y YAW_DEG --goal X Y YAW_DEG
+# Keep the goal a few metres short of the lane's end. To try a route on a
+# scratch copy of the map, add map_path:=<dir> after this file.
+map_path:=./data/basement-indoor
+planning_preset:=slow_indoor

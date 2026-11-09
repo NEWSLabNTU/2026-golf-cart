@@ -33,7 +33,7 @@ mod vehicle 'just/vehicle.just'
 mod can 'just/can.just'
 # Development and monitoring tools
 mod tool 'just/tool.just'
-# Synthetic cameras on v4l2loopback, for working with no hardware attached
+# Simulators (planning, logging replay) and synthetic cameras on v4l2loopback
 mod sim 'just/sim.just'
 # Diagnostic graph: inspect it, and inject faults into it
 mod diag 'just/diag.just'
@@ -168,64 +168,81 @@ clean *FLAGS="":
 
 # ============================================================================
 # Launch Commands
-# ARGS is one string of golfcart.launch.yaml arguments. There is no CAN TX
-# switch: the vehicle interface always transmits; the cart's power switch is
-# the master enable.
+#
+#   just up [ARGS...]     both hosts, as systemd units; returns at once
+#   just down             both hosts, orin first; recording left alone
+#   just run [ARGS...]    this host only, play_launch in the foreground
+#   just logs             follow this host's unit
+#
+# ARGS are golfcart.launch.yaml arguments, `key:=value`, plus `@name` for
+# config/launch/<name>.args, expanded in place; later args win
+# (`just up @mingda-loop planning_speed_limit:=0.5`). scripts/launch/args.py
+# expands them, adds host:=, master_ip:= and link_topics:= for this host's role,
+# and prints the final list before anything starts.
+#
+# There is no CAN TX switch: the vehicle interface always transmits; the cart's
+# power switch is the master enable.
 #
 # Every launch first runs scripts/rmw/ensure.sh, which fails loudly on two
 # otherwise silent problems: a stale ros2 daemon from the other RMW, and (under
 # zenoh) a missing or non-multicast interface.
 # ============================================================================
 
-# Launch the system, web UI at http://localhost:8081. ARGS: [launch args]
-launch ARGS="":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    {{justfile_directory()}}/scripts/rmw/ensure.sh || exit 2
-    GOLFCART_LAUNCH_ARGS={{quote(ARGS)}}
-    # host:= comes from config/host (master/orin), else "all". host:=all would
-    # start the ZED driver on a machine without one. An explicit host:= in ARGS wins.
-    GOLFCART_HOST_ROLE=$(
-        GOLFCART_ENV_RESOLVE_ONLY=1 GOLFCART_ENV_QUIET=1 \
-        bash -c 'source "{{justfile_directory()}}/scripts/env.sh"; printf "%s" "${GOLFCART_HOST}"'
-    ) || GOLFCART_HOST_ROLE=""
-    case "${GOLFCART_HOST_ROLE}" in
-        master | orin) HOST_ARG="host:=${GOLFCART_HOST_ROLE}" ;;
-        *)             HOST_ARG="host:=all" ;;
-    esac
-    case " ${GOLFCART_LAUNCH_ARGS} " in
-        *" host:="*) HOST_ARG="" ;;
-    esac
-    if [ -n "${DISPLAY:-}" ]; then
-        play_launch launch \
-            --container-mode "${GOLFCART_CONTAINER_MODE:-observable}" \
-            --web-addr 0.0.0.0:8081 \
-            golfcart_launch golfcart.launch.yaml \
-            ${HOST_ARG} ${GOLFCART_LAUNCH_ARGS}
-    else
-        play_launch launch \
-            --container-mode "${GOLFCART_CONTAINER_MODE:-observable}" \
-            --web-addr 0.0.0.0:8081 \
-            golfcart_launch golfcart.launch.yaml \
-            ${HOST_ARG} \
-            rviz:=false ${GOLFCART_LAUNCH_ARGS}
-    fi
-
-# ── This host only. The master drives the orin by running these same recipes there.
-
-# Start this host's stack. ARGS: [launch args]
-launch-up ARGS="":
+# Teardown is `just down`; the orin's watchdog covers a master that never runs it.
+# Start the stack on BOTH hosts as systemd units; returns at once. ARGS: [launch args, @file]
+[positional-arguments]
+up *ARGS:
     #!/usr/bin/env bash
     set -uo pipefail
     {{justfile_directory()}}/scripts/rmw/ensure.sh || exit 2
-    GOLFCART_LAUNCH_ARGS={{quote(ARGS)}}
-    # ARGS reach the unit through the user manager's environment, which
-    # persists; launch-down clears it so today's flags don't leak into tomorrow.
-    if [ -n "${GOLFCART_LAUNCH_ARGS}" ]; then
-        systemctl --user set-environment GOLFCART_LAUNCH_ARGS="${GOLFCART_LAUNCH_ARGS}"
-    else
-        systemctl --user unset-environment GOLFCART_LAUNCH_ARGS
+    # Expand once, here, so both hosts get the same list even if the orin's
+    # checkout has different arg files; the orin's _up-local sees no @ left.
+    OUT=$(python3 {{justfile_directory()}}/scripts/launch/args.py --label "up args" "$@") || exit 2
+    EXPANDED=()
+    [ -n "${OUT}" ] && mapfile -t EXPANDED <<< "${OUT}"
+    just _up-local "${EXPANDED[@]}" || exit 1
+    # A missing orin does not fail the master, but the vehicle interface lives there.
+    if [[ "${GOLFCART_USE_ORIN:-1}" == "1" ]]; then
+        ./scripts/multi_machine/on_orin.sh just _up-local "${EXPANDED[@]}" \
+            || echo "WARNING: could not start the orin - continuing without it; no vehicle interface, the cart cannot be driven" >&2
     fi
+    echo
+    echo "web UI: http://localhost:8081    logs: just logs    stop: just down"
+
+# Stop the stack on BOTH hosts, orin first. Leaves any recording running.
+down:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    RC=0
+    # The orin first, while this host can still reach it.
+    if [[ "${GOLFCART_USE_ORIN:-1}" == "1" ]]; then
+        ./scripts/multi_machine/on_orin.sh just _down-local || RC=1
+    fi
+    just _down-local || RC=1
+    exit $RC
+
+# This host's unit only; `up` runs it here and, over ssh, on the orin. ARGS
+# reach the unit through .golfcart-launch.args (gitignored), rewritten on EVERY
+# start (empty when there are none), so no flag outlives the start that asked
+# for it. launch_unit_exec.sh reads it and adds the host-derived args.
+[private]
+[positional-arguments]
+_up-local *ARGS:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    REPO={{justfile_directory()}}
+    "${REPO}/scripts/rmw/ensure.sh" || exit 2
+    python3 "${REPO}/scripts/launch/args.py" --quiet --write "${REPO}/.golfcart-launch.args" "$@" || exit 2
+    # Show what the unit will run: the same call launch_unit_exec.sh makes, with
+    # the role the installer's drop-in gives the unit.
+    ROLE=$(systemctl --user show -p Environment --value golfcart-launch.service 2>/dev/null \
+        | tr ' ' '\n' | sed -n 's/^GOLFCART_HOST=//p')
+    python3 "${REPO}/scripts/launch/args.py" --label "$(hostname) runs" \
+        --host "${ROLE:-master}" --no-rviz --from "${REPO}/.golfcart-launch.args" >/dev/null || exit 2
+    # Retired transport: an older launch-up left its flags in the user manager's
+    # environment. Nothing reads it now; clear it so `systemctl show-environment`
+    # cannot mislead.
+    systemctl --user unset-environment GOLFCART_LAUNCH_ARGS 2>/dev/null || true
     # restart, not start: replaces a stale unit left by a previous run.
     if ! systemctl --user restart golfcart-launch.service; then
         echo "golfcart-launch.service failed to start on $(hostname)." >&2
@@ -234,146 +251,43 @@ launch-up ARGS="":
     fi
     echo "$(hostname): launch $(systemctl --user is-active golfcart-launch.service)"
 
-# Stop this host's stack. Leaves any recording running.
-launch-down:
+# This host's unit only; `down` runs it here and on the orin.
+[private]
+_down-local:
     #!/usr/bin/env bash
     set -uo pipefail
     systemctl --user stop golfcart-launch.service
     RC=$?
-    systemctl --user unset-environment GOLFCART_LAUNCH_ARGS
     echo "$(hostname): launch $(systemctl --user is-active golfcart-launch.service)"
     exit $RC
 
-# ARGS is positional: `just launch-all "a:=1"`, not `ARGS="a:=1"`. Teardown is
-# `just stop-all`; the orin's watchdog covers a master that never runs it.
-# Start the stack on BOTH hosts; returns immediately. ARGS: [launch args]
-launch-all ARGS="":
+# host:= comes from config/host (master/orin, plus master_ip:= and
+# link_topics:=), else host:=all; host:=all would start the ZED driver on a
+# machine without one. An explicit host:= in ARGS wins. rviz only with DISPLAY.
+# Run the stack on THIS host only, in the foreground (Ctrl-C stops). ARGS: [launch args, @file]
+[positional-arguments]
+run *ARGS:
     #!/usr/bin/env bash
-    set -uo pipefail
+    set -euo pipefail
     {{justfile_directory()}}/scripts/rmw/ensure.sh || exit 2
-    just launch-up {{quote(ARGS)}} || exit 1
-    # A missing orin does not fail the master, but the vehicle interface lives there.
-    if [[ "${GOLFCART_USE_ORIN:-1}" == "1" ]]; then
-        ./scripts/multi_machine/on_orin.sh just launch-up {{quote(ARGS)}} \
-            || echo "WARNING: could not start the orin - continuing without it; no vehicle interface, the cart cannot be driven" >&2
-    fi
-    echo
-    echo "web UI: http://localhost:8081    logs: just logs    stop: just stop-all"
-
-# Stop the stack on BOTH hosts. Leaves any recording running.
-stop-all:
-    #!/usr/bin/env bash
-    set -uo pipefail
-    RC=0
-    # The orin first, while this host can still reach it.
-    if [[ "${GOLFCART_USE_ORIN:-1}" == "1" ]]; then
-        ./scripts/multi_machine/on_orin.sh just launch-down || RC=1
-    fi
-    just launch-down || RC=1
-    exit $RC
+    RVIZ=()
+    [ -n "${DISPLAY:-}" ] || RVIZ=(--no-rviz)
+    OUT=$(python3 {{justfile_directory()}}/scripts/launch/args.py \
+        --label "run args" --host auto "${RVIZ[@]}" "$@") || exit 2
+    LAUNCH_ARGS=()
+    [ -n "${OUT}" ] && mapfile -t LAUNCH_ARGS <<< "${OUT}"
+    exec play_launch launch \
+        --container-mode "${GOLFCART_CONTAINER_MODE:-observable}" \
+        --web-addr 0.0.0.0:8081 \
+        golfcart_launch golfcart.launch.yaml \
+        "${LAUNCH_ARGS[@]}"
 
 # Follow this host's stack log.
 logs:
     journalctl --user -u golfcart-launch.service -f
 
 # ============================================================================
-# Supervised drives (Phase 8). Board cold start, no GNSS, 1.0 m/s planning
-# default, perception off: NO obstacle detection, the driver with the e-stop is
-# it. Extra ARGS win. Engage order: docs/roadmaps/8-autonomous-driving.md.
-# ============================================================================
-
-# Drive on the basement map (both hosts). ARGS: [launch args]
-launch-drive-basement ARGS="":
-    just launch-all "pose_initializer:=board reflective_pose_scenario:=basement map_path:=./data/basement-indoor use_gnss:=false planning_speed_limit:=1.0 planning_preset:=slow_indoor {{ARGS}}"
-
-# Re-anchored map (3.46 deg yaw from basement-indoor; old poses don't carry over).
-# Same `basement` scenario: the board defines the map origin in both.
-# NVTL gate 2.1: healthy lock ~2.53, wrong poses 1.5-1.66 (bag master_20261028_192241).
-# Drive on the Ming-Da map (both hosts). ARGS: [launch args]
-launch-drive-mingda ARGS="":
-    just launch-all "pose_initializer:=board reflective_pose_scenario:=basement map_path:=./data/mingda-basement use_gnss:=false planning_speed_limit:=2.0 planning_preset:=slow_indoor ndt_divergence_nvtl_median_gate:=2.1 {{ARGS}}"
-
-# Drive the Ming-Da clockwise loop lane (narrows to 1.5 m / 5.4 km/h under the board)
-launch-drive-mingda-loop ARGS="":
-    just launch-drive-mingda "lanelet2_map_file:=lanelet2_map_loop.osm {{ARGS}}"
-
-# ============================================================================
-# Planning simulators
-# ============================================================================
-
-# MAP is a map directory (point it at a scratch copy to try a route); PRESET is
-# slow_indoor or default. Then, from another terminal:
-#   python3 scripts/testing/sim_route_check.py --start X Y YAW_DEG --goal X Y YAW_DEG
-# Keep the goal a few metres short of the lane's end.
-# Planning simulator on the basement map. MAP PRESET LANELET
-sim-drive-basement MAP="./data/basement-indoor" PRESET="slow_indoor" LANELET="lanelet2_map.osm":
-    play_launch launch \
-        --container-mode "${GOLFCART_CONTAINER_MODE:-observable}" \
-        --web-addr 0.0.0.0:8081 \
-        golfcart_launch planning_sim.launch.xml \
-        map_path:={{MAP}} \
-        lanelet2_map_file:={{LANELET}} \
-        planning_preset:={{PRESET}}
-
-# Planning simulator on the Ming-Da loop lane, for `just sim-loop-drive`
-sim-drive-mingda-loop PRESET="slow_indoor":
-    just sim-drive-basement ./data/mingda-basement {{PRESET}} lanelet2_map_loop.osm
-
-# With sim-drive-mingda-loop up: drive N laps (`--laps 2`; `--check-only` without ROS)
-sim-loop-drive *ARGS:
-    python3 scripts/testing/sim_loop_drive.py {{ARGS}}
-
-# With `just sim-drive-basement ./data/mingda-basement` up: fault NDT while
-# driving and follow the MRM to the CAN frames (vcan0 + mock_vcu).
-# `--no-can` on a machine without vcan0 or the vendor DBC.
-# MRM end-to-end check on the Ming-Da lane. ARGS go to the script
-sim-mrm-check *ARGS:
-    python3 scripts/testing/sim_mrm_check.py --start 17.6 -4.9 180 --goal 6.5 -4.9 180 {{ARGS}}
-
-# Planning simulator on an NTU campus map: `just launch-sim-planning r02`. MAP: r01|r02
-launch-sim-planning MAP="r01":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    MAPS="{{justfile_directory()}}/data/ntu-campus-planning"
-    if [[ ! -d "${MAPS}/{{MAP}}" ]]; then
-        echo "No NTU map '{{MAP}}'. Available: $(ls "${MAPS}" | tr '\n' ' ')" >&2
-        exit 1
-    fi
-    play_launch launch \
-        --container-mode "${GOLFCART_CONTAINER_MODE:-observable}" \
-        --web-addr 0.0.0.0:8081 \
-        autoware_launch planning_simulator.launch.xml \
-        map_path:="${MAPS}/{{MAP}}" \
-        vehicle_model:=golfcart_vehicle \
-        sensor_model:=golfcart_sensor_kit
-
-# Phase 3D-6 stage 2: ArUco localization driving the planning simulator
-sim-aruco-planning *ARGS:
-    play_launch launch \
-        --container-mode "${GOLFCART_CONTAINER_MODE:-observable}" \
-        --web-addr 0.0.0.0:8081 \
-        golfcart_launch aruco_planning_sim.launch.xml \
-        map_path:={{justfile_directory()}}/data/sample-map-planning \
-        {{ARGS}}
-
-# Launch logging simulation for rosbag replay testing
-launch-sim-logging ARGS="":
-    #!/usr/bin/env bash
-    if [ -n "$DISPLAY" ]; then \
-        play_launch launch \
-            --container-mode "${GOLFCART_CONTAINER_MODE:-observable}" \
-            --web-addr 0.0.0.0:8081 \
-            golfcart_launch logging_simulation.launch.yaml {{ARGS}}; \
-    else \
-        play_launch launch \
-            --container-mode "${GOLFCART_CONTAINER_MODE:-observable}" \
-            --web-addr 0.0.0.0:8081 \
-            golfcart_launch logging_simulation.launch.yaml \
-            rviz:=false {{ARGS}}; \
-    fi
-
-# ============================================================================
-# Checks, audits and full-scenario simulation
+# Checks and audits
 # ============================================================================
 
 # Run sensor & interface health check (LiDAR, GNSS, IMU, cameras, CAN, system)
@@ -383,15 +297,6 @@ check-sensors:
 # Audit launch files for silently-ignored arguments and unparseable comments.
 audit-launch:
     python3 ./scripts/check/audit_launch.py
-
-# Needs the NTU COSS Park rosbag (./scripts/rosbag/download-test-rosbag.sh).
-# Run COSS Park simulation (launch + rosbag feed + localization recording)
-sim-coss-park:
-    #!/usr/bin/env bash
-    parallel --line-buffer ::: \
-        "just launch-sim-logging" \
-        "sleep 40 && ros2 bag play data/rosbags/outdoor_20251226_153115/ --clock -l -r 1.0" \
-        "sleep 45 && ./scripts/rosbag/record_localization.sh"
 
 # ============================================================================
 # oToBrite Setup - AFE R750 only

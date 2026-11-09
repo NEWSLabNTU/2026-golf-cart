@@ -40,7 +40,7 @@ default:
 # Packages, message types, sensor kit config, the account file, the device and
 # the caster's port. Nothing here touches the receiver, so it is safe to run
 # while the stack is up.
-# Verify everything `just launch use_ntrip:=true` needs, without running it
+# Verify everything `just run use_ntrip:=true` needs, without running it
 check:
     ./scripts/testing/ntrip/check_ntrip_setup.sh
 
@@ -61,7 +61,7 @@ test SECONDS="60" *ARGS="":
 #   just gnss launch             # with NTRIP (the sensor kit's ntrip_client.param.yaml)
 #   just gnss launch ntrip=off   # driver only
 #
-# Not under `just launch`: both open /dev/ublox-gps, and the second one loses.
+# Not under `just run`: both open /dev/ublox-gps, and the second one loses.
 # The driver respawns and is orphaned by a launch kill, so the exit trap runs
 # `kill` whatever way this ends; without it the next run cannot open the port.
 # Run the u-blox receiver standalone (Ctrl-C to stop)
@@ -83,7 +83,7 @@ launch *OPTS="":
     trap 'just gnss kill >/dev/null' EXIT
     ros2 launch golfcart_sensor_kit_launch gnss.launch.xml use_ntrip:=$ntrip
 
-# For a receiver already running under `just launch` or the systemd unit. It
+# For a receiver already running under `just run` or the systemd unit. It
 # autodetects /sensing/gnss there, where the standalone launch is /gnss.
 # Measure a GNSS stack that is already running, and leave it running
 attach SECONDS="60" *ARGS="":

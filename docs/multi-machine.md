@@ -41,7 +41,7 @@ What follows from that:
 
 - **The orin needs `CAX_ADS_CAN.dbc`.** Without it `just build` skips the
   interface there and the cart has no velocity and cannot engage.
-- **Driving needs the orin.** `launch-all` still treats a missing orin as
+- **Driving needs the orin.** `just up` still treats a missing orin as
   non-fatal for the master, but with the bus on the orin a master alone has no
   vehicle interface. `GOLFCART_USE_ORIN=0` is for work that does not move the
   cart.
@@ -92,16 +92,28 @@ split brings master → orin down to ~2 kB/s and orin → master to ~90 kB/s
 Everything runs from the master:
 
 ```bash
-just launch-all    # both hosts: this stack + the orin's ZED, over ssh
+just up            # both hosts: this stack + the orin's ZED, over ssh
+just up @mingda    # ...with config/launch/mingda.args; later args win
 just logs          # follow this host's log
-just stop-all      # stop both hosts
+just down          # stop both hosts, orin first
 ```
 
-Both hosts run under systemd now, so `launch-all` **returns immediately** and
+Both hosts run under systemd now, so `just up` **returns immediately** and
 nothing occupies a terminal. Closing your ssh session no longer stops the cart;
-`just stop-all` is the stop verb, and there is no Ctrl-C to press.
+`just down` is the stop verb, and there is no Ctrl-C to press.
 
-`stop-all` deliberately leaves recording alone — that is `just record stop`.
+Arguments reach each unit through `.golfcart-launch.args` in that host's
+checkout (gitignored). `just up` expands `@name` arg files once on the master,
+prints the list, and runs the private `_up-local` recipe here and on the orin
+with it; `_up-local` rewrites the file on **every** start, empty when there are
+no arguments, so a flag never outlives the start that asked for it (the old
+`GOLFCART_LAUNCH_ARGS` in the user manager's environment did, until something
+cleared it). `launch_unit_exec.sh` reads the file and adds `host:=`,
+`master_ip:=` and `link_topics:=` through `scripts/launch/args.py`, which logs
+the final list to the journal. A hand-run `systemctl --user restart` reuses the
+last file.
+
+`just down` deliberately leaves recording alone — that is `just record stop`.
 
 ### Letting the cart move
 
@@ -114,12 +126,13 @@ watchdog brakes when commands stop arriving.
 Single-machine operation is untouched:
 
 ```bash
-just launch                         # host:= from config/host, nothing remote
-GOLFCART_USE_ORIN=0 just launch-all   # master alone, without touching the orin
+just run                     # host:= from config/host, nothing remote, foreground
+GOLFCART_USE_ORIN=0 just up   # master alone, without touching the orin
 ```
 
-`just launch` derives `host:=` from the `config/host` marker — `master` and
-`orin` narrow the profile, no marker (loopback) keeps `host:=all`. It used to
+`just run` derives `host:=` from the `config/host` marker — `master` and
+`orin` narrow the profile and add `master_ip:=` / `link_topics:=`, no marker
+(loopback) keeps `host:=all`. It used to
 pass nothing and take the `all` default, which put the `is_orin` group in scope
 on the Advantech: that group includes `camera.launch.xml` with
 `camera_model:=zedx` unconditionally, so a machine with no ZED and no ZED SDK
@@ -335,7 +348,7 @@ Both machines carry the same repository, so there is no separate remote-control
 vocabulary to learn: you run the same recipe over there.
 
 ```bash
-./scripts/multi_machine/on_orin.sh just launch-up
+./scripts/multi_machine/on_orin.sh just _up-local
 ./scripts/multi_machine/on_orin.sh just record down
 ./scripts/multi_machine/on_orin.sh just service host-status
 ./scripts/multi_machine/on_orin.sh systemctl --user is-active golfcart-record.service
@@ -346,17 +359,17 @@ directory to start in, and nothing else. Anything you can run by hand on the ori
 runs from here unchanged, and the exit status is the remote command's, so the
 caller decides what a failure means.
 
-The per-host recipes are symmetric — `launch-up`, `launch-down`, `record-up`,
-`record-down`, `host-status` act only on the machine they run on. The two-host
-verbs (`launch-all`, `stop-all`, `record-start`, `record-stop`) are just
-each one run locally and then over there.
+The per-host recipes are symmetric — `_up-local`, `_down-local` (private, hidden
+from `just --list`), `record up`, `record down`, `service host-status` act only on
+the machine they run on. The two-host verbs (`up`, `down`, `record start`,
+`record stop`) are just each one run locally and then over there.
 
 ## What stops the orin, and when
 
 | Failure | What stops it | How long |
 |---|---|---|
-| `just stop-all` | it runs `just launch-down` on the orin over ssh, then stops the local unit | immediate |
-| Master unit stopped or crashed, network up | nothing stops the orin until someone runs `stop-all`; otherwise the watchdog | ~42s |
+| `just down` | it runs `just _down-local` on the orin over ssh, then stops the local unit | immediate |
+| Master unit stopped or crashed, network up | nothing stops the orin until someone runs `just down`; otherwise the watchdog | ~42s |
 | Network cut, or master powered off | the orin's own watchdog stops **every** `golfcart-*` unit locally | ~42s |
 
 `KillMode=control-group` in the unit is what makes the no-orphan guarantee hold —
@@ -506,7 +519,6 @@ Most of these now have a home in a file, and the variable is only an override.
 | `GOLFCART_MASTER_IP` | `config/multi_machine.conf` | what the orin's watchdog pings |
 | `GOLFCART_BAG_DIR` | `/mnt/external/rosbags` if mounted, else `~/rosbags` | where each host writes its bags |
 | `GOLFCART_WORKSPACE` | `~/2026-golf-cart` | workspace the units launch from; set by the installer's drop-in |
-| `GOLFCART_LAUNCH_ARGS` | *(empty)* | extra launch arguments for the launch unit |
 
 ## A bag with an empty metadata.yaml
 

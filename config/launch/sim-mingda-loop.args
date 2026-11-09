@@ -1,0 +1,4 @@
+# Planning simulator on the Ming-Da loop lane, for `just sim loop-drive`:
+# `just sim planning @sim-mingda-loop`.
+@sim-mingda
+lanelet2_map_file:=lanelet2_map_loop.osm

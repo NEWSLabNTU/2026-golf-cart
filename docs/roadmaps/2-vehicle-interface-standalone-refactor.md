@@ -140,7 +140,7 @@ just can test
 ```
 
 Untested and out of scope: whether `play_launch` preserves `launch-prefix`. Only
-matters if teleop later moves inside the full `just launch` stack; this recipe
+matters if teleop later moves inside the full `just run` stack; this recipe
 uses plain `ros2 launch`. Real-bus (`can0`, `tx=on`) driving is field-test work.
 
 ## Risks

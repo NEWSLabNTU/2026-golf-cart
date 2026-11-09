@@ -83,7 +83,7 @@ map loaders, planning and control consuming the fused pose, and the MRM path.
       `aruco_planning_sim.launch.xml` composes what
       `planning_simulator.launch.xml` composes, with its dummy vehicle replaced
       by `planning_sim_vehicle.launch.xml` and the ArUco chain in place of the
-      localization it disables. `just sim-aruco-planning` runs it.
+      localization it disables. `just sim aruco` runs it.
 
       It cannot be that file's own include, because `launch_dummy_vehicle` is
       derived there from `scenario_simulation` with a `<let>` and cannot be
@@ -99,7 +99,7 @@ map loaders, planning and control consuming the fused pose, and the MRM path.
       Two things were learned on the way. `data/ntu-campus-planning/r01` has no
       `pointcloud_map.pcd`, only the lanelet2 map, so anything expecting a
       complete map directory there will wait, including the repository's own
-      `just launch-sim-planning`. And `data/sample-map-planning` is complete,
+      `just sim planning`. And `data/sample-map-planning` is complete,
       which is why the tag map and this launch default to it.
 - [ ] Confirm planning and control engage on the ArUco-derived pose.
 - [ ] Confirm the MRM path actually stops the vehicle when the localizer reports

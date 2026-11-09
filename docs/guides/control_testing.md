@@ -53,10 +53,10 @@ which is the quickest way to answer "does the VCU agree" at any step below.
 ## Bring-up
 
 ```bash
-just launch-drive-basement
+just up @basement
 ```
 
-This is `launch-all` with the board initializer, the basement map, no GNSS,
+This is `just up` with `config/launch/basement.args`: the board initializer, the basement map, no GNSS,
 perception off and planning defaulting to 1.0 m/s. **With perception off there
 is no obstacle detection.** The driver is the obstacle detector.
 
@@ -110,11 +110,11 @@ file against the lane offline.
 On the desk first, every time the lane or the goals change (Phase 8, M6):
 
 ```bash
-just sim-drive-mingda-loop             # planning sim, loop lane, slow_indoor preset
-just sim-loop-drive --laps 2           # another terminal
+just sim planning @sim-mingda-loop     # planning sim, loop lane, slow_indoor preset
+just sim loop-drive --laps 2           # another terminal
 ```
 
-On the cart, `just launch-drive-mingda-loop`, then the route TUI on the same
+On the cart, `just up @mingda-loop`, then the route TUI on the same
 file:
 
 ```bash

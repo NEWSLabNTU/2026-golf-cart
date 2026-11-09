@@ -11,7 +11,7 @@
 #
 # Usage:  scripts/profiling/lidar_rate.sh [seconds]        (default 60)
 #
-# Needs the stack up (`just launch`) and `source scripts/env.sh` already done.
+# Needs the stack up (`just run`) and `source scripts/env.sh` already done.
 
 set -u
 

@@ -100,12 +100,12 @@ not variations on one pipeline — `aruco` replaces the pipeline.
 | `aruco` | indoor ArUco board localization | surveyed board map, **no** point cloud map |
 
 ```bash
-just launch                                    # ndt
-just launch "pose_source:=cuda_ndt"
-just launch "pose_source:=aruco aruco_tag_map_path:=./data/<site>/aruco_tag_map.yaml"
+just run                                    # ndt
+just run "pose_source:=cuda_ndt"
+just run "pose_source:=aruco aruco_tag_map_path:=./data/<site>/aruco_tag_map.yaml"
 
 # or by preset, which sets pose_source for you
-just launch "localization_preset:=aruco aruco_tag_map_path:=/path/to/aruco_tag_map.yaml"
+just run "localization_preset:=aruco aruco_tag_map_path:=/path/to/aruco_tag_map.yaml"
 ```
 
 `aruco_tag_map_path` has no default and is required. A default would be worse

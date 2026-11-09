@@ -1,0 +1,3 @@
+# Planning simulator on NTU campus route r01: `just sim planning @sim-ntu-r01`.
+# Stock planning modules (planning_preset:=default is planning_sim's default).
+map_path:=./data/ntu-campus-planning/r01

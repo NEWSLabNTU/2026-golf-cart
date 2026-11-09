@@ -5,6 +5,10 @@ Description=Golf Cart launch stack (play_launch)
 # GOLFCART_HOST=master|orin plus the resolved repo path, and launch_unit_exec.sh
 # derives the DDS profile and the host:= launch argument from it. Per-host unit
 # files only ever differed in those two strings.
+#
+# Start it with `just up` (both hosts), not by hand: the launch arguments are
+# read from .golfcart-launch.args in the repo, which `just up` rewrites on
+# every start. A bare `systemctl --user restart` reuses the last file.
 After=network-online.target
 Wants=network-online.target
 

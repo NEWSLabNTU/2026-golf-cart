@@ -189,7 +189,7 @@ case "${GOLFCART_RMW:-cyclonedds}" in
         # Iceoryx was deleted on one branch while this script was written on
         # another, so nothing conflicted and nothing complained. Left in, it
         # would have run `|| exit 1` against a path that does not exist, on the
-        # DEFAULT middleware — every `just launch` and every systemd start,
+        # DEFAULT middleware — every `just run` and every systemd start,
         # failing at the one gate whose whole job is to fail loudly for a good
         # reason.
         :

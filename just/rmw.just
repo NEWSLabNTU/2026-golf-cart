@@ -23,7 +23,7 @@ ensure:
 # and its port is 11511 + ROS_DOMAIN_ID with no RMW in it -- so a daemon from the
 # other setting sits on the same port and answers `ros2 topic list` from a
 # middleware where nothing is published. Nothing errors; the graph is just empty.
-# `just launch` handles this for you; a bare `ros2 topic list` does not.
+# `just run` handles this for you; a bare `ros2 topic list` does not.
 
 # Stop the ros2 daemon - needed after changing GOLFCART_RMW by hand
 [no-cd]

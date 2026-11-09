@@ -38,9 +38,9 @@ computers, and the normal deployment uses both:
 They split because the shared LAN negotiates 100 Mb/s and a single LiDAR stream is
 ~30 MB/s. Neither machine records the other's topics.
 
-Both carry the **same repository and the same recipes**. Recipes ending `-up` /
-`-down` act on whichever machine runs them; `launch-all` / `stop-all` act on both,
-by logging into the orin and running its copy of the same recipe. There is no
+Both carry the **same repository and the same recipes**. `just up` / `just down`
+act on both, by running the private per-host recipe (`_up-local` /
+`_down-local`) here and then, over ssh, on the orin's copy of the repository. There is no
 separate remote vocabulary to learn.
 
 Running on one machine is also supported, and is covered under
@@ -121,36 +121,34 @@ disagree. See *Time sync* in [docs/multi-machine.md](docs/multi-machine.md).
 From the master:
 
 ```bash
-just launch-all    # both hosts; returns immediately
+just up            # both hosts; returns immediately
 just logs          # follow this host's log
-just stop-all      # stop both hosts
+just down          # stop both hosts
 just service doctor        # when topics do not show up
 ```
 
 There is no Ctrl-C to press. Both hosts run under systemd, so closing the terminal
-or dropping the ssh session does not stop the cart — `just stop-all` is the stop
+or dropping the ssh session does not stop the cart — `just down` is the stop
 verb.
 
 ### Choosing the map and the initial pose
 
-Launch arguments go in one quoted string, passed to both hosts. A `\` at the end
-of a line continues the string on the next one; keep the closing quote on the last
-line:
+Launch arguments follow the recipe and are passed to both hosts. `@name` expands
+in place to the arguments in `config/launch/<name>.args`, and later arguments
+win. The recipe prints the final list before anything starts:
 
 ```bash
-# NTU campus, route 02 (default map: ./data/COSS-map-planning)
-just launch-all "map_path:=./data/ntu-campus-planning/r01"
+# NTU campus, route 01 (default map: ./data/COSS-map-planning)
+just up map_path:=./data/ntu-campus-planning/r01
 
-# Ming-Da basement, the clockwise loop lane
-just launch-all "map_path:=./data/mingda-basement \
-                 lanelet2_map_file:=lanelet2_map_loop.osm \
-                 use_gnss:=false \
-                 pose_initializer:=board"
+# Ming-Da basement, the clockwise loop lane: board init, no GNSS, 2.0 m/s
+just up @mingda-loop
+
+# ...the same, slower
+just up @mingda-loop planning_speed_limit:=0.5
 
 # Basement, indoor: no GNSS, initial pose from the reflective board
-just launch-all "map_path:=./data/basement-indoor \
-                 use_gnss:=false \
-                 pose_initializer:=board"
+just up @basement
 ```
 
 `pose_initializer:=` picks what seeds the initial pose:
@@ -263,7 +261,7 @@ just bag merge "master_20260814_152605 orin_20260814_152603"
 `-o /path/to/output`. The merged bag is roughly the sum of its inputs, so point
 `-o` at the SSD if the inputs are large.
 
-`just stop-all` deliberately leaves a recording running; stopping the stack and
+`just down` deliberately leaves a recording running; stopping the stack and
 stopping a recording are separate decisions.
 
 **The vehicle interface must be running while you record.** NDT needs a velocity
@@ -301,17 +299,17 @@ runs play_launch in the foreground with the `loopback` DDS profile and involves 
 systemd and no ssh:
 
 ```bash
-just launch                              # web UI at http://localhost:8081
-just launch "use_gnss:=false"            # indoor, no GNSS
-just launch "gnss_receiver:=ublox camera_model:=usb"
+just run                                 # web UI at http://localhost:8081
+just run use_gnss:=false                 # indoor, no GNSS
+just run @basement use_gnss:=true        # an arg file, then an override
 ```
 
-Launch arguments are one positional string, not `ARGS=...`.
+Launch arguments are positional, not `ARGS=...`; `@name` arg files work here too.
 
 To drive the master alone but still through its systemd unit:
 
 ```bash
-GOLFCART_USE_ORIN=0 just launch-all
+GOLFCART_USE_ORIN=0 just up
 ```
 
 `just --list` shows every recipe.
@@ -405,11 +403,10 @@ grep -a -m3 -E '^(FIELDS|POINTS|DATA)' $MAP/pointcloud_map.pcd
 # DATA binary
 ```
 
-**3. Autoware loads it.** Start the planning simulator on it (NTU maps take the
-short name):
+**3. Autoware loads it.** Start the planning simulator on it:
 
 ```bash
-just launch-sim-planning r03
+just sim planning map_path:=./data/ntu-campus-planning/r03
 ```
 
 The map loaded if RViz shows the point cloud and the lanes. Node output goes to
@@ -421,7 +418,7 @@ grep lanelet2_map_loader "$(ls -td play_log/*/ | head -1)"node/map_container/err
 ```
 
 Once it loads here, use the same path on the cart:
-`just launch-all "map_path:=./data/ntu-campus-planning/r03"`.
+`just up map_path:=./data/ntu-campus-planning/r03`.
 
 
 ## Documentation
