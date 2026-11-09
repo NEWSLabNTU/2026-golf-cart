@@ -3,19 +3,37 @@
 Guidance for Claude Code when working with this repository.
 
 ## Project Overview
-This is a golf cart autonomous driving system for 華夏科大 campus deployment, based on the Golf Cart platform. The system uses the Autoware 1.5.0 apt distribution (`autoware-full-1-5-0`, universe 0.48.0) on AGX Orin (JetPack 6.2) with ROS 2 Humble.
+An autonomous golf cart on the Autoware 1.5.0 apt distribution (`autoware-full-1-5-0`,
+universe 0.48.0), ROS 2 Humble, two Jetson AGX Orins (JetPack 6.2). It drives
+supervised autonomous laps indoors (Ming-Da basement) and is starting outdoor runs on
+the NTU campus; a 華夏科大 campus deployment is the eventual goal.
+[docs/hardware.md](docs/hardware.md) is the authoritative hardware picture.
 
-**Key System Configuration:**
-- **LiDAR**: Velodyne VLP-32C only
-- **GNSS**: u-blox ZED-F9P on the Advantech, driver built from the NEWSLabNTU/ublox submodule (apt has no RTCM input), apt `ntrip_client`, RTK over NTRIP optional
-- **IMU**: Tamagawa IMU (replaces MPU9250)
-- **Cameras**: USB cameras (will upgrade to Tier IV cameras later)
-- **Vehicle Interface**: Turing Drive packages (replaces Golf Cart custom PWM interface)
-- **Map**: COSS practice map and the NTU campus map. A 華夏科大 campus HDMap is PLANNED and does not exist; `data/huaxia-campus/` is not present.
-- **Localization**: Autoware NDT scan matching (GNSS for initialization)
-- **Planning**: Autoware built-in planner (enabled, not manual control)
+**The system as it is (2026-11):**
+- **Two hosts.** The **master** (Advantech AFE-R750, 192.168.125.100) runs Autoware and
+  most sensors; the **orin** (AGX Orin dev kit, 192.168.125.101) runs the ZED X and the
+  CAN vehicle interface. Same repository, same commands, separate ROS domains joined by
+  a link bridge (see below).
+- **LiDAR**: Velodyne VLP-32C (Nebula, preprocessed, feeds NDT) and Seyond Falcon
+  (`/sensing/lidar/falcon/iv_points`, raw, not deskewed), both on the master.
+- **Cameras**: three TIER IV GMSL cameras (left, right, rear) on the master; ZED X stereo
+  on the orin (RGB JPEG plus H.264 left/right, recorded on the orin).
+- **IMU**: the ZED X's (`imu_source:=zed`, default). The Xsens MTi is broken. There is
+  no Tamagawa or MPU9250 on this cart.
+- **GNSS**: u-blox ZED-F9P on the master, driver from the NEWSLabNTU/ublox submodule
+  (apt has no RTCM input), apt `ntrip_client`, RTK over NTRIP optional.
+- **Vehicle**: Turing Drive VCU over CAN (orin `can0`, 500 kbit/s), driven by our Rust
+  `golfcart_vehicle_interface` from the vendor DBC. No PWM anywhere.
+- **Maps** (`data/`): `mingda-basement` (indoor loop, the one driven most),
+  `basement-indoor`, `ntu-campus-planning/{r01,r02}` (MGRS, outdoor), `COSS-map-planning`.
+  `data/huaxia-campus/` does NOT exist; nothing may depend on it.
+- **Localization**: `cuda_ndt` on the VLP-32C, EKF with gyro odometry; seeded by GNSS
+  outdoors or by the retroreflective board indoors.
+- **Planning/control**: Autoware's planner and controller, engaged under supervision.
+  Perception is off by default (stand-in grid and cloud), so nothing stops for people.
 
-**Migration Status**: See [docs/roadmaps/0-migration.md](docs/roadmaps/0-migration.md) for detailed migration plan from Golf Cart to golf cart system.
+The migration plan from the original golf cart project is history:
+[docs/roadmaps/0-migration.md](docs/roadmaps/0-migration.md).
 
 ## Essential Commands
 
@@ -70,8 +88,7 @@ they are the daily verbs, and a module may not share a name with a recipe
 | `just run [ARGS...]` | this host | play_launch in the foreground; Ctrl-C stops it |
 
 ARGS are launch arguments plus `@name`, which expands in place to
-`config/launch/<name>.args` (`@basement`, `@mingda`, `@mingda-loop`,
-`@sim-*`); later args win, so `just up @mingda-loop planning_speed_limit:=0.5`
+`config/launch/<name>.args` (table below); later args win, so `just up @mingda-loop planning_speed_limit:=0.5`
 overrides the file. `scripts/launch/args.py` does the expansion for every
 launcher, adds `host:=`, `master_ip:=` and `link_topics:=` for the host's
 role, and prints the final list before anything starts. The unit gets its args
@@ -144,30 +161,26 @@ colcon build --base-paths src --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=
 ## Architecture
 
 ### Core Structure
-- **src/launcher/golfcart_launch/** - Main launch configurations and system monitor
-  - Provides web-based system monitor at http://localhost:8080/
-  - Main launch file: `golfcart.launch.yaml`
+- **src/launcher/golfcart_launch/** - Main launch configurations
+  - Main launch file: `golfcart.launch.yaml`; per-site arg files in `config/launch/`
+  - play_launch's web UI is at http://<host>:8081 under `just run`/`just up`
 - **src/param/autoware_individual_params/** - Parameter configurations for different sensor kits
 - **src/sensor_kit/golfcart_sensor_kit_launch/** - Sensor integration and launch files
 - **src/vehicle/golfcart_vehicle_launch/** - Vehicle interface and description
 - **src/sensor_component/external/** - External sensor drivers (submodules)
 
 ### Key Submodules
-**Golf Cart Migration Notes:**
-- **Retained**: autoware_manual_control, gnss_locator
-- **To Replace**: ros2_mpu9250_driver → Tamagawa IMU driver (pending)
-- **Camera**: USB cameras (no ZED submodule needed initially)
-- **Vehicle Interface**: Will use Turing Drive packages (to be added)
-
-Submodules:
-- autoware_manual_control - Keyboard control interface
-- golfcart_sensor_kit_launch - Sensor kit configurations
-- gnss_locator - GNSS positioning
-- ublox - u-blox ZED-F9P driver, NEWSLabNTU fork with RTCM input (NTRIP client is apt)
-- rig_localization - camera + IMU + wheel twist estimator (`localization_preset:=rigloc`); runs on
-  the orin under a two-machine profile; links cuVSLAM (`./setup.sh --only cuvslam`), and
-  `just build` skips it without
-- ros2_mpu9250_driver - IMU driver (to be replaced with Tamagawa)
+`.gitmodules` is the list; the ones you will touch:
+- golfcart_vehicle_launch - the CAN vehicle interface (Rust), vehicle description, its params
+- golfcart_sensor_kit_launch - every sensor launch file and sensor config (ZED, GMSL, LiDARs, GNSS, IMU)
+- cuda_ndt_matcher - the default `pose_source` (Rust + CUDA)
+- reflective_pose_detector - board-based cold start (`pose_initializer:=board`)
+- gmslcam - the GMSL camera node (Rust, GStreamer)
+- zed-ros2-wrapper, seyond_ros_driver, xsens_mti_can_ros2_driver, ublox - drivers
+- autoware_individual_params - per-vehicle sensor calibration and corrector params
+- golfcart_system_monitor, cuda_pointcloud_filters, rig_localization (`localization_preset:=rigloc`;
+  links cuVSLAM, `./setup.sh --only cuvslam`, and `just build` skips it without),
+  autoware_manual_control, gnss_locator, CalibrationTools
 
 ### config/ is the single source of truth
 
@@ -367,22 +380,20 @@ and commit the `.zst`, never the `.pcd`. See docs/maps.md.
 ## Development Workflow
 
 ### Sensor Configuration
-**Golf Cart Configuration:**
-- **LiDAR**: Velodyne VLP-32C only (no Robin-W or Cube1)
-- **GNSS**: u-blox ZED-F9P only. There is no F9R; anything that says F9R is from an older project
-- **IMU**: Tamagawa IMU (replaces MPU9250)
-- **Cameras**: USB cameras → Tier IV GMSL cameras (future upgrade)
+The sensor set is in the Project Overview and docs/hardware.md. Two traps from older
+projects: there is no F9R (anything that says F9R is from another project), and no
+Robin-W or Cube1 (the Seyond on this cart is a Falcon).
 
-Sensor configurations are in `src/param/autoware_individual_params/individual_params/config/default/golfcart_sensor_kit/`
+Sensor calibrations are in `src/param/autoware_individual_params/individual_params/config/default/golfcart_sensor_kit/`
 
 ### Launch System
 - Main launch uses Autoware's standard launch system
 - Vehicle model: `golfcart_vehicle`
 - Sensor model: `golfcart_sensor_kit`
-- Default map: `./data/COSS-map-planning`, changed with `map_path:=` (for example
-  `map_path:=./data/basement-indoor`). Until 2026-09-29 that override silently did
-  nothing: `map_path` was a fixed include value, so the loaders always got COSS.
-  The production map is planned, not present.
+- Default map: `./data/COSS-map-planning`, changed with `map_path:=`. In practice a
+  drive names its map through an arg file: `just up @mingda-loop`, `just up @ntu-r01`.
+  Until 2026-09-29 that override silently did nothing: `map_path` was a fixed include
+  value, so the loaders always got COSS.
 
 ### Writing launch XML
 
@@ -448,14 +459,8 @@ just run "pose_source:=visual visual_map_dir:=/path/to/visual_map"
 just run "pose_source:=isaac"
 ```
 
-**Creating Visual Maps:**
-```bash
-# Golf cart standard configuration
-just run "lidar_model:=vlp32c camera_model:=usb gnss_receiver:=ublox"
-
-# Indoor testing without GNSS
-just run "lidar_model:=vlp32c camera_model:=usb use_gnss:=false"
-```
+**Indoor testing without GNSS:** `just run "use_gnss:=false"` (the indoor arg files set
+it, with `pose_initializer:=board`).
 
 ### Python Packages
 Standard ROS 2 conventions: setup.py/setup.cfg, test files for copyright/flake8/pep257.
@@ -738,7 +743,7 @@ Under `host:=master` / `host:=orin` an empty one stops the launch with
 `pointcloud_backend` picks where the **whole preprocessing and concatenation
 stage** runs, not just the concatenator:
 
-| | `cpu` (default) | `cuda` |
+| | `cpu` | `cuda` (default, `use_cuda:=true`) |
 |---|---|---|
 | per-LiDAR | crop box, distortion corrector, ring outlier filter (3 nodes) | `CudaPointcloudPreprocessorNode` (1 node) |
 | concatenation | `PointCloudConcatenateDataSynchronizerComponent` | `CudaPointCloudConcatenateDataSynchronizerComponent` |
@@ -793,8 +798,8 @@ drops undeclared arguments — so it does not keep anything off. Use `vcan0`
 #### Localization (pose_source)
 ```bash
 # pose_source options:
-pose_source:=ndt       # Default: LiDAR NDT scan matching (Autoware, requires point cloud map)
-pose_source:=cuda_ndt  # CUDA-accelerated NDT (1.3-1.6x faster, 57% less CPU on Jetson)
+pose_source:=cuda_ndt  # Default: our CUDA NDT (1.3-1.6x faster, 57% less CPU on Jetson)
+pose_source:=ndt       # Autoware's CPU NDT; the control run when localization misbehaves
 pose_source:=isaac     # cuVSLAM visual odometry only (relative tracking, manual init)
 pose_source:=visual    # cuVGL + cuVSLAM (camera-only, auto init from visual map)
 
@@ -874,10 +879,22 @@ no velocity, so the replay proves initialization only. Design and status:
 
 #### Driving autonomously (Phase 8)
 
+**Arg files (`config/launch/*.args`); use these names, add a new site as a new file:**
+
+| name | use | map | seed pose | planning start speed |
+|---|---|---|---|---|
+| `@mingda-loop` | **the indoor drive**: clockwise Ming-Da loop, 5 km/h, 3 km/h north lane, right-turn blinker tags | `data/mingda-basement`, `lanelet2_map_loop.osm` | board | 2.0 m/s (lanes cap lower) |
+| `@mingda` | Ming-Da on its straight lane | `data/mingda-basement` | board | 2.0 m/s |
+| `@basement` | the older basement-indoor map | `data/basement-indoor` | board | 1.0 m/s |
+| `@ntu-r01` | **the outdoor drive**: NTU campus route r01 (first run 2026-11-11) | `data/ntu-campus-planning/r01` (MGRS) | GNSS | 1.5 m/s |
+| `@sim-mingda-loop`, `@sim-mingda`, `@sim-basement`, `@sim-ntu-r01`, `@sim-ntu-r02`, `@sim-aruco` | planning simulator, `just sim planning @<name>` | as named | RViz | - |
+
+All drive files use `planning_preset:=slow_indoor`; the indoor ones set `use_gnss:=false`.
+
 ```bash
-just up @basement      # both hosts, basement map, board init, no GNSS, 1.0 m/s planning default
-just up @mingda        # same, on the re-anchored Ming-Da map (data/mingda-basement), 2.0 m/s
-just up @mingda-loop   # @mingda on the clockwise loop lane
+just up @mingda-loop   # indoor loop, board init (park at the board first)
+just up @ntu-r01       # outdoor, GNSS init; RViz 2D Pose Estimate if it does not converge
+just up @mingda-loop planning_speed_limit:=1.0   # later args override the file
 ```
 
 `planning_speed_limit:=<m/s>` is the startup planning speed default (empty keeps
@@ -927,21 +944,23 @@ twist_source:=gyro_odom|eagleye|rigloc     # Override preset twist source
 
 ### Vehicle Interface (Quick Ref)
 
-**Motor PWM** (PCA9685 I2C, channel 0):
-- Range: 280-460, Init: 370 (neutral), Brake: 340
-- Forward: 371-460, Reverse: 280-369
-- Multi-mode controller: Emergency Brake, Full Stop, Deadband Hold, Active Control (PID)
+`golfcart_vehicle_interface` (Rust, rclrs) on the orin, `can0`, bindings generated from
+the vendor DBC at build time. Parameters:
+`src/vehicle/golfcart_vehicle_launch/golfcart_vehicle_launch/config/vehicle_interface.param.yaml`
+(a symlink install: edit, `just checkout`/pull on the orin, restart; no rebuild).
 
-**Steering PWM** (PCA9685 I2C, channel 1):
-- Range: 350-450, Init: 400 (center)
-- Max angle: 0.349 rad ≈ 20°
-- Dual-mode controller: Fallback (v<0.3m/s), Normal (yaw rate feedback)
+| param | value | meaning |
+|---|---|---|
+| `max_speed_mps` | 2.5 | hard ceiling on any setpoint (9 km/h) |
+| `min_speed_mps` | 0.8 | floor for a nonzero setpoint; must sit below every lane limit or the cart surges and brakes (2026-11-10) |
+| `decel_deadband_mps2` | 0.2 | any decel above it cuts motor torque in the VCU |
+| `control_timeout_ms` | 500 | command silence -> brake |
+| `fault_clear_hold_ms` | 2000 | a latched VCU fault clears after this long in Manual |
+| `invert_steering` | true | verified on the cart 2026-10-22 |
 
-**Velocity Sensing**:
-- Hall effect sensor (KY-003) on GPIO
-- Parameters: `params/velocity_report.yaml`
-
-**Actuator Parameters**: `src/vehicle/golfcart_vehicle_launch/golfcart_vehicle_interface/params/actuator.yaml`
+Vehicle description: `wheel_base` 2.061 m, `max_steer_angle` 0.52 rad (VCU limit +-30 deg).
+The DBC and its signals: `just can vcu-status` (live, receive only); recorded `candump -L`
+logs decode with cantools and `golfcart_vehicle_interface/CAX_ADS_CAN.dbc` (see Field practice).
 
 ## Documentation
 
@@ -967,7 +986,7 @@ described one under `book/`.
 | Guide | Description |
 |-------|-------------|
 | [docs/guides/sensor_configuration.md](docs/guides/sensor_configuration.md) | Sensor suites, NTRIP/RTK, localization |
-| [docs/guides/vehicle_calibration.md](docs/guides/vehicle_calibration.md) | PWM control, PID tuning, testing tools |
+| [docs/guides/vehicle_calibration.md](docs/guides/vehicle_calibration.md) | OBSOLETE: the original PWM cart, not this one |
 | [docs/guides/lidar_integration.md](docs/guides/lidar_integration.md) | Velodyne VLP-32C, TensorRT |
 | [docs/guides/control_testing.md](docs/guides/control_testing.md) | First supervised autonomous drive: roles, pre-drive checks, engage order, stopping |
 | [docs/guides/mrm_configuration.md](docs/guides/mrm_configuration.md) | MRM (emergency stop) configuration |
@@ -1016,29 +1035,20 @@ described one under `book/`.
   ```
   GXF libraries are located at `/opt/ros/humble/share/*/gxf/lib/` and should be added by Isaac ROS environment hooks.
 
-## NDT Localization (Golf Cart)
+## NDT Localization
 
-### Overview
-The golf cart uses Autoware's built-in NDT (Normal Distributions Transform) scan matching for localization:
-- **Input Requirements**: LiDAR point cloud, IMU data, speedometer from vehicle interface, GNSS (initialization)
-- **Map**: Point cloud map (PCD format) + Lanelet2 vector map
-- **Practice**: ZED-F9P GNSS + COSS map
-- **Production**: ZED-F9P GNSS + 華夏科大 map
-
-### Configuration
-NDT parameters may need tuning for golf cart:
-- Located in: `src/param/autoware_individual_params/individual_params/config/default/`
-- Key parameters: resolution, convergence tolerance, iteration limits
-- Adjust based on testing results
-
-### Localization Dependencies
-1. **LiDAR**: Velodyne VLP-32C (Phase #3)
-2. **IMU**: Tamagawa IMU (Phase #5)
-3. **Speedometer**: From Turing Drive vehicle interface (Phase #7)
-4. **GNSS**: u-blox for initialization (Phase #4)
-5. **Map**: Point cloud + Lanelet2 map (Phase #8)
-
-All dependencies must be ready before localization can work.
+- **Inputs**: the preprocessed VLP-32C cloud, the ZED IMU (corrected), wheel speed from
+  the vehicle interface (`/vehicle/status/velocity_status`), and a seed pose (GNSS,
+  the board, a saved spot or RViz).
+- **Map**: `pointcloud_map.pcd` + `lanelet2_map.osm` under the arg file's `map_path`.
+- **Matcher**: `cuda_ndt` by default; scan-matcher params in
+  `cuda_ndt_matcher_launch/config/cuda_scan_matcher.param.yaml`.
+- **The NVTL divergence gate is per map** (`ndt_divergence_nvtl_median_gate`, 0.0 = off):
+  2.1 for Ming-Da; unset for NTU until a cuda_ndt drive gives the numbers. Derive it from
+  a healthy run's score distribution, never copy it between maps or matcher versions
+  ([NTU tuning notes](docs/research/localization/ndt_tuning_ntu_campus.md)).
+- Without wheel speed the EKF has no twist and NDT drifts: the vehicle interface must run
+  (and the VCU be powered) whenever localization is being judged.
 
 ## Tooling Preferences
 - Prefer `rg` (ripgrep) over `grep -r` / `find … -exec grep` for codebase searches — it's faster, respects `.gitignore`, and the flags compose more cleanly (e.g. `rg -nE 'pattern' path`, `rg -l 'pattern'`, `rg -tyaml 'pattern'`).
@@ -1052,8 +1062,7 @@ All dependencies must be ready before localization can work.
 - Built for Ubuntu 22.04 with NVIDIA GPU support
 - Uses colcon build system (not catkin)
 - Symlink installs enabled for faster development iteration
-- System monitor available at http://localhost:8080/ when launched
-- **Migration**: See [docs/roadmaps/0-migration.md](docs/roadmaps/0-migration.md) for team assignments and phase details
+- play_launch's web UI at http://<host>:8081 when launched
 
 ## System Management
 
@@ -1124,10 +1133,11 @@ prints recent lines regardless.
 - This is a known non-critical issue related to AWS Greengrass
 - Can be safely ignored - doesn't affect system functionality
 
-## Velodyne VLP-32C LiDAR Integration
+## LiDAR Integration
 
-### Golf Cart Configuration
-The golf cart uses Velodyne VLP-32C as the sole LiDAR sensor:
+### Velodyne VLP-32C
+The localization LiDAR (the Seyond Falcon beside it is recorded and concatenated but
+not preprocessed, see GPU section):
 - Driver: Nebula (Autoware's universal LiDAR driver)
 - Launch file: `golfcart_sensor_kit_launch/launch/lidar.launch.xml`
 - Config: `golfcart_sensor_kit_launch/config/VLP32.param.yaml`
@@ -1186,21 +1196,13 @@ For faster startup and LiDAR-only operation, configure in `golfcart.launch.yaml`
 
 ## Vehicle Interface
 
-### Turing Drive Integration (Golf Cart)
-The golf cart uses Turing Drive vehicle interface packages (replacing Golf Cart custom PWM interface):
-- **Status**: Pending - specifications and packages to be obtained from Turing Drive
-- **Expected components**:
-  - Vehicle interface node (control command → CAN/vehicle protocol)
-  - Velocity/odometry reporting
-  - Gear status management
-  - Control mode management (manual/autonomous)
-- **Integration files**: `src/vehicle/golfcart_vehicle_launch/golfcart_vehicle_launch/launch/vehicle_interface.launch.xml`
-
-### Golf Cart PWM Interface (Reference Only)
-The original Golf Cart system used custom PWM control:
-- Motor PWM: 370 = stop, >370 = forward, <370 = reverse
-- Steering PWM: 400 = center, 350 = left, 450 = right
-- **Note**: This is for reference only. Golf cart will use Turing Drive interface.
+Turing Drive VCU over CAN, integrated and driving since 2026-10-28. See
+"Vehicle Interface (Quick Ref)", "The vendor CAN DBC", "No CAN TX switch" and Known
+Issues. Launch: `golfcart_vehicle_launch/launch/vehicle_interface.launch.xml`. The VCU
+switches to AUTO only from its dashboard (brake held + AUTO button); nothing over CAN
+changes its mode. It reports and accepts the blinker (`0x43F` / `0x103`), wired to
+Autoware's turn-indicator and hazard commands; whether the VCU acts on them is still
+unverified on the cart.
 
 ## u-blox GNSS Integration
 
@@ -1387,43 +1389,86 @@ One ZED X stereo camera, driven as a composable node:
 - Needs OpenGL hardware acceleration — plain VNC breaks it. If the GMSL link
   wedges (`ZEDX#0#0#FROZEN`), run `sudo service zed_x_daemon restart; sleep 25`.
 
-## Golf Cart Migration Plan
+## Field practice: developing and testing on the cart
 
-**See [docs/roadmaps/0-migration.md](docs/roadmaps/0-migration.md)** for comprehensive migration plan with 11 phases and team assignments.
+Habits that have saved, or would have saved, time on the cart. They apply to people and
+to agents alike.
 
-### Key Migration Tasks
-1. **Phase #1**: Advantech Orin computer setup (JP6.2, firmware, dependencies)
-2. **Phase #3**: Velodyne VLP-32C LiDAR integration
-3. **Phase #4**: u-blox ZED-F9P GNSS
-4. **Phase #5**: Tamagawa IMU integration
-5. **Phase #6**: USB cameras (upgrade to Tier IV later)
-6. **Phase #7**: Turing Drive vehicle interface integration
-7. **Phase #8**: 華夏科大 campus HDMap (COSS map for practice)
-8. **Phase #9**: NDT localization tuning
-9. **Phase #10**: Planning and control configuration
-10. **Phase #11**: Integration testing and validation
+### Before a run
+- `git pull` on the master, then on the orin (`git pull --ff-only` from `local`, below);
+  a Rust change needs `just build` on the host that runs it, a YAML/XML/Python change
+  does not (symlink install).
+- `just service doctor`, `just gnss check` (outdoors), `just can vcu-status` with the VCU
+  powered: the VCU must report, and see our rolling counter.
+- Start through an arg file (`just up @mingda-loop`, `just up @ntu-r01`) rather than a
+  long hand-typed argument list; add a new site as `config/launch/<site>.args`.
+- Record every drive: `just record start [SCOPE] [NAME]`. `drive` (default) has sensors,
+  vehicle, NDT/EKF; use `autonomy` when control or planning is the question, since
+  `drive` leaves out `/control/trajectory_follower/*` and planning output.
+- Charge the cart; a flat battery ends the session and reboots both hosts.
 
-### Team Assignments
-- **Team A (Allan & Liao)**: Sensors (LiDAR, cameras, GNSS focus)
-- **Team B (Vincent & Darren)**: System setup, map preparation, vehicle interface
-- **Coordination**: Both teams work together on GNSS + Map for localization testing
-- **Practice Equipment**: ZED-F9P GNSS + COSS map
-- **Production Equipment**: ZED-F9P GNSS + 華夏科大 map
+### During a run
+- **Hands off the live system** unless asked: no service calls, no restarts, no
+  `ros2 param set`, no recordings started or stopped by someone else.
+- **The master's display belongs to the driver**: open no windows on `:0` and drive no
+  input there; read state from the CLI (`ros2 topic echo --once`, `just record status`).
+- Probing a live topic costs the publisher something: subscribing to the ZED RGB JPEG
+  halves every ZED stream when stereo is on. Probe briefly, with sensor-data QoS.
+- Perception is off by default: the driver's foot is the obstacle detector.
 
-### Hardware Status
-**Available Now:**
-- Velodyne VLP-32C LiDAR
-- USB cameras
-- u-blox ZED-F9P (on the vehicle; brought up 2026-09-17)
-- COSS map (practice)
-- Orin box (interim testing)
+### After a run
+- `just record list`, then check what was recorded before trusting it: topic counts and
+  rates from each half's `bag/metadata.yaml`; an expected topic with 0 messages means
+  that device was silent.
+- `just record collect <id>` (the orin's half crosses at ~11 MB/s, the 100 Mbit link),
+  then archive with `tar -cf - <id> | zstd -T0 -6 -o <id>.tar.zst && zstd -t <id>.tar.zst`.
+  Expect little gain: the bags are mostly JPEG, H.264 and LiDAR.
+- CAN logs (`<can>.log`, `candump -L`) decode with cantools and the vendor DBC
+  (`cantools.database.load_file(".../golfcart_vehicle_interface/CAX_ADS_CAN.dbc")`):
+  `0x75` our motor command, `0x68` brake, `0x65` steering, `0x43F` vehicle/blinker;
+  `0x101` VCU speed, `0x102` tire angle, `0x103` driving state (2 = AUTO) and errors.
 
-**Pending:**
-- Advantech Orin computer
-- Tamagawa IMU
-- 華夏科大 campus map
-- Turing Drive vehicle interface packages
+### Working on the orin from the master
+- The orin may have no internet. The master holds bare repos at `/mnt/external/*.git`;
+  workspace clones on the master have them as remote `local`, and the orin's checkout
+  pulls from `local = ubuntu@192.168.125.100:/mnt/external/<repo>.git`. After pushing to
+  GitHub, fast-forward `local` too (`git push local refs/remotes/origin/main:refs/heads/main`,
+  never force), and the same for each touched submodule's long-lived branch.
+- Long or visible work on the orin goes through tmux (`tmux send-keys -t <session>:<win>`),
+  so whoever is at the orin can follow it. Check the pane is an idle shell before EVERY
+  send (`[ "$(tmux display -p -t S:W '#{pane_current_command}')" = bash ]`): a person may
+  have opened `nmtui` or `sudo` in it since the last command. Never send `clear`.
+- sudo on either host needs the user's password: queue the command in a tmux pane and
+  let them type it.
 
-## Recent Updates (Golf Cart Legacy)
-- With --symlink-install flag in colcon build, edits on yaml, xml, py source files immediately apply if the file was installed earlier. There is no need to rebuild. In case you create a new file, you need to run colcon build again to create the symlink in the install/ dir.
-- Original Golf Cart system had PWM interface calibration, Robin-W LiDAR, ZED cameras - see sections above for reference
+### Probing ROS from a script
+- Source `scripts/env.sh` (with `GOLFCART_ENV_ROLE=master|orin` when the role matters)
+  and use `--no-daemon`; see the daemon trap under "The master/orin link".
+- A ten-line rclpy probe beats `ros2 topic hz` for anything subtle: count messages AND
+  distinct `header.stamp`s (duplicated frames look like a doubled rate), with
+  `qos_profile_sensor_data`.
+- `pkill -f <pattern>` matches your own `ssh ... bash -c '...<pattern>...'` and kills it.
+  Use `pgrep` to list first, and stop processes by PID or by Ctrl-C in their pane.
+
+### Shell and config traps
+- `cmd | grep -q x` under `set -o pipefail` can fail on a MATCH: grep exits on the first
+  hit, `cmd` dies of SIGPIPE, and the pipeline reports 141. Capture the output first
+  (`out=$(cmd); grep -q x <<<"$out"`). It made `isaac-h264-encoder` report a missing apt
+  candidate that was there.
+- XML comments may not contain `--` (see "Writing launch XML").
+- Containers: play_launch's `observable` mode runs a `component_container_isolated` on one
+  thread (play_launch issue #0082); the orin therefore runs `stock`
+  (`config/runtime.conf`). Suspect container mode first when composable nodes behave
+  differently under `just up` than under `ros2 launch`.
+
+### Maps you can regenerate
+- The Ming-Da loop lanelets come from `data/mingda-basement/route_loop_cw.yaml` through
+  `scripts/map/centerline_to_lanelet.py`. Per route point: `width`, `speed_limit` (km/h)
+  and `turn` (left|right|straight|none, written as `turn_direction` so Autoware blinks
+  before the lanelet); both hold until the next point that sets them. Rebuild:
+  `python3 scripts/map/centerline_to_lanelet.py data/mingda-basement/route_loop_cw.yaml
+  --map-dir data/mingda-basement --width 2.5 --ele 0.0 --speed-limit 5 --smoothing 0
+  > data/mingda-basement/lanelet2_map_loop.osm`, then
+  `python3 scripts/testing/sim_loop_drive.py --check-only` and `pytest scripts/map`.
+- Lane fits come from driven laps: the user drives the route, the NDT trajectory from the
+  bag defines the safe corridor.
