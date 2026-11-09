@@ -999,10 +999,12 @@ described one under `book/`.
   in the interface, `dbc::VCU_SPEED_UNIT_TO_MPS` (golfcart_vehicle_launch f0abd26), for both; the
   report is still signed by gear. Before the update both were km/h whatever the DBC said; the
   history is in [docs/research/system/vcu-speed-report.md](docs/research/system/vcu-speed-report.md).
-- **`min_speed_mps: 1.5` in `vehicle_interface.param.yaml`** raises any nonzero speed setpoint to 5.4 km/h,
-  the least that overcomes the cart's friction (it stalls on a bump at a crawl). The planner's range is
-  1.5 to `max_speed_mps` (2.5 since 2026-11-02; at 1.5 the cart ran at one fixed speed). The Ming-Da
-  lanes are 7 km/h, 5.4 past the hanging board; `just up @mingda` cruises at 2.0 m/s.
+- **`min_speed_mps: 0.8` in `vehicle_interface.param.yaml`** raises any nonzero speed setpoint to 2.9 km/h.
+  It was 1.5 (5.4 km/h) until 2026-11-10, chosen when the cart stalled on a bump at a crawl with the
+  setpoint still read as km/h; lowered so the Ming-Da loop's 3 km/h north lane is sent as asked, and not
+  yet driven. If the cart stalls there, raise it back. The ceiling is `max_speed_mps` (2.5 since
+  2026-11-02). The Ming-Da loop is 5 km/h, 3 km/h through the narrow north lane, and tags its four
+  corners `turn_direction: right` so the indicator blinks before each (`turn:` in the route YAML).
 
 - **Steering sign verified on the cart 2026-10-22** (Phase 8 V2): `invert_steering` (vehicle interface, 2026-08-12) is right; keyboard left (+5 deg) went out as -4.98 deg and turned the wheels left. The VCU's steering *report* is not usable yet: `0x102 Vcu_Ads_Tire_Angle` never goes negative, so every left angle reads 0.000 (raw bytes `00 00`, the VCU's doing, not our DBC decode), and `Vcu_Ads_Tire_Angular_Speed` is always 0. On 2026-11-06 the right side was live **in Manual** too (to +18.05 deg, `rosbags/can/can_can0_20261106_161744.log` on the master), so the earlier "live only in AUTO, frozen in Manual" (2026-10-22) no longer holds; reported to the vendor. Record with `just can record` **on the orin**, where the bus is. See [Phase 9](docs/roadmaps/9-mingda-autonomous-driving.md).
 - **Network monitor errors**: AWS Greengrass socket errors (non-critical, ignore)

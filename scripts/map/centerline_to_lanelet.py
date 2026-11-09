@@ -195,10 +195,14 @@ def speeds_along(route: list[Point], speeds: Sequence[float], samples: list[Poin
     return out
 
 
+TURNS = ('left', 'right', 'straight')
+
+
 def parse_route(items, default_width: float,
                 default_speed: float = 4.0) -> tuple[list[Point], list[float], list[float]]:
-    """Route-file items, [x, y], [x, y, z] or {x, y, width, speed_limit}, as points,
-    widths and speeds. A speed holds until the next point that sets one."""
+    """Route-file items, [x, y], [x, y, z] or {x, y, width, speed_limit, turn}, as points,
+    widths and speeds. A speed holds until the next point that sets one.
+    `turn` is read by parse_turns()."""
     pts, widths, speeds = [], [], []
     speed = default_speed
     for item in items:
@@ -213,16 +217,34 @@ def parse_route(items, default_width: float,
     return pts, widths, speeds
 
 
+def parse_turns(items) -> list[str]:
+    """Each route point's turn direction, '' for none. Like speed_limit, a `turn:`
+    (left | right | straight | none) holds until the next point that sets one."""
+    out, turn = [], ''
+    for item in items:
+        if isinstance(item, dict) and 'turn' in item:
+            v = str(item['turn']).strip().lower()
+            if v not in TURNS + ('none',):
+                raise ValueError(f"turn: {item['turn']!r}, expected one of {TURNS + ('none',)}")
+            turn = '' if v == 'none' else v
+        out.append(turn)
+    return out
+
+
 def split_segments(n_points: int, points_per_segment: float,
                    breaks: Sequence[int] = ()) -> list[tuple[int, int]]:
     """Index ranges [start, end] covering 0..n-1, consecutive ranges sharing an end.
 
-    Every index in `breaks` is also a range boundary."""
-    k = max(1, round(points_per_segment))
-    bounds = list(range(0, n_points - 1, k)) + [n_points - 1]
-    if len(bounds) > 2 and bounds[-1] - bounds[-2] < k / 2:
-        bounds.pop(-2)  # fold a stub tail into the previous lanelet
-    bounds = sorted(set(bounds) | {b for b in breaks if 0 < b < n_points - 1})
+    Every index in `breaks` is also a range boundary. Between two boundaries the
+    span is cut into round(length / points_per_segment) equal pieces, at least
+    one, so a break never leaves a stub beside it."""
+    k = max(1.0, points_per_segment)
+    fixed = [0] + sorted({b for b in breaks if 0 < b < n_points - 1}) + [n_points - 1]
+    bounds = []
+    for a, b in zip(fixed, fixed[1:]):
+        pieces = max(1, round((b - a) / k))
+        bounds += [a + round(j * (b - a) / pieces) for j in range(pieces)]
+    bounds.append(n_points - 1)
     return list(zip(bounds, bounds[1:]))
 
 
@@ -245,11 +267,14 @@ def _node(parent, nid, x, y, z):
 
 def build_osm(centerline, *, width: float | Sequence[float], ele: float, segment_length: float,
               speed_limit_kmh: float | Sequence[float], base_osm: str | None, step: float = 1.0,
-              smoothing: int = 0) -> str:
+              smoothing: int = 0, turns: Sequence[str] | None = None) -> str:
     """The full lanelet2 OSM document, base elements first.
 
     `width` and `speed_limit_kmh` are one value, or one per centreline point;
-    a per-point speed holds from its point to the next."""
+    a per-point speed holds from its point to the next. `turns`, one per
+    centreline point ('' for none), likewise; a lanelet starts wherever it
+    changes and carries it as Autoware's `turn_direction` tag, which is what
+    the turn signal decider reads to blink before the lanelet."""
     route = [(float(p[0]), float(p[1])) for p in centerline]
     closed = len(route) > 2 and math.dist(route[0], route[-1]) < 1e-6
     pts2 = smooth(route, smoothing, closed) if smoothing else route
@@ -266,7 +291,14 @@ def build_osm(centerline, *, width: float | Sequence[float], ele: float, segment
         if len(speed_limit_kmh) != len(route):
             raise ValueError(f'{len(speed_limit_kmh)} speeds for {len(route)} route points')
         speeds = speeds_along(route, speed_limit_kmh, center)
-    breaks = [i for i in range(1, len(speeds)) if speeds[i] != speeds[i - 1]]
+    if turns is None:
+        turn_at = [''] * len(center)
+    else:
+        if len(turns) != len(route):
+            raise ValueError(f'{len(turns)} turns for {len(route)} route points')
+        turn_at = speeds_along(route, turns, center)
+    breaks = [i for i in range(1, len(speeds))
+              if speeds[i] != speeds[i - 1] or turn_at[i] != turn_at[i - 1]]
     left, right = offset_bounds(center, width, closed)
 
     if base_osm:
@@ -325,6 +357,8 @@ def build_osm(centerline, *, width: float | Sequence[float], ele: float, segment
                      ('one_way', 'yes'), ('participant:vehicle', 'yes'),
                      ('speed_limit', f'{speeds[s0]:g}')):
             ET.SubElement(rel, 'tag', k=k, v=v)
+        if turn_at[s0]:
+            ET.SubElement(rel, 'tag', k='turn_direction', v=turn_at[s0])
         rid += 1
 
     ET.indent(root, space='  ')
@@ -351,14 +385,15 @@ def main(argv=None) -> int:
                     help='write --map-dir/lanelet2_map.osm; otherwise print to stdout')
     args = ap.parse_args(argv)
 
-    points, widths, speeds = parse_route(yaml.safe_load(args.route.read_text()),
-                                         args.width, args.speed_limit)
+    items = yaml.safe_load(args.route.read_text())
+    points, widths, speeds = parse_route(items, args.width, args.speed_limit)
+    turns = parse_turns(items)
     base = args.map_dir / args.base
     osm = build_osm(points, width=widths if len(set(widths)) > 1 else args.width, ele=args.ele,
                     segment_length=args.segment_length,
                     speed_limit_kmh=speeds if len(set(speeds)) > 1 else args.speed_limit,
                     base_osm=base.read_text() if base.exists() else None,
-                    smoothing=args.smoothing)
+                    smoothing=args.smoothing, turns=turns if any(turns) else None)
 
     pts2 = points
     closed = len(pts2) > 2 and math.dist(pts2[0], pts2[-1]) < 1e-6

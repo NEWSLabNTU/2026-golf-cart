@@ -128,7 +128,7 @@ Known VCU limits:
 |---|---|
 | Steering report (`0x102`) reads 0 for left turns | vendor bug. Watch the wheels, not `/vehicle/status/steering_status` |
 | Speed signals are whole km/h | the report is coarse; the interface converts to m/s |
-| `min_speed_mps: 1.5` | whenever the cart moves, it moves at 5.4 km/h or faster, whatever the planner asks. The ceiling is `max_speed_mps: 2.5` (9 km/h) |
+| `min_speed_mps: 0.8` | whenever the cart moves, it moves at 2.9 km/h or faster, whatever the planner asks (1.5 m/s, 5.4 km/h, until 2026-11-10). The ceiling is `max_speed_mps: 2.5` (9 km/h) |
 | Right steering stops at about 22 degrees | the mechanical limit is less than the left side |
 
 Detail and status: [Phase 9 roadmap](roadmaps/9-mingda-autonomous-driving.md).

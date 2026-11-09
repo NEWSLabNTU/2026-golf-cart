@@ -257,3 +257,32 @@ def test_turning_radius_comes_from_the_vehicle_description():
     p = yaml.safe_load(info.read_text())['/**']['ros__parameters']
     want = p['wheel_base'] / math.tan(p['max_steer_angle'])
     assert c2l.min_turning_radius() == pytest.approx(want)
+
+
+def test_turn_holds_until_changed_and_none_clears():
+    items = [{'x': 0, 'y': 0}, {'x': 1, 'y': 0, 'turn': 'Right'}, {'x': 2, 'y': 0},
+             {'x': 3, 'y': 0, 'turn': 'none'}, [4, 0]]
+    assert c2l.parse_turns(items) == ['', 'right', 'right', '', '']
+    with pytest.raises(ValueError):
+        c2l.parse_turns([{'x': 0, 'y': 0, 'turn': 'u-turn'}])
+
+
+def test_turn_span_is_its_own_lanelet_tagged_turn_direction():
+    route = [(float(x), 0.0) for x in range(0, 31, 5)]
+    turns = ['', '', 'right', 'right', '', '', '']          # x 10 to 20
+    osm = c2l.build_osm(route, width=2.5, ele=0.0, segment_length=100.0,
+                        speed_limit_kmh=7, base_osm=None, smoothing=0, turns=turns)
+    root = ET.fromstring(osm.split('\n', 1)[1])
+    rels = [r for r in root.iter('relation')]
+    tags = [{t.get('k'): t.get('v') for t in r.findall('tag')} for r in rels]
+    assert [t.get('turn_direction') for t in tags] == [None, 'right', None]
+    xs = {n.get('id'): float(n.find("tag[@k='local_x']").get('v')) for n in root.iter('node')}
+    ways = {w.get('id'): [nd.get('ref') for nd in w.findall('nd')] for w in root.iter('way')}
+    left = ways[rels[1].find("member[@role='left']").get('ref')]
+    assert sorted(round(xs[r]) for r in (left[0], left[-1])) == [10, 20]
+
+
+def test_no_turns_no_tag():
+    osm = c2l.build_osm(STRAIGHT, width=2.4, ele=0.0, segment_length=10.0,
+                        speed_limit_kmh=7, base_osm=None, smoothing=0)
+    assert 'turn_direction' not in osm

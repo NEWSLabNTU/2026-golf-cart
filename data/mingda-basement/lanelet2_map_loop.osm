@@ -1553,9 +1553,6 @@
     <tag k="ele" v="0.0000" />
   </node>
   <way id="200000" visible="true">
-    <nd ref="100020" />
-    <nd ref="100018" />
-    <nd ref="100016" />
     <nd ref="100014" />
     <nd ref="100012" />
     <nd ref="100010" />
@@ -1568,9 +1565,6 @@
     <tag k="subtype" v="solid" />
   </way>
   <way id="200001" visible="true">
-    <nd ref="100021" />
-    <nd ref="100019" />
-    <nd ref="100017" />
     <nd ref="100015" />
     <nd ref="100013" />
     <nd ref="100011" />
@@ -1590,10 +1584,9 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="7" />
+    <tag k="speed_limit" v="5" />
   </relation>
   <way id="200002" visible="true">
-    <nd ref="100040" />
     <nd ref="100038" />
     <nd ref="100036" />
     <nd ref="100034" />
@@ -1604,11 +1597,13 @@
     <nd ref="100024" />
     <nd ref="100022" />
     <nd ref="100020" />
+    <nd ref="100018" />
+    <nd ref="100016" />
+    <nd ref="100014" />
     <tag k="type" v="line_thin" />
     <tag k="subtype" v="solid" />
   </way>
   <way id="200003" visible="true">
-    <nd ref="100041" />
     <nd ref="100039" />
     <nd ref="100037" />
     <nd ref="100035" />
@@ -1619,6 +1614,9 @@
     <nd ref="100025" />
     <nd ref="100023" />
     <nd ref="100021" />
+    <nd ref="100019" />
+    <nd ref="100017" />
+    <nd ref="100015" />
     <tag k="type" v="line_thin" />
     <tag k="subtype" v="solid" />
   </way>
@@ -1630,10 +1628,10 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="7" />
+    <tag k="speed_limit" v="5" />
+    <tag k="turn_direction" v="right" />
   </relation>
   <way id="200004" visible="true">
-    <nd ref="100060" />
     <nd ref="100058" />
     <nd ref="100056" />
     <nd ref="100054" />
@@ -1644,11 +1642,11 @@
     <nd ref="100044" />
     <nd ref="100042" />
     <nd ref="100040" />
+    <nd ref="100038" />
     <tag k="type" v="line_thin" />
     <tag k="subtype" v="solid" />
   </way>
   <way id="200005" visible="true">
-    <nd ref="100061" />
     <nd ref="100059" />
     <nd ref="100057" />
     <nd ref="100055" />
@@ -1659,6 +1657,7 @@
     <nd ref="100045" />
     <nd ref="100043" />
     <nd ref="100041" />
+    <nd ref="100039" />
     <tag k="type" v="line_thin" />
     <tag k="subtype" v="solid" />
   </way>
@@ -1670,10 +1669,9 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="7" />
+    <tag k="speed_limit" v="5" />
   </relation>
   <way id="200006" visible="true">
-    <nd ref="100080" />
     <nd ref="100078" />
     <nd ref="100076" />
     <nd ref="100074" />
@@ -1684,11 +1682,11 @@
     <nd ref="100064" />
     <nd ref="100062" />
     <nd ref="100060" />
+    <nd ref="100058" />
     <tag k="type" v="line_thin" />
     <tag k="subtype" v="solid" />
   </way>
   <way id="200007" visible="true">
-    <nd ref="100081" />
     <nd ref="100079" />
     <nd ref="100077" />
     <nd ref="100075" />
@@ -1699,6 +1697,7 @@
     <nd ref="100065" />
     <nd ref="100063" />
     <nd ref="100061" />
+    <nd ref="100059" />
     <tag k="type" v="line_thin" />
     <tag k="subtype" v="solid" />
   </way>
@@ -1710,7 +1709,7 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="7" />
+    <tag k="speed_limit" v="5" />
   </relation>
   <way id="200008" visible="true">
     <nd ref="100100" />
@@ -1724,6 +1723,7 @@
     <nd ref="100084" />
     <nd ref="100082" />
     <nd ref="100080" />
+    <nd ref="100078" />
     <tag k="type" v="line_thin" />
     <tag k="subtype" v="solid" />
   </way>
@@ -1739,6 +1739,7 @@
     <nd ref="100085" />
     <nd ref="100083" />
     <nd ref="100081" />
+    <nd ref="100079" />
     <tag k="type" v="line_thin" />
     <tag k="subtype" v="solid" />
   </way>
@@ -1750,7 +1751,7 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="7" />
+    <tag k="speed_limit" v="5" />
   </relation>
   <way id="200010" visible="true">
     <nd ref="100120" />
@@ -1790,9 +1791,15 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="7" />
+    <tag k="speed_limit" v="5" />
   </relation>
   <way id="200012" visible="true">
+    <nd ref="100140" />
+    <nd ref="100138" />
+    <nd ref="100136" />
+    <nd ref="100134" />
+    <nd ref="100132" />
+    <nd ref="100130" />
     <nd ref="100128" />
     <nd ref="100126" />
     <nd ref="100124" />
@@ -1802,6 +1809,12 @@
     <tag k="subtype" v="solid" />
   </way>
   <way id="200013" visible="true">
+    <nd ref="100141" />
+    <nd ref="100139" />
+    <nd ref="100137" />
+    <nd ref="100135" />
+    <nd ref="100133" />
+    <nd ref="100131" />
     <nd ref="100129" />
     <nd ref="100127" />
     <nd ref="100125" />
@@ -1818,41 +1831,11 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="7" />
+    <tag k="speed_limit" v="3" />
+    <tag k="turn_direction" v="right" />
   </relation>
   <way id="200014" visible="true">
-    <nd ref="100140" />
-    <nd ref="100138" />
-    <nd ref="100136" />
-    <nd ref="100134" />
-    <nd ref="100132" />
-    <nd ref="100130" />
-    <nd ref="100128" />
-    <tag k="type" v="line_thin" />
-    <tag k="subtype" v="solid" />
-  </way>
-  <way id="200015" visible="true">
-    <nd ref="100141" />
-    <nd ref="100139" />
-    <nd ref="100137" />
-    <nd ref="100135" />
-    <nd ref="100133" />
-    <nd ref="100131" />
-    <nd ref="100129" />
-    <tag k="type" v="line_thin" />
-    <tag k="subtype" v="solid" />
-  </way>
-  <relation id="300007" visible="true">
-    <member type="way" ref="200014" role="left" />
-    <member type="way" ref="200015" role="right" />
-    <tag k="type" v="lanelet" />
-    <tag k="subtype" v="road" />
-    <tag k="location" v="urban" />
-    <tag k="one_way" v="yes" />
-    <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="5.4" />
-  </relation>
-  <way id="200016" visible="true">
+    <nd ref="100162" />
     <nd ref="100160" />
     <nd ref="100158" />
     <nd ref="100156" />
@@ -1867,7 +1850,8 @@
     <tag k="type" v="line_thin" />
     <tag k="subtype" v="solid" />
   </way>
-  <way id="200017" visible="true">
+  <way id="200015" visible="true">
+    <nd ref="100163" />
     <nd ref="100161" />
     <nd ref="100159" />
     <nd ref="100157" />
@@ -1882,17 +1866,22 @@
     <tag k="type" v="line_thin" />
     <tag k="subtype" v="solid" />
   </way>
-  <relation id="300008" visible="true">
-    <member type="way" ref="200016" role="left" />
-    <member type="way" ref="200017" role="right" />
+  <relation id="300007" visible="true">
+    <member type="way" ref="200014" role="left" />
+    <member type="way" ref="200015" role="right" />
     <tag k="type" v="lanelet" />
     <tag k="subtype" v="road" />
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="5.4" />
+    <tag k="speed_limit" v="3" />
   </relation>
-  <way id="200018" visible="true">
+  <way id="200016" visible="true">
+    <nd ref="100190" />
+    <nd ref="100188" />
+    <nd ref="100186" />
+    <nd ref="100184" />
+    <nd ref="100182" />
     <nd ref="100180" />
     <nd ref="100178" />
     <nd ref="100176" />
@@ -1903,11 +1892,15 @@
     <nd ref="100166" />
     <nd ref="100164" />
     <nd ref="100162" />
-    <nd ref="100160" />
     <tag k="type" v="line_thin" />
     <tag k="subtype" v="solid" />
   </way>
-  <way id="200019" visible="true">
+  <way id="200017" visible="true">
+    <nd ref="100191" />
+    <nd ref="100189" />
+    <nd ref="100187" />
+    <nd ref="100185" />
+    <nd ref="100183" />
     <nd ref="100181" />
     <nd ref="100179" />
     <nd ref="100177" />
@@ -1918,7 +1911,45 @@
     <nd ref="100167" />
     <nd ref="100165" />
     <nd ref="100163" />
-    <nd ref="100161" />
+    <tag k="type" v="line_thin" />
+    <tag k="subtype" v="solid" />
+  </way>
+  <relation id="300008" visible="true">
+    <member type="way" ref="200016" role="left" />
+    <member type="way" ref="200017" role="right" />
+    <tag k="type" v="lanelet" />
+    <tag k="subtype" v="road" />
+    <tag k="location" v="urban" />
+    <tag k="one_way" v="yes" />
+    <tag k="participant:vehicle" v="yes" />
+    <tag k="speed_limit" v="3" />
+    <tag k="turn_direction" v="right" />
+  </relation>
+  <way id="200018" visible="true">
+    <nd ref="100208" />
+    <nd ref="100206" />
+    <nd ref="100204" />
+    <nd ref="100202" />
+    <nd ref="100200" />
+    <nd ref="100198" />
+    <nd ref="100196" />
+    <nd ref="100194" />
+    <nd ref="100192" />
+    <nd ref="100190" />
+    <tag k="type" v="line_thin" />
+    <tag k="subtype" v="solid" />
+  </way>
+  <way id="200019" visible="true">
+    <nd ref="100209" />
+    <nd ref="100207" />
+    <nd ref="100205" />
+    <nd ref="100203" />
+    <nd ref="100201" />
+    <nd ref="100199" />
+    <nd ref="100197" />
+    <nd ref="100195" />
+    <nd ref="100193" />
+    <nd ref="100191" />
     <tag k="type" v="line_thin" />
     <tag k="subtype" v="solid" />
   </way>
@@ -1930,25 +1961,33 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="5.4" />
+    <tag k="speed_limit" v="5" />
   </relation>
   <way id="200020" visible="true">
-    <nd ref="100190" />
-    <nd ref="100188" />
-    <nd ref="100186" />
-    <nd ref="100184" />
-    <nd ref="100182" />
-    <nd ref="100180" />
+    <nd ref="100226" />
+    <nd ref="100224" />
+    <nd ref="100222" />
+    <nd ref="100220" />
+    <nd ref="100218" />
+    <nd ref="100216" />
+    <nd ref="100214" />
+    <nd ref="100212" />
+    <nd ref="100210" />
+    <nd ref="100208" />
     <tag k="type" v="line_thin" />
     <tag k="subtype" v="solid" />
   </way>
   <way id="200021" visible="true">
-    <nd ref="100191" />
-    <nd ref="100189" />
-    <nd ref="100187" />
-    <nd ref="100185" />
-    <nd ref="100183" />
-    <nd ref="100181" />
+    <nd ref="100227" />
+    <nd ref="100225" />
+    <nd ref="100223" />
+    <nd ref="100221" />
+    <nd ref="100219" />
+    <nd ref="100217" />
+    <nd ref="100215" />
+    <nd ref="100213" />
+    <nd ref="100211" />
+    <nd ref="100209" />
     <tag k="type" v="line_thin" />
     <tag k="subtype" v="solid" />
   </way>
@@ -1960,25 +1999,31 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="5.4" />
+    <tag k="speed_limit" v="5" />
   </relation>
   <way id="200022" visible="true">
-    <nd ref="100200" />
-    <nd ref="100198" />
-    <nd ref="100196" />
-    <nd ref="100194" />
-    <nd ref="100192" />
-    <nd ref="100190" />
+    <nd ref="100242" />
+    <nd ref="100240" />
+    <nd ref="100238" />
+    <nd ref="100236" />
+    <nd ref="100234" />
+    <nd ref="100232" />
+    <nd ref="100230" />
+    <nd ref="100228" />
+    <nd ref="100226" />
     <tag k="type" v="line_thin" />
     <tag k="subtype" v="solid" />
   </way>
   <way id="200023" visible="true">
-    <nd ref="100201" />
-    <nd ref="100199" />
-    <nd ref="100197" />
-    <nd ref="100195" />
-    <nd ref="100193" />
-    <nd ref="100191" />
+    <nd ref="100243" />
+    <nd ref="100241" />
+    <nd ref="100239" />
+    <nd ref="100237" />
+    <nd ref="100235" />
+    <nd ref="100233" />
+    <nd ref="100231" />
+    <nd ref="100229" />
+    <nd ref="100227" />
     <tag k="type" v="line_thin" />
     <tag k="subtype" v="solid" />
   </way>
@@ -1990,35 +2035,33 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="7" />
+    <tag k="speed_limit" v="5" />
   </relation>
   <way id="200024" visible="true">
-    <nd ref="100220" />
-    <nd ref="100218" />
-    <nd ref="100216" />
-    <nd ref="100214" />
-    <nd ref="100212" />
-    <nd ref="100210" />
-    <nd ref="100208" />
-    <nd ref="100206" />
-    <nd ref="100204" />
-    <nd ref="100202" />
-    <nd ref="100200" />
+    <nd ref="100260" />
+    <nd ref="100258" />
+    <nd ref="100256" />
+    <nd ref="100254" />
+    <nd ref="100252" />
+    <nd ref="100250" />
+    <nd ref="100248" />
+    <nd ref="100246" />
+    <nd ref="100244" />
+    <nd ref="100242" />
     <tag k="type" v="line_thin" />
     <tag k="subtype" v="solid" />
   </way>
   <way id="200025" visible="true">
-    <nd ref="100221" />
-    <nd ref="100219" />
-    <nd ref="100217" />
-    <nd ref="100215" />
-    <nd ref="100213" />
-    <nd ref="100211" />
-    <nd ref="100209" />
-    <nd ref="100207" />
-    <nd ref="100205" />
-    <nd ref="100203" />
-    <nd ref="100201" />
+    <nd ref="100261" />
+    <nd ref="100259" />
+    <nd ref="100257" />
+    <nd ref="100255" />
+    <nd ref="100253" />
+    <nd ref="100251" />
+    <nd ref="100249" />
+    <nd ref="100247" />
+    <nd ref="100245" />
+    <nd ref="100243" />
     <tag k="type" v="line_thin" />
     <tag k="subtype" v="solid" />
   </way>
@@ -2030,91 +2073,9 @@
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="7" />
+    <tag k="speed_limit" v="5" />
   </relation>
   <way id="200026" visible="true">
-    <nd ref="100240" />
-    <nd ref="100238" />
-    <nd ref="100236" />
-    <nd ref="100234" />
-    <nd ref="100232" />
-    <nd ref="100230" />
-    <nd ref="100228" />
-    <nd ref="100226" />
-    <nd ref="100224" />
-    <nd ref="100222" />
-    <nd ref="100220" />
-    <tag k="type" v="line_thin" />
-    <tag k="subtype" v="solid" />
-  </way>
-  <way id="200027" visible="true">
-    <nd ref="100241" />
-    <nd ref="100239" />
-    <nd ref="100237" />
-    <nd ref="100235" />
-    <nd ref="100233" />
-    <nd ref="100231" />
-    <nd ref="100229" />
-    <nd ref="100227" />
-    <nd ref="100225" />
-    <nd ref="100223" />
-    <nd ref="100221" />
-    <tag k="type" v="line_thin" />
-    <tag k="subtype" v="solid" />
-  </way>
-  <relation id="300013" visible="true">
-    <member type="way" ref="200026" role="left" />
-    <member type="way" ref="200027" role="right" />
-    <tag k="type" v="lanelet" />
-    <tag k="subtype" v="road" />
-    <tag k="location" v="urban" />
-    <tag k="one_way" v="yes" />
-    <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="7" />
-  </relation>
-  <way id="200028" visible="true">
-    <nd ref="100260" />
-    <nd ref="100258" />
-    <nd ref="100256" />
-    <nd ref="100254" />
-    <nd ref="100252" />
-    <nd ref="100250" />
-    <nd ref="100248" />
-    <nd ref="100246" />
-    <nd ref="100244" />
-    <nd ref="100242" />
-    <nd ref="100240" />
-    <tag k="type" v="line_thin" />
-    <tag k="subtype" v="solid" />
-  </way>
-  <way id="200029" visible="true">
-    <nd ref="100261" />
-    <nd ref="100259" />
-    <nd ref="100257" />
-    <nd ref="100255" />
-    <nd ref="100253" />
-    <nd ref="100251" />
-    <nd ref="100249" />
-    <nd ref="100247" />
-    <nd ref="100245" />
-    <nd ref="100243" />
-    <nd ref="100241" />
-    <tag k="type" v="line_thin" />
-    <tag k="subtype" v="solid" />
-  </way>
-  <relation id="300014" visible="true">
-    <member type="way" ref="200028" role="left" />
-    <member type="way" ref="200029" role="right" />
-    <tag k="type" v="lanelet" />
-    <tag k="subtype" v="road" />
-    <tag k="location" v="urban" />
-    <tag k="one_way" v="yes" />
-    <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="7" />
-  </relation>
-  <way id="200030" visible="true">
-    <nd ref="100280" />
-    <nd ref="100278" />
     <nd ref="100276" />
     <nd ref="100274" />
     <nd ref="100272" />
@@ -2127,9 +2088,7 @@
     <tag k="type" v="line_thin" />
     <tag k="subtype" v="solid" />
   </way>
-  <way id="200031" visible="true">
-    <nd ref="100281" />
-    <nd ref="100279" />
+  <way id="200027" visible="true">
     <nd ref="100277" />
     <nd ref="100275" />
     <nd ref="100273" />
@@ -2142,17 +2101,53 @@
     <tag k="type" v="line_thin" />
     <tag k="subtype" v="solid" />
   </way>
-  <relation id="300015" visible="true">
-    <member type="way" ref="200030" role="left" />
-    <member type="way" ref="200031" role="right" />
+  <relation id="300013" visible="true">
+    <member type="way" ref="200026" role="left" />
+    <member type="way" ref="200027" role="right" />
     <tag k="type" v="lanelet" />
     <tag k="subtype" v="road" />
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="7" />
+    <tag k="speed_limit" v="5" />
+    <tag k="turn_direction" v="right" />
   </relation>
-  <way id="200032" visible="true">
+  <way id="200028" visible="true">
+    <nd ref="100290" />
+    <nd ref="100288" />
+    <nd ref="100286" />
+    <nd ref="100284" />
+    <nd ref="100282" />
+    <nd ref="100280" />
+    <nd ref="100278" />
+    <nd ref="100276" />
+    <tag k="type" v="line_thin" />
+    <tag k="subtype" v="solid" />
+  </way>
+  <way id="200029" visible="true">
+    <nd ref="100291" />
+    <nd ref="100289" />
+    <nd ref="100287" />
+    <nd ref="100285" />
+    <nd ref="100283" />
+    <nd ref="100281" />
+    <nd ref="100279" />
+    <nd ref="100277" />
+    <tag k="type" v="line_thin" />
+    <tag k="subtype" v="solid" />
+  </way>
+  <relation id="300014" visible="true">
+    <member type="way" ref="200028" role="left" />
+    <member type="way" ref="200029" role="right" />
+    <tag k="type" v="lanelet" />
+    <tag k="subtype" v="road" />
+    <tag k="location" v="urban" />
+    <tag k="one_way" v="yes" />
+    <tag k="participant:vehicle" v="yes" />
+    <tag k="speed_limit" v="5" />
+    <tag k="turn_direction" v="right" />
+  </relation>
+  <way id="200030" visible="true">
     <nd ref="100000" />
     <nd ref="100302" />
     <nd ref="100300" />
@@ -2161,15 +2156,10 @@
     <nd ref="100294" />
     <nd ref="100292" />
     <nd ref="100290" />
-    <nd ref="100288" />
-    <nd ref="100286" />
-    <nd ref="100284" />
-    <nd ref="100282" />
-    <nd ref="100280" />
     <tag k="type" v="line_thin" />
     <tag k="subtype" v="solid" />
   </way>
-  <way id="200033" visible="true">
+  <way id="200031" visible="true">
     <nd ref="100001" />
     <nd ref="100303" />
     <nd ref="100301" />
@@ -2178,22 +2168,17 @@
     <nd ref="100295" />
     <nd ref="100293" />
     <nd ref="100291" />
-    <nd ref="100289" />
-    <nd ref="100287" />
-    <nd ref="100285" />
-    <nd ref="100283" />
-    <nd ref="100281" />
     <tag k="type" v="line_thin" />
     <tag k="subtype" v="solid" />
   </way>
-  <relation id="300016" visible="true">
-    <member type="way" ref="200032" role="left" />
-    <member type="way" ref="200033" role="right" />
+  <relation id="300015" visible="true">
+    <member type="way" ref="200030" role="left" />
+    <member type="way" ref="200031" role="right" />
     <tag k="type" v="lanelet" />
     <tag k="subtype" v="road" />
     <tag k="location" v="urban" />
     <tag k="one_way" v="yes" />
     <tag k="participant:vehicle" v="yes" />
-    <tag k="speed_limit" v="7" />
+    <tag k="speed_limit" v="5" />
   </relation>
 </osm>
