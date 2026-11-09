@@ -1,0 +1,197 @@
+# Host configuration tracked in the repo: the allow-list.
+#
+#   just host diff            this machine (config/host) against the tree
+#   just host diff --orin     the orin, read over ssh, against THIS tree
+#   just host capture         live -> tree, for entries listed here only
+#   ./setup.sh --only host-config   tree -> live (restore)
+#
+# The tree beside this file mirrors absolute target paths:
+#   <common|master|orin>/<target path>
+# common/ is installed on both roles; master/ and orin/ on that role only.
+#
+# Nothing is captured that is not listed here. Personal and lab profiles on the
+# same machines (VPNs, phones, home Wi-Fi, docker0, l4tbr0) are deliberately
+# absent, and `capture` refuses a target that is not in this file.
+#
+# Fields, per file:
+#   repo     path under setup/host/ (must mirror target)
+#   target   absolute path on the host
+#   roles    master | orin | both
+#   mode     octal; owner  user:group
+#   reload   once each after a run that changed something:
+#              nmcli-reload | udev-reload | sysctl | networkd-reload |
+#              systemd-daemon-reload | enable:<unit> | restart:<unit> | none
+#   strip    strip profile applied on capture and before comparing (secrets)
+#   step     setup step that owns the entry (default host-config). Owning
+#            steps install their subset with `hostcfg.py install --step <id>`;
+#            host-config installs everything with restore: true regardless.
+#   restore  false: host-config leaves it to its step, which must do more
+#            than copy a file first (kernel modules, a vendor blob)
+#   legacy   older filenames on a live host; read when the target is absent,
+#            removed by install once the target is written
+
+strip_profiles:
+  nmconnection:
+    # Dropped whole: VPN credentials.
+    sections: [vpn-secrets]
+    # Dropped keys, in any section, 802-1x included. fnmatch patterns.
+    keys:
+      - psk
+      - password
+      - password-raw
+      - "*-password"
+      - "*-password-raw"
+      - "wep-key*"
+      - "private-key*"
+      - "*-private-key*"
+      - preshared-key
+      - pin
+    # Never dropped: these say who holds a secret, not what it is.
+    keep: ["*-flags", wep-key-type]
+    # Rewritten by NetworkManager on every activation; noise in a diff.
+    # uuid stays: it is what `nmcli connection up <uuid>` and other profiles'
+    # master= references use.
+    volatile: [timestamp]
+
+files:
+  # ---- both hosts ---------------------------------------------------------
+  - repo: common/etc/sysctl.d/99-cyclonedds-max.conf
+    target: /etc/sysctl.d/99-cyclonedds-max.conf
+    roles: [master, orin]
+    reload: [sysctl]
+    step: cyclonedds-sysctl
+
+  # ---- master (Advantech) -------------------------------------------------
+  - repo: master/etc/NetworkManager/system-connections/dhcp.nmconnection
+    target: /etc/NetworkManager/system-connections/dhcp.nmconnection
+    roles: [master]
+    mode: "0600"
+    reload: [nmcli-reload]
+    strip: nmconnection
+    why: >-
+      "4G LAN" on enP5p3s0 (by MAC), DHCP. The .100 address is a reservation
+      on the 4G router, not set here: see docs/hardware.md, "4G router".
+  - repo: master/etc/NetworkManager/system-connections/velodyne-vlp32c.nmconnection
+    target: /etc/NetworkManager/system-connections/velodyne-vlp32c.nmconnection
+    roles: [master]
+    mode: "0600"
+    reload: [nmcli-reload]
+    strip: nmconnection
+    step: hardware-config
+  - repo: master/etc/NetworkManager/system-connections/seyond-falcon-l.nmconnection
+    target: /etc/NetworkManager/system-connections/seyond-falcon-l.nmconnection
+    roles: [master]
+    mode: "0600"
+    reload: [nmcli-reload]
+    strip: nmconnection
+    step: hardware-config
+    # Created by hand before the template existed; same id and MAC.
+    legacy: ["/etc/NetworkManager/system-connections/falcon k lidar.nmconnection"]
+  - repo: master/etc/systemd/network/80-can0.network
+    target: /etc/systemd/network/80-can0.network
+    roles: [master]
+    reload: [networkd-reload]
+    step: hardware-config
+  - repo: master/etc/systemd/network/80-can1.network
+    target: /etc/systemd/network/80-can1.network
+    roles: [master]
+    reload: [networkd-reload]
+    step: hardware-config
+  - repo: master/etc/modules-load.d/can.conf
+    target: /etc/modules-load.d/can.conf
+    roles: [master]
+    step: hardware-config
+  - repo: master/etc/linuxptp/ptp4l.conf
+    target: /etc/linuxptp/ptp4l.conf
+    roles: [master]
+    step: linuxptp
+  - repo: master/etc/systemd/system/ptp4l.service
+    target: /etc/systemd/system/ptp4l.service
+    roles: [master]
+    reload: [systemd-daemon-reload]
+    step: linuxptp
+  - repo: master/etc/systemd/system/phc2sys.service
+    target: /etc/systemd/system/phc2sys.service
+    roles: [master]
+    reload: [systemd-daemon-reload]
+    step: linuxptp
+  - repo: master/etc/chrony/conf.d/golfcart-master.conf
+    target: /etc/chrony/conf.d/golfcart-master.conf
+    roles: [master]
+    step: chrony-master
+  - repo: master/etc/udev/rules.d/99-ublox-gps.rules
+    target: /etc/udev/rules.d/99-ublox-gps.rules
+    roles: [master]
+    reload: [udev-reload]
+    step: ublox-udev
+  - repo: master/etc/udev/rules.d/99-tier4-camera.rules
+    target: /etc/udev/rules.d/99-tier4-camera.rules
+    roles: [master]
+    reload: [udev-reload]
+    step: tier4-camera
+  - repo: master/etc/modprobe.d/otocam.conf
+    target: /etc/modprobe.d/otocam.conf
+    roles: [master]
+    step: otocam
+    restore: false
+    why: Blacklists modules the otocam step installs from a vendor blob.
+  - repo: master/etc/systemd/system/otocam.service
+    target: /etc/systemd/system/otocam.service
+    roles: [master]
+    step: otocam
+    restore: false
+    why: Loads the vendor kernel modules; fails every boot without them.
+
+  # ---- orin ---------------------------------------------------------------
+  - repo: orin/etc/NetworkManager/system-connections/Wired connection 1.nmconnection
+    target: /etc/NetworkManager/system-connections/Wired connection 1.nmconnection
+    roles: [orin]
+    mode: "0600"
+    reload: [nmcli-reload]
+    strip: nmconnection
+    why: >-
+      "4G router" on eno1, DHCP; .101 is a router reservation. Root-only on
+      the orin, whose sudo needs a password: capture by hand there with
+      `sudo python3 setup/golfcart_setup/hostcfg.py capture`.
+  - repo: orin/etc/chrony/sources.d/golfcart-orin.sources
+    target: /etc/chrony/sources.d/golfcart-orin.sources
+    roles: [orin]
+    step: chrony-orin
+  - repo: orin/etc/udev/rules.d/99-imu.rules
+    target: /etc/udev/rules.d/99-imu.rules
+    roles: [orin]
+    reload: [udev-reload]
+  - repo: orin/etc/udev/rules.d/99-slabs.rules
+    target: /etc/udev/rules.d/99-slabs.rules
+    roles: [orin]
+    reload: [udev-reload]
+    why: Stereolabs (ZED) USB/HID/I2C permissions, from the ZED SDK installer.
+
+# Lines in files that are not ours as a whole. Ensure-line: exactly one line
+# matches `match`, and it equals `line` (whitespace-insensitive).
+lines:
+  - target: /etc/fstab
+    roles: [master]
+    match: '^\S+\s+/mnt/external\s'
+    line: "UUID=0658e8d7-dc92-4022-98db-1a13d907acba\t/mnt/external\text4\tauto,nofail,defaults,noatime,x-systemd.device-timeout=3s"
+    reload: [systemd-daemon-reload]
+    why: >-
+      The SSD holding the checkout, bags and maps. nofail + a 3 s device
+      timeout so a missing SSD does not drop the boot into emergency mode. A
+      replacement SSD has a new UUID: edit this line.
+
+# Written by a script, not copied: the script is the source. Listed so diff
+# reports whether it is there.
+generated:
+  - target: /etc/systemd/system/golfcart-can0.service
+    roles: [orin]
+    by: scripts/hardware/can/setup-orin-can0.sh (step orin-can0)
+    step: orin-can0
+
+# Units that must be off for a role. install disables and stops them.
+units_disabled:
+  - units: [ptp4l.service, phc2sys.service]
+    roles: [orin]
+    why: >-
+      linuxptp is the master's (its units are bound to enP5p5s0, which the
+      orin does not have); on the orin they only ever fail.

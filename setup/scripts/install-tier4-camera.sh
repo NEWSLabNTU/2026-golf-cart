@@ -38,19 +38,11 @@ else
     exit 1
 fi
 
-# Install udev rules template
+# Install the udev rules: setup/host/master/etc/udev/rules.d/99-tier4-camera.rules,
+# the master's file with its real port paths (manifest step: tier4-camera).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RULES_SRC="${SCRIPT_DIR}/../files/99-tier4-camera.rules"
-
-if [[ -f "$RULES_SRC" ]]; then
-    printf "${YELLOW}→${NC} Installing udev rules template...\n"
-    sudo cp "$RULES_SRC" /etc/udev/rules.d/99-tier4-camera.rules
-    sudo chmod 644 /etc/udev/rules.d/99-tier4-camera.rules
-    sudo udevadm control --reload-rules
-    printf "${GREEN}✓${NC} udev rules template installed\n"
-else
-    printf "${YELLOW}⚠${NC} udev rules template not found at ${RULES_SRC}, skipping\n"
-fi
+printf "${YELLOW}→${NC} Installing udev rules...\n"
+python3 "${SCRIPT_DIR}/../golfcart_setup/hostcfg.py" install --step tier4-camera
 
 printf "${GREEN}✓${NC} TIER IV C1 camera driver installation complete\n"
 printf "\n"
@@ -61,4 +53,5 @@ printf "  3. Edit /etc/udev/rules.d/99-tier4-camera.rules with actual port paths
 printf "  4. Reload: sudo udevadm control --reload-rules && sudo udevadm trigger\n"
 printf "  5. Verify: ls -la /dev/tier4-cam-*\n"
 printf "\n"
-printf "See setup/files/99-tier4-camera.rules for detailed instructions.\n"
+printf "See setup/host/master/etc/udev/rules.d/99-tier4-camera.rules for detailed instructions,\n"
+printf "and capture the edited file back with: just host capture\n"

@@ -1,7 +1,7 @@
 [Unit]
-Descriptions=Synchronize system clock or PTP hardware clock (PHC)
+Description=Synchronize system clock or PTP hardware clock (PHC)
 Documentation=man:phc2sys
-After=ntpdate.service
+After=chrony.service
 Wants=ptp4l.service
 After=ptp4l.service
 
@@ -11,4 +11,3 @@ ExecStart=/usr/sbin/phc2sys -s CLOCK_REALTIME -c enP5p5s0 -O 0 -E linreg
 
 [Install]
 WantedBy=multi-user.target
-

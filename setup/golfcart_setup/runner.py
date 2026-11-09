@@ -10,7 +10,7 @@ import subprocess
 import sys
 import time
 
-from .model import REPO_ROOT, Machine, Step
+from .model import REPO_ROOT, Machine, Step, read_host_role, write_host_role
 from .state import FAILED, OK, State
 
 
@@ -76,3 +76,28 @@ class Runner:
                         "completed steps will be skipped.")
                     break
         return failures
+
+
+def apply_role(role: str | None, state: State, log=print) -> None:
+    """Write config/host for `--role`, once the run is really going ahead.
+
+    Never on a dry run and never before the user has confirmed: until then the
+    role only shapes the selection. When `--force-role` changes the value, the
+    role-specific steps' state is forgotten, because what they installed (units
+    for the old role, the other half of chrony) belongs to the old one.
+    The conflict check itself is model.check_role, done before anything else.
+    """
+    if not role:
+        return
+    from .registry import STEPS          # registry imports model; keep it lazy
+
+    previous = read_host_role()
+    if not write_host_role(role):
+        log(f"config/host: {role} (unchanged)")
+        return
+    log(f"config/host: {role}" + (f" (was {previous})" if previous else " (written)"))
+    if previous and previous != role:
+        for step in STEPS:
+            if step.roles:
+                state.forget(step.id)
+        state.save()

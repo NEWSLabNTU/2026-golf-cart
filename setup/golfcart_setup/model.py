@@ -24,6 +24,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SETUP_DIR = REPO_ROOT / "setup"
 SCRIPTS_DIR = SETUP_DIR / "scripts"
 FILES_DIR = SETUP_DIR / "files"
+# Host configuration mirrored from /etc: setup/host/manifest.yaml + the tree.
+HOST_DIR = SETUP_DIR / "host"
 HARDWARE_DIR = REPO_ROOT / "scripts" / "hardware"
 
 # `all` and `none` are computed rather than declared per step, so a new step
@@ -46,6 +48,22 @@ PROFILE_HELP = {
 # per-board profile meant maintaining a third column that only ever differed
 # from `dev` by whether hardware happened to be plugged in.
 RETIRED_PROFILES = {"laptop": "dev", "orin": "dev"}
+
+# Which machine of the two-host pair this checkout is. Written to config/host by
+# `./setup.sh --role`, read by scripts/env.sh (DDS profile, domain ids) and by the
+# systemd unit installer. A role is not a profile: it adds the few steps that
+# belong to exactly one machine (see Step.roles) and drops the ones that belong
+# to the other (Requires.role), on top of whatever profile was picked.
+ROLES = ("master", "orin")
+HOST_FILE = REPO_ROOT / "config" / "host"
+
+# The profile `--role` implies when no --profile is given: both hosts are the
+# vehicle, so both want the sensor and bus configuration.
+ROLE_PROFILE = "vehicle"
+
+# Profiles a role adds its own steps to. `none` means nothing preselected and
+# `ci` is a headless build box; neither should grow systemd units.
+ROLE_ADDS_TO = ("dev", "vehicle", "all")
 
 # How a step's recorded state is spelled, everywhere it is shown. The menu also
 # offers a tick box, and the two answer different questions -- "run this now?"
@@ -79,6 +97,10 @@ class Requires:
     arch: tuple[str, ...] = ()          # empty means any
     hardware: str | None = None
     reboot: bool = False
+    # Host roles (config/host) this step means anything on; empty means any.
+    # Like `hardware` it annotates, never blocks -- but once a role is known,
+    # a step for the other role also drops out of the preset's selection.
+    role: tuple[str, ...] = ()
 
 
 @dataclass
@@ -92,12 +114,28 @@ class Step:
     group: str = "Core"
     after: tuple[str, ...] = ()          # ordering only, not auto-selection
     note: str = ""                       # printed after a successful run
+    roles: tuple[str, ...] = ()          # roles that select it, whatever the profile
+    # Repo files or directories whose contents the step installs. Hashed into
+    # the digest like a script in `run`, so an edited config file under
+    # setup/host shows the step as stale.
+    inputs: tuple[str, ...] = ()
 
-    def default_for(self, profile: str) -> bool:
+    def default_for(self, profile: str, role: str | None = None) -> bool:
+        """Is this step ticked by `profile` on a host playing `role`?
+
+        Without a role this is the profile alone, exactly as before roles
+        existed. With one, the role's own steps are added (unless the profile
+        is `none` or `ci`) and steps meant only for the other role are removed,
+        so `--role orin` does not install the master's LiDAR NIC profiles.
+        """
+        if role is not None and self.requires.role and role not in self.requires.role:
+            return False
         if profile == "all":
             return True
         if profile == "none":
             return False
+        if role is not None and role in self.roles and profile in ROLE_ADDS_TO:
+            return True
         return self.profiles.get(profile, False)
 
     def digest(self) -> str:
@@ -123,16 +161,32 @@ class Step:
                 in_repo = False
             if in_repo and candidate.is_file():
                 h.update(candidate.read_bytes())
+        for item in self.inputs:
+            path = Path(item)
+            files = sorted(p for p in path.rglob("*") if p.is_file()) \
+                if path.is_dir() else [path]
+            for f in files:
+                try:
+                    name = str(f.relative_to(REPO_ROOT))
+                except ValueError:
+                    name = str(f)
+                h.update(name.encode())
+                h.update(b"\0")
+                h.update(f.read_bytes() if f.is_file() else b"<missing>")
         return h.hexdigest()[:12]
 
 
 class Machine:
     """Detected facts about this host, cached for the process lifetime."""
 
-    def __init__(self) -> None:
+    def __init__(self, role: str | None = None) -> None:
         self.arch = platform.machine()
         self.is_jetson = Path("/etc/nv_tegra_release").exists()
+        # What config/host says now, and the role this run is for: `--role`
+        # when given (config/host may not be written yet -- a dry run never
+        # writes it), else config/host when it names a real role.
         self.host_role = self._host_role()
+        self.role = role or (self.host_role if self.host_role in ROLES else None)
         self.os_release = self._os_release()
         self._caps: dict[str, bool] = {}
 
@@ -185,13 +239,7 @@ class Machine:
 
     @staticmethod
     def _host_role() -> str | None:
-        # config/host is gitignored and says which machine this checkout is.
-        path = REPO_ROOT / "config" / "host"
-        if path.is_file():
-            value = path.read_text().strip()
-            if value:
-                return value
-        return None
+        return read_host_role()
 
     def has(self, capability: str) -> bool:
         if capability not in self._caps:
@@ -234,14 +282,76 @@ class Machine:
         """
         if self.has("can") or self.has("ublox-gnss") or self.has("tier4-camera"):
             return "vehicle"
-        if self.host_role in {"master", "orin"}:
-            return "vehicle"
+        if self.role in ROLES:
+            return ROLE_PROFILE
         return "dev"
 
     def applicable(self, step: Step) -> tuple[bool, str]:
         req = step.requires
+        if req.role:
+            wanted = " or ".join(req.role)
+            if self.role is None:
+                return False, (f"{wanted} host only; no role set "
+                               f"(./setup.sh --role {'|'.join(ROLES)})")
+            if self.role not in req.role:
+                return False, f"{wanted} host only, this host is {self.role}"
         if req.arch and self.arch not in req.arch:
             return False, f"needs {' or '.join(req.arch)}, this host is {self.arch}"
         if req.hardware and not self.has(req.hardware):
             return False, f"{req.hardware} not detected"
         return True, ""
+
+
+# --------------------------------------------------------------------------
+# config/host
+# --------------------------------------------------------------------------
+def read_host_role(path: Path | None = None) -> str | None:
+    """config/host's word, whatever it is, or None when absent or empty.
+
+    Not validated here: scripts/env.sh accepts any name with a matching
+    config/cyclonedds/<name>.xml (`loopback` too), and the caller decides what
+    a value outside ROLES means for it.
+    """
+    path = path or HOST_FILE
+    if path.is_file():
+        value = path.read_text().strip()
+        if value:
+            return value
+    return None
+
+
+class RoleConflict(Exception):
+    """config/host already names a different machine."""
+
+
+def check_role(requested: str, force: bool, path: Path | None = None) -> str | None:
+    """Validate `--role` against config/host. Returns the previous value.
+
+    A checkout that is already the master must not quietly become the orin:
+    the role picks the DDS profile, the domain ids and what the units start,
+    and two masters on one LAN is a confusing afternoon. So a different value
+    refuses unless `--force-role`.
+    """
+    if requested not in ROLES:
+        raise ValueError(f"role must be one of {', '.join(ROLES)}, not {requested!r}")
+    current = read_host_role(path)
+    if current is not None and current != requested and not force:
+        raise RoleConflict(
+            f"config/host says '{current}', but --role {requested} was given.\n"
+            f"This checkout is already set up as '{current}'. If this machine "
+            f"really is the {requested}, re-run with --force-role: it rewrites "
+            f"config/host and forgets the role-specific steps' state "
+            f"(host-config, host-services, chrony-*, linuxptp, orin-can0) so "
+            f"they run again."
+        )
+    return current
+
+
+def write_host_role(role: str, path: Path | None = None) -> bool:
+    """Write config/host. Returns True when the file changed."""
+    path = path or HOST_FILE
+    if read_host_role(path) == role:
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(role + "\n")
+    return True

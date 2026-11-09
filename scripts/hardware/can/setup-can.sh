@@ -11,7 +11,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TEMPLATES="${SCRIPT_DIR}/templates"
+HOSTCFG="${SCRIPT_DIR}/../../../setup/golfcart_setup/hostcfg.py"
 
 if ! command -v candump >/dev/null 2>&1 || ! command -v canplayer >/dev/null 2>&1; then
   echo "Installing can-utils (candump/canplayer/cansend)..."
@@ -19,9 +19,11 @@ if ! command -v candump >/dev/null 2>&1 || ! command -v canplayer >/dev/null 2>&
   apt-get install -y can-utils
 fi
 
-install -m 0644 "${TEMPLATES}/can.conf"        /etc/modules-load.d/can.conf
-install -m 0644 "${TEMPLATES}/80-can0.network" /etc/systemd/network/80-can0.network
-install -m 0644 "${TEMPLATES}/80-can1.network" /etc/systemd/network/80-can1.network
+# The files live in setup/host/master/etc/ (setup/host/manifest.yaml).
+python3 "${HOSTCFG}" install --role master --no-reload \
+  --target /etc/modules-load.d/can.conf \
+  --target /etc/systemd/network/80-can0.network \
+  --target /etc/systemd/network/80-can1.network
 
 echo "Loading CAN modules now..."
 modprobe can

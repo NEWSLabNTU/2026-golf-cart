@@ -93,7 +93,7 @@ VCU_EXPECTED="${VCU_EXPECTED:-1}"
 CAN_HOST="${CAN_HOST:-orin}"
 
 # ── u-blox GNSS ────────────────────────────────────────────────────────────
-# The udev name from setup/files/99-ublox-gps.rules, which is what the driver
+# The udev name from setup/host/master/etc/udev/rules.d/99-ublox-gps.rules, which is what the driver
 # opens (golfcart_sensor_kit_launch/config/ublox_f9p.yaml). The ZED-F9P is USB
 # CDC, so the kernel node behind it is /dev/ttyACM*, never /dev/ttyUSB*.
 GNSS_DEV="${GNSS_DEV:-/dev/ublox-gps}"

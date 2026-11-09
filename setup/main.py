@@ -16,12 +16,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from golfcart_setup import checklist  # noqa: E402
 from golfcart_setup.model import (  # noqa: E402
-    OS_ERROR, OS_WARN, PROFILE_HELP, PROFILES, RETIRED_PROFILES, STATE_WORDS,
-    Machine,
+    OS_ERROR, OS_WARN, PROFILE_HELP, PROFILES, RETIRED_PROFILES, ROLE_PROFILE,
+    ROLES, STATE_WORDS, Machine, RoleConflict, check_role, write_host_role,
 )
 from golfcart_setup.registry import BY_ID, STEPS, ordered  # noqa: E402
-from golfcart_setup.runner import Runner  # noqa: E402
+from golfcart_setup.runner import Runner, apply_role  # noqa: E402
 from golfcart_setup.state import State  # noqa: E402
 
 COLOUR = {"ok": "32", "stale": "33", "failed": "31", "skipped": "90", "pending": "90"}
@@ -46,22 +47,33 @@ def _statuses(state: State) -> dict[str, str]:
     return {s.id: state.status_of(s.id, s.digest()) for s in STEPS}
 
 
+def _profile(args, machine: Machine) -> str:
+    """--profile, else what --role implies, else what the hardware suggests."""
+    if args.profile:
+        return args.profile
+    if args.role:
+        return ROLE_PROFILE
+    return machine.suggested_profile()
+
+
 def cmd_list(args) -> int:
-    machine = Machine()
+    machine = Machine(args.role)
     state = State()
     status = _statuses(state)
-    profile = args.profile or machine.suggested_profile()
+    profile = _profile(args, machine)
+    role = machine.role
     if args.json:
         import json
         print(json.dumps({
             "profile": profile,
+            "role": role,
             "arch": machine.arch,
             "jetson": machine.is_jetson,
             "steps": [
                 {
                     "id": s.id, "label": s.label, "group": s.group,
                     "status": status[s.id],
-                    "default": s.default_for(profile),
+                    "default": s.default_for(profile, role),
                     "applicable": machine.applicable(s)[0],
                     "reason": machine.applicable(s)[1],
                     "sudo": s.requires.sudo,
@@ -71,8 +83,8 @@ def cmd_list(args) -> int:
         }, indent=2))
         return 0
     group = None
-    print(f"Profile: {profile}   host: {machine.arch}"
-          f"{'  (jetson)' if machine.is_jetson else ''}\n")
+    print(f"Profile: {profile}   role: {_role_words(machine, args)}   "
+          f"host: {machine.arch}{'  (jetson)' if machine.is_jetson else ''}\n")
     width = shutil.get_terminal_size((100, 24)).columns
     right = max(len(w) for w in STATE_WORDS.values())
     print("  run?  step".ljust(width - right - 2) + "already installed?\n")
@@ -81,16 +93,44 @@ def cmd_list(args) -> int:
             group = step.group
             print(f"  {group}")
         ok, reason = machine.applicable(step)
-        default = "[x]" if step.default_for(profile) else "[ ]"
+        default = "[x]" if step.default_for(profile, role) else "[ ]"
         note = "" if ok else f"   ({reason})"
         left = f"   {default}  {step.id:<20} {step.label}{note}"
         word = _state(status[step.id])
         pad = max(1, width - right - 2 - len(left))
         print(left + " " * pad + _paint(status[step.id], word.rjust(right))
               if word else left)
-    print(f"\n  [x] is what profile '{profile}' selects; the right-hand column "
-          f"is what is already installed.")
+    print(f"\n  [x] is what profile '{profile}'"
+          f"{f' plus role {role!r}' if role else ''} selects; the right-hand "
+          f"column is what is already installed.")
     return 0
+
+
+def _role_words(machine: Machine, args) -> str:
+    if args.role:
+        on_file = machine.host_role
+        return (f"{args.role} (--role; config/host "
+                f"{'already says so' if on_file == args.role else 'not written yet'})")
+    if machine.role:
+        return f"{machine.role} (config/host)"
+    if machine.host_role:
+        return f"none (config/host says {machine.host_role!r})"
+    return "none (no config/host)"
+
+
+def print_checklist(role: str | None = None, as_json: bool = False) -> int:
+    """The hand-work checklist. Returns the number of outstanding items."""
+    used, items = checklist.run_checks(role)
+    if as_json:
+        import json
+        print(json.dumps(checklist.as_json(used, items), indent=2))
+    else:
+        print(checklist.render(used, items, colour=sys.stdout.isatty()))
+    return sum(1 for i in items if not i.ok)
+
+
+def cmd_checklist(args) -> int:
+    return 1 if print_checklist(args.role, as_json=args.json) else 0
 
 
 def cmd_status(args) -> int:
@@ -120,7 +160,9 @@ def cmd_status(args) -> int:
         print(f"  {step.id:<20} {painted} {when}{extra}")
     print("\n  " + "   ".join(
         f"{STATE_WORDS[k] or 'not run'}: {v}" for k, v in sorted(counts.items())))
-    print(f"  state file: {state.path}")
+    print(f"  state file: {state.path}\n")
+    # The other half of "is this machine ready": what no step can do.
+    print_checklist(args.role)
     return 0
 
 
@@ -144,11 +186,11 @@ def _select(args, machine: Machine, state: State) -> list:
     if args.only:
         return ordered(_known(args.only, "--only") - skip)
 
-    profile = args.profile or machine.suggested_profile()
+    profile = _profile(args, machine)
     status = _statuses(state)
     chosen = set()
     for step in STEPS:
-        if not (args.all or step.default_for(profile)):
+        if not (args.all or step.default_for(profile, machine.role)):
             continue
         if not args.force and status[step.id] == "ok":
             continue
@@ -174,8 +216,23 @@ def check_os(machine: Machine, args) -> int | None:
     return None
 
 
+def resolve_role(args) -> int | None:
+    """Check --role against config/host. None to continue, or an exit code."""
+    if not args.role:
+        return None
+    try:
+        check_role(args.role, args.force_role)
+    except RoleConflict as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    return None
+
+
 def cmd_run(args) -> int:
-    machine = Machine()
+    refused = resolve_role(args)
+    if refused is not None:
+        return refused
+    machine = Machine(args.role)
     state = State()
     refused = check_os(machine, args)
     if refused is not None:
@@ -185,11 +242,26 @@ def cmd_run(args) -> int:
         print(f"Imported {imported} completed steps from the old .markers/ "
               f"directory; those will not be reinstalled.\n")
 
+    role_written = False
+    if args.role and args.force_role and not args.dry_run:
+        # A role change forgets state, which changes the selection: apply it
+        # before selecting. Without --force-role the role cannot change, so
+        # writing it can wait until the run is confirmed.
+        apply_role(args.role, state)
+        role_written = True
+
     steps = _select(args, machine, state)
     if not steps:
+        if args.json and args.dry_run:
+            print("[]")
+            return 0
         print("Nothing to do: the selection is empty -- already done, "
               "or subtracted by --skip.")
-        print("Use --force to re-run, or --only <step> to pick one.")
+        print("Use --force to re-run, or --only <step> to pick one.\n")
+        if not args.dry_run:
+            if not role_written:
+                apply_role(args.role, state)
+            print_checklist(machine.role)
         return 0
 
     if args.json:
@@ -205,8 +277,9 @@ def cmd_run(args) -> int:
         return 0
 
     profile = "--only" if args.only else ("all" if args.all
-                                          else args.profile or machine.suggested_profile())
-    print(f"Profile: {profile}   {len(steps)} step(s) to run\n")
+                                          else _profile(args, machine))
+    print(f"Profile: {profile}   role: {_role_words(machine, args)}   "
+          f"{len(steps)} step(s) to run\n")
     for step in steps:
         ok, reason = machine.applicable(step)
         flag = "" if ok else f"   ({reason} -- selected anyway)"
@@ -224,15 +297,20 @@ def cmd_run(args) -> int:
             return 0
         print()
 
+    # Before any step: host-services reads the role from config/host.
+    if not role_written:
+        apply_role(args.role, state)
+
     failures = Runner(state, machine).run_all(
         steps, stop_on_error=not args.keep_going)
     print()
     if failures:
         print(f"{failures} step(s) failed. Re-run to resume; "
-              f"completed steps are skipped.")
-        return 1
-    print("Setup complete.")
-    return 0
+              f"completed steps are skipped.\n")
+    else:
+        print("Setup complete.\n")
+    print_checklist(machine.role)
+    return 1 if failures else 0
 
 
 def cmd_rerun(args) -> int:
@@ -250,6 +328,9 @@ def cmd_rerun(args) -> int:
 
 
 def cmd_menu(args) -> int:
+    refused = resolve_role(args)
+    if refused is not None:
+        return refused
     from golfcart_setup.menu import run_menu
     return run_menu(args)
 
@@ -301,6 +382,12 @@ def main(argv=None) -> int:
             f"  {name:<9} {PROFILE_HELP[name]}" for name in PROFILES
         ) + """
 
+Two-host install (one command per machine, then `just service pair` on the master):
+  setup.sh --role master                     menu, seeded with vehicle + master steps
+  setup.sh --run --role orin -y              the same, unattended, on the orin
+  setup.sh --status                          steps, then what is still to do by hand
+  setup.sh --checklist [--json]              only the hand-work checklist; exit 1 if any
+
 Unattended:
   setup.sh --run --profile vehicle --yes     the profile's steps, no prompts
   setup.sh --run --all --skip tensorrt-engines opencv
@@ -311,6 +398,15 @@ Unattended:
     )
     ap.add_argument("--profile", choices=PROFILES,
                     help="preset selection; asked for, or detected, if omitted")
+    ap.add_argument("--role", choices=ROLES,
+                    help="which machine of the pair this is: writes config/host "
+                         "and adds that role's steps (host-config, chrony, "
+                         "linuxptp, orin-can0, host-services); implies "
+                         "--profile vehicle")
+    ap.add_argument("--force-role", action="store_true",
+                    help="let --role replace a different value in config/host")
+    ap.add_argument("--checklist", action="store_true",
+                    help="only the still-to-do-by-hand checklist; exit 1 if any")
     ap.add_argument("--only", nargs="+", metavar="STEP",
                     help="run exactly these steps")
     ap.add_argument("--rerun", nargs="+", metavar="STEP",
@@ -340,8 +436,12 @@ Unattended:
     args = ap.parse_args(_rename_profile(_accept_old_forms(
         list(argv) if argv is not None else sys.argv[1:])))
 
+    if args.force_role and not args.role:
+        ap.error("--force-role needs --role")
     if args.list:
         return cmd_list(args)
+    if args.checklist:
+        return cmd_checklist(args)
     if args.status:
         return cmd_status(args)
     if args.rerun:
@@ -357,7 +457,7 @@ Unattended:
     if not sys.stdin.isatty():
         # No terminal to draw a menu on. Say which flag was wanted rather than
         # failing somewhere less obvious.
-        print("No terminal: use --run (optionally with --profile/--only) "
+        print("No terminal: use --run (optionally with --role/--profile/--only) "
               "for an unattended install.", file=sys.stderr)
         return 2
     # A bare --profile still opens the menu: it answers the preset screen and

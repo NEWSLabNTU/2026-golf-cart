@@ -1,0 +1,16 @@
+[connection]
+id=4G LAN
+uuid=bced243d-52ae-49c2-b0d5-743328c6ddaa
+type=ethernet
+
+[ethernet]
+mac-address=74:FE:48:B3:B1:12
+
+[ipv4]
+method=auto
+
+[ipv6]
+addr-gen-mode=stable-privacy
+method=auto
+
+[proxy]

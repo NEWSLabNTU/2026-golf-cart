@@ -1,0 +1,12 @@
+[Match]
+Name=can0
+
+[CAN]
+BitRate=500000
+SamplePoint=82.5%
+RestartSec=50ms
+
+[Link]
+# CAN has no L3 address, so it can never reach an "online" operstate.
+# Without this, systemd-networkd-wait-online blocks for its full timeout.
+RequiredForOnline=no

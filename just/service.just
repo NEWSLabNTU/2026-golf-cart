@@ -13,10 +13,24 @@ set working-directory := '..'
 default:
     @just --list service
 
-# Provision the orin over ssh (may prompt for its password and sudo).
+# The two-host install is `./setup.sh --role master` here, `./setup.sh --role
+# orin` there, then `just service pair` here. pair installs the ssh key if
+# needed (one password prompt), verifies the orin's checkout, config/host and
+# units - printing what to run ON THE ORIN for each miss, and offering to run
+# the orin's setup over ssh behind a y/N - compares commits, then runs the setup
+# checklist and doctor on both hosts. It supersedes running ssh-setup and
+# install-orin by hand; both stay for doing one part alone.
+
+# Pair with the orin, once, on the master: ssh key, orin checks, checklists, doctor. --check: read-only
+pair *ARGS:
+    @./scripts/multi_machine/pair.sh {{ARGS}}
+
+# Install the orin's units over ssh only (prefer: ./setup.sh --role orin there, or just service pair)
 install-orin:
     # Runs before key-based ssh necessarily exists, and lingering needs the
     # orin's sudo - hence the tty. Every other remote call is BatchMode=yes.
+    # Kept for re-installing units alone; `./setup.sh --role orin` on the orin
+    # does this as its host-services step, and `just service pair` checks it.
     ./scripts/multi_machine/on_orin.sh --tty just service install orin
 
 # Unit states on both hosts.
@@ -26,7 +40,7 @@ status:
     ./scripts/multi_machine/on_orin.sh just service host-status \
         || echo "orin: unreachable" >&2
 
-# Generate an ssh key if needed and copy it to the orin (one password prompt).
+# Generate an ssh key if needed and copy it to the orin (one password prompt; `pair` does this too).
 ssh-setup DEST="":
     ./scripts/multi_machine/setup_ssh.sh {{DEST}}
 
@@ -62,7 +76,7 @@ doctor:
 doctor-orin:
     ./scripts/multi_machine/on_orin.sh ./scripts/doctor.sh
 
-# Install this host's systemd user units. ROLE: master or orin.
+# Install this host's systemd user units. ROLE: master or orin (setup's host-services step does this).
 install ROLE:
     ./setup/scripts/install-host-service.sh {{ROLE}}
 

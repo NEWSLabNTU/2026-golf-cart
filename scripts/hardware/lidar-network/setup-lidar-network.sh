@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Install NetworkManager profiles for LiDAR ethernet interfaces.
-# Bound by MAC address — edit templates if hardware MAC differs per box.
+# Bound by MAC address. The profiles are setup/host/master/etc/NetworkManager/
+# system-connections/*.nmconnection; edit them there (or `just host capture`).
 # Velodyne VLP-32C  : 192.168.7.1/24  (currently enP5p4s0)
 # Seyond Falcon L   : 172.168.1.1/24  (currently enP5p5s0)
 
@@ -12,16 +13,14 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TEMPLATES="${SCRIPT_DIR}/templates"
+HOSTCFG="${SCRIPT_DIR}/../../../setup/golfcart_setup/hostcfg.py"
 TARGET_DIR="/etc/NetworkManager/system-connections"
 
-for f in velodyne-vlp32c.nmconnection seyond-falcon-l.nmconnection; do
-  echo "Installing ${f}..."
-  install -m 0600 -o root -g root "${TEMPLATES}/${f}" "${TARGET_DIR}/${f}"
-done
-
-echo "Reloading NetworkManager..."
-nmcli connection reload
+# Installs and reloads NetworkManager if anything changed. A profile still
+# under its old hand-made name ("falcon k lidar") is replaced, not duplicated.
+python3 "${HOSTCFG}" install --role master \
+  --target "${TARGET_DIR}/velodyne-vlp32c.nmconnection" \
+  --target "${TARGET_DIR}/seyond-falcon-l.nmconnection"
 
 echo
 echo "Done. Verify with:"

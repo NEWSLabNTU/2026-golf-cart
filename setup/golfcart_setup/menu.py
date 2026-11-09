@@ -52,10 +52,11 @@ Row = tuple[str, Union[str, Step]]
 class Selection:
     """Which steps are ticked, and the preset that seeded them."""
 
-    def __init__(self, state: State, preset: str) -> None:
+    def __init__(self, state: State, preset: str, role: str | None = None) -> None:
         self.state = state
         self.status = {s.id: state.status_of(s.id, s.digest()) for s in STEPS}
         self.preset = preset
+        self.role = role
         self.ticked: dict[str, bool] = {}
         self.apply(preset)
 
@@ -69,7 +70,7 @@ class Selection:
         """
         self.preset = preset
         for step in STEPS:
-            want = step.default_for(preset)
+            want = step.default_for(preset, self.role)
             if want and preset != "all" and self.status[step.id] == "ok":
                 want = False
             self.ticked[step.id] = want
@@ -127,6 +128,8 @@ def _init_colours() -> None:
 # --------------------------------------------------------------------------
 def choose_preset(stdscr, machine: Machine, suggested: str,
                   current: str | None = None) -> str | None:
+    # With a role (--role or config/host) the counts include its steps, and
+    # `suggested` is already `vehicle`: the role preselects the preset.
     """Pick a preset. Returns the name, or None if the user quit.
 
     Asked before the list rather than beside it: a preset decides most of the
@@ -145,13 +148,16 @@ def choose_preset(stdscr, machine: Machine, suggested: str,
                  _colour(C_BAD if status == OS_ERROR else C_WARN))
             row += 2
         _put(stdscr, row, 1, "Start from which preset?", curses.A_BOLD)
+        if machine.role:
+            _put(stdscr, row, 26, f"role {machine.role} adds: " + ", ".join(
+                s.id for s in STEPS if machine.role in s.roles), _colour(C_DIM))
         row += 2
         for i, name in enumerate(PROFILES):
             selected = i == index
             _put(stdscr, row, 1, ">" if selected else " ", _colour(C_HEAD, bold=True))
             _put(stdscr, row, 3, f"{name:<9}",
                  curses.A_REVERSE if selected else curses.A_BOLD)
-            count = sum(1 for s in STEPS if s.default_for(name))
+            count = sum(1 for s in STEPS if s.default_for(name, machine.role))
             _put(stdscr, row, 13, f"{count:2d} steps", _colour(C_DIM))
             row += 1
         row += 1
@@ -199,8 +205,8 @@ def choose_steps(stdscr, machine: Machine, sel: Selection) -> list[Step] | None:
         stdscr.erase()
         ticked = sum(1 for v in sel.ticked.values() if v)
         _put(stdscr, 0, 1, "Golf cart setup", _colour(C_HEAD, bold=True))
-        _put(stdscr, 0, 20, f"preset: {sel.preset}   {ticked} of {len(STEPS)} ticked",
-             _colour(C_DIM))
+        _put(stdscr, 0, 20, f"preset: {sel.preset}   role: {sel.role or 'none'}   "
+                            f"{ticked} of {len(STEPS)} ticked", _colour(C_DIM))
         heading = "already installed?"
         _put(stdscr, 1, 3, "run?  step", _colour(C_DIM))
         # Right-aligned against the widest state word, and placed by its own
@@ -368,7 +374,10 @@ def _machine_line(machine: Machine) -> str:
     bits = [machine.os_name, machine.arch]
     if machine.is_jetson:
         bits.append("jetson")
-    if machine.host_role:
+    if machine.role and machine.role != machine.host_role:
+        bits.append(f"role={machine.role} (config/host "
+                    f"{'unset' if machine.host_role is None else machine.host_role})")
+    elif machine.host_role:
         bits.append(f"host={machine.host_role}")
     bits.append("detected: " + (", ".join(caps) if caps else "no sensors"))
     return "   ".join(bits)
@@ -456,9 +465,10 @@ def run_menu(args) -> int:
     are apt, sudo and kernel modules, they prompt, and their output is the
     thing you need when one fails. The menu ends first.
     """
-    from .runner import Runner
+    from .checklist import render, run_checks
+    from .runner import Runner, apply_role
 
-    machine = Machine()
+    machine = Machine(args.role)
     state = State()
     imported = state.import_markers({s.id: s.digest() for s in STEPS})
     if imported:
@@ -473,7 +483,11 @@ def run_menu(args) -> int:
     if status == OS_WARN or (status == OS_ERROR and args.ignore_os_check):
         print(f"warning: {message}\n")
 
-    sel = Selection(state, args.profile or machine.suggested_profile())
+    if args.role and args.force_role:
+        # A role change forgets the role steps' state; do it before seeding
+        # the selection so they show as not installed, and ticked.
+        apply_role(args.role, state)
+    sel = Selection(state, args.profile or machine.suggested_profile(), machine.role)
 
     if args.plain or not sys.stdout.isatty():
         chosen = plain_flow(machine, sel)
@@ -488,14 +502,18 @@ def run_menu(args) -> int:
     for step in chosen:
         print(f"  · {step.label}")
     print()
+    if not args.force_role:
+        apply_role(args.role, state)     # before host-services reads it
     failures = Runner(state, machine).run_all(
         chosen, stop_on_error=not args.keep_going)
     print()
     if failures:
-        print(f"{failures} step(s) failed. Re-run to resume.")
-        return 1
-    print("Setup complete.")
-    return 0
+        print(f"{failures} step(s) failed. Re-run to resume.\n")
+    else:
+        print("Setup complete.\n")
+    used, items = run_checks(machine.role)
+    print(render(used, items, colour=sys.stdout.isatty()))
+    return 1 if failures else 0
 
 
 def _curses_flow(machine: Machine, sel: Selection,

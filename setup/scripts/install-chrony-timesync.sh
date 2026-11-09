@@ -19,18 +19,16 @@
 set -eo pipefail
 
 REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." &> /dev/null && pwd)"
-SRC="${REPO_DIR}/setup/files/chrony"
+HOSTCFG="${REPO_DIR}/setup/golfcart_setup/hostcfg.py"
 
 ROLE="${1:-}"
 
 case "${ROLE}" in
   master)
     DST="/etc/chrony/conf.d/golfcart-master.conf"
-    FILE="${SRC}/golfcart-master.conf"
     ;;
   orin)
     DST="/etc/chrony/sources.d/golfcart-orin.sources"
-    FILE="${SRC}/golfcart-orin.sources"
     ;;
   *)
     echo "Usage: $0 <master|orin>" >&2
@@ -53,8 +51,9 @@ if [ ! -d "$(dirname "${DST}")" ]; then
     exit 1
 fi
 
-echo "Installing ${FILE} -> ${DST}"
-install -m 644 "${FILE}" "${DST}"
+# The file is setup/host/${ROLE}/etc/..., listed in setup/host/manifest.yaml.
+echo "Installing ${DST}"
+python3 "${HOSTCFG}" install --role "${ROLE}" --step "chrony-${ROLE}" --no-reload
 
 # systemd-timesyncd and chrony both discipline the system clock; running the two
 # together makes the offset jump around unpredictably.

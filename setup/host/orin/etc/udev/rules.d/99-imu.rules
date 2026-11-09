@@ -1,0 +1,1 @@
+SUBSYSTEM=="bmi_spsc", GROUP="imu", MODE="0660"

@@ -50,11 +50,22 @@ the rest of the repo does, so it becomes an ordinary step.
 from __future__ import annotations
 
 from .model import (
-    DECLARED, FILES_DIR, HARDWARE_DIR, REPO_ROOT, SCRIPTS_DIR, Requires, Step,
+    DECLARED, HARDWARE_DIR, HOST_DIR, REPO_ROOT, SCRIPTS_DIR, Requires, Step,
 )
 
 _S = lambda name: str(SCRIPTS_DIR / name)          # noqa: E731
 _BASH = lambda body: ["bash", "-euc", body]        # noqa: E731
+
+# setup/host: /etc files kept in the repo, one tree, one manifest. host-config
+# installs all of a role's entries; a narrower step installs its own subset
+# through the same installer (`hostcfg.py install --step <id>`), so the two
+# never disagree and a step that runs after host-config finds nothing to do.
+_HOSTCFG = str(REPO_ROOT / "setup" / "golfcart_setup" / "hostcfg.py")
+
+
+def _tree(*rel: str) -> tuple[str, ...]:
+    """Files under setup/host/ a step installs: hashed into its digest."""
+    return tuple(str(HOST_DIR / r) for r in rel)
 
 
 # Preflight fragments. A step that needs something an EARLIER step installs
@@ -336,6 +347,7 @@ STEPS: list[Step] = [
         run=[_S("configure-cyclonedds-sysctl.sh")],
         requires=Requires(sudo=True),
         profiles=_on(*DEV),
+        inputs=_tree("common/etc/sysctl.d/99-cyclonedds-max.conf", "manifest.yaml"),
     ),
     Step(
         id="multicast-lo",
@@ -351,6 +363,23 @@ STEPS: list[Step] = [
 
     # ---- System config: touches devices, device naming or the bus. This is
     #      the whole of what `vehicle` adds to `dev`. -----------------------
+    # First in the group: it puts back every tracked file for this role, and
+    # the steps below then find their files already in place.
+    Step(
+        id="host-config",
+        label="Host config from setup/host (restore /etc for this role)",
+        why="Installs this role's tracked files from setup/host/manifest.yaml "
+            "with their mode and owner: NetworkManager profiles, CAN and "
+            "LiDAR network, udev rules, chrony, linuxptp (master), sysctl, the "
+            "SSD's fstab line; then reloads what changed, once each. On the "
+            "orin it also disables ptp4l/phc2sys. `just host diff` shows drift.",
+        group="System config",
+        run=["python3", _HOSTCFG, "install"],
+        requires=Requires(sudo=True, network=False, role=("master", "orin")),
+        profiles=_on(*OPT_IN),
+        roles=("master", "orin"),
+        inputs=(str(HOST_DIR),),
+    ),
     Step(
         id="ublox-udev",
         label="u-blox udev rules",
@@ -358,13 +387,13 @@ STEPS: list[Step] = [
             "Without it the driver opens whichever ttyACM enumerated first.",
         group="System config",
         run=_BASH(
-            f"sudo cp {FILES_DIR / '99-ublox-gps.rules'} /etc/udev/rules.d/ && "
-            "sudo chmod 644 /etc/udev/rules.d/99-ublox-gps.rules && "
-            "sudo udevadm control --reload-rules && sudo udevadm trigger && "
+            f"python3 {_HOSTCFG} install --step ublox-udev && "
             'sudo usermod -aG dialout "$USER" || true'
         ),
         requires=Requires(sudo=True, hardware="ublox-gnss"),
+        after=("host-config",),
         profiles=_on(*VEHICLE),
+        inputs=_tree("master/etc/udev/rules.d/99-ublox-gps.rules", "manifest.yaml"),
         note="Log out and back in for the dialout group to take effect.",
     ),
     Step(
@@ -374,21 +403,35 @@ STEPS: list[Step] = [
         group="System config",
         run=[_S("install-tier4-camera.sh")],
         requires=Requires(sudo=True, hardware="tier4-camera"),
-        after=("ros2",),
+        after=("ros2", "host-config"),
         profiles=_on(*VEHICLE),
+        inputs=_tree("master/etc/udev/rules.d/99-tier4-camera.rules", "manifest.yaml"),
     ),
     Step(
         id="hardware-config",
         label="CAN interfaces + LiDAR network profiles",
         why="Matches specific MAC addresses on this vehicle. Meaningless on any "
-            "other machine.",
+            "other machine. The files are setup/host/master/etc/...; this "
+            "step adds can-utils, loads the modules and (re)starts networkd.",
         group="System config",
         run=_BASH(
             f"sudo bash {HARDWARE_DIR / 'can' / 'setup-can.sh'} && "
             f"sudo bash {HARDWARE_DIR / 'lidar-network' / 'setup-lidar-network.sh'}"
         ),
-        requires=Requires(sudo=True, hardware="can"),
+        # The master's: the LiDAR NICs and the MACs in the profiles are the
+        # Advantech's. The orin's bus is orin-can0, so `--role orin` drops this
+        # even though the orin has a can0 too.
+        requires=Requires(sudo=True, hardware="can", role=("master",)),
+        after=("host-config",),
         profiles=_on(*VEHICLE),
+        inputs=_tree(
+            "master/etc/modules-load.d/can.conf",
+            "master/etc/systemd/network/80-can0.network",
+            "master/etc/systemd/network/80-can1.network",
+            "master/etc/NetworkManager/system-connections/velodyne-vlp32c.nmconnection",
+            "master/etc/NetworkManager/system-connections/seyond-falcon-l.nmconnection",
+            "manifest.yaml",
+        ),
     ),
     Step(
         id="orin-can0",
@@ -399,8 +442,10 @@ STEPS: list[Step] = [
             "uses hardware-config.",
         group="System config",
         run=_BASH(f"sudo bash {HARDWARE_DIR / 'can' / 'setup-orin-can0.sh'}"),
-        requires=Requires(sudo=True, arch=("aarch64",), hardware="can"),
-        profiles=_on(*OPT_IN),                  # one machine; tick it there
+        requires=Requires(sudo=True, arch=("aarch64",), hardware="can",
+                          role=("orin",)),
+        profiles=_on(*OPT_IN),                  # in no preset ...
+        roles=("orin",),                        # ... but `--role orin` selects it
     ),
     Step(
         id="isaac-h264-encoder",
@@ -423,17 +468,47 @@ STEPS: list[Step] = [
         run=_BASH(f"sudo bash {HARDWARE_DIR / 'otocam' / 'setup-otocam.sh'}"),
         requires=Requires(sudo=True, arch=("aarch64",), reboot=True),
         profiles=_on(*OPT_IN),                  # opt-in: needs a blob and a reboot
+        inputs=_tree("master/etc/modprobe.d/otocam.conf",
+                     "master/etc/systemd/system/otocam.service"),
         note="Reboot required for the DTB overlay to take effect.",
     ),
     Step(
         id="linuxptp",
         label="linuxptp (ptp4l + phc2sys)",
-        why="Hardware time sync between the two machines.",
+        why="PTP to the Falcon LiDAR's NIC: phc2sys pushes the system clock "
+            "out to enP5p5s0's hardware clock. The master's; on the orin the "
+            "units only fail, and host-config disables them there.",
         group="System config",
         run=[_S("install-linuxptp.sh")],
-        requires=Requires(sudo=True, hardware="ptp-nic"),
-        profiles=_on(*OPT_IN),                  # opt-in until the interface is a parameter
+        requires=Requires(sudo=True, hardware="ptp-nic", role=("master",)),
+        after=("host-config",),
+        profiles=_on(*OPT_IN),                  # in no preset ...
+        roles=("master",),                      # ... but `--role master` selects it
+        inputs=_tree("master/etc/linuxptp/ptp4l.conf",
+                     "master/etc/systemd/system/ptp4l.service",
+                     "master/etc/systemd/system/phc2sys.service",
+                     "manifest.yaml"),
         note="ptp4l.conf is currently hardcoded to interface enP5p5s0.",
+    ),
+
+    # Last in the group: the units start what the steps above installed.
+    Step(
+        id="host-services",
+        label="golfcart systemd user units + lingering",
+        why="Installs golfcart-launch/-record (and the orin's watchdog) as user "
+            "units for the role in config/host, with a drop-in pointing at this "
+            "checkout, and enables lingering so they outlive the ssh session "
+            "that started them. Installed, never enabled: `just up` starts them.",
+        group="System config",
+        # No role argument: the script reads config/host, which `--role` has
+        # written by the time any step runs. Keeping the argv fixed keeps the
+        # digest about the script's contents, not about which machine ran it.
+        run=[_S("install-host-service.sh")],
+        # Only `sudo loginctl enable-linger`, and only the first time.
+        requires=Requires(sudo=True, network=False, role=("master", "orin")),
+        profiles=_on(*OPT_IN),
+        roles=("master", "orin"),
+        note="Units are installed, not enabled. On the master: just service pair.",
     ),
 
     # ---- Optional --------------------------------------------------------
@@ -455,8 +530,10 @@ STEPS: list[Step] = [
         why="Two-machine operation. The master serves, the orin follows.",
         group="Optional",
         run=["sudo", _S("install-chrony-timesync.sh"), "master"],
-        requires=Requires(sudo=True),
+        requires=Requires(sudo=True, role=("master",)),
         profiles=_on(*OPT_IN),
+        roles=("master",),
+        inputs=_tree("master/etc/chrony/conf.d/golfcart-master.conf", "manifest.yaml"),
     ),
     Step(
         id="chrony-orin",
@@ -464,9 +541,12 @@ STEPS: list[Step] = [
         why="The other half of the two-machine clock alignment.",
         group="Optional",
         run=["sudo", _S("install-chrony-timesync.sh"), "orin"],
-        requires=Requires(sudo=True),
+        requires=Requires(sudo=True, role=("orin",)),
         profiles=_on(*OPT_IN),
+        roles=("orin",),
+        inputs=_tree("orin/etc/chrony/sources.d/golfcart-orin.sources", "manifest.yaml"),
     ),
+
 ]
 
 BY_ID = {s.id: s for s in STEPS}

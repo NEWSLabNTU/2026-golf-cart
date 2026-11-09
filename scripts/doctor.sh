@@ -86,7 +86,7 @@ case "${GOLFCART_DDS_PROFILE_SOURCE:-unknown}" in
     fallback)
         warn "no config/host marker — falling back to the loopback profile"
         info "Two-machine operation needs one. On this machine run:"
-        info "    echo master > config/host      # or: orin"
+        info "    ./setup.sh --role master      # or: --role orin"
         ;;
     invalid-marker)
         fail "${MARKER_REL} names a profile with no config/cyclonedds/<name>.xml"
@@ -146,8 +146,8 @@ if [ "${GOLFCART_RMW:-cyclonedds}" = "zenoh" ]; then
         info "on localhost:7447 that this deployment never starts - so nothing"
         info "would discover anything, silently, on either machine."
         info "config/host is gitignored; on this machine run one of:"
-        info "    echo master > config/host"
-        info "    echo orin   > config/host"
+        info "    ./setup.sh --role master"
+        info "    ./setup.sh --role orin"
     else
         ziface=$(ip -o addr show 2>/dev/null | awk -v a="$zaddr" '$4 ~ "^"a"/" {print $2; exit}')
         if [ -z "$ziface" ]; then
@@ -260,14 +260,20 @@ case "$daemon_running" in
 esac
 
 # ── 3. Kernel buffers ────────────────────────────────────────────────────────
-# CycloneDDS only. The 10MB floor is the <SocketReceiveBufferSize min=> in
-# config/cyclonedds/*.xml, which Cyclone treats as a hard requirement; zenoh
+# CycloneDDS only. The floor is the <SocketReceiveBufferSize min=> in
+# config/cyclonedds/*.xml, which Cyclone treats as a hard requirement, read from
+# there by setup's checklist module rather than copied here (this used to say
+# 10 MB after the profiles had moved to 16 MB); zenoh
 # carries data over TCP and has no equivalent, so under it this whole section
 # would send an operator to tune sysctls that cannot affect anything.
 if [ "${GOLFCART_RMW:-cyclonedds}" = "cyclonedds" ]; then
 section "Kernel network buffers"
 
-MIN_RMEM=10485760   # 10 MB; below this CycloneDDS refuses to create a domain
+# Below this CycloneDDS refuses to create a domain. 10 MB only if the profiles
+# cannot be read at all, which the checklist section below then reports.
+MIN_RMEM=$(cd "${REPO_ROOT}/setup" 2>/dev/null && python3 -c \
+    'from golfcart_setup.checklist import dds_rmem_min; print(dds_rmem_min() or "")' 2>/dev/null)
+printf '%s' "${MIN_RMEM}" | grep -Eq '^[0-9]+$' || MIN_RMEM=10485760
 # Read /proc directly when sysctl is not on PATH (it lives in /sbin).
 rmem=$(sysctl -n net.core.rmem_max 2>/dev/null || cat /proc/sys/net/core/rmem_max 2>/dev/null || echo "")
 if ! printf '%s' "$rmem" | grep -Eq '^[0-9]+$'; then
@@ -276,7 +282,7 @@ elif [ "$rmem" -lt "$MIN_RMEM" ]; then
     fail "net.core.rmem_max = ${rmem} (< ${MIN_RMEM} required by our DDS profiles)"
     info "CycloneDDS will refuse to create a domain. Usual culprit:"
     info "    /etc/sysctl.d/60-zed-buffers.conf  (installed by the ZED SDK)"
-    info "Fix: cd setup && just cyclonedds-sysctl"
+    info "Fix: ./setup.sh --rerun cyclonedds-sysctl"
     for f in /etc/sysctl.d/*.conf /etc/sysctl.conf; do
         [ -f "$f" ] || continue
         if grep -q 'net\.core\.rmem_max' "$f" 2>/dev/null; then
@@ -335,6 +341,20 @@ else
         info "free space on $(dirname "$bag_dir"): $(free_space_of "$parent")"
     else
         fail "bag dir: ${bag_dir} (${origin}) cannot be created (${parent} missing or not writable)"
+    fi
+fi
+
+# ── 6. Setup checklist ───────────────────────────────────────────────────────
+# What setup cannot install by itself: config/host, the vendor DBC and ZED SDK
+# on the orin, kernel buffers, units and lingering. Same module as
+# `./setup.sh --status`; `just service pair` prints it on its own and sets
+# GOLFCART_DOCTOR_CHECKLIST=0 to avoid saying it twice.
+if [ "${GOLFCART_DOCTOR_CHECKLIST:-1}" != "0" ] && [ -f "${REPO_ROOT}/setup/main.py" ]; then
+    section "Setup checklist"
+    if python3 "${REPO_ROOT}/setup/main.py" --checklist; then
+        ok "nothing left to do by hand"
+    else
+        warn "setup checklist has outstanding items (above)"
     fi
 fi
 

@@ -1,5 +1,6 @@
 [connection]
 id=Seyond Falcon L LiDAR
+uuid=b71004ea-f0e6-4d32-bf4f-4341365d2bb7
 type=ethernet
 
 [ethernet]

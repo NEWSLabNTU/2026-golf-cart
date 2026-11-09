@@ -2,12 +2,18 @@
 # install-host-service.sh - one-time provisioning of a golf cart host's systemd
 # user units.
 #
-#   install-host-service.sh master|orin [--remove]
+#   install-host-service.sh [master|orin] [--remove]
+#
+# With no role, the role is read from config/host. That is how setup's
+# `host-services` step calls it (`./setup.sh --role master|orin` writes
+# config/host first), so the step's argv - and its digest - is the same on both
+# machines.
 #
 # Runs on the machine being provisioned, always. There is no remote mode: both
-# machines carry the same repository, so provisioning the orin is `just
-# service-install-orin`, which logs in and runs this same script from the orin's
-# own checkout. Keeping the ssh knowledge in one thin runner
+# machines carry the same repository, so provisioning the orin is
+# `./setup.sh --role orin` run there (`just service pair` on the master checks it
+# and can start it over ssh), which runs this same script from the orin's own
+# checkout. Keeping the ssh knowledge in one thin runner
 # (scripts/multi_machine/on_orin.sh) means this script never has to reason about
 # which machine it is talking about - only about the one it is on.
 #
@@ -30,8 +36,9 @@ UNIT_SRC="${REPO_DIR}/setup/files/systemd"
 UNIT_DST="${HOME}/.config/systemd/user"
 
 usage() {
-    echo "usage: $(basename "$0") <master|orin> [--remove]" >&2
-    echo "       to provision the orin from here: just service install-orin" >&2
+    echo "usage: $(basename "$0") [master|orin] [--remove]" >&2
+    echo "       with no role, config/host is read (./setup.sh --role writes it)" >&2
+    echo "       to provision the orin from the master: just service pair" >&2
     exit 2
 }
 
@@ -45,7 +52,21 @@ for arg in "$@"; do
         *)           echo "unknown argument: ${arg}" >&2; usage ;;
     esac
 done
-[ -n "${ROLE}" ] || usage
+if [ -z "${ROLE}" ]; then
+    HOST_FILE="${REPO_DIR}/config/host"
+    ROLE="$(tr -d '[:space:]' < "${HOST_FILE}" 2>/dev/null || true)"
+    case "${ROLE}" in
+        master|orin) echo "Role '${ROLE}' from config/host." ;;
+        "")
+            echo "ERROR: no role given and ${HOST_FILE} is missing or empty." >&2
+            echo "       ./setup.sh --role master   (or: --role orin)" >&2
+            exit 2 ;;
+        *)
+            echo "ERROR: config/host says '${ROLE}', which is not master or orin." >&2
+            echo "       ./setup.sh --role master --force-role   (or: orin)" >&2
+            exit 2 ;;
+    esac
+fi
 
 # The DDS profile is the same thing launch_unit_exec.sh resolves at start time;
 # checking it here turns a runtime failure into an install-time one.

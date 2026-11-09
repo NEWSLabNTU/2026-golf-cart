@@ -10,6 +10,7 @@
 #   ./setup.sh                pick a preset, then the steps
 #   ./setup.sh --status       what is installed
 #   ./setup.sh --list         every step, and whether it applies here
+#   ./setup.sh --role master   two-host install (or --role orin); writes config/host
 #   ./setup.sh --run --profile vehicle --yes
 #   ./setup.sh --run --all --skip tensorrt-engines
 #   ./setup.sh --rerun opencv

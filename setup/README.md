@@ -1,8 +1,10 @@
 # Setup
 
 ```bash
+./setup.sh --role master         # on the cart: master or orin (writes config/host)
 ./setup.sh                       # pick a preset, then the steps
-./setup.sh --status              # what is installed
+./setup.sh --status              # what is installed, then what is left by hand
+./setup.sh --checklist           # only what is left by hand (exit 1 if anything)
 ./setup.sh --list                # every step, and whether it applies here
 ./setup.sh --rerun opencv        # forget one step's state and run it again
 ./setup.sh --plain               # numbered menu, no full-screen drawing
@@ -43,16 +45,19 @@ a pipe, or a terminal `curses` cannot drive. It is also the automatic fallback.
 ### Unattended
 
 ```bash
+./setup.sh --run --role orin -y                 # a cart machine: vehicle preset + its role's steps
 ./setup.sh --run --profile vehicle --yes        # the profile's steps, no prompts
 ./setup.sh --run --all --skip tensorrt-engines  # everything bar one step
 ./setup.sh --only ros2 ros2-dev-tools --yes     # exactly these
 ./setup.sh --dry-run --json --profile ci        # what would run, as JSON
 ./setup.sh --status --json                      # state, for a health check
-./setup.sh --run --profile orin -y --keep-going # do not stop at the first failure
+./setup.sh --run --role orin -y --keep-going    # do not stop at the first failure
 ```
 
 | flag | |
 |---|---|
+| `--role master\|orin` | which cart machine this is. Writes `config/host` once the run is confirmed (never on a dry run), selects the `vehicle` preset unless `--profile` is given, and adds that role's steps (`host-services`, `chrony-master` or `chrony-orin` + `orin-can0`). Later plain runs read the role from `config/host`. Refuses to change an existing role without `--force-role` |
+| `--checklist [--json]` | what is still to do by hand: vendor DBC and ZED SDK (orin), `net.core.rmem_max` against the DDS profiles, units and lingering |
 | `--run` | run the resolved selection without opening the menu |
 | `--profile P` | preset selection; detected when omitted |
 | `--all` | every step, not just the profile's |

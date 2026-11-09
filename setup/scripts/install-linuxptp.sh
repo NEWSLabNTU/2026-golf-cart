@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# Install linuxptp + ptp4l/phc2sys systemd units + ptp4l.conf
+# Install linuxptp + ptp4l/phc2sys systemd units + ptp4l.conf. The master only.
+#
+# The files are setup/host/master/etc/{linuxptp/ptp4l.conf,
+# systemd/system/ptp4l.service, systemd/system/phc2sys.service}, installed by
+# setup/golfcart_setup/hostcfg.py (manifest step: linuxptp).
 #
 # Files (interface hardcoded to enP5p5s0 — Falcon Seyond LiDAR iface on the
 # Jetson AGX Orin Dev Kit). Adjust unit ExecStart `-i` flag if running on
@@ -8,7 +12,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-FILES_DIR="$(cd "$SCRIPT_DIR/../files/linuxptp" && pwd)"
+HOSTCFG="$(cd "$SCRIPT_DIR/.." && pwd)/golfcart_setup/hostcfg.py"
 SKIP_INSTALL=${SKIP_INSTALL:-0}
 
 GREEN='\033[0;32m'
@@ -21,16 +25,10 @@ if [ "$SKIP_INSTALL" -eq 0 ]; then
     sudo apt-get install -y linuxptp
 fi
 
-printf "${YELLOW}→${NC} Installing /etc/linuxptp/ptp4l.conf...\n"
-sudo install -d -m 0755 /etc/linuxptp
-sudo install -m 0644 "$FILES_DIR/ptp4l.conf" /etc/linuxptp/ptp4l.conf
-
-printf "${YELLOW}→${NC} Installing systemd units (ptp4l, phc2sys)...\n"
-sudo install -m 0644 "$FILES_DIR/ptp4l.service"   /etc/systemd/system/ptp4l.service
-sudo install -m 0644 "$FILES_DIR/phc2sys.service" /etc/systemd/system/phc2sys.service
-
-printf "${YELLOW}→${NC} Reloading systemd...\n"
-sudo systemctl daemon-reload
+printf "${YELLOW}→${NC} Installing ptp4l.conf + ptp4l/phc2sys units from setup/host/master...\n"
+# --role master: these are the master's files whatever config/host says; the
+# step itself is master-only (Step.roles / Requires.role).
+python3 "$HOSTCFG" install --role master --step linuxptp
 
 printf "${YELLOW}→${NC} Enabling + starting ptp4l, phc2sys...\n"
 sudo systemctl enable --now ptp4l.service phc2sys.service

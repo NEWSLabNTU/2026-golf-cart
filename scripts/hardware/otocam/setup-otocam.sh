@@ -19,7 +19,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TEMPLATES="${SCRIPT_DIR}/modules"
+HOSTCFG="${SCRIPT_DIR}/../../../setup/golfcart_setup/hostcfg.py"
 KVER="$(uname -r)"
 EXTRA_DIR="/lib/modules/${KVER}/extra/otocam"
 EXTLINUX="/boot/extlinux/extlinux.conf"
@@ -58,8 +58,10 @@ sudo depmod -a "${KVER}"
 
 # 4. Install modules-load + modprobe configs
 echo "[4/6] Installing /etc/systemd/system/otocam.service + /etc/modprobe.d/otocam.conf..."
-sudo install -m 0644 "${TEMPLATES}/otocam.service" /etc/systemd/system/otocam.service
-sudo install -m 0644 "${TEMPLATES}/otocam.modprobe.conf" /etc/modprobe.d/otocam.conf
+# setup/host/master/etc/{systemd/system/otocam.service,modprobe.d/otocam.conf}
+# (manifest step: otocam, restore: false -- host-config leaves them to this step).
+python3 "${HOSTCFG}" install --role master --step otocam --no-reload
+systemctl daemon-reload
 
 # 5. Patch extlinux.conf (idempotent — grep before insert, backup first)
 echo "[5/6] Patching ${EXTLINUX}..."

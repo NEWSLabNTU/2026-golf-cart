@@ -47,6 +47,8 @@ mod rmw 'just/rmw.just'
 mod link 'just/link.just'
 # CPU / kernel profiling of the running stack
 mod profile 'just/profile.just'
+# Host /etc config tracked in setup/host: diff, capture; restore is the host-config setup step
+mod host 'just/host.just'
 
 # The cart in the NTU twin on Isaac Sim: `just twin` (Phase 10)
 mod twin 'just/twin.just'
