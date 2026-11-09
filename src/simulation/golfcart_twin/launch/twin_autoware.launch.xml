@@ -26,6 +26,17 @@
   <arg name="camera_model" default="none"
        description="none: Isaac publishes the camera topics itself. The sensor kit starts its GMSL camera nodes whatever launch_driver says, and they die with no nvv4l2camerasrc off the cart."/>
   <arg name="launch_perception" default="true" description="Launch perception"/>
+  <!-- Detection: CenterPoint tiny merged with the clustering detector, not CenterPoint alone.
+       The cart's lidar_only preset runs CenterPoint only (the multi-channel tracker merger reads
+       nothing else), and in the twin CenterPoint scores a pedestrian 0.37-0.56 while it walks
+       and drops it once it stands: 4400 lidar points stood in the cart's lane, 4.6 m ahead,
+       with no object, and the cart crept to 0.95 m of it (showcase_pedestrian, 118,
+       2026-11-09). With the single merged input the clustering detector reports it as an
+       unknown object and the cart holds. Autoware's own alternative; the preset is unchanged. -->
+  <arg name="use_lidar_rule_detector" default="true"
+       description="Run the clustering detector beside CenterPoint (the cart's preset: false)"/>
+  <arg name="use_multi_channel_tracker_merger" default="false"
+       description="false: the tracker reads the merged CenterPoint + clustering objects (the cart's preset: true, CenterPoint only)"/>
   <!-- Not "rviz": the include below sets rviz:=false, and an XML include's arguments are not
        scoped (ros2 launch on Humble and play_launch alike), so that value would reach this
        file's scope and the demo RViz would never start (118, 2026-11-07). -->
@@ -37,6 +48,8 @@
     <arg name="camera_model" value="$(var camera_model)"/>
     <arg name="data_path" value="$(var data_path)"/>
     <arg name="launch_perception" value="$(var launch_perception)"/>
+    <arg name="use_lidar_rule_detector" value="$(var use_lidar_rule_detector)"/>
+    <arg name="use_multi_channel_tracker_merger" value="$(var use_multi_channel_tracker_merger)"/>
     <!-- the stack's own RViz is the stock config; the demo's is started below -->
     <arg name="rviz" value="false"/>
   </include>

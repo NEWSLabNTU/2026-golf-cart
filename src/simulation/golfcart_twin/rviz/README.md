@@ -24,15 +24,17 @@ python3 src/simulation/golfcart_twin/rviz/make_twin_rviz.py
 
 ## What it shows, and why
 
-- **View:** top down over the T junction, centred at map (53014, 67870), north up, about
-  70 m tall. Demo routes 1 to 3 fit. It is an Orbit view in `map`: drag to tilt. The base's
-  saved views (ThirdPersonFollower, TopDownOrtho) are still in the Views panel, after
-  "Twin T junction".
-- **Map:** the point cloud map and the lanelet2 vector map, as in the base.
+- **View:** it follows the cart from behind and above (ThirdPersonFollower on `base_link`,
+  26 m away, 0.85 rad above the horizon, centred 1.5 m ahead of `base_link`): the whole cart,
+  its lidar returns around it and the road ahead. The top-down view of the T junction is kept
+  as the saved view "Twin T junction" (centred at map (53014, 67870), north up, about 70 m
+  tall), with "Follow the cart" and the base's ThirdPersonFollower and TopDownOrtho.
+- **Map:** the lanelet2 vector map, and the point cloud map dimmed to a backdrop (grey,
+  1 px, alpha 0.4) so the live lidar stands out over it.
 - **Ego:** the vehicle model (its footprint, from `robot_description`), the EKF pose history,
   and `/tf` as axes only. Frame names and arrows are off: the cart's tree is dense.
 - **What it senses:**
-  - `/sensing/lidar/concatenated/pointcloud`: both lidars, coloured by intensity, best effort.
+  - `/sensing/lidar/concatenated/pointcloud`: both lidars, coloured by intensity, 3 px, best effort.
   - `/localization/pose_estimator/points_aligned`: the cloud NDT matched, in green. It shows
     localization working.
   - Perception's predicted objects.
@@ -45,8 +47,12 @@ python3 src/simulation/golfcart_twin/rviz/make_twin_rviz.py
   depth 1) in the dock named "Image", where the base window keeps an image dock. Move it to
   any corner and save the config.
 - **Panels:** AutowareStatePanel (engage, operation mode), ControlModeDisplay and the date
-  and time. On the toolbar: 2D Pose Estimate (`/initialpose`), 2D Goal Pose
-  (`/planning/mission_planning/goal`) and the base's other tools.
+  and time, in the left dock. The right dock's panels (Displays, Views, Tool Properties,
+  Selection) are closed so the 3D view has the room; Panels > Add New Panel brings any of
+  them back, and the saved views with the Views panel. (`Hide Right Dock` only collapses them
+  in rviz2, and they still showed, so the generator drops them from the config.) On the
+  toolbar: 2D Pose Estimate (`/initialpose`), 2D Goal Pose (`/planning/mission_planning/goal`)
+  and the base's other tools.
 
 **Turned off as noise for the demo:**
 - debug output: anything on a `/debug/` topic except virtual walls;
