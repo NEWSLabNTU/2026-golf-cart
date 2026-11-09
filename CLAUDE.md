@@ -314,6 +314,12 @@ Any submodule printing no remote branch, or only a `feat/…` branch, is not rea
 to be pointed at. Full workflow in [CONTRIBUTING.md](CONTRIBUTING.md#submodule-workflow).
 
 ### Data Structure
+Point cloud maps are committed as `pointcloud_map.pcd.zst` (zstd -19) and
+unpacked beside themselves by `just data unpack` (setup step `map-data`); the
+`.pcd` files are gitignored (`*.pcd` in `data/.gitignore`), so a shallow clone carries only
+the compressed copies. After editing a map in git, `just data pack <file.pcd>`
+and commit the `.zst`, never the `.pcd`. See docs/maps.md.
+
 - **data/COSS-map-planning/** - Practice map (from Golf Cart)
 - **data/huaxia-campus/** - planned production map. DOES NOT EXIST; nothing may depend on it.
 - **data/models/** - ML models (YOLOX, CenterPoint, TensorRT)

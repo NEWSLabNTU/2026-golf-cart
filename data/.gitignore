@@ -24,11 +24,11 @@
 *.tflite
 *.blob
 *.pb
+# Point clouds are committed compressed, as <map>/pointcloud_map.pcd.zst, and
+# unpacked beside themselves by `just data unpack` (docs/maps.md). The .pcd is
+# a build product; never commit it.
 *.pcd
 *.ply
-# The Ming-Da map is small enough to track: 0.30 m voxels, 1.0 MB, and NDT
-# tracks on it (scripts/map/downsample_pcd.py has the numbers).
-!/mingda-basement/pointcloud_map.pcd
 
 # Temporary files
 *.tmp

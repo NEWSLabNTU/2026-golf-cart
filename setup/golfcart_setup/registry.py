@@ -275,6 +275,18 @@ STEPS: list[Step] = [
         profiles=_on(*DEV),
     ),
     Step(
+        id="map-data",
+        label="Unpack the point cloud maps (data/**/*.pcd.zst)",
+        why="Maps are committed zstd-compressed so a shallow clone stays small; "
+            "the map loaders read the .pcd beside each .pcd.zst. Seconds per "
+            "map. Rerun after a pull that changes a map: `just data unpack`.",
+        group="Autoware",
+        run=[f"cd {REPO_ROOT} && just data unpack"],
+        after=("just",),
+        profiles=_on(*DEV),
+        inputs=(str(REPO_ROOT / "scripts" / "data" / "pcd.sh"),),
+    ),
+    Step(
         id="tensorrt-engines",
         label="TensorRT engines: install the cached pack, build the rest",
         why="Copies this host's engine pack from data/engines/<key> (key = "

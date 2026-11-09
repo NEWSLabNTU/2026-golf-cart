@@ -1,7 +1,9 @@
 # Maps
 
-Maps live under `data/`. They are not in the git repository. Choose one with
-`map_path:=` (see [operating.md](operating.md#choosing-the-map)).
+Maps live under `data/`. Choose one with `map_path:=` (see
+[operating.md](operating.md#choosing-the-map)). Some are in the git repository
+(compressed, see [Preparing map data](#preparing-map-data)); the NTU campus
+maps are downloaded.
 
 | map | directory |
 |---|---|
@@ -12,12 +14,58 @@ Maps live under `data/`. They are not in the git repository. Choose one with
 
 The 華夏科大 campus map is planned and does not exist yet.
 
+## Preparing map data
+
+Point clouds are committed compressed, as `pointcloud_map.pcd.zst` (zstd -19),
+so a shallow clone (`git clone --depth 1`) stays small. Autoware reads
+`pointcloud_map.pcd`, so unpack them once after cloning, and again after a pull
+that changes a map:
+
+```bash
+just data unpack     # writes pointcloud_map.pcd beside every .pcd.zst under data/
+just data status     # ok / NOT UNPACKED / DIFFERS, per map
+```
+
+`./setup.sh` does the first unpack for you (step `map-data`). The `.pcd` files
+are gitignored. Without them a launch fails to load the map.
+
+| map in git | compressed | unpacked |
+|---|---|---|
+| `data/COSS-map-planning` | 24.0 MB | 78.3 MB |
+| `data/mingda-basement` | 45.5 MB | 63.9 MB |
+| `data/sample-map-planning` | 14.5 MB | 28.1 MB |
+
+`unpack` never overwrites a `.pcd` you edited (one newer than its `.zst` and
+different from it); it reports it as `KEPT`. `just data unpack --force` throws
+the edit away.
+
+### Changing a map that is in git
+
+Edit or replace `pointcloud_map.pcd`, then pack it and commit the `.zst`:
+
+```bash
+just data pack data/mingda-basement/pointcloud_map.pcd
+git add data/mingda-basement/pointcloud_map.pcd.zst
+```
+
+`just data pack` with no argument repacks every map whose `.pcd` changed and
+leaves unchanged ones alone (the output is byte-for-byte reproducible, so git
+stays clean). Each committed change stores the whole compressed file in git
+history again, so commit a map when it really changed, not every experiment.
+
+### Adding a new map to git
+
+Put the three files in `data/<name>/` (layout below), then
+`just data pack data/<name>/pointcloud_map.pcd` and commit
+`pointcloud_map.pcd.zst` with the `.osm` and `.yaml` files, never the `.pcd`.
+
 ## Download
 
 Download the NTU campus map into `data/ntu-campus-planning/`:
 https://newslabn.csie.ntu.edu.tw/drive/d/s/17udXr7jE0y1uVZuITDKMHFdhprfnH8l/y7cT2BSRT_5RUSI5bp4blXm8MI8qlp-3-iLCA3n5hIg0
 
-Copy maps to both machines' `data/` directories if you use them on both.
+Downloaded maps are not in git: copy them to both machines' `data/`
+directories if you use them on both.
 
 ## Directory layout
 

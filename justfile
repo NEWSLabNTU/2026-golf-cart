@@ -51,6 +51,8 @@ mod profile 'just/profile.just'
 mod engines 'just/engines.just'
 # Host /etc config tracked in setup/host: diff, capture; restore is the host-config setup step
 mod host 'just/host.just'
+# Map data in git as .pcd.zst: unpack after a clone or pull, pack after editing a map
+mod data 'just/data.just'
 
 # The cart in the NTU twin on Isaac Sim: `just twin` (Phase 10)
 mod twin 'just/twin.just'

@@ -112,13 +112,16 @@ Details: [Time sync](multi-machine.md#time-sync).
 
 ## Maps
 
-Maps are not in the repository. See [maps.md](maps.md).
+The COSS, Ming-Da and sample point clouds are in the repository compressed;
+`./setup.sh` unpacks them (step `map-data`), or run `just data unpack`. The NTU
+campus maps are downloaded separately. See [maps.md](maps.md#preparing-map-data).
 
 ## Updating
 
 ```bash
 git pull
-just checkout   # update submodules
+just checkout      # update submodules
+just data unpack   # if a map changed (see maps.md)
 just build
 ```
 
