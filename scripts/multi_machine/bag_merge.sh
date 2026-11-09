@@ -41,8 +41,11 @@ fi
 
 INPUTS=()
 for bag in "$@"; do
-    # Accept either a path or a bare name relative to GOLFCART_BAG_DIR.
-    if [ -d "${bag}" ]; then
+    # Accept a path, a session half (recordings/<id>/<role>, whose bag is bag/),
+    # or a bare name relative to GOLFCART_BAG_DIR.
+    if [ -d "${bag}/bag" ] && [ ! -f "${bag}/metadata.yaml" ]; then
+        INPUTS+=("$(cd "${bag}/bag" && pwd)")
+    elif [ -d "${bag}" ]; then
         INPUTS+=("$(cd "${bag}" && pwd)")
     elif [ -d "${BAG_DIR}/${bag}" ]; then
         INPUTS+=("${BAG_DIR}/${bag}")

@@ -318,30 +318,21 @@ else
     fi
 fi
 
-# ── 5. Bag directory ─────────────────────────────────────────────────────────
+# ── 5. Recording directory ───────────────────────────────────────────────────
 section "Recording directory"
 
-bag_dir="${GOLFCART_BAG_DIR:-${HOME}/rosbags}"
-if [ -n "${GOLFCART_BAG_DIR:-}" ]; then
-    origin="GOLFCART_BAG_DIR"
+# Sessions (just record start) write recordings/<id>/<role>/ in the repo; the
+# repo's own disk is what has to have room. GOLFCART_BAG_DIR now only holds bags
+# from before sessions.
+rec_dir="${REPO_ROOT}/recordings"
+probe="$rec_dir"; [ -d "$probe" ] || probe="$REPO_ROOT"
+if [ -w "$probe" ]; then
+    ok "recordings: ${rec_dir}, free: $(free_space_of "$probe")"
 else
-    origin="default"
+    fail "recordings: ${probe} is not writable"
 fi
-
-if [ -d "$bag_dir" ]; then
-    if [ -w "$bag_dir" ]; then
-        ok "bag dir: ${bag_dir} (${origin}), free: $(free_space_of "$bag_dir")"
-    else
-        fail "bag dir: ${bag_dir} (${origin}) exists but is not writable"
-    fi
-else
-    parent=$(dirname "$bag_dir")
-    if [ -d "$parent" ] && [ -w "$parent" ]; then
-        warn "bag dir: ${bag_dir} (${origin}) does not exist yet; it will be created on first record"
-        info "free space on $(dirname "$bag_dir"): $(free_space_of "$parent")"
-    else
-        fail "bag dir: ${bag_dir} (${origin}) cannot be created (${parent} missing or not writable)"
-    fi
+if [ -n "${GOLFCART_BAG_DIR:-}" ] && [ -d "${GOLFCART_BAG_DIR}" ]; then
+    info "pre-session bags: ${GOLFCART_BAG_DIR}"
 fi
 
 # ── 6. Setup checklist ───────────────────────────────────────────────────────

@@ -18,7 +18,7 @@ The cart has two computers on one LAN.
 | address | `192.168.125.100` | `192.168.125.101` |
 | runs | the Autoware stack | ZED X camera, CAN vehicle interface |
 | sensors | Velodyne VLP-32C, Seyond Falcon, u-blox ZED-F9P GNSS, 3 TIER IV GMSL cameras | ZED X stereo camera (its IMU is the IMU in use) |
-| records to | external SSD, `/mnt/external/rosbags` | `~/rosbags` (NVMe) |
+| records to | `recordings/` in the repo, on the external SSD | `recordings/` in the repo (NVMe) |
 
 ```mermaid
 flowchart LR
@@ -66,14 +66,17 @@ just down
 `just up` returns at once and the stack keeps running in the background.
 Closing the terminal does not stop it; `just down` does.
 
-Record a session (both machines; stop merges the two bags into one):
+Record a session on both machines (ROS bags plus raw CAN, under one session ID),
+then copy the orin's half to the master:
 
 ```bash
-just record start
+just record start [SCOPE] [NAME]   # scopes: drive (default), all, raw, can, ros
+just record status
 just record stop
+just record collect
 ```
 
-Check free disk before recording: see [docs/recording.md](docs/recording.md).
+Scopes, where files land and how to open them: [docs/recording.md](docs/recording.md).
 
 **Before any autonomous drive**, follow
 [docs/guides/control_testing.md](docs/guides/control_testing.md). The driver puts
@@ -93,7 +96,7 @@ just service doctor
 | [docs/hardware.md](docs/hardware.md) | what is on the cart, addresses, CAN, known-broken devices |
 | [docs/setup.md](docs/setup.md) | installing a machine (once) |
 | [docs/operating.md](docs/operating.md) | start/stop, argument files, map and initial pose, RViz, logs, troubleshooting |
-| [docs/recording.md](docs/recording.md) | recording, fetching and merging bags, replay |
+| [docs/recording.md](docs/recording.md) | recording sessions (bags, CAN, pcapng): start/stop/collect, scopes, opening and replaying the files |
 | [docs/maps.md](docs/maps.md) | downloading and checking maps |
 | [docs/guides/control_testing.md](docs/guides/control_testing.md) | supervised autonomous drive: roles, checks, engage order |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | for developers: build, single-machine runs, simulators, project layout |

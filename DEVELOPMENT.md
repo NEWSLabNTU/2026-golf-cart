@@ -120,7 +120,7 @@ just vehicle interface                 # real bus, can0 (no Autoware)
 just vehicle interface can=vcan0       # against a virtual bus
 just vehicle manual-control            # keyboard, in a second terminal
 just can vcu-status                    # receive-only VCU readout
-just can record / just can decode      # raw CAN
+just can record / just can decode      # raw CAN (record writes a session, docs/recording.md)
 ```
 
 ## Project structure
@@ -159,7 +159,8 @@ script hardcodes it. See [config/README.md](config/README.md).
 | `config/runtime.conf` | container mode, middleware, the ROS domain ids |
 | `config/launch/*.args` | named launch argument sets (`@name`) |
 | `config/link/topics.yaml` | which topics cross between the machines |
-| `config/recording/*_topics.txt` | what each machine records |
+| `config/recording/scopes.yaml` | recording scopes: ROS / CAN / pcap per machine |
+| `config/recording/*_topics.txt` | the topics the `drive` and `ros` scopes record |
 | `config/cyclonedds/*.xml` | DDS profiles, one per role |
 
 `scripts/env.sh` sets up the environment from these files: ROS and Autoware

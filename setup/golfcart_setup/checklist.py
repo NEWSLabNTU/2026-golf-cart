@@ -8,7 +8,9 @@ files nobody may redistribute, or because a later manual install undoes a step:
 * the ZED SDK, a Stereolabs .run installer -- which also writes
   /etc/sysctl.d/60-zed-buffers.conf and lowers net.core.rmem_max below what the
   CycloneDDS profiles demand, so cyclonedds-sysctl has to run again after it;
-* the systemd user units and lingering, which a moved checkout invalidates.
+* the systemd user units and lingering, which a moved checkout invalidates;
+* rootless packet capture (tshark/dumpcap), which recording sessions use for
+  the `raw` and `all` scopes and which needs a group change and a fresh login.
 
 Each check is read-only and names the exact command that fixes it. One module so
 every caller agrees: `./setup.sh --status` and the end of a run print it,
@@ -281,6 +283,60 @@ def check_host_services(role: str) -> Item:
                 + (", lingering on" if linger else ""))
 
 
+# --------------------------------------------------------------------------
+# rootless packet capture, for recording sessions (config/recording/scopes.yaml)
+# --------------------------------------------------------------------------
+def _getcap(path: str) -> str:
+    if not shutil.which("getcap"):
+        return ""
+    try:
+        return subprocess.run(["getcap", path], capture_output=True, text=True,
+                              timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def _group_members(name: str) -> list[str] | None:
+    import grp
+    try:
+        return list(grp.getgrnam(name).gr_mem)
+    except KeyError:
+        return None
+
+
+CAPTURE_FIX = [
+    "    sudo apt install tshark            (answer Yes: non-superusers may capture)",
+    "    sudo dpkg-reconfigure wireshark-common   (if it was answered No)",
+    "    sudo usermod -aG wireshark $USER",
+    "then log out and in again (a new ssh session) so the group applies",
+]
+
+
+def check_packet_capture() -> Item:
+    """Can this user capture with tshark without root? Read-only."""
+    summary_bad = "tshark/dumpcap cannot capture without root: recording scopes raw/all skip pcap"
+    if not shutil.which("tshark"):
+        return Item("packet-capture", False, summary_bad + " (tshark not installed)", CAPTURE_FIX)
+    if os.geteuid() == 0:
+        return Item("packet-capture", True, "packet capture: running as root")
+    dumpcap = shutil.which("dumpcap") or "/usr/bin/dumpcap"
+    try:
+        st = os.stat(dumpcap)
+    except OSError:
+        return Item("packet-capture", False, summary_bad + f" ({dumpcap} missing)", CAPTURE_FIX)
+    privileged = "cap_net_raw" in _getcap(dumpcap) or (st.st_mode & 0o4000 and st.st_uid == 0)
+    if not privileged:
+        return Item("packet-capture", False,
+                    summary_bad + f" ({dumpcap} has no cap_net_raw)", CAPTURE_FIX)
+    if not os.access(dumpcap, os.X_OK):
+        user = getpass.getuser()
+        members = _group_members("wireshark") or []
+        why = ("in group wireshark, but this login predates it: log in again"
+               if user in members else "not in group wireshark")
+        return Item("packet-capture", False, summary_bad + f" ({user} {why})", CAPTURE_FIX)
+    return Item("packet-capture", True, "packet capture: tshark works without root")
+
+
 def run_checks(role_override: str | None = None) -> tuple[str | None, list[Item]]:
     """All checks for this host. Returns (role used, items)."""
     on_file = read_host_role()
@@ -302,6 +358,7 @@ def run_checks(role_override: str | None = None) -> tuple[str | None, list[Item]
         items.append(rmem)
     if role in ROLES:
         items.append(check_host_services(role))
+        items.append(check_packet_capture())
     return role, items
 
 

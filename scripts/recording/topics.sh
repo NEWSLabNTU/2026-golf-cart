@@ -1,8 +1,9 @@
 # topics.sh — the one reader of config/recording/*_topics.txt. Source it.
 #
 # Every recorder in the repo takes its topics from those lists through this
-# function: the systemd unit (record_unit_exec.sh), the terminal recorder
-# (record_foreground.sh, `just bag record`) and the link simulation. Before
+# function: the session runner (scripts/recording/session.py, for the `drive`
+# and `ros` scopes, under the unit and from `just bag record`) and the link
+# simulation. Before
 # this, two scripts carried their own inline topic arrays that drifted from the
 # lists — the Velodyne under a `top/` namespace that does not exist, its packets
 # at /sensing/lidar/velodyne_packets instead of /sensing/lidar/vlp32/... — and

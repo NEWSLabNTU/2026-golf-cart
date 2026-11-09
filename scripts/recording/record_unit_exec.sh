@@ -2,7 +2,8 @@
 # record_unit_exec.sh — ExecStart target for golfcart-record.service.
 #
 # One script for both hosts: the role comes from GOLFCART_HOST, and everything
-# role-specific (topic list, DDS profile, bag name) is derived from it.
+# role-specific (DDS profile, which half of the session) is derived from it.
+# What is recorded is the scope's, config/recording/scopes.yaml.
 #
 # WHY RECORDING IS ITS OWN UNIT: until 2026-08-14 the recorders ran as `node:`
 # entries inside golfcart.launch.yaml, i.e. as play_launch children. Every
@@ -38,7 +39,7 @@ cd "${WORKSPACE}"
 # One environment, one place. scripts/env.sh is what `.envrc` sources too, so the
 # recorder and the terminal you debug it from cannot drift apart. It supplies the
 # Autoware/ROS overlay, RMW_IMPLEMENTATION, the ROS_LOCALHOST_ONLY unset, PATH,
-# CYCLONEDDS_URI and the SSD-preferring GOLFCART_BAG_DIR - all of which this
+# CYCLONEDDS_URI - all of which this
 # script used to carry its own copy of.
 #
 # The recorder must join the same DDS domain as the stack it is recording: on the
@@ -56,39 +57,18 @@ if [ "${GOLFCART_DDS_PROFILE}" != "${ROLE}" ]; then
     exit 1
 fi
 
-OUTPUT_DIR="${GOLFCART_BAG_DIR:-${HOME}/rosbags}"
-
-TOPIC_FILE="${WORKSPACE}/config/recording/${ROLE}_topics.txt"
-if [ ! -f "${TOPIC_FILE}" ]; then
-    echo "record_unit_exec: topic list not found: ${TOPIC_FILE}" >&2
-    echo "record_unit_exec: expected one topic per line ('#' comments allowed)" >&2
-    exit 1
-fi
-
-# The one list reader, shared with `just bag record` and the link simulation.
-# shellcheck source=topics.sh
-source "${WORKSPACE}/scripts/recording/topics.sh"
-mapfile -t TOPICS < <(golfcart_recording_topics "${TOPIC_FILE}")
-
-if [ "${#TOPICS[@]}" -eq 0 ]; then
-    echo "record_unit_exec: ${TOPIC_FILE} lists no topics — refusing to record nothing" >&2
-    exit 1
-fi
-
-BAG_NAME="${ROLE}_$(date +%Y%m%d_%H%M%S)"
-
-mkdir -p "${OUTPUT_DIR}"
-echo "record_unit_exec: role=${ROLE} writing ${OUTPUT_DIR}/${BAG_NAME} (${#TOPICS[@]} topics)"
-
-# exec so systemd supervises `ros2 bag record` itself and its SIGINT lands on the
-# recorder rather than on a wrapper shell. Bag finalization — the metadata.yaml
-# that was 0 bytes on every foreground-stopped bag — depends on the recorder
-# receiving that signal directly.
-# Middleware preconditions, as in launch_unit_exec.sh. This matters more here
-# than anywhere else: with GOLFCART_RMW=zenoh and no router, `ros2 bag record`
-# starts, subscribes, reports no error, and writes a bag containing zero messages
-# on every topic. A recording is the one artefact of a test drive that cannot be
-# taken again, so it is worth refusing to start over.
-"${WORKSPACE}/scripts/rmw/ensure.sh" || exit 1
-
-exec ros2 bag record -o "${OUTPUT_DIR}/${BAG_NAME}" "${TOPICS[@]}"
+# The session runner does the rest: it reads the session id and scope that
+# `just record start` / `just record up` wrote to .golfcart-record.args just
+# before starting this unit (rewritten on every start, so nothing outlives the
+# start that asked for it), starts the scope's recorders (ros2 bag, candump,
+# tshark) as its children under recordings/<id>/<role>/, and stops them on the
+# SIGINT systemd sends. It runs scripts/rmw/ensure.sh itself when the scope
+# records ROS: with GOLFCART_RMW=zenoh and no router, `ros2 bag record` starts,
+# subscribes, reports no error and writes zero messages on every topic.
+#
+# exec, so systemd's main PID is the runner. KillMode=control-group delivers
+# KillSignal=SIGINT to every recorder directly; `--unit` tells the runner not
+# to forward a second one (bag finalization, the metadata.yaml that was 0 bytes
+# on every foreground-stopped bag, must not be interrupted).
+exec python3 "${WORKSPACE}/scripts/recording/session.py" run --unit \
+    --role "${ROLE}" --args-file "${WORKSPACE}/.golfcart-record.args"

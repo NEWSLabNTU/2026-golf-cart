@@ -47,7 +47,7 @@ Grouped families live in `just/*.just` and are reached as `just <module> <recipe
 | `indoor-test` | indoor cold start from the reflective board, init-only replay of the basement bag — `just indoor-test` for the sequence |
 | `pose` | initial pose per map without an RViz click: `capture MAP SPOT` once, then `init MAP SPOT`; `list` |
 | `bag` | rosbag record, play, merge, fetch |
-| `record` | recording lifecycle, independent of the launch |
+| `record` | recording sessions on both hosts (ROS bags + CAN + pcapng, one ID): `start [SCOPE] [NAME]`, `status`, `stop`, `collect [ID]`, `list`, `nuke` (deletes all, asks); independent of the launch |
 | `service` | multi-machine systemd units, `doctor`, `host-status` |
 | `vehicle` | vehicle interface bring-up, manual control, control tests |
 | `can` | CAN record, replay, decode; `vcu-status` is a receive-only live readout of the VCU and our commands |
@@ -250,7 +250,21 @@ or pass `--no-daemon`. Scripts and one-off tests should use `--no-daemon`.
 
 ### Recording: first-hand topics only
 
-`config/recording/*_topics.txt` record **driver output**. Topics a node computed
+A recording is a **session**: one ID (`YYYYmmdd_HHMMSS[_NAME]`, made once on the
+master by `just record start` and passed to the orin), files in
+`recordings/<id>/<role>/` inside the repo on each host (gitignored; not `log/`,
+which `just clean` deletes): `bag/`, `<can>.log` (`candump -L`), `<nic>.pcapng`
+(rootless `tshark`), `session.yaml` (commit, launch args, chrony offset, each
+recorder's status/size/exit). `just record collect [ID]` rsyncs the orin's half
+over `on_orin.sh`. What a session records is its **scope**,
+`config/recording/scopes.yaml` (`drive` default, `all`, `raw`, `can`, `ros`);
+`scripts/recording/session.py` is the one runner, under `golfcart-record.service`
+(id and scope via `.golfcart-record.args`, rewritten on every start) and in the
+foreground for `just bag record` / `just can record`. A missing or DOWN interface
+is skipped and noted, never fatal. `GOLFCART_BAG_DIR` now only holds bags from
+before sessions. User guide: [docs/recording.md](docs/recording.md).
+
+`config/recording/*_topics.txt` (the `drive` and `ros` scopes) record **driver output**. Topics a node computed
 from other topics — the concatenated cloud, the corrected IMU — are commented out,
 because replay is a logging simulation: the single-machine stack runs with drivers
 disabled against the merged bag and recomputes them with current parameters

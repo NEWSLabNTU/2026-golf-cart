@@ -7,7 +7,7 @@ Index for developers. Users start at the [top-level README](../README.md).
 - [Hardware](hardware.md) — the two machines, sensors, addresses, the CAN path to the VCU, known-broken devices
 - [Setup](setup.md) — installing a machine, once
 - [Operating](operating.md) — up/down, argument files, map and initial pose, RViz, logs, troubleshooting
-- [Recording](recording.md) — recording, fetching and merging bags, replay
+- [Recording](recording.md) — recording sessions on both machines (ROS bags, CAN logs, pcapng): `just record start|status|stop|collect`, scopes, opening and replaying the files, a vendor bug-report recipe
 - [Maps](maps.md) — downloading, layout, checking a new map
 - [Control testing](guides/control_testing.md) — first supervised autonomous drive: roles, pre-drive checks, engage order
 
@@ -16,7 +16,7 @@ Index for developers. Users start at the [top-level README](../README.md).
 - [ROADMAP.md](../ROADMAP.md) — the development plan
 - [DEVELOPMENT.md](../DEVELOPMENT.md) — build, single-machine runs, simulators, project layout, deprecated recipes
 - [CONTRIBUTING.md](../CONTRIBUTING.md) — branching convention (`2026-golfcart`), submodule table, and workflow
-- [Multi-machine operation](multi-machine.md) — the deep dive: domain split, link bridge, systemd units, time sync, recording internals
+- [Multi-machine operation](multi-machine.md) — the deep dive: domain split, link bridge, systemd units, time sync, recording internals (session runner, unit, collect)
 - [Phase 7: reflective board cold start](roadmaps/7-reflective-board-cold-start.md)
 - [Phase 8: autonomous driving](roadmaps/8-autonomous-driving.md)
 - [Phase 9: Ming-Da autonomous driving](roadmaps/9-mingda-autonomous-driving.md) — VCU findings, steering report, open issues

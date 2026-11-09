@@ -1,7 +1,9 @@
 # orin_topics.txt — topics recorded by golfcart-record.service on the ORIN.
 #
-# One topic per line. `#` starts a comment, blank lines are ignored. Read by
-# scripts/recording/record_unit_exec.sh, which passes them to `ros2 bag record`.
+# One topic per line. `#` starts a comment, blank lines are ignored. The `drive`
+# and `ros` recording scopes (config/recording/scopes.yaml) record this list;
+# scripts/recording/session.py reads it through topics.sh and passes it to
+# `ros2 bag record`. Scope `all` ignores it and records every topic.
 #
 # Topic names verified against a running ZED X on 2026-08-07. They follow the
 # zed-ros2-wrapper v5 scheme (rgb/color/rect/image), NOT the v4 scheme

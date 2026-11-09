@@ -10,7 +10,8 @@ changing a value here changes it for every consumer on both hosts.
 | `multi_machine.conf` | shell assignments | the other host's `user@addr`, its repo path, the ssh key, the master's IP |
 | `ntrip_credentials.txt` | plain text | the NTRIP caster account, kept to paste from. **Gitignored**, it is a secret. The launch reads the account from the sensor kit's own gitignored `config/ntrip_client.param.yaml`, not from here |
 | `runtime.conf` | shell assignments | how play_launch runs composable nodes (`GOLFCART_CONTAINER_MODE`), which middleware this host uses (`GOLFCART_RMW`), and the three ROS domain ids: master stack 50, orin stack 60, wire 10 |
-| `recording/master_topics.txt`<br>`recording/orin_topics.txt` | one topic per line, `#` comments | what each host records |
+| `recording/scopes.yaml` | YAML | recording scopes: per host, ROS (all/list/none), CAN buses, pcap NICs; disk threshold |
+| `recording/master_topics.txt`<br>`recording/orin_topics.txt` | one topic per line, `#` comments | the topics each host records in the `drive` and `ros` scopes |
 | `launch/<name>.args` | `key:=value` per line, `#` comments, `@other` includes | named launch argument sets: `just up @mingda-loop`, `just run @basement`, `just sim planning @sim-ntu-r02`. Expanded in place by `scripts/launch/args.py`; later args win |
 | `link/topics.yaml` | YAML | what crosses the master/orin wire, in which direction, with what QoS. One file, read by both hosts' bridges |
 | `cyclonedds/{master,orin,loopback}.xml` | CycloneDDS XML | DDS network profiles, one per role. `master` and `orin` bind the stack domain (50 / 60) to `lo` and only the link domain (10) to the LAN |

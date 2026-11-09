@@ -1,5 +1,5 @@
 [Unit]
-Description=Golf Cart rosbag recorder
+Description=Golf Cart recording session (ros2 bag, candump, tshark)
 # Deliberately NOT tied to golfcart-launch.service by PartOf/BindsTo/Requires.
 # Recording has its own lifecycle: it must be startable against an already
 # running stack, stoppable without stopping it, and it must survive a launch
@@ -16,7 +16,10 @@ ExecStart=%h/2026-golf-cart/scripts/recording/record_unit_exec.sh
 KillMode=control-group
 # `ros2 bag record` writes metadata.yaml during its SIGINT shutdown. A SIGKILLed
 # recorder leaves a 0-byte metadata.yaml and an unreadable bag, so the signal
-# matters more here than anywhere else in the stack.
+# matters more here than anywhere else in the stack. control-group delivers it
+# to every recorder of the session (ros2 bag, candump, tshark/dumpcap) at once;
+# the session runner (scripts/recording/session.py --unit) then waits for each
+# to finish and writes session.yaml, and does not forward a second SIGINT.
 KillSignal=SIGINT
 # Generous: this is now the only place bag finalization happens, and closing a
 # multi-gigabyte bag (index + metadata over an external SSD) is the one stop in

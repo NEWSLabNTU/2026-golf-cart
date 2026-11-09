@@ -731,10 +731,14 @@ golfcart_resolve_rmw
 golfcart_resolve_domains
 
 # ── Recording ────────────────────────────────────────────────────────────────
-# Record to the external SSD when it is mounted. The root filesystem has only a
-# couple of GB free and recording runs at roughly 15MB/s, so a bag fills it in
-# under two minutes. An explicit GOLFCART_BAG_DIR still wins, and hosts without
-# the SSD (the orin) fall back to ~/rosbags.
+# New recordings do NOT go here: `just record start`, `just bag record` and
+# `just can record` write sessions to recordings/<id>/<role>/ inside the repo
+# (docs/recording.md); on the master the repo is on the external SSD.
+# GOLFCART_BAG_DIR is where bags from before sessions live, and where `just bag
+# play|replay|merge|fetch-orin` still look after recordings/. The root
+# filesystem has only a couple of GB free, so prefer the SSD when mounted. An
+# explicit GOLFCART_BAG_DIR still wins; hosts without the SSD fall back to
+# ~/rosbags.
 if [ -d /mnt/external ] && [ -w /mnt/external ]; then
     export GOLFCART_BAG_DIR="${GOLFCART_BAG_DIR:-/mnt/external/rosbags}"
 fi

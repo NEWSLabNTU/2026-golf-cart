@@ -93,3 +93,11 @@ config/twin.env
 # Launch args for the systemd unit, rewritten by every `just up` / _up-local.
 .golfcart-launch.args
 .golfcart-launch.args.tmp
+
+# Recording sessions (just record start): ROS bags, CAN logs, pcapng, per host,
+# recordings/<id>/<role>/. Run data, never committed; not under log/ because
+# `just clean` deletes log/. The args file is the unit's input, rewritten by
+# every `just record start` / `just record up`.
+recordings/
+.golfcart-record.args
+.golfcart-record.args.tmp

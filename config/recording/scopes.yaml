@@ -1,0 +1,63 @@
+# Recording scopes: what a session records, per host role. The single source;
+# scripts/recording/session.py is the only reader.
+#
+#   just record start [SCOPE] [NAME]     both hosts, SCOPE defaults to `default:`
+#
+# Per scope and role:
+#   ros:  all   ros2 bag record -a (every topic, hidden ones included)
+#         list  config/recording/<role>_topics.txt (first-hand topics only)
+#         none  no bag
+#   can:  CAN interfaces, each recorded with `candump -L` to <iface>.log
+#   pcap: Ethernet interfaces, each captured with rootless tshark to <iface>.pcapng;
+#         per entry `iface`, optional `filter` (capture filter), optional `snaplen`
+#
+# An interface that is missing or DOWN when the session starts is skipped and
+# recorded as skipped in session.yaml; the rest of the session goes ahead. A
+# role this file does not name (a single-machine checkout) records the union of
+# master and orin, and both topic lists.
+
+default: drive
+
+# Free space under recordings/ checked before every start. Below it a scope with
+# `disk: refuse` will not start; any other scope starts with a warning.
+min_free_gb: 20
+
+# Interface sets, referenced below. Verified with `ip -br link` 2026-11-09.
+interfaces:
+  master_can: &master_can [can0, can1]   # both UP; the VCU bus moved to the orin
+  orin_can: &orin_can [can0]             # VCU, 500 kbit/s. can1 is DOWN, unused
+  master_pcap: &master_pcap
+    - iface: enP5p4s0                    # Velodyne VLP-32C, 192.168.7.x
+    - iface: enP5p5s0                    # Seyond Falcon, 172.168.1.x, also PTP
+    - iface: enP5p3s0                    # cart LAN 192.168.125.x (the link domain)
+      filter: "not tcp port 22"          # leave out our own ssh / rsync
+  orin_pcap: &orin_pcap
+    - iface: eno1                        # cart LAN
+      filter: "not tcp port 22"
+
+scopes:
+  all:
+    description: every topic, every CAN bus, every sensor NIC and the cart LAN
+    disk: refuse
+    master: {ros: all, can: *master_can, pcap: *master_pcap}
+    orin:   {ros: all, can: *orin_can,   pcap: *orin_pcap}
+
+  drive:
+    description: the topic lists plus every CAN bus (the everyday drive)
+    master: {ros: list, can: *master_can}
+    orin:   {ros: list, can: *orin_can}
+
+  raw:
+    description: raw packets only, CAN and Ethernet, no ROS
+    master: {ros: none, can: *master_can, pcap: *master_pcap}
+    orin:   {ros: none, can: *orin_can,   pcap: *orin_pcap}
+
+  can:
+    description: CAN only
+    master: {can: *master_can}
+    orin:   {can: *orin_can}
+
+  ros:
+    description: the topic lists only (what `just record start` did before sessions)
+    master: {ros: list}
+    orin:   {ros: list}

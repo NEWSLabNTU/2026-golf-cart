@@ -1,7 +1,9 @@
 # master_topics.txt — topics recorded by golfcart-record.service on the MASTER.
 #
-# One topic per line. `#` starts a comment, blank lines are ignored. Read by
-# scripts/recording/record_unit_exec.sh, which passes them to `ros2 bag record`.
+# One topic per line. `#` starts a comment, blank lines are ignored. The `drive`
+# and `ros` recording scopes (config/recording/scopes.yaml) record this list;
+# scripts/recording/session.py reads it through topics.sh and passes it to
+# `ros2 bag record`. Scope `all` ignores it and records every topic.
 #
 # Topic names verified against a running stack on 2026-08-10 with
 # `ros2 topic list`. The list this replaced was inherited from

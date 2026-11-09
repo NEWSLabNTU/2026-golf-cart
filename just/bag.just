@@ -13,24 +13,32 @@ set working-directory := '..'
 default:
     @just --list bag
 
-# Play the most recent recording in $GOLFCART_BAG_DIR
-play:
+# Play a bag (default: newest in recordings/, then $GOLFCART_BAG_DIR). BAG: session id or path
+play BAG="":
     #!/usr/bin/env bash
     set -eo pipefail
     GOLFCART_ENV_QUIET=1 source scripts/env.sh
-    BAG_DIR="${GOLFCART_BAG_DIR:-${HOME}/rosbags}"
-    # Newest finalized bag, whichever recorder wrote it: <role>_<ts>[_NAME]
-    # from `just bag record` or the unit, merged_<ts> from `just bag merge`.
-    LATEST=""
-    for candidate in "${BAG_DIR}"/*_*/metadata.yaml; do
-        [ -s "${candidate}" ] || continue
-        candidate="$(dirname "${candidate}")"
-        if [ -z "${LATEST}" ] || [ "${candidate}" -nt "${LATEST}" ]; then
-            LATEST="${candidate}"
-        fi
-    done
+    if [ -n "{{BAG}}" ]; then
+        LATEST=$(python3 scripts/recording/session.py resolve-bag "{{BAG}}") || {
+            [ -d "${GOLFCART_BAG_DIR:-${HOME}/rosbags}/{{BAG}}" ] && LATEST="${GOLFCART_BAG_DIR:-${HOME}/rosbags}/{{BAG}}"; }
+        [ -n "${LATEST:-}" ] || { echo "No bag '{{BAG}}' (session id, bag dir, or a name in \$GOLFCART_BAG_DIR)" >&2; exit 1; }
+    else
+        # Sessions first: recordings/<id>/merged, else the newest <id>/<role>/bag.
+        LATEST=$(python3 scripts/recording/session.py latest bag || true)
+    fi
     if [ -z "${LATEST}" ]; then
-        echo "No finalized bag found in ${BAG_DIR}" >&2
+        # Bags from before sessions: <role>_<ts>[_NAME], merged_<ts>.
+        BAG_DIR="${GOLFCART_BAG_DIR:-${HOME}/rosbags}"
+        for candidate in "${BAG_DIR}"/*_*/metadata.yaml; do
+            [ -s "${candidate}" ] || continue
+            candidate="$(dirname "${candidate}")"
+            if [ -z "${LATEST}" ] || [ "${candidate}" -nt "${LATEST}" ]; then
+                LATEST="${candidate}"
+            fi
+        done
+    fi
+    if [ -z "${LATEST}" ]; then
+        echo "No finalized bag in recordings/ or ${GOLFCART_BAG_DIR:-${HOME}/rosbags}" >&2
         exit 1
     fi
     echo "Playing: ${LATEST}"
@@ -61,15 +69,15 @@ play-ntu SET="CSIE-1" ARGS="":
 # either wrong fails silently and still looks like it is working — see the
 # comment at the top of scripts/rosbag/ntu_sim_bag.sh.
 
-# Record this host's config/recording list from this terminal; Ctrl-C stops
+# A one-host recording session, scope `ros`, from this terminal; Ctrl-C stops
 #
-#   just bag record              ->  $GOLFCART_BAG_DIR/master_<ts>
-#   just bag record campus_loop  ->  $GOLFCART_BAG_DIR/master_<ts>_campus_loop
+#   just bag record              ->  recordings/<YYYYmmdd_HHMMSS>/<role>/bag
+#   just bag record campus_loop  ->  recordings/<YYYYmmdd_HHMMSS>_campus_loop/<role>/bag
 #
-# Same list, directory and naming as `just record start`, which runs the same
-# thing under systemd on both hosts. The topics live in
-# config/recording/<role>_topics.txt and nowhere else.
-# Record this host's topic list (config/recording/) in the foreground
+# Same runner, scopes and layout as `just record start`, which runs it under
+# systemd on both hosts. The topics live in config/recording/<role>_topics.txt
+# and nowhere else.
+# Record this host's topic list (config/recording/) in the foreground, as a session
 record NAME="":
     ./scripts/recording/record_foreground.sh {{NAME}}
 
@@ -84,20 +92,24 @@ record-aruco SCENARIO="session":
 record-indoor:
     ./scripts/rosbag/record_indoor_mapping.sh
 
-# Merge per-host bags into one. ARGS: [-o OUTPUT] <bag> <bag> [bag ...]
+# Merge per-host bags into one (bag dirs, or session halves recordings/<id>/<role>). ARGS: [-o OUTPUT] <bag> <bag> [bag ...]
 merge ARGS="":
     ./scripts/multi_machine/bag_merge.sh {{ARGS}}
 
-# Replay a bag in RViz. BAG defaults to the newest merged_*/master_* bag found.
-# ARGS: rate:=2.0 start_offset:=40.0 play_args:=--loop rviz:=false
+# BAG: session id, bag path, or a name in $GOLFCART_BAG_DIR; default the newest
+# session (merged, else master), then the newest legacy bag.
+# Replay a bag in RViz. ARGS: rate:=2.0 start_offset:=40.0 play_args:=--loop rviz:=false
 replay BAG="" ARGS="":
     #!/usr/bin/env bash
     set -eo pipefail
     BAG="{{BAG}}"
     BAG_DIR="${GOLFCART_BAG_DIR:-${HOME}/rosbags}"
     if [ -z "${BAG}" ]; then
-        # Newest merged bag first: it has both hosts in it. Fall back to a
-        # master bag so this still works before anything has been merged.
+        BAG=$(python3 scripts/recording/session.py latest bag || true)
+    fi
+    if [ -z "${BAG}" ]; then
+        # Bags from before sessions. Newest merged bag first: it has both hosts
+        # in it. Fall back to a master bag so this works before any merge.
         #
         # Deliberately no `ls ... | head`: ls exits 2 when one of the two globs
         # matches nothing, and with pipefail + set -e that killed the recipe
@@ -111,12 +123,13 @@ replay BAG="" ARGS="":
         done
         shopt -u nullglob
         if [ -z "${BAG}" ]; then
-            echo "No bag given and none found in ${BAG_DIR}" >&2
-            echo "Set GOLFCART_BAG_DIR, or pass one:" >&2
-            echo "  just bag replay <bag> [\"rate:=2.0 start_offset:=40.0\"]" >&2
+            echo "No bag given and none in recordings/ or ${BAG_DIR}" >&2
+            echo "Pass one:  just bag replay <session id | bag> [\"rate:=2.0 start_offset:=40.0\"]" >&2
             exit 1
         fi
         echo "Replaying newest bag: ${BAG}"
+    elif R=$(python3 scripts/recording/session.py resolve-bag "${BAG}"); then
+        BAG="${R}"
     elif [ ! -d "${BAG}" ] && [ -d "${BAG_DIR}/${BAG}" ]; then
         BAG="${BAG_DIR}/${BAG}"
     fi

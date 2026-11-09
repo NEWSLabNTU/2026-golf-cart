@@ -225,5 +225,60 @@ class Checks(unittest.TestCase):
             self.assertIn("lingering off", item.summary)
 
 
+class PacketCapture(unittest.TestCase):
+    """check_packet_capture, with tshark, dumpcap and the user faked."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.dumpcap = Path(self.tmp.name) / "dumpcap"
+        self.dumpcap.write_text("")
+        self.dumpcap.chmod(0o754)
+
+    def check(self, *, tshark=True, caps="cap_net_admin,cap_net_raw=eip",
+              executable=True, members=(), euid=1000):
+        def which(name):
+            if name == "tshark":
+                return "/usr/bin/tshark" if tshark else None
+            return str(self.dumpcap) if name == "dumpcap" else None
+        with mock.patch.object(checklist.shutil, "which", side_effect=which), \
+                mock.patch.object(checklist, "_getcap",
+                                  return_value=f"{self.dumpcap} {caps}" if caps else ""), \
+                mock.patch.object(checklist, "_group_members", return_value=list(members)), \
+                mock.patch.object(checklist.os, "geteuid", return_value=euid), \
+                mock.patch.object(checklist.os, "access", return_value=executable), \
+                mock.patch.object(checklist.getpass, "getuser", return_value="jetson"):
+            return checklist.check_packet_capture()
+
+    def test_ok(self) -> None:
+        self.assertTrue(self.check().ok)
+
+    def test_root(self) -> None:
+        self.assertTrue(self.check(executable=False, caps="", euid=0).ok)
+
+    def test_not_installed(self) -> None:
+        item = self.check(tshark=False)
+        self.assertFalse(item.ok)
+        self.assertIn("tshark not installed", item.summary)
+        self.assertTrue(any("apt install tshark" in f for f in item.fix))
+
+    def test_no_capabilities(self) -> None:
+        item = self.check(caps="")
+        self.assertFalse(item.ok)
+        self.assertIn("no cap_net_raw", item.summary)
+        self.assertTrue(any("dpkg-reconfigure wireshark-common" in f for f in item.fix))
+
+    def test_not_in_group(self) -> None:
+        item = self.check(executable=False)
+        self.assertFalse(item.ok)
+        self.assertIn("not in group wireshark", item.summary)
+        self.assertTrue(any("usermod -aG wireshark" in f for f in item.fix))
+
+    def test_in_group_needs_relogin(self) -> None:
+        item = self.check(executable=False, members=("jetson",))
+        self.assertFalse(item.ok)
+        self.assertIn("log in again", item.summary)
+
+
 if __name__ == "__main__":
     unittest.main()

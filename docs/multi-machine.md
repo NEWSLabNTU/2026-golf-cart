@@ -141,42 +141,39 @@ still wins.
 The commands are in [recording.md](recording.md). The internals:
 
 Recording is independent of the launch. Start it whenever you want, with the
-stack up, down, or half-up:
+stack up, down, or half-up. A session is one ID, `YYYYmmdd_HHMMSS[_NAME]`,
+generated once on the master by `just record start` and handed to both hosts,
+so the two halves are paired by name rather than by nearby timestamps.
 
 ```bash
-just record start     # both hosts begin recording to their own local disk
-just record status
-just record stop      # both finalize their bags; fetch + merge into merged_<ts> runs in the background
-just record stop merge=off   # only stop; collect later with `just record collect`
+just record start [SCOPE] [NAME]   # master first, then the orin over on_orin.sh
+just record status                 # both hosts: session, files, growth per second
+just record stop [merge=on]        # both finalize; prints the collect command
+just record collect [ID] [merge=on]
 ```
 
-`record stop` ends the session as one bag on the master: once both recorders
-have exited it fetches the orin bag and merges it with the master bag into
-`merged_<ts>` (named after the master bag's timestamp). The orin bag is the one
-whose timestamp is within 60 s of the master's; anything further is treated as
-another session and nothing is merged. Nor is an orin bag holding nothing but
-`/tf_static` (the orin stack was down): the merge rewrites the whole master bag,
-13 GB for a few minutes of driving, so it is only done when it adds something.
+How a host records: `just record _up-local ID SCOPE` (what `start` runs on each
+host) checks free space (`session.py preflight`), writes `.golfcart-record.args`
+(gitignored, `id=` and `scope=`, rewritten on every start, the same pattern as
+`.golfcart-launch.args`) and restarts `golfcart-record.service`. The unit runs
+`scripts/recording/record_unit_exec.sh`, which sources `scripts/env.sh` for the
+role's DDS profile and execs the session runner, `scripts/recording/session.py
+run --unit`. The runner starts every recorder of the scope as a child in its own
+process group (`ros2 bag record`, one `candump -L` per CAN bus, one `tshark`
+per NIC), checks at 2 s which ones died at start (no permission, interface gone),
+and writes `recordings/<id>/<role>/session.yaml`.
 
-The collection runs as a transient user unit (`golfcart-collect-<ts>`), so
-`record stop` returns as soon as both bags are finalized, and closing the
-terminal does not kill a half-written merge. Its output goes to
-`$GOLFCART_BAG_DIR/golfcart-collect-<ts>.log`, which `record stop` prints. If either host failed to stop,
-nothing is collected and the stop exits non-zero. Re-run the collection with:
+Stopping: the unit has `KillMode=control-group` and `KillSignal=SIGINT`, so
+systemd delivers SIGINT to every recorder at once; the runner does not forward a
+second one (a second SIGINT during bag finalization is what must not happen),
+waits for each to exit (escalating to SIGTERM and SIGKILL only after a grace:
+270 s for the bag, inside `TimeoutStopSec=300`), and rewrites `session.yaml`
+with exit codes, sizes, packet counts and the bag's topic count. In the
+foreground (`just bag record`, `just can record`) the runner forwards exactly one
+SIGINT to each recorder on Ctrl-C.
 
-```bash
-just record collect                          # newest master_<ts> bag
-just record collect master_20260924_124734   # a given session
-```
-
-It is safe to re-run: the fetch resumes, and an existing `merged_<ts>` is left
-alone.
-
-Bags land in `$GOLFCART_BAG_DIR/master_<ts>` and `.../orin_<ts>` on their
-respective machines — the external SSD (`/mnt/external/rosbags`) when mounted,
-otherwise `~/rosbags`.
-
-What each host records is a plain list, one topic per line:
+Scopes are `config/recording/scopes.yaml`; the `drive` and `ros` scopes record
+the plain topic lists:
 
 ```
 config/recording/master_topics.txt
@@ -188,6 +185,16 @@ cabled to the master at ~30 MB/s each, and only the ZED's *compressed* stream is
 small enough to cross the shared 100 Mb/s LAN, so each host records its own
 sensors locally.
 
+`just record collect` rsyncs the orin's `recordings/<id>/orin/` into the same
+path on the master. The transport is `scripts/recording/orin_rsh.sh`, which
+makes `on_orin.sh` rsync's remote shell, so it uses the same key, BatchMode and
+checkout path as every other remote command. It refuses while the orin's half
+is still recording, resumes partial files, and finishes with a size check of
+every file against the orin's own listing. `merge=on` runs `bag_merge.sh` on
+`master/bag` and `orin/bag` into `recordings/<id>/merged/`.
+`GOLFCART_ON_ORIN` replaces `on_orin.sh` in all of the record recipes, which is
+how the two-host flow is tested against a second local checkout.
+
 Recording used to be part of the launch (`record:=true`), and that argument no
 longer exists. Two reasons it moved out. You could not start or stop a recording
 without restarting the whole stack; and as a play_launch child, every
@@ -195,8 +202,11 @@ multi-gigabyte bag stopped from the foreground came out with a 0-byte
 `metadata.yaml` (see docs/roadblocks.md). Outside that process tree, play_launch's
 shutdown cannot reach the recorder at all.
 
-If the orin is unreachable, the master still records — the failure is reported
-and `just record start` exits non-zero.
+Before sessions (2026-11-09) the unit wrote `$GOLFCART_BAG_DIR/<role>_<ts>`,
+`record stop` fetched and merged in the background into `merged_<ts>`, pairing
+the orin bag by nearest timestamp. Those bags are still where they were; `just
+record collect master_<ts>` still runs the old pairing collector
+(`scripts/multi_machine/record_collect.sh`) for them.
 
 ## Time sync
 
@@ -244,9 +254,9 @@ LiDAR. Do not reverse phc2sys's direction while chrony is running.
 
 ## Collecting the bags
 
-Each host records to its own disk, so a session leaves two bags on two machines.
-`just record stop` brings the orin's side over and merges it (see *Recording*).
-For bags from `just bag record`, or anything else, fetch by hand:
+Each host records to its own disk, so a session leaves two halves on two
+machines. `just record collect` brings the orin's half over (see *Recording*).
+For bags from before sessions, fetch by hand:
 
 ```bash
 just bag fetch-orin              # everything not already here
@@ -292,7 +302,8 @@ carry an empty `storage_id` in their metadata, and convert will not infer it.
 ### Replaying with RViz
 
 ```bash
-just bag replay                                    # newest merged bag, or newest master bag
+just bag replay                                    # newest session (merged, else master), then legacy bags
+just bag replay 20261109_142501_campus-loop        # a session by id
 just bag replay "" "start_offset:=40.0"            # skip the orin-only opening
 just bag replay merged_20260810_1230 "rate:=2.0 play_args:=--loop"
 ```
@@ -503,7 +514,8 @@ Most of these now have a home in a file, and the variable is only an override.
 | `GOLFCART_ORIN_SSH` | `config/multi_machine.conf` | ssh destination for the orin |
 | `GOLFCART_ORIN_WAIT` | `60` | seconds to wait for the orin before giving up |
 | `GOLFCART_MASTER_IP` | `config/multi_machine.conf` | what the orin's watchdog pings |
-| `GOLFCART_BAG_DIR` | `/mnt/external/rosbags` if mounted, else `~/rosbags` | where each host writes its bags |
+| `GOLFCART_BAG_DIR` | `/mnt/external/rosbags` if mounted, else `~/rosbags` | where bags from before sessions are; new recordings go to `recordings/` |
+| `GOLFCART_ON_ORIN` | `scripts/multi_machine/on_orin.sh` | the record recipes' way to the orin (tests point it at a stub) |
 | `GOLFCART_WORKSPACE` | `~/2026-golf-cart` | workspace the units launch from; set by the installer's drop-in |
 
 ## A bag with an empty metadata.yaml

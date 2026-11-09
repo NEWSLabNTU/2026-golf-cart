@@ -14,7 +14,7 @@ just down      # stop both machines
 `just up` starts the stack as systemd services on both machines. Closing the
 terminal or the ssh session does not stop the cart. **`just down` is the only
 stop command.** It leaves a recording running; stop that with
-`just record stop` (see [recording.md](recording.md)).
+`just record stop`, then `just record collect` (see [recording.md](recording.md)).
 
 The play_launch web UI is at http://localhost:8081 on the master.
 
