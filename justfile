@@ -189,7 +189,7 @@ clean *FLAGS="":
 # ============================================================================
 
 # Teardown is `just down`; the orin's watchdog covers a master that never runs it.
-# Start the stack on BOTH hosts as systemd units; returns at once. ARGS: [launch args, @file]
+# Start the stack on BOTH hosts as systemd units, RViz here if DISPLAY is set; returns at once. ARGS: [launch args, @file]
 [positional-arguments]
 up *ARGS:
     #!/usr/bin/env bash
@@ -200,11 +200,28 @@ up *ARGS:
     OUT=$(python3 {{justfile_directory()}}/scripts/launch/args.py --label "up args" "$@") || exit 2
     EXPANDED=()
     [ -n "${OUT}" ] && mapfile -t EXPANDED <<< "${OUT}"
+    # rviz:= is decided here, not by the units: they have no display and always
+    # run with rviz:=false. With DISPLAY set, RViz opens in this desktop session
+    # below; rviz:=false skips it.
+    RVIZ=1
+    [ -n "${DISPLAY:-}" ] || RVIZ=0
+    UNIT_ARGS=()
+    for a in "${EXPANDED[@]}"; do
+        case "$a" in
+            rviz:=false|rviz:=False|rviz:=0) RVIZ=0 ;;
+            rviz:=*) ;;
+            *) UNIT_ARGS+=("$a") ;;
+        esac
+    done
+    EXPANDED=("${UNIT_ARGS[@]}")
     just _up-local "${EXPANDED[@]}" || exit 1
     # A missing orin does not fail the master, but the vehicle interface lives there.
     if [[ "${GOLFCART_USE_ORIN:-1}" == "1" ]]; then
         ./scripts/multi_machine/on_orin.sh just _up-local "${EXPANDED[@]}" \
             || echo "WARNING: could not start the orin - continuing without it; no vehicle interface, the cart cannot be driven" >&2
+    fi
+    if [[ "${RVIZ}" == "1" ]]; then
+        just _rviz-desktop
     fi
     echo
     echo "web UI: http://localhost:8081    logs: just logs    stop: just down"
@@ -219,7 +236,28 @@ down:
         ./scripts/multi_machine/on_orin.sh just _down-local || RC=1
     fi
     just _down-local || RC=1
+    # The RViz `up` opened, if any. SIGINT: rviz2 segfaults on SIGTERM.
+    RV="^rviz2 -d {{justfile_directory()}}/src/launcher/golfcart_launch/rviz/golfcart.rviz"
+    if pkill -INT -f "${RV}"; then
+        for _ in 1 2 3 4 5; do pgrep -f "${RV}" >/dev/null || break; sleep 1; done
+        pkill -KILL -f "${RV}" 2>/dev/null && echo "rviz: did not exit on SIGINT, killed" || echo "rviz: closed"
+    fi
     exit $RC
+
+# RViz in this desktop session, detached, in this host's stack domain; up opens it.
+[private]
+_rviz-desktop:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    REPO={{justfile_directory()}}
+    CFG="${REPO}/src/launcher/golfcart_launch/rviz/golfcart.rviz"
+    if pgrep -f "^rviz2 -d ${CFG}" >/dev/null; then
+        echo "rviz: already open"; exit 0
+    fi
+    mkdir -p "${REPO}/log"
+    setsid -f bash -c 'GOLFCART_ENV_QUIET=1 source "$1/scripts/env.sh"; exec rviz2 -d "$2"' _ "${REPO}" "${CFG}" \
+        > "${REPO}/log/rviz-up.log" 2>&1 < /dev/null
+    echo "rviz: opened on ${DISPLAY} (log: log/rviz-up.log; rviz:=false skips it)"
 
 # This host's unit only; `up` runs it here and, over ssh, on the orin. ARGS
 # reach the unit through .golfcart-launch.args (gitignored), rewritten on EVERY
@@ -321,3 +359,69 @@ advantech-r750-otobrite-setup-and-reboot:
     exit 0
     ;;
     esac
+
+# ============================================================================
+# Deprecated launch recipes (2026-11-09). Each warns, then forwards to its
+# replacement with the same arguments. Remove once nobody types them.
+# ============================================================================
+
+[private]
+_deprecated OLD NEW:
+    @printf '\033[1;33mDEPRECATED:\033[0m `just %s` is now `just %s`. This alias will be removed; please switch.\n\n' "{{OLD}}" "{{NEW}}" >&2
+
+# DEPRECATED: use `just run`
+[positional-arguments]
+launch *ARGS:
+    @just _deprecated launch run
+    @just run "$@"
+
+# DEPRECATED: use `just up`
+[positional-arguments]
+launch-all *ARGS:
+    @just _deprecated launch-all up
+    @just up "$@"
+
+# DEPRECATED: use `just down`
+stop-all:
+    @just _deprecated stop-all down
+    @just down
+
+# DEPRECATED: use `just up` (both hosts); this host only is the private `_up-local`
+[positional-arguments]
+launch-up *ARGS:
+    @just _deprecated launch-up up
+    @just _up-local "$@"
+
+# DEPRECATED: use `just down` (both hosts); this host only is the private `_down-local`
+launch-down:
+    @just _deprecated launch-down down
+    @just _down-local
+
+# DEPRECATED: use `just up @basement`
+[positional-arguments]
+launch-drive-basement *ARGS:
+    @just _deprecated launch-drive-basement "up @basement"
+    @just up @basement "$@"
+
+# DEPRECATED: use `just up @mingda`
+[positional-arguments]
+launch-drive-mingda *ARGS:
+    @just _deprecated launch-drive-mingda "up @mingda"
+    @just up @mingda "$@"
+
+# DEPRECATED: use `just up @mingda-loop`
+[positional-arguments]
+launch-drive-mingda-loop *ARGS:
+    @just _deprecated launch-drive-mingda-loop "up @mingda-loop"
+    @just up @mingda-loop "$@"
+
+# DEPRECATED: use `just sim planning @sim-ntu-r01` (or @sim-ntu-r02)
+launch-sim-planning MAP="r01":
+    @just _deprecated "launch-sim-planning {{MAP}}" "sim planning @sim-ntu-{{MAP}}"
+    @just sim planning @sim-ntu-{{MAP}}
+
+# DEPRECATED: use `just sim logging`
+[positional-arguments]
+launch-sim-logging *ARGS:
+    @just _deprecated launch-sim-logging "sim logging"
+    @just sim logging "$@"
