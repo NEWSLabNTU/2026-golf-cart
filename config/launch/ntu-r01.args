@@ -1,0 +1,17 @@
+# Supervised outdoor drive on NTU campus route r01: `just up @ntu-r01`.
+# The map is MGRS 51RUH, so Autoware's default GNSS-seeded initializer applies
+# (pose_initializer:=gnss and use_gnss:=true are the defaults, not repeated
+# here). Not yet driven: the first run is also the first GNSS init on this map,
+# and RViz's 2D Pose Estimate is the fallback.
+map_path:=./data/ntu-campus-planning/r01
+# The lanes are 10 and 20 km/h; this is the startup planning speed (5.4 km/h),
+# under the vehicle interface's 2.5 m/s ceiling. Raise it from RViz once the
+# lock holds.
+planning_speed_limit:=1.5
+# The route has only road lanelets (no crosswalks, lights or intersections), and
+# perception is off by default, so the reduced module set is enough; it also
+# keeps the 3.5 m stop margins and no reversing that the Ming-Da runs used.
+planning_preset:=slow_indoor
+# ndt_divergence_nvtl_median_gate stays 0.0 (off): the only NTU NVTL numbers
+# (median ~2.0, min 1.44, docs/research/localization/ndt_tuning_ntu_campus.md)
+# predate cuda_ndt's NVTL rescaling, so re-derive it from this drive's bag.
