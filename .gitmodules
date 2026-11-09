@@ -26,10 +26,6 @@
 	path = src/vehicle/golfcart_vehicle_launch
 	url = https://github.com/NEWSLabNTU/golfcart_vehicle_launch.git
 	branch = 2026-golf
-[submodule "src/system/golfcart_runtime"]
-	path = src/system/golfcart_runtime
-	url = https://github.com/NEWSLabNTU/golfcart_runtime.git
-	branch = 2026-golfcart
 [submodule "src/system/golfcart_system_monitor"]
 	path = src/system/golfcart_system_monitor
 	url = https://github.com/NEWSLabNTU/golfcart_system_monitor.git

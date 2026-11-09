@@ -38,7 +38,6 @@ Then run `git submodule sync && git submodule update --remote` to track the bran
 | `src/vehicle/external/autoware_manual_control` | `evshary/autoware_manual_control` | Upstream | Keyboard control |
 | `src/sensor_component/external/gnss_locator` | `NEWSLabNTU/gnss_locator` | Fork | GNSS localization |
 | `src/param/autoware_individual_params` | `NEWSLabNTU/autoware_individual_params` | Fork | Sensor kit params |
-| `src/system/golfcart_runtime` | `NEWSLabNTU/golfcart_runtime` | Fork | CLI + systemd runtime |
 | `src/system/golfcart_system_monitor` | `NEWSLabNTU/golfcart_system_monitor` | Fork | Web system monitor |
 | `src/calibration/CalibrationTools` | `NEWSLabNTU/CalibrationTools` | Fork | LiDAR-camera calib |
 | `src/localization/cuda_ndt_matcher` | `NEWSLabNTU/cuda_ndt_matcher` | Fork | CUDA NDT localization |
