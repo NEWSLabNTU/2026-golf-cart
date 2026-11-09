@@ -4,6 +4,8 @@
 set -eo pipefail
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 pkg="$root/src/simulation/golfcart_twin"
+# Host settings: config/twin.env when present, else the environment (a wrapper repository's
+# .envrc, for one; config/twin.env.example lists them).
 [ -f "$root/config/twin.env" ] && set -a && source "$root/config/twin.env" && set +a
 TWIN_SWB=${TWIN_SWB:-$HOME/repos/scenario-world-bridge}
 TWIN_DOMAIN=${TWIN_DOMAIN:-1}
@@ -17,7 +19,7 @@ mkdir -p "$run"
 dds="file://$pkg/config/cyclonedds-unicast-lo.xml"
 
 die() { echo "twin: $*" >&2; exit 1; }
-need() { [ -n "${!1:-}" ] || die "$1 is not set (config/twin.env; twin.sh doctor)"; }
+need() { [ -n "${!1:-}" ] || die "$1 is not set (config/twin.env or the environment; twin.sh doctor)"; }
 dds_env() {
     export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp ROS_DOMAIN_ID=$TWIN_DOMAIN CYCLONEDDS_URI=$dds
 }
@@ -126,7 +128,7 @@ setup() {
     # Idempotent: each step is skipped when already done. What it cannot do for you (Isaac
     # Sim, the map, the assets) `doctor` names at the end.
     [ -f "$AUTOWARE/setup.bash" ] || die "Autoware 1.5.0 is not at $AUTOWARE: install it first (just setup)"
-    if [ ! -f "$root/config/twin.env" ]; then
+    if [ ! -f "$root/config/twin.env" ] && [ -z "${TWIN_MAP:-}" ]; then
         cp "$root/config/twin.env.example" "$root/config/twin.env"
         die "wrote config/twin.env from the example: fill in this host's paths, then run setup again"
     fi
@@ -152,8 +154,9 @@ doctor() {
     no() { printf '  MISS  %s\n        %s\n' "$1" "$2"; bad=1; }
     warn() { printf '  warn  %s\n        %s\n' "$1" "$2"; }
     echo "twin doctor ($root)"
-    [ -f "$root/config/twin.env" ] && ok "config/twin.env" \
-        || no "config/twin.env" "cp config/twin.env.example config/twin.env, and fill it in"
+    if [ -f "$root/config/twin.env" ]; then ok "config/twin.env"
+    elif [ -n "${TWIN_MAP:-}" ]; then ok "host settings from the environment"
+    else no "host settings" "cp config/twin.env.example config/twin.env and fill it in, or export them"; fi
     [ -f "$AUTOWARE/setup.bash" ] && ok "Autoware 1.5.0" || no "Autoware 1.5.0 at $AUTOWARE" "just setup"
     if command -v play_launch > /dev/null; then ok "$(play_launch --version 2>&1 | head -1)"
     else no "play_launch" "pip install --user play_launch"; fi

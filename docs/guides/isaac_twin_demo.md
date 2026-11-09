@@ -33,6 +33,9 @@ The first `setup` writes `config/twin.env` from `config/twin.env.example` and st
 the host's paths and run it again. It clones scenario-world-bridge into `TWIN_SWB` when it is
 absent and builds both workspaces. Isaac Sim, the twin's map and the NPC assets it cannot
 fetch; `doctor` names each and how to get it. Verdicts are under `log/twin/scenario/<name>/`.
+Host settings exported in the environment instead (a wrapper repository's `.envrc`, as
+the private demo repository has, with this repository and scenario-world-bridge as its
+submodules) take the place of `config/twin.env`, which then need not exist.
 The rest of this page is what the script does, by hand.
 
 ## Before you start
