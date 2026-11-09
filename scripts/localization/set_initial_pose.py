@@ -79,7 +79,10 @@ def main() -> int:
         return 1
 
     import yaml
-    pose = yaml.safe_load(open(path, encoding="utf-8"))["initial_pose"]
+    pose = (yaml.safe_load(open(path, encoding="utf-8")) or {}).get("initial_pose")
+    if pose is None:
+        print(f"no initial_pose in {path}", file=sys.stderr)
+        return 1
     if args.map:
         problem = pose_maps.check_extent(args.map, float(pose["x"]), float(pose["y"]))
         if problem:

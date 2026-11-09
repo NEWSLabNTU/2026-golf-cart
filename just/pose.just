@@ -10,6 +10,11 @@
 #   # every time after, parked at the same spot:
 #   just pose init ntu-r01 gate
 #
+# Or click both start and goal in RViz once, then replay them:
+#
+#   just pose listen ntu-r01 gate   # click 2D Pose Estimate + 2D Goal Pose, Ctrl-C
+#   just pose go ntu-r01 gate       # initial pose, then route; engage is still yours
+#
 # Poses live in config/initial_poses/<map>/<spot>.yaml; a map is any directory
 # there with a map.yaml naming its data directory. `init` refuses a pose that
 # falls outside the map, or a map the running stack did not load. It calls
@@ -30,6 +35,19 @@ init MAP SPOT:
 # Save the current converged pose as a spot on MAP
 capture MAP SPOT:
     python3 ./scripts/localization/capture_initial_pose.py --map {{MAP}} {{SPOT}}
+
+# Record the start and goal you click in RViz as SPOT on MAP (Ctrl-C when done)
+listen MAP SPOT:
+    python3 ./scripts/localization/listen_pose.py --map {{MAP}} {{SPOT}}
+
+# Set the route to SPOT's saved goal (localization already initialized)
+goal MAP SPOT:
+    python3 ./scripts/localization/set_goal_pose.py --map {{MAP}} {{SPOT}}
+
+# Initial pose, then route to the goal, both from SPOT. Does not engage.
+go MAP SPOT:
+    python3 ./scripts/localization/set_initial_pose.py --map {{MAP}} {{SPOT}}
+    python3 ./scripts/localization/set_goal_pose.py --map {{MAP}} {{SPOT}}
 
 # Seed localization from the reflective board again: cart stopped, board in view.
 # Re-arms board_pose_initializer (one initialization per launch otherwise).
