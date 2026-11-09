@@ -7,6 +7,34 @@ makes one or two turns at the T junction in front of 學新館. The plan and its
 This page assumes newslab-118-server, which is already set up. Run every command from the
 repository root. For another host, see [Setting up a new host](#setting-up-a-new-host).
 
+## The demo by one script
+
+`scripts/twin/twin.sh` (or `just twin <command>`) runs the whole demo from a fresh clone:
+
+```bash
+scripts/twin/twin.sh setup       # config/twin.env, scenario-world-bridge, the build; then doctor
+scripts/twin/twin.sh doctor      # what this host still lacks, and how to get it
+scripts/twin/twin.sh help        # every command and option
+scripts/twin/twin.sh list        # the routes and scenarios
+
+scripts/twin/twin.sh run                                # free drive from route 1 (Ctrl-C ends it)
+scripts/twin/twin.sh go 1                               # second terminal: route 1's goal, engage
+scripts/twin/twin.sh run --route 2 --no-perception      # another route, the cart without perception
+scripts/twin/twin.sh run --scenario showcase_pedestrian # a scenario: it ends with a verdict
+scripts/twin/twin.sh run --showcase                     # every showcase in turn, then the verdicts
+scripts/twin/twin.sh stop                               # whatever it started, if a terminal was lost
+```
+
+`run` takes `--route N` or `--scenario NAME` (or `--showcase`), and `--no-perception`,
+`--no-rviz`, `--headless`, `--fast` (free drive unpaced), `--follow MODE`; anything after `--`
+goes to `twin.launch.py` as `name:=value`. `drive`, `scenario` and `showcase` are shortcuts.
+
+The first `setup` writes `config/twin.env` from `config/twin.env.example` and stops: fill in
+the host's paths and run it again. It clones scenario-world-bridge into `TWIN_SWB` when it is
+absent and builds both workspaces. Isaac Sim, the twin's map and the NPC assets it cannot
+fetch; `doctor` names each and how to get it. Verdicts are under `log/twin/scenario/<name>/`.
+The rest of this page is what the script does, by hand.
+
 ## Before you start
 
 1. Open a VNC viewer on `newslab-118-server:9`. Isaac's window and RViz open there.
@@ -205,6 +233,8 @@ stops its nodes and exits.
 `just twin` runs the same launches in the background, with logs in `log/twin/`:
 
 ```bash
+just twin drive 1     # the whole stack, as scripts/twin/twin.sh drive
+just twin showcase    # the showcase scenarios and their verdicts
 just twin world 1     # terminal 1's launch
 just twin autoware    # terminal 2's
 just twin go 1        # twin_go.py
@@ -238,7 +268,8 @@ Each play_launch logs to `play_log/<time>/` of the directory it was started in (
    - `isaac/world.yaml`.
 
    Do not run it from the NAS: a dropped mount takes the map loaders down.
-3. Write `config/twin.env` (git-ignored). `scripts/twin/setup.bash` reads it:
+3. Write `config/twin.env` (git-ignored; `config/twin.env.example` is the template, and
+   `scripts/twin/twin.sh setup` copies it). `scripts/twin/setup.bash` reads it:
    ```bash
    TWIN_SWB=$HOME/repos/carla-scenario-bridge    # the swb checkout
    ISAAC_ROOT=/mnt/disk1/isaac-sim                # Isaac Sim 6.1

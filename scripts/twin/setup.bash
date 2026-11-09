@@ -27,7 +27,7 @@
 #                 (swb's; set them when another stack on the host has the defaults)
 _twin_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 [ -f "$_twin_root/config/twin.env" ] && set -a && source "$_twin_root/config/twin.env" && set +a
-: "${TWIN_SWB:=$HOME/repos/carla-scenario-bridge}"
+: "${TWIN_SWB:=$HOME/repos/scenario-world-bridge}"
 : "${TWIN_DOMAIN:=1}"
 # ROS Humble's Python is the system's 3.10: a virtualenv's python3 ahead of it on PATH (an
 # activated venv, or a desktop session that inherited one) runs `ros2 run` scripts without
