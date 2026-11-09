@@ -4518,7 +4518,7 @@ Visualization Manager:
   Enabled: true
   Global Options:
     Background Color: 15; 20; 23
-    Fixed Frame: base_link
+    Fixed Frame: map
     Frame Rate: 30
   Name: root
   Tools:
