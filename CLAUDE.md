@@ -1371,10 +1371,13 @@ One ZED X stereo camera, driven as a composable node:
 - **The RGB channel is the left camera.** Images are stamped
   `zed_left_camera_frame_optical` (Z forward, X right, Y down), so any pose
   computed from them is in that frame — transform with tf2, never by hand.
-- Stereo video: `just up zed_stereo_video:=true` H.264-encodes the
-  rectified left and right on the orin's NVENC (Isaac ROS) into the orin's bag,
+- Stereo video, **on by default since 2026-11-10** (`zed_stereo_video:=false`
+  turns it off): the rectified left and right, H.264 on the orin's NVENC (Isaac
+  ROS), into the orin's bag as
   `/sensing/camera/zed/{left,right}/color/rect/image/h264`. Needs the
-  `isaac-h264-encoder` setup step there; untested on the orin as of 2026-10-27.
+  `isaac-h264-encoder` setup step there (installed on the orin 2026-11-10).
+  Cost: ~33 Mbit/s per side, and with the RGB JPEG also subscribed every ZED
+  stream drops to 15 Hz; the ZED IMU stays at 100 Hz.
   See docs/design/zed_camera_integration.md.
 - Left/right raw images, depth, and point cloud are otherwise disabled. Positional
   tracking is off, because Autoware owns `map -> odom` and `odom -> base_link`.

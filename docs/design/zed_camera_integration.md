@@ -140,12 +140,24 @@ whenever it finds that package: it would then publish NITROS images with no
 `image/compressed` transport, and the recorded RGB JPEG would disappear on the
 next rebuild.
 
-**Not yet run on the orin** (2026-10-27). To check there: the encoders load
-(`ros2 component list`), both h264 topics at 30 Hz, the container's CPU with
-and without, and a recorded bag decoding (`isaac_ros_h264_decoder`'s rosbag
-launch, or ffmpeg on the concatenated payloads). The raw images reach the
-encoders through DDS inside one process, not intra-process; if the CPU cost is
-high, intra-process comms on the four components is the next thing to try.
+**Run on the orin 2026-11-10, and on by default since.** ZED alone
+(`camera.launch.xml camera_model:=zedx`), stack down:
+
+| subscribed | each h264 | RGB JPEG | `zed_main` CPU | ZED IMU |
+|---|---|---|---|---|
+| h264 only | 30 Hz | - | | 100 Hz, max gap 11 ms |
+| h264 + RGB JPEG | 15 Hz | 15 Hz | ~106 % | |
+| stereo off, RGB JPEG | - | 20-30 Hz | ~6-12 % | 100 Hz |
+
+Each side is ~33 Mbit/s (qp 20, I-frame every 5, Main profile, 1920x1200);
+150 frames per side decoded cleanly with ffmpeg on the concatenated payloads.
+The halved rate with the JPEG comes from the wrapper's CPU JPEG encode on top
+of the raw left/right publishing. Intra-process comms, the next thing this
+section used to suggest, is not possible: every Isaac NITROS node (converter
+and encoder alike) refuses it at construction, "intraprocess communication
+allowed only with volatile durability". What remains is the wrapper's own
+NITROS output (`debug.disable_nitros: false`), which costs the RGB JPEG, see
+above.
 `pos_tracking` stays disabled either way, so transforms do not change.
 
 ---
