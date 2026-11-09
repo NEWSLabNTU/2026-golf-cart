@@ -1,24 +1,20 @@
 # Golf Cart Development Commands
-# Use `just --list` to see all available commands
+# Use `just --list` to see all available commands.
+#
+# `just --list` shows the comment line directly above a recipe as its
+# description, so keep that line last.
 
 # ============================================================================
 # Core Commands
-# --list-submodules is not optional. Without it each module collapses to a
-# single `bag ...` line and its recipes are invisible, which for a 60-recipe
-# repo is the difference between a menu and a riddle.
+# ============================================================================
+
 # Show all available commands, modules expanded
 default:
     @just --list --list-submodules
 
 # ============================================================================
-# Modules — grouped commands. `just <module>` lists that module's recipes.
-#
-# Invoke either way:  `just bag play`  or  `just bag::play`
-#
-# Only families that are entered deliberately live here. The daily verbs
-# (build, test, clean, launch, stop-all, logs) stay at the root, partly by
-# choice and partly because a module may NOT share a name with a recipe --
-# `mod launch` next to `launch:` is a hard error that kills the whole justfile.
+# Modules: `just <module>` lists its recipes; call as `just bag play` or `just bag::play`.
+# A module may not share a name with a root recipe (hard error for the whole justfile).
 # ============================================================================
 
 # NTU campus NDT replay test — see `just ntu-test` for the ordered sequence
@@ -49,7 +45,6 @@ mod gnss 'just/gnss.just'
 mod rmw 'just/rmw.just'
 # The master/orin link: what crosses it, how much, and the two-host simulation
 mod link 'just/link.just'
-
 # CPU / kernel profiling of the running stack
 mod profile 'just/profile.just'
 
@@ -88,55 +83,24 @@ build *FLAGS="":
         --cargo-args --release \
         "${IGNORE_ARGS[@]}"
 
-# Fill data/autoware_data, a tree this user owns, so TensorRT can write its
-# .engine files beside the models. With autoware-localrepo 1.5.0-3 or later it
-# runs autoware-download-models (arguments pass through, e.g. `--only
-# lidar_centerpoint` or `--list`); on older installs it symlinks the packaged
-# models. See scripts/setup_autoware_data.sh.
-#
-# just --list shows only the LAST comment line, so the description goes here.
+# With autoware-localrepo 1.5.0-3 or later this runs autoware-download-models
+# (ARGS pass through, e.g. `--only lidar_centerpoint`); older installs symlink.
 # Download or link Autoware models into data/autoware_data (writable, for TensorRT)
 setup-autoware-data *ARGS:
     ./scripts/setup_autoware_data.sh {{ARGS}}
 
-# Compile the TensorRT engines this stack needs, ahead of the first launch.
-#
-# Autoware compiles an .onnx into a .engine inside the NODE'S CONSTRUCTOR the
-# first time it runs. On the Orin that is minutes per model — measured, 94 s for
-# the small traffic-light classifier alone — during which the node is not up and
-# perception is unavailable. Doing it here turns that into a provisioning step.
-#
-# Engines are specific to the TensorRT version AND the GPU, so this must run ON
-# THE TARGET BOARD. It cannot be baked into an image built elsewhere, and it
-# must be re-run after an Autoware or JetPack upgrade.
-#
-# The model set below is the one `perception_preset:=camera_lidar_fusion`
-# actually resolves to — derived by resolving the launch and listing every node
-# that references a .onnx. Re-derive it if the preset changes:
-#
+# Engines are specific to the TensorRT version and the GPU: run on the target
+# board, and again after an Autoware or JetPack upgrade. The model set is what
+# perception_preset:=camera_lidar_fusion resolves to; re-derive it with
 #     play_launch resolve golfcart_launch golfcart.launch.yaml \
 #       launch_perception:=true perception_preset:=camera_lidar_fusion -o /tmp/m.yaml
-#
-# `autoware_shape_estimation` is deliberately absent: it uses TensorRT but ships
-# no `build_only` argument, so its pointnet engine is still built on first use.
-# That is one model rather than six, and it succeeds now that the directory is
-# writable.
-#
-# just --list shows only the LAST comment line, so the description goes here.
+# shape_estimation has no build_only argument, so it still builds on first use.
 # Compile TensorRT engines ahead of time (minutes; run on the target board)
 build-engines:
     #!/usr/bin/env bash
-    # No `set -u`: ROS's own setup.bash reads unbound variables and dies under
-    # it (AMENT_TRACE_SETUP_FILES). No `set -e` either — one model failing must
-    # not hide the rest, and the summary at the end reports what actually
-    # landed.
+    # No `set -u` (ROS setup.bash breaks under it) and no `set -e`: one failed
+    # model must not hide the rest; the summary at the end reports what landed.
     set -o pipefail
-    # Say which install is missing, before sourcing a file that is not there.
-    # Reached on a first run whenever this recipe is asked for ahead of the
-    # steps that provide it -- `./setup.sh --only tensorrt-engines`, or a run
-    # with ros2 or autoware-debian unticked. Without these two checks the
-    # failure is `source: /opt/ros/humble/setup.bash: No such file or
-    # directory`, which names neither this recipe nor the fix.
     for req in /opt/ros/humble/setup.bash:ros2 /opt/autoware/1.5.0/setup.bash:autoware-debian; do
         if [[ ! -f "${req%%:*}" ]]; then
             echo "Not installed: ${req%%:*}" >&2
@@ -149,21 +113,12 @@ build-engines:
     source /opt/autoware/1.5.0/setup.bash
     DATA="${GOLFCART_DATA_PATH:-{{justfile_directory()}}/data/autoware_data}"
 
-    # Each entry: <package> <launch file> [extra args]. `build_only:=true` makes
-    # the node exit as soon as its engine is written — an Autoware-provided
-    # argument, so the builder settings match what the node will later expect.
-    # Building with trtexec by hand would not guarantee that.
+    # <package> <launch file> [extra args]; build_only:=true exits once the engine is written.
     build() {
         local pkg="$1" launch="$2"; shift 2
         echo "=== ${pkg} ${launch}"
         local start=$SECONDS
-        # Stream the TensorRT lines rather than piping into `tail`, which
-        # buffers the whole build and shows nothing for minutes — on a step
-        # that takes minutes per model, silence is indistinguishable from a
-        # hang. `--line-buffered` matters for the same reason.
-        #
-        # Not fatal on failure: one model failing must not hide the others, and
-        # the summary below reports what actually landed.
+        # Stream progress line by line; a buffered build looks like a hang.
         ros2 launch "${pkg}" "${launch}" data_path:="${DATA}" build_only:=true "$@" 2>&1 \
             | grep --line-buffered -iE "engine generation|engine build|error|fail" \
             | sed -u 's/^/    /' || true
@@ -212,42 +167,24 @@ clean *FLAGS="":
     fi
 
 # ============================================================================
-# Launch Commands - Start systems
-# ARGS is one string of golfcart.launch.yaml arguments.
+# Launch Commands
+# ARGS is one string of golfcart.launch.yaml arguments. There is no CAN TX
+# switch: the vehicle interface always transmits; the cart's power switch is
+# the master enable.
 #
-# There is no CAN TX switch. The vehicle interface always transmits, because
-# the VCU reports velocity and steering only while it hears our rolling
-# counter; the cart's power switch is the master enable.
-#
-# just --list shows only the LAST comment line, so the description goes here, at
-# the bottom. Moving it up silently replaces it with whatever line ends up last.
+# Every launch first runs scripts/rmw/ensure.sh, which fails loudly on two
+# otherwise silent problems: a stale ros2 daemon from the other RMW, and (under
+# zenoh) a missing or non-multicast interface.
+# ============================================================================
+
 # Launch the system, web UI at http://localhost:8081. ARGS: [launch args]
 launch ARGS="":
     #!/usr/bin/env bash
     set -euo pipefail
-    # Middleware preconditions, whichever middleware this host is on. Two jobs:
-    # stop a ros2 daemon left behind by the OTHER RMW (its XML-RPC port is
-    # 11511 + ROS_DOMAIN_ID with no RMW in it, so a stale one answers every graph
-    # query from an empty world), and under zenoh confirm the interface this host
-    # advertises exists and carries MULTICAST, since with no router that is the
-    # only discovery path. Both failures are SILENT, which is why this is a gate
-    # and not a hint. See scripts/rmw/ensure.sh.
     {{justfile_directory()}}/scripts/rmw/ensure.sh || exit 2
     GOLFCART_LAUNCH_ARGS={{quote(ARGS)}}
-    # host:= comes from the config/host marker, not from the "all" default.
-    #
-    # `host:=all` puts the is_orin group in scope, and that group includes
-    # camera.launch.xml with camera_model:=zedx unconditionally — so a plain
-    # `just launch` on the Advantech started the ZED driver for a camera that is
-    # not attached, against zed_wrapper, which `just build` skips on any host
-    # without the ZED SDK. `$(find-pkg-share zed_wrapper)` then aborts the whole
-    # launch, and the message names a package nobody asked for.
-    #
-    # The marker already states which machine this is and config/ is the single
-    # source of truth for that, so read it here rather than making every operator
-    # remember host:=master. Only master and orin narrow the profile; loopback (or
-    # no marker) keeps the historical single-machine `all`, and an explicit
-    # host:= in ARGS still wins; see the case below.
+    # host:= comes from config/host (master/orin), else "all". host:=all would
+    # start the ZED driver on a machine without one. An explicit host:= in ARGS wins.
     GOLFCART_HOST_ROLE=$(
         GOLFCART_ENV_RESOLVE_ONLY=1 GOLFCART_ENV_QUIET=1 \
         bash -c 'source "{{justfile_directory()}}/scripts/env.sh"; printf "%s" "${GOLFCART_HOST}"'
@@ -256,9 +193,6 @@ launch ARGS="":
         master | orin) HOST_ARG="host:=${GOLFCART_HOST_ROLE}" ;;
         *)             HOST_ARG="host:=all" ;;
     esac
-    # An explicit host:= in ARGS wins outright. Dropping ours rather than
-    # appending theirs: play_launch's precedence for a repeated argument is not
-    # something to bet the ZED guard on.
     case " ${GOLFCART_LAUNCH_ARGS} " in
         *" host:="*) HOST_ARG="" ;;
     esac
@@ -277,25 +211,16 @@ launch ARGS="":
             rviz:=false ${GOLFCART_LAUNCH_ARGS}
     fi
 
-# ── This host only. The same recipes exist on both machines; the master drives
-# ── the orin by running them over there, not by reimplementing them here.
+# ── This host only. The master drives the orin by running these same recipes there.
 
 # Start this host's stack. ARGS: [launch args]
 launch-up ARGS="":
     #!/usr/bin/env bash
     set -uo pipefail
-    # Middleware preconditions, whichever middleware this host is on. Two jobs:
-    # stop a ros2 daemon left behind by the OTHER RMW (its XML-RPC port is
-    # 11511 + ROS_DOMAIN_ID with no RMW in it, so a stale one answers every graph
-    # query from an empty world), and under zenoh confirm the interface this host
-    # advertises exists and carries MULTICAST, since with no router that is the
-    # only discovery path. Both failures are SILENT, which is why this is a gate
-    # and not a hint. See scripts/rmw/ensure.sh.
     {{justfile_directory()}}/scripts/rmw/ensure.sh || exit 2
     GOLFCART_LAUNCH_ARGS={{quote(ARGS)}}
-    # Per-invocation launch arguments reach the unit through the user manager's
-    # environment. set-environment persists, so launch-down clears it - otherwise
-    # today's flags silently apply to tomorrow's launch.
+    # ARGS reach the unit through the user manager's environment, which
+    # persists; launch-down clears it so today's flags don't leak into tomorrow.
     if [ -n "${GOLFCART_LAUNCH_ARGS}" ]; then
         systemctl --user set-environment GOLFCART_LAUNCH_ARGS="${GOLFCART_LAUNCH_ARGS}"
     else
@@ -319,29 +244,15 @@ launch-down:
     echo "$(hostname): launch $(systemctl --user is-active golfcart-launch.service)"
     exit $RC
 
+# ARGS is positional: `just launch-all "a:=1"`, not `ARGS="a:=1"`. Teardown is
+# `just stop-all`; the orin's watchdog covers a master that never runs it.
 # Start the stack on BOTH hosts; returns immediately. ARGS: [launch args]
 launch-all ARGS="":
     #!/usr/bin/env bash
     set -uo pipefail
-    # Middleware preconditions, whichever middleware this host is on. Two jobs:
-    # stop a ros2 daemon left behind by the OTHER RMW (its XML-RPC port is
-    # 11511 + ROS_DOMAIN_ID with no RMW in it, so a stale one answers every graph
-    # query from an empty world), and under zenoh confirm the interface this host
-    # advertises exists and carries MULTICAST, since with no router that is the
-    # only discovery path. Both failures are SILENT, which is why this is a gate
-    # and not a hint. See scripts/rmw/ensure.sh.
     {{justfile_directory()}}/scripts/rmw/ensure.sh || exit 2
-    # NOTE: ARGS is positional. `just launch-all ARGS="..."` does NOT work:
-    # just has no NAME=value syntax for recipe parameters.
-    #
-    # Both hosts run under systemd, so nothing blocks a terminal and no EXIT trap
-    # orchestrates the orin: teardown is `just stop-all`, and the orin's
-    # watchdog covers the case where this machine never gets to run it.
     just launch-up {{quote(ARGS)}} || exit 1
-    # The orin runs the identical recipe from its own checkout, with the same
-    # arguments. A missing orin does not fail the master, so its status is
-    # reported and discarded - but the vehicle interface is on the orin, so
-    # without it the cart has no velocity report and cannot be engaged.
+    # A missing orin does not fail the master, but the vehicle interface lives there.
     if [[ "${GOLFCART_USE_ORIN:-1}" == "1" ]]; then
         ./scripts/multi_machine/on_orin.sh just launch-up {{quote(ARGS)}} \
             || echo "WARNING: could not start the orin - continuing without it; no vehicle interface, the cart cannot be driven" >&2
@@ -354,8 +265,7 @@ stop-all:
     #!/usr/bin/env bash
     set -uo pipefail
     RC=0
-    # The orin first, while this host can still reach it. Recording is deliberately
-    # untouched on both sides: `just record stop` is its own verb.
+    # The orin first, while this host can still reach it.
     if [[ "${GOLFCART_USE_ORIN:-1}" == "1" ]]; then
         ./scripts/multi_machine/on_orin.sh just launch-down || RC=1
     fi
@@ -366,57 +276,36 @@ stop-all:
 logs:
     journalctl --user -u golfcart-launch.service -f
 
-# Both hosts, set up for a supervised drive in the Ming-Da basement (Phase 8, E4):
-# board cold start against the board-anchored map, no GNSS, planning defaulting
-# to 1.0 m/s. Perception stays off, which selects the no-perception diagnostic
-# graph: there is NO obstacle detection, the driver with the e-stop is it.
-#
-# Anything passed after it wins, e.g. "planning_speed_limit:=0.5".
-# The engage sequence is in docs/roadmaps/8-autonomous-driving.md.
+# ============================================================================
+# Supervised drives (Phase 8). Board cold start, no GNSS, 1.0 m/s planning
+# default, perception off: NO obstacle detection, the driver with the e-stop is
+# it. Extra ARGS win. Engage order: docs/roadmaps/8-autonomous-driving.md.
+# ============================================================================
+
+# Drive on the basement map (both hosts). ARGS: [launch args]
 launch-drive-basement ARGS="":
     just launch-all "pose_initializer:=board reflective_pose_scenario:=basement map_path:=./data/basement-indoor use_gnss:=false planning_speed_limit:=1.0 planning_preset:=slow_indoor {{ARGS}}"
 
-# The same drive on the re-anchored MingDa map (data/mingda-basement): the Falcon
-# cloud is on this map, and its anchor is 3.46 deg of yaw away from
-# basement-indoor's, so nothing traced in the old frame (the lanelet ring,
-# route_loop_cw.yaml, poses captured there) carries over. Its lanelet map is
-# whatever data/mingda-basement/lanelet2_map.osm holds when this runs.
-#
-# Same scenario, `basement`, on purpose: a scenario is the site's board and the
-# VLP-32C's gates, not the anchor. Both anchors define the map frame as the
-# board at the origin facing +x, so the runtime board.pose_in_map is the same
-# [0, 0, 1.3, 0, 0, 0] in either; what changed is which way the survey cloud
-# was turned to put it there. A copy would be a second place to tune the gates.
-#
-# ndt_divergence_nvtl_median_gate:=2.1 is this map's NVTL divergence gate
-# (Phase 8, L6). On the dense 0.15 m cloud, 2026-10-28 bag master_20261028_192241:
-# a healthy lock scores a median 2.53 (rolling median of 10 never below 2.51, single
-# scans down to 2.03) while hand-clicked wrong poses scored 1.5 to 1.66. 2.1 sits
-# between them with about 0.4 either side. The 2.5 it replaces was set on the
-# 0.30 m map (healthy never below 2.57) and latched on a good lock here.
+# Re-anchored map (3.46 deg yaw from basement-indoor; old poses don't carry over).
+# Same `basement` scenario: the board defines the map origin in both.
+# NVTL gate 2.1: healthy lock ~2.53, wrong poses 1.5-1.66 (bag master_20261028_192241).
+# Drive on the Ming-Da map (both hosts). ARGS: [launch args]
 launch-drive-mingda ARGS="":
     just launch-all "pose_initializer:=board reflective_pose_scenario:=basement map_path:=./data/mingda-basement use_gnss:=false planning_speed_limit:=2.0 planning_preset:=slow_indoor ndt_divergence_nvtl_median_gate:=2.1 {{ARGS}}"
 
-# The same, on the clockwise loop lane (lanelet2_map_loop.osm, from the
-# 2026-09-24 drive carried into this frame; see route_loop_cw.yaml). Narrows to
-# 1.5 m and 5.4 km/h past the board hanging over the top aisle; drives two laps in
-# the planning simulator.
+# Drive the Ming-Da clockwise loop lane (narrows to 1.5 m / 5.4 km/h under the board)
 launch-drive-mingda-loop ARGS="":
     just launch-drive-mingda "lanelet2_map_file:=lanelet2_map_loop.osm {{ARGS}}"
 
-# The planning simulator on the basement map, golf-cart vehicle model (Phase 8, M2).
-# MAP is a map directory; point it at a scratch copy to try a route before
-# writing it into data/basement-indoor. Then, from another terminal:
-#
+# ============================================================================
+# Planning simulators
+# ============================================================================
+
+# MAP is a map directory (point it at a scratch copy to try a route); PRESET is
+# slow_indoor or default. Then, from another terminal:
 #   python3 scripts/testing/sim_route_check.py --start X Y YAW_DEG --goal X Y YAW_DEG
-#
-# which initializes, routes, engages and passes only on arrival, forward along
-# the lane. Keep the goal a few metres short of the lane's end: the goal
-# footprint must fit inside the lanelet.
-#
-# PRESET is the planning preset (M3): slow_indoor, as the drive recipes use,
-# or default for stock autoware_launch. planning_sim.launch.xml is upstream's
-# planning simulator with our planning component in place of upstream's.
+# Keep the goal a few metres short of the lane's end.
+# Planning simulator on the basement map. MAP PRESET LANELET
 sim-drive-basement MAP="./data/basement-indoor" PRESET="slow_indoor" LANELET="lanelet2_map.osm":
     play_launch launch \
         --container-mode "${GOLFCART_CONTAINER_MODE:-observable}" \
@@ -426,23 +315,18 @@ sim-drive-basement MAP="./data/basement-indoor" PRESET="slow_indoor" LANELET="la
         lanelet2_map_file:={{LANELET}} \
         planning_preset:={{PRESET}}
 
-# The planning simulator on the Ming-Da clockwise loop lane (Phase 8, M6), for
-# `just sim-loop-drive` from another terminal.
+# Planning simulator on the Ming-Da loop lane, for `just sim-loop-drive`
 sim-drive-mingda-loop PRESET="slow_indoor":
     just sim-drive-basement ./data/mingda-basement {{PRESET}} lanelet2_map_loop.osm
 
-# With sim-drive-mingda-loop up: N laps as chained goals from
-# data/mingda-basement/loop_goals_cw.yaml (`--laps 2`; `--check-only` checks
-# an edited goal file against the lane without ROS).
+# With sim-drive-mingda-loop up: drive N laps (`--laps 2`; `--check-only` without ROS)
 sim-loop-drive *ARGS:
     python3 scripts/testing/sim_loop_drive.py {{ARGS}}
 
-# Phase 8 S5, desk half of exit criterion 4: with `just sim-drive-basement
-# ./data/mingda-basement` up, drive the Ming-Da lane, fault NDT's leaf at
-# 0.8 m/s, and follow the MRM to the vehicle interface's CAN frames (real
-# interface on vcan0, mock_vcu in AUTO). ARGS go to the script, e.g.
-# `--leaf 'topic_state_monitor_obstacle_segmentation_pointcloud: perception_topic_status'`
-# or `--no-can` on a machine without vcan0 or the vendor DBC.
+# With `just sim-drive-basement ./data/mingda-basement` up: fault NDT while
+# driving and follow the MRM to the CAN frames (vcan0 + mock_vcu).
+# `--no-can` on a machine without vcan0 or the vendor DBC.
+# MRM end-to-end check on the Ming-Da lane. ARGS go to the script
 sim-mrm-check *ARGS:
     python3 scripts/testing/sim_mrm_check.py --start 17.6 -4.9 180 --goal 6.5 -4.9 180 {{ARGS}}
 
@@ -493,8 +377,8 @@ check-sensors:
 audit-launch:
     python3 ./scripts/check/audit_launch.py
 
+# Needs the NTU COSS Park rosbag (./scripts/rosbag/download-test-rosbag.sh).
 # Run COSS Park simulation (launch + rosbag feed + localization recording)
-# Requires: rosbag data from NTU COSS Park (run ./scripts/rosbag/download-test-rosbag.sh)
 sim-coss-park:
     #!/usr/bin/env bash
     parallel --line-buffer ::: \
@@ -505,6 +389,9 @@ sim-coss-park:
 # ============================================================================
 # oToBrite Setup - AFE R750 only
 # https://ess-wiki.advantech.com.tw/view/AFE_R750_Development#oToBrite_Camera
+# ============================================================================
+
+# Install the oToBrite camera module and reboot (AFE R750 only)
 advantech-r750-otobrite-setup-and-reboot:
     #!/usr/bin/env bash
     if [ -f "$HOME/insmod-otocam.sh" ]; then
@@ -512,7 +399,7 @@ advantech-r750-otobrite-setup-and-reboot:
     fi
     read -p "The device will be rebooted immediately, continue? (y/N)" yyyes
     yyyes="${yyyes:-n}"
-    case "$yyyes" in 
+    case "$yyyes" in
         [Yy]*)
     echo "Start to setup and reboot"
     cd /usr/local/bin/otocam
