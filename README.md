@@ -131,6 +131,46 @@ There is no Ctrl-C to press. Both hosts run under systemd, so closing the termin
 or dropping the ssh session does not stop the cart — `just stop-all` is the stop
 verb.
 
+### Choosing the map and the initial pose
+
+Launch arguments go in one quoted string, passed to both hosts. A `\` at the end
+of a line continues the string on the next one; keep the closing quote on the last
+line:
+
+```bash
+# NTU campus, route 02 (default map: ./data/COSS-map-planning)
+just launch-all "map_path:=./data/ntu-campus-planning/r01"
+
+# Ming-Da basement, the clockwise loop lane
+just launch-all "map_path:=./data/mingda-basement \
+                 lanelet2_map_file:=lanelet2_map_loop.osm \
+                 use_gnss:=false \
+                 pose_initializer:=board"
+
+# Basement, indoor: no GNSS, initial pose from the reflective board
+just launch-all "map_path:=./data/basement-indoor \
+                 use_gnss:=false \
+                 pose_initializer:=board"
+```
+
+`pose_initializer:=` picks what seeds the initial pose:
+
+| value | seeds from |
+|---|---|
+| `gnss` (default) | the GNSS fix |
+| `board` | the reflective board in view (indoor; use with `use_gnss:=false`) |
+| `none` | nothing: click *2D Pose Estimate* in RViz |
+
+When GNSS puts the cart somewhere wrong, seed it from a spot captured once instead
+of clicking in RViz:
+
+```bash
+just pose capture ntu-r02 gate   # first time: click in RViz, let NDT settle, then save the spot
+just pose init ntu-r02 gate      # every time after, parked on that spot
+just pose list                   # maps and saved spots
+```
+
+
 Full operational guide: [docs/multi-machine.md](docs/multi-machine.md).
 
 ## Recording
@@ -299,16 +339,89 @@ This project is currently in development. See [ROADMAP.md](ROADMAP.md) for the a
 
 ## Maps Download
 
-Click the link to download NTU campus map to data/ntu-campus-planning: https://newslabn.csie.ntu.edu.tw/drive/d/s/17udXr7jE0y1uVZuITDKMHFdhprfnH8l/y7cT2BSRT_5RUSI5bp4blXm8MI8qlp-3-iLCA3n5hIg0
-The expected structure will be
+Download the NTU campus map into `data/ntu-campus-planning/`:
+https://newslabn.csie.ntu.edu.tw/drive/d/s/17udXr7jE0y1uVZuITDKMHFdhprfnH8l/y7cT2BSRT_5RUSI5bp4blXm8MI8qlp-3-iLCA3n5hIg0
+
+### Map directory layout
+
+Every map is one directory holding exactly these three files, with these exact
+names. Autoware looks them up by name, so a renamed file (`map.osm`,
+`pointcloud_map.pcd.pcd`) is not found:
+
 ```
-├── data/
-│   └── ntu-campus-planning/             # For NTU campus map
-│       └── r01/                         # Route 01
-│           ├── lanelet2_map.osm         # Lanelet2 map
-│           ├── map_projector_info.yaml  # Map projector information
-│           └── pointcloud_map.pcd.pcd   # Point cloud
+data/
+└── ntu-campus-planning/
+    ├── r01/                          # route 01
+    │   ├── lanelet2_map.osm          # Lanelet2 vector map (lanes, routes)
+    │   ├── map_projector_info.yaml   # how map coordinates relate to lat/lon
+    │   └── pointcloud_map.pcd        # point cloud, for NDT localization
+    └── r02/                          # route 02, same three files
+        ├── lanelet2_map.osm
+        ├── map_projector_info.yaml
+        └── pointcloud_map.pcd
 ```
+
+Do not add an extra folder level. After unzipping, the files must sit directly in
+`r02/`, not in `r02/r02/` or `r02/map/`.
+
+### Checking a new map
+
+Example: you have just put a new route at `data/ntu-campus-planning/r03`.
+
+**1. All three files are there and not empty:**
+
+```bash
+MAP=data/ntu-campus-planning/r03
+for f in lanelet2_map.osm map_projector_info.yaml pointcloud_map.pcd; do
+  [ -s "$MAP/$f" ] && echo "ok       $f" || echo "MISSING  $f"
+done
+```
+
+A correct map prints three `ok` lines:
+
+```
+ok       lanelet2_map.osm
+ok       map_projector_info.yaml
+ok       pointcloud_map.pcd
+```
+
+**2. The files have the right contents.** Each one starts like this (values
+differ per map):
+
+```bash
+cat $MAP/map_projector_info.yaml
+# projector_type: MGRS
+# mgrs_grid: 51RUH           <- NTU campus is in grid 51RUH
+# vertical_datum: WGS84
+
+head -3 $MAP/lanelet2_map.osm
+# <?xml version="1.0" encoding="UTF-8"?>
+# <osm generator="VMB">
+#   <MetaInfo format_version="1" map_version="4" validation_version="1"/>
+
+grep -a -m3 -E '^(FIELDS|POINTS|DATA)' $MAP/pointcloud_map.pcd
+# FIELDS x y z intensity
+# POINTS 2493616
+# DATA binary
+```
+
+**3. Autoware loads it.** Start the planning simulator on it (NTU maps take the
+short name):
+
+```bash
+just launch-sim-planning r03
+```
+
+The map loaded if RViz shows the point cloud and the lanes. Node output goes to
+`play_log/`, not the terminal; the map loader's log should say:
+
+```bash
+grep lanelet2_map_loader "$(ls -td play_log/*/ | head -1)"node/map_container/err
+# [map.lanelet2_map_loader]: Succeeded to load lanelet2_map. Map is published.
+```
+
+Once it loads here, use the same path on the cart:
+`just launch-all "map_path:=./data/ntu-campus-planning/r03"`.
 
 
 ## Documentation

@@ -330,13 +330,20 @@ sim-loop-drive *ARGS:
 sim-mrm-check *ARGS:
     python3 scripts/testing/sim_mrm_check.py --start 17.6 -4.9 180 --goal 6.5 -4.9 180 {{ARGS}}
 
-# Launch Autoware planning simulator with Golf Cart vehicle
-launch-sim-planning:
+# Planning simulator on an NTU campus map: `just launch-sim-planning r02`. MAP: r01|r02
+launch-sim-planning MAP="r01":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    MAPS="{{justfile_directory()}}/data/ntu-campus-planning"
+    if [[ ! -d "${MAPS}/{{MAP}}" ]]; then
+        echo "No NTU map '{{MAP}}'. Available: $(ls "${MAPS}" | tr '\n' ' ')" >&2
+        exit 1
+    fi
     play_launch launch \
         --container-mode "${GOLFCART_CONTAINER_MODE:-observable}" \
         --web-addr 0.0.0.0:8081 \
         autoware_launch planning_simulator.launch.xml \
-        map_path:={{justfile_directory()}}/data/ntu-campus-planning/r01 \
+        map_path:="${MAPS}/{{MAP}}" \
         vehicle_model:=golfcart_vehicle \
         sensor_model:=golfcart_sensor_kit
 
