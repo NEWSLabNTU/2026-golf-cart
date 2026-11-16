@@ -335,10 +335,9 @@ Next:
      `launch_fault_injection` and `perception_simulation.launch.xml`.
 
    Left open:
-   - **`use_lidar_rule_detector`** (decision): on 2.1.0 the tracker reads the
-     clustering detector as its own channel, so the presets' `false` now
-     loses unknown-class objects (a box, a trolley); on 1.5.0 they were
-     discarded anyway. Kept `false` to match 1.5.0.
+   - `use_lidar_rule_detector`: decided 2026-11-17, on in `lidar_only` and
+     `minimal`. On 2.1.0 the tracker reads the clustering detector as its own
+     channel, the only source of unknown-class objects (a box, a trolley).
    - The yabloc/eagleye fallback runs on `autoware_localization_config`'s
      parameters: `component_localization` takes no paths. A golfcart
      localization config package would restore ours.

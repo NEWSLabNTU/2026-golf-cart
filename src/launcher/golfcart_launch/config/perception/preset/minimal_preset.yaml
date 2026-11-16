@@ -26,17 +26,19 @@ launch:
       name: use_pointcloud_map
       default: "false"
 
-  # Detection: CenterPoint tiny and nothing else. In lidar mode the tracker
-  # reads only CenterPoint (multi-channel merger), so the clustering detector
-  # Autoware also starts would be computed and discarded; it is switched off
-  # through our copy of the perception launch (use_lidar_rule_detector).
+  # Detection: CenterPoint tiny plus the clustering detector. On Autoware
+  # 2.1.0 the tracker reads clustering as its own channel (lidar_clustering),
+  # objects of class unknown: whatever CenterPoint has no class for, a box or a
+  # trolley in the aisle. On, by decision of 2026-11-17. On 1.5.0 the tracker
+  # ignored it in lidar mode and this was off; use_lidar_rule_detector:=false
+  # (our copy of the perception launch) is still there to drop it.
   - arg:
       name: lidar_detection_model
       default: "centerpoint/centerpoint_tiny"
 
   - arg:
       name: use_lidar_rule_detector
-      default: "false"
+      default: "true"
 
   # Statistics publisher, nothing consumes it
   - arg:

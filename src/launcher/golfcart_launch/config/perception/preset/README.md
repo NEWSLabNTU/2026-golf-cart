@@ -18,12 +18,12 @@ when `use_traffic_light_recognition` is true). So:
   (`object_recognition_camera_lidar_radar.launch.xml`) and has not been built.
 - `traffic_light_recognition/enable_fine_detection` is passed on as 2.1.0's
   `traffic_light_recognition/use_high_accuracy_detection`.
-- **`use_lidar_rule_detector:=false` now changes what is detected.** In 1.5.0's
-  lidar mode the tracker ignored the clustering detector, so turning it off
-  only saved its CPU. In 2.1.0 the tracker reads clustering as its own channel
-  (`lidar_clustering`, objects of class unknown), so off means no detection
-  of anything CenterPoint has no class for. `lidar_only` and `minimal` keep it
-  off, as on 1.5.0; whether the cart should turn it on is open.
+- **The clustering detector is on in `lidar_only` and `minimal`** (decided
+  2026-11-17). In 1.5.0's lidar mode the tracker ignored it, so both presets
+  turned it off to save its CPU. In 2.1.0 the tracker reads clustering as its
+  own channel (`lidar_clustering`, objects of class unknown), so it is what
+  detects anything CenterPoint has no class for. `use_lidar_rule_detector:=false`
+  still drops it.
 
 The two copies are `launch/components/tier4_perception_component.launch.xml`
 (of `component_perception`) and `launch/components/perception/object_recognition_lidar.launch.xml`.
@@ -41,10 +41,10 @@ Default preset for Golf Cart. Uses only LiDAR for perception.
 - `use_image_segmentation_based_filter`: `false`
 - `use_pointcloud_map`: `true`
 - `lidar_detection_model`: `centerpoint/centerpoint_tiny`
-- `use_lidar_rule_detector`: `false`
+- `use_lidar_rule_detector`: `false` (1.5.0; `true` on 2.1.0, above)
 - `use_perception_analytics_publisher`: `false`
 
-**Detection is CenterPoint tiny and nothing else.** In lidar mode the tracker
+**Detection is CenterPoint tiny and nothing else** (1.5.0). In lidar mode the tracker
 (multi-channel merger) reads only CenterPoint's validated objects, so the
 clustering detector Autoware also starts was computed and discarded. Upstream
 has no switch for it; `use_lidar_rule_detector` exists only in our copies of the
