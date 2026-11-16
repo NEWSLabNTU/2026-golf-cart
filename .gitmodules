@@ -9,11 +9,11 @@
 [submodule "src/param/autoware_individual_params"]
 	path = src/param/autoware_individual_params
 	url = https://github.com/NEWSLabNTU/autoware_individual_params.git
-	branch = main
+	branch = 2026-golf
 [submodule "src/calibration/CalibrationTools"]
 	path = src/calibration/CalibrationTools
 	url = https://github.com/NEWSLabNTU/CalibrationTools.git
-	branch = golfcart
+	branch = 1.5.0
 [submodule "src/localization/cuda_ndt_matcher"]
 	path = src/localization/cuda_ndt_matcher
 	url = https://github.com/NEWSLabNTU/cuda_ndt_matcher.git
@@ -21,7 +21,7 @@
 [submodule "src/sensor_kit/golfcart_sensor_kit_launch"]
 	path = src/sensor_kit/golfcart_sensor_kit_launch
 	url = https://github.com/NEWSLabNTU/golfcart_sensor_kit_launch.git
-	branch = main
+	branch = 2026-golf
 [submodule "src/vehicle/golfcart_vehicle_launch"]
 	path = src/vehicle/golfcart_vehicle_launch
 	url = https://github.com/NEWSLabNTU/golfcart_vehicle_launch.git
@@ -33,7 +33,7 @@
 [submodule "src/sensor_component/external/seyond_ros_driver"]
 	path = src/sensor_component/external/seyond_ros_driver
 	url = https://github.com/NEWSLabNTU/seyond_ros_driver.git
-	branch = 1.5.0
+	branch = main
 [submodule "src/sensor_component/external/xsens_mti_can_ros2_driver"]
 	path = src/sensor_component/external/xsens_mti_can_ros2_driver
 	url = https://github.com/NEWSLabNTU/xsens_mti_can_ros2_driver.git
