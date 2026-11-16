@@ -9,6 +9,10 @@ and 2.1.0 source workspaces (`autoware-localrepo/{1.5.0,2.1.0}/amd64/source`).
 Nothing below has been built or launched yet; items marked *unverified* need a
 real launch to settle.
 
+What changed upstream, and what it changes in this repository's own
+interfaces, measured from the two installed releases:
+[autoware-1.5.0-to-2.1.0-changes.md](../research/system/autoware-1.5.0-to-2.1.0-changes.md).
+
 ## Summary
 
 - **Messages and services: nothing breaks.** Every type our code uses is
