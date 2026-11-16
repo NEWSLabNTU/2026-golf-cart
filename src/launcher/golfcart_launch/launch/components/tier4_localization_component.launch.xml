@@ -58,7 +58,7 @@
     which is why this stayed a hardcoded GNSS topic unnoticed.
 
     Only the cuda_ndt branch honours this. The standard Autoware branch reaches
-    the same setting through tier4_localization_launch, which hardcodes the GNSS
+    the same setting through upstream localization launch, which hardcodes the GNSS
     topic in its own ndt_scan_matcher.launch.xml; overriding that needs an
     upstream fork, so with pose_source:=ndt indoors, regularization must stay
     disabled.
@@ -69,15 +69,15 @@
   <!--
     ArUco boards as the sole pose source. Phase 3D-2.
 
-    This bypasses tier4_localization_launch entirely, the same way the
+    This bypasses Autoware's localization component entirely, the same way the
     cuda_ndt branch below does. That is deliberate: upstream parses
     pose_source against a fixed list [ndt, yabloc, eagleye, artag,
     lidar-marker] and silently drops anything else, so adding "aruco" there
     would mean patching an upstream package.
 
     Nothing here brings up a scan matcher, its pointcloud preprocessing, or
-    the pointcloud map loader. See golfcart_map_component.launch.xml for why
-    the map side needs its own component.
+    the pointcloud map loader; golfcart_autoware.launch.xml passes
+    use_pointcloud_map false to component_map on this path.
   -->
   <group if="$(eval '\'$(var pose_source)\' == \'aruco\'')">
     <include file="$(find-pkg-share golfcart_launch)/launch/components/aruco_localization.launch.xml">
@@ -105,7 +105,7 @@
   </group>
 
   <!-- Autoware's NDT, through this repo's drop-in rather than
-       tier4_localization_launch's own localization.launch.xml.
+       autoware_localization_launch (component_localization).
        
        The reason is localization_pointcloud_backend. Autoware includes the
        preprocessing chain from inside pose_twist_estimator.launch.xml, guarded
@@ -136,9 +136,18 @@
     </include>
   </group>
 
-  <!-- Standard Autoware localization stack (yabloc, eagleye) -->
+  <!-- Standard Autoware localization stack (yabloc, eagleye)
+
+       2.1.0's component_localization takes no parameter paths: every unit
+       launcher reads its files from localization_config_pkg's config/ tree.
+       loc_config_path is a directory of our own files, not a package with that
+       layout, so on this path the stack runs on autoware_localization_config's
+       parameters (EKF, pose initializer, yabloc, eagleye included). The
+       cuda_ndt and ndt paths above pass ours explicitly and are unaffected.
+       Roadmap 11 lists this as an open item: a golfcart localization config
+       package would bring our files back here. -->
   <group if="$(eval '\'$(var pose_source)\' not in [\'cuda_ndt\', \'aruco\', \'ndt\']')">
-    <include file="$(find-pkg-share tier4_localization_launch)/launch/localization.launch.xml">
+    <include file="$(find-pkg-share autoware_launch)/launch/components/component_localization.launch.xml">
       <arg name="pose_source" value="$(var pose_source)"/>
       <arg name="twist_source" value="$(var twist_source)"/>
       <arg name="gnss_enabled" value="$(var gnss_enabled)"/>
@@ -146,54 +155,6 @@
       <arg name="input_pointcloud" value="$(var input_pointcloud)"/>
       <arg name="localization_pointcloud_container_name" value="$(var localization_pointcloud_container_name)"/>
       <arg name="initial_pose" value="$(var initial_pose)"/>
-
-      <!-- parameter paths for common -->
-      <arg name="localization_error_monitor_param_path" value="$(var loc_config_path)/localization_error_monitor.param.yaml"/>
-      <arg name="ekf_localizer_param_path" value="$(var ekf_param_file)"/>
-      <arg name="stop_filter_param_path" value="$(var loc_config_path)/stop_filter.param.yaml"/>
-      <arg name="pose_instability_detector_param_path" value="$(var loc_config_path)/pose_instability_detector.param.yaml"/>
-      <arg name="pose_initializer_param_path" value="$(var loc_config_path)/pose_initializer.param.yaml"/>
-      <arg name="twist2accel_param_path" value="$(var loc_config_path)/twist2accel.param.yaml"/>
-
-      <!-- parameter paths for ndt -->
-      <arg name="ndt_scan_matcher/ndt_scan_matcher_param_path" value="$(var loc_config_path)/ndt_scan_matcher/ndt_scan_matcher.param.yaml"/>
-      <arg
-        name="ndt_scan_matcher/pointcloud_preprocessor/crop_box_filter_measurement_range_param_path"
-        value="$(var loc_config_path)/ndt_scan_matcher/pointcloud_preprocessor/crop_box_filter_measurement_range.param.yaml"
-      />
-      <arg
-        name="ndt_scan_matcher/pointcloud_preprocessor/voxel_grid_downsample_filter_param_path"
-        value="$(var loc_config_path)/ndt_scan_matcher/pointcloud_preprocessor/voxel_grid_filter.param.yaml"
-      />
-      <arg
-        name="ndt_scan_matcher/pointcloud_preprocessor/random_downsample_filter_param_path"
-        value="$(var loc_config_path)/ndt_scan_matcher/pointcloud_preprocessor/random_downsample_filter.param.yaml"
-      />
-
-      <!-- parameter paths for yabloc -->
-      <arg name="camera_pose_initializer_param_path" value="$(var loc_config_path)/yabloc/camera_pose_initializer.param.yaml"/>
-      <arg name="camera_particle_corrector_param_path" value="$(var loc_config_path)/yabloc/camera_particle_corrector.param.yaml"/>
-      <arg name="gnss_particle_corrector_param_path" value="$(var loc_config_path)/yabloc/gnss_particle_corrector.param.yaml"/>
-      <arg name="predictor_param_path" value="$(var loc_config_path)/yabloc/predictor.param.yaml"/>
-      <arg name="graph_segment_param_path" value="$(var loc_config_path)/yabloc/graph_segment.param.yaml"/>
-      <arg name="segment_filter_param_path" value="$(var loc_config_path)/yabloc/segment_filter.param.yaml"/>
-      <arg name="undistort_param_path" value="$(var loc_config_path)/yabloc/undistort.param.yaml"/>
-      <arg name="ground_server_param_path" value="$(var loc_config_path)/yabloc/ground_server.param.yaml"/>
-      <arg name="ll2_decomposer_param_path" value="$(var loc_config_path)/yabloc/ll2_decomposer.param.yaml"/>
-
-      <!-- parameter paths for eagleye -->
-      <arg name="eagleye_param_path" value="$(find-pkg-share golfcart_launch)/config/localization/eagleye_config.param.yaml"/>
-
-      <!-- parameter paths for lidar_marker_localizer -->
-      <arg name="lidar_marker_localizer/lidar_marker_localizer_param_path" value="$(var loc_config_path)/lidar_marker_localizer/lidar_marker_localizer.param.yaml"/>
-      <arg
-        name="lidar_marker_localizer/pointcloud_preprocessor/crop_box_filter_measurement_range_param_path"
-        value="$(var loc_config_path)/lidar_marker_localizer/pointcloud_preprocessor/crop_box_filter_measurement_range.param.yaml"
-      />
-      <arg name="lidar_marker_localizer/pointcloud_preprocessor/ring_filter_param_path" value="$(var loc_config_path)/lidar_marker_localizer/pointcloud_preprocessor/ring_filter.param.yaml"/>
-
-      <!-- parameter path for ar_tag_based_localizer -->
-      <arg name="ar_tag_based_localizer_param_path" value="$(var loc_config_path)/ar_tag_based_localizer.param.yaml"/>
     </include>
   </group>
 

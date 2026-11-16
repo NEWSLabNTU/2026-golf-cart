@@ -1,8 +1,9 @@
 <launch>
-  <!-- Same two arguments as the sensor kit's lidar.launch.xml, same 1.5.0
-       defaults: VLP32.param.yaml reads the calibration through $(var ...). -->
-  <arg name="nebula_velodyne_launch_file" default="$(find-pkg-share nebula_ros)/launch/velodyne_launch_all_hw.xml"/>
-  <arg name="vlp32_calibration_file" default="$(find-pkg-share nebula_decoders)/calibration/velodyne/VLP32.yaml"/>
+  <!-- Same two arguments as the sensor kit's lidar.launch.xml, with this
+       branch's Autoware 2.1.0 (Nebula 1.2) defaults: VLP32.param.yaml reads
+       the calibration through $(var ...). -->
+  <arg name="nebula_velodyne_launch_file" default="$(find-pkg-share nebula_velodyne)/launch/velodyne_launch_all_hw.xml"/>
+  <arg name="vlp32_calibration_file" default="$(find-pkg-share nebula_velodyne_decoders)/calibration/VLP32.yaml"/>
   <!-- Arguments to toggle each sensor -->
   <arg name="launch_lidar"  default="false"/>
   <arg name="launch_gnss"   default="false"/>

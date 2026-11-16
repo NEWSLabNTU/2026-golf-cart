@@ -1,7 +1,8 @@
-# Copy of autoware_launch 1.5.0 config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/start_planner/start_planner.param.yaml,
-# for the slow_indoor planning preset. Changed values carry a "golfcart:"
-# comment; everything else must stay upstream (test_planning_preset.py
-# compares every leaf).
+# Copy of autoware_planning_config 2.1.0 config/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/start_planner/start_planner.param.yaml, for the
+# slow_indoor planning preset (rebased from the 1.5.0 copy 2026-11-17).
+# Changed values carry a "golfcart:" comment; everything else must stay
+# upstream (test_planning_preset.py compares every leaf). Any sync-params
+# header below is upstream's, kept as it is.
 /**:
   ros__parameters:
     start_planner:
@@ -30,6 +31,7 @@
       allow_check_shift_path_lane_departure_override: false
       shift_collision_check_distance_from_end: -10.0
       minimum_shift_pull_out_distance: 0.0
+      minimum_shift_length: 0.5  # the minimum required length for a clothoid path to be considered valid, and also significant enough to trigger specific safety checks.
       maximum_longitudinal_deviation: 1.0 # Note, should be the same or less than planning validator's "longitudinal_distance_deviation"
       lateral_jerk: 0.5
       lateral_acceleration_sampling_num: 3
@@ -72,6 +74,7 @@
       ignore_distance_from_lane_end: 0.0
       # turns signal
       prepare_time_before_start: 0.0
+      turn_signal_on_centerline_start: "RIGHT" # default turn signal when pull out from centerline
       # freespace planner
       freespace_planner:
         # golfcart: true -> false. Freespace pull-out plans reverse segments too,

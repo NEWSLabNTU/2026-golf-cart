@@ -1,7 +1,9 @@
 <?xml version="1.0"?>
 <!--
   Our copy of autoware_launch's tier4_sensing_component.launch.xml (Autoware
-  1.5.0), with tier4_sensing_launch/sensing.launch.xml folded into it.
+  1.5.0), with tier4_sensing_launch/sensing.launch.xml folded into it. Kept
+  for 2.1.0, where both upstream files are gone: component_sensing includes
+  autoware_sensing_launch, which forwards a fixed set of arguments too.
 
   Why it exists: upstream goes component, then tier4_sensing_launch, then the
   sensor kit, and each of the two installed files forwards a fixed set of
@@ -38,6 +40,12 @@
   <arg name="gnss_receiver" default="ublox" description="ublox | septentrio | none"/>
   <arg name="use_ntrip" default="false" description="launch the NTRIP client (ublox only)"/>
   <arg name="pointcloud_backend" default="cuda" description="cpu | cuda"/>
+  <!-- Where this Autoware release keeps the Velodyne driver launch file and
+       the VLP-32 calibration. Nebula 1.2 (Autoware 2.1.0) split nebula_ros
+       and nebula_decoders per vendor; the sensor kit defaults to 1.5.0's
+       paths, so the release-specific ones come from here. -->
+  <arg name="nebula_velodyne_launch_file" default="$(find-pkg-share nebula_velodyne)/launch/velodyne_launch_all_hw.xml"/>
+  <arg name="vlp32_calibration_file" default="$(find-pkg-share nebula_velodyne_decoders)/calibration/VLP32.yaml"/>
 
   <!-- Global parameters -->
   <group scoped="false">
@@ -68,6 +76,8 @@
       <arg name="gnss_receiver" value="$(var gnss_receiver)"/>
       <arg name="use_ntrip" value="$(var use_ntrip)"/>
       <arg name="pointcloud_backend" value="$(var pointcloud_backend)"/>
+      <arg name="nebula_velodyne_launch_file" value="$(var nebula_velodyne_launch_file)"/>
+      <arg name="vlp32_calibration_file" value="$(var vlp32_calibration_file)"/>
     </include>
   </group>
 </launch>

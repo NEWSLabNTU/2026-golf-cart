@@ -1,6 +1,8 @@
-# Copy of autoware_launch 1.5.0 config/planning/scenario_planning/lane_driving/motion_planning/motion_velocity_planner/obstacle_stop.param.yaml, for the slow_indoor planning
-# preset. Changed values carry a "golfcart:" comment; everything else must
-# stay upstream (test_planning_preset.py compares every leaf).
+# Copy of autoware_planning_config 2.1.0 config/scenario_planning/lane_driving/motion_planning/motion_velocity_planner/obstacle_stop.param.yaml, for the
+# slow_indoor planning preset (rebased from the 1.5.0 copy 2026-11-17).
+# Changed values carry a "golfcart:" comment; everything else must stay
+# upstream (test_planning_preset.py compares every leaf). Any sync-params
+# header below is upstream's, kept as it is.
 /**:
   ros__parameters:
     obstacle_stop:
@@ -90,6 +92,14 @@
               default: 0.0
             is_moving_obstacle: # [m] additional stop margin for moving obstacle
               default: 0.0
+
+        detection_height: # [m] height range for collision detection from the ground.
+          top_limit:
+            default: 50.0
+            unknown: 1.0
+          bottom_limit: -50.0
+
+        min_object_length: 0.1 # [m] minimum object length to consider for stop planning
 
         min_velocity_to_reach_collision_point: 2.0 # minimum velocity margin to calculate time to reach collision [m/s]
         stop_obstacle_hold_time_threshold : 1.0 # maximum time for holding closest stop obstacle

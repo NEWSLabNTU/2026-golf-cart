@@ -63,8 +63,9 @@
     </include>
   </group>
 
-  <!-- tier4_simulator_component.launch.xml declares these WITHOUT defaults
-       and forwards them to the simulator, so an include of it has to pass
+  <!-- tier4_simulator_component.launch.xml (and, for the perception ones,
+       2.1.0's perception_simulation.launch.xml) takes these; the component
+       declares its own WITHOUT defaults, so an include of it has to pass
        every one explicitly: a value merely present in this file's scope does
        not satisfy a required argument of an included description. Autoware's
        planning_simulator.launch.xml is where they normally live, and this
@@ -76,8 +77,6 @@
        description="simulate detection failure with the dummy perception"/>
   <arg name="perception/enable_object_recognition" default="true"
        description="object recognition with the dummy perception"/>
-  <arg name="perception/enable_traffic_light" default="false"
-       description="traffic light recognition with the dummy perception"/>
   <arg name="perception/use_base_link_z" default="true"
        description="dummy objects at base_link height"/>
   <arg name="sensing/visible_range" default="300.0"
@@ -92,21 +91,35 @@
   <!-- The simulator, minus its vehicle. localization_sim_mode is none because
        nothing here wants the simulator pretending to be a pose estimator. -->
   <group>
+    <!-- 2.1.0 also requires launch_fault_injection; false, as
+         planning_simulator.launch.xml derives it from scenario_simulation. -->
     <include file="$(find-pkg-share autoware_launch)/launch/components/tier4_simulator_component.launch.xml">
-      <arg name="launch_dummy_perception" value="true"/>
       <arg name="launch_dummy_vehicle" value="false"/>
+      <arg name="launch_fault_injection" value="false"/>
       <arg name="launch_dummy_doors" value="true"/>
       <arg name="localization_sim_mode" value="none"/>
       <arg name="launch_scenario_simulator_v2_adapter" value="false"/>
       <arg name="vehicle_model" value="$(var vehicle_model)"/>
-      <arg name="perception/enable_detection_failure" value="$(var perception/enable_detection_failure)"/>
-      <arg name="perception/enable_object_recognition" value="$(var perception/enable_object_recognition)"/>
-      <arg name="perception/enable_traffic_light" value="$(var perception/enable_traffic_light)"/>
-      <arg name="perception/use_base_link_z" value="$(var perception/use_base_link_z)"/>
-      <arg name="sensing/visible_range" value="$(var sensing/visible_range)"/>
       <arg name="initial_engage_state" value="$(var initial_engage_state)"/>
       <arg name="raw_vehicle_cmd_converter_param_path" value="$(var raw_vehicle_cmd_converter_param_path)"/>
       <arg name="vehicle_info_param_file" value="$(var vehicle_info_param_file)"/>
+    </include>
+  </group>
+
+  <!-- Dummy perception. In 2.1.0 it left the simulator component for
+       planning_simulator/perception_simulation.launch.xml, which also brings
+       the tracker, the predictor and a laserscan occupancy grid, as the stock
+       planning simulator runs them. enable_traffic_light became
+       dummy_traffic_light_mode; its default, empty, publishes no signals,
+       which is what false meant. -->
+  <group>
+    <include file="$(find-pkg-share autoware_launch)/launch/planning_simulator/perception_simulation.launch.xml">
+      <arg name="launch_dummy_perception" value="true"/>
+      <arg name="perception/enable_detection_failure" value="$(var perception/enable_detection_failure)"/>
+      <arg name="perception/enable_object_recognition" value="$(var perception/enable_object_recognition)"/>
+      <arg name="perception/use_base_link_z" value="$(var perception/use_base_link_z)"/>
+      <arg name="sensing/visible_range" value="$(var sensing/visible_range)"/>
+      <arg name="launch_occupancy_grid_map" value="true"/>
     </include>
   </group>
 

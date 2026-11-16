@@ -143,19 +143,22 @@
   <!-- Map -->
   <group if="$(var launch_map)">
     <!--
-      pose_source:=aruco has no point cloud map. tier4_map_component composes
-      the pointcloud map loader unconditionally, so that path needs its own
-      component. See golfcart_map_component.launch.xml.
+      pose_source:=aruco has no point cloud map. 2.1.0's component_map can
+      leave the pointcloud loader out (use_pointcloud_map), which 1.5.0's
+      tier4_map_component could not, so the aruco path no longer needs a
+      component of its own. The map hash generator hashes the pointcloud map
+      too and stays off there, as it was on 1.5.0's aruco path. The viewer
+      transform now comes from the vector map (vector_map_tf_generator), so it
+      runs on both paths.
     -->
-    <group if="$(eval '\'$(var pose_source)\' == \'aruco\'')">
-      <include file="$(find-pkg-share golfcart_launch)/launch/components/golfcart_map_component.launch.xml">
-        <arg name="map_path" value="$(var map_path)"/>
-        <arg name="lanelet2_map_file" value="$(var lanelet2_map_file)"/>
-      </include>
-    </group>
-    <group unless="$(eval '\'$(var pose_source)\' == \'aruco\'')">
-      <include file="$(find-pkg-share autoware_launch)/launch/components/tier4_map_component.launch.xml"/>
-    </group>
+    <let name="map_uses_pointcloud" value="$(eval '\'$(var pose_source)\' != \'aruco\'')"/>
+    <include file="$(find-pkg-share autoware_launch)/launch/components/component_map.launch.xml">
+      <arg name="map_path" value="$(var map_path)"/>
+      <arg name="lanelet2_map_file" value="$(var lanelet2_map_file)"/>
+      <arg name="pointcloud_map_file" value="$(var pointcloud_map_file)"/>
+      <arg name="use_pointcloud_map" value="$(var map_uses_pointcloud)"/>
+      <arg name="use_map_hash_generator" value="$(var map_uses_pointcloud)"/>
+    </include>
   </group>
 
   <!-- Sensing -->
@@ -334,7 +337,7 @@
 
   <!-- Control -->
   <group if="$(var launch_control)">
-    <include file="$(find-pkg-share autoware_launch)/launch/components/tier4_control_component.launch.xml">
+    <include file="$(find-pkg-share autoware_launch)/launch/components/component_control.launch.xml">
       <arg name="module_preset" value="$(var control_module_preset)"/>
       <arg name="use_sim_time" value="$(var use_sim_time)"/>
       <arg name="vehicle_model" value="$(var vehicle_model)"/>

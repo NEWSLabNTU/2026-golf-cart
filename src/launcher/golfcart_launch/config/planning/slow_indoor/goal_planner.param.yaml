@@ -1,7 +1,8 @@
-# Copy of autoware_launch 1.5.0 config/planning/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/goal_planner/goal_planner.param.yaml,
-# for the slow_indoor planning preset. Changed values carry a "golfcart:"
-# comment; everything else must stay upstream (test_planning_preset.py
-# compares every leaf).
+# Copy of autoware_planning_config 2.1.0 config/scenario_planning/lane_driving/behavior_planning/behavior_path_planner/goal_planner/goal_planner.param.yaml, for the
+# slow_indoor planning preset (rebased from the 1.5.0 copy 2026-11-17).
+# Changed values carry a "golfcart:" comment; everything else must stay
+# upstream (test_planning_preset.py compares every leaf). Any sync-params
+# header below is upstream's, kept as it is.
 /**:
   ros__parameters:
     goal_planner:
@@ -148,6 +149,8 @@
         bezier_parking:
           pull_over_angle_threshold: 0.5
           after_shift_straight_distance: 1.5
+          lateral_acceleration_threshold: 1.0
+          lateral_acceleration_filtering_duration: 0.5
 
       stop_condition:
         maximum_deceleration_for_stop: 1.0

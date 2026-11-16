@@ -17,7 +17,7 @@
   <arg name="localization_pointcloud_backend" default="cpu" description="cpu or cuda: which hardware runs the NDT input preprocessing chain"/>
 
   <!-- Config paths (default to autoware_launch config) -->
-  <arg name="localization_config_path" default="$(find-pkg-share autoware_launch)/config/localization"/>
+  <arg name="localization_config_path" default="$(find-pkg-share autoware_localization_config)/config"/>
 
   <!-- The preprocessing chain's parameter files. Overridable so a caller whose
        own point budget differs from this package's can keep it while still
@@ -60,7 +60,7 @@
     <!-- Twist estimator: Gyro odometer, unless twist_source names another -->
     <group if="$(eval '\'$(var twist_source)\' == \'gyro_odom\'')">
       <push-ros-namespace namespace="twist_estimator"/>
-      <include file="$(find-pkg-share tier4_localization_launch)/launch/pose_twist_estimator/gyro_odometer.launch.xml"/>
+      <include file="$(find-pkg-share autoware_localization_launch)/launch/pose_twist_estimator/gyro_odometer.launch.xml"/>
     </group>
 
     <!-- Pose estimator: Autoware NDT -->
@@ -108,14 +108,14 @@
 
       <!-- Automatic pose initializer (only when GNSS enabled) -->
       <group if="$(var gnss_enabled)">
-        <include file="$(find-pkg-share autoware_automatic_pose_initializer)/launch/automatic_pose_initializer.launch.xml"/>
+        <include file="$(find-pkg-share autoware_pose_initialization_requester)/launch/pose_initialization_requester.launch.xml"/>
       </group>
     </group>
 
     <!-- EKF localizer (pose_twist_fusion_filter) -->
     <group>
       <push-ros-namespace namespace="pose_twist_fusion_filter"/>
-      <include file="$(find-pkg-share tier4_localization_launch)/launch/pose_twist_fusion_filter/pose_twist_fusion_filter.launch.xml">
+      <include file="$(find-pkg-share autoware_localization_launch)/launch/pose_twist_fusion_filter/pose_twist_fusion_filter.launch.xml">
         <arg name="ekf_localizer_param_path" value="$(var ekf_localizer_param_path)"/>
         <arg name="stop_filter_param_path" value="$(var localization_config_path)/stop_filter.param.yaml"/>
         <arg name="twist2accel_param_path" value="$(var localization_config_path)/twist2accel.param.yaml"/>
@@ -124,7 +124,7 @@
     </group>
 
     <!-- Localization error monitor -->
-    <include file="$(find-pkg-share tier4_localization_launch)/launch/localization_error_monitor/localization_error_monitor.launch.xml">
+    <include file="$(find-pkg-share autoware_localization_launch)/launch/localization_error_monitor/localization_error_monitor.launch.xml">
       <arg name="localization_error_monitor_param_path" value="$(var localization_config_path)/localization_error_monitor.param.yaml"/>
     </include>
   </group>
