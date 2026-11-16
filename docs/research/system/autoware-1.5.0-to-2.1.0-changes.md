@@ -215,6 +215,73 @@ are listed per file in roadmap 11 §2. In short:
 - RViz configs, `config/recording/topics.yaml` and a recording test: the old
   `/planning/scenario_planning/trajectory` name.
 
+### Sensor kit and vehicle: upstream's structure against ours
+
+**Upstream's sample sensor kit (0.48 → 0.53) was restructured.** In 1.5.0 its
+`lidar.launch.xml` included `common_sensor_launch/velodyne_*.launch.xml`, one
+file that started both the driver and the preprocessing. In 2.1.0 each LiDAR
+is three includes into a container the kit names itself:
+
+1. `autoware_sensing_launch/pointcloud_container.launch.xml`
+2. `autoware_sensor_driver_launch/<vendor>_<model>.launch.xml` (the Nebula driver)
+3. `autoware_sensing_launch/pointcloud_preprocessor_{cpu,cuda}.launch.xml`
+
+`pointcloud_concatenation_{cpu,cuda}.launch.xml` closes the chain. The
+preprocessing launch moved out of the kit
+(`sample_sensor_kit_launch/launch/pointcloud_preprocessor.launch.py` is
+gone). `vehicle_mirror_param_file` is replaced by the kit's own
+`crop_box_filter_{self,mirror}.param.yaml`. `component_sensing.launch.xml`
+now includes the kit's `sensing.launch.xml` directly, since
+`tier4_sensing_launch` is gone. In `gnss.launch.xml` the u-blox param file
+moved to `ublox_gps/config/zed_f9p.yaml`.
+
+**Upstream's vehicle packages did not change.** `sample_vehicle_launch`,
+`sample_vehicle_description` and `tier4_vehicle_launch` are byte-identical
+between the two releases. Core adds `autoware_sample_{vehicle,sensor_kit}_description`,
+whose configs are identical to universe's `sample_*` copies.
+
+**Ours: the sensor kit is self-contained, so most of this does not reach it.**
+`golfcart_sensor_kit_launch` inlines its own preprocessing nodes in
+`pointcloud_preprocessor.launch.py`, rather than including upstream's. All
+seven component classes it loads exist in 2.1.0 under the same names:
+
+- CPU: `CropBoxFilter`, `DistortionCorrector`, `RingOutlierFilter`,
+  `PickupBasedVoxelGridDownsampleFilter`,
+  `PointCloudConcatenateDataSynchronizer`
+- CUDA: `CudaPointcloudPreprocessorNode`,
+  `CudaPointCloudConcatenateDataSynchronizer`
+
+What breaks:
+
+| Our file | Change for 2.1.0 |
+|---|---|
+| `launch/lidar.launch.xml` | `nebula_ros/launch/velodyne_launch_all_hw.xml` → `nebula_velodyne/launch/velodyne_launch_all_hw.xml`; the launch file's arguments are unchanged |
+| `config/VLP32.param.yaml` | `calibration_file`: `nebula_decoders/calibration/velodyne/VLP32.yaml` → `nebula_velodyne_decoders/calibration/VLP32.yaml`; every other key is identical to Nebula 1.2's own file |
+| `launch/pointcloud_preprocessor.launch.py` (CUDA path) | the three new required parameters (Part 1) |
+| our `tier4_sensing_component` copy | includes the removed `tier4_sensing_launch`; include our kit's `sensing.launch.xml` directly, as 2.1.0's `component_sensing` does, and keep forwarding the six sensor arguments |
+
+`camera`, `imu`, `gnss` and `zed.launch.xml` use nothing that moved.
+Adopting upstream's three-piece LiDAR structure is optional, not required.
+
+`golfcart_vehicle_launch` includes no upstream launch file, and our
+`vehicle_info`, `mirror` and `simulator_model` param files match the
+unchanged upstream schema. The vehicle interface's topics and types
+(`/control/command/*`, `/vehicle/status/*`) are unchanged. It rebuilds as
+it is. 2.1.0 adds an optional actuation-level interface
+(`autoware_vehicle_msgs/Actuation{Command,Report}`); we do not need it.
+
+**The open design question is how one checkout serves both versions.** The
+Nebula paths differ by version, and a launch file cannot name a package that
+the other version lacks. The rule against environment side channels rules
+out `$(env …)`. Two options:
+
+- **(a)** an `autoware_version` launch argument that `scripts/launch/args.py`
+  passes from `GOLFCART_AUTOWARE_VERSION`, threaded down to the places whose
+  includes differ (`if=` / `unless=` pairs, and `$(var …)` in the param file,
+  which `allow_substs` expands).
+- **(b)** one submodule branch per Autoware version. Simpler files, but a host
+  could no longer switch version without switching branches.
+
 ### Messages our code uses
 
 - **Unchanged:** every type our Rust and Python packages use, and every
