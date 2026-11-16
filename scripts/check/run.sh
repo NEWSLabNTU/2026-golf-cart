@@ -6,6 +6,7 @@ set -uo pipefail
 
 script_dir=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &>/dev/null && pwd )
 repo_dir="$script_dir/../.."
+. "${repo_dir}/scripts/autoware_version.sh"  # GOLFCART_AUTOWARE_PREFIX, GOLFCART_INSTALL_DIR
 
 # ── Colours ──────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'
@@ -93,10 +94,10 @@ if [[ -n "$lidar_iface" ]] && $lidar_ok; then
     fi
 fi
 
-if dpkg -l ros-humble-nebula-ros-1-5-0 &>/dev/null; then
+if dpkg -l ros-humble-nebula-ros-${GOLFCART_AUTOWARE_SUFFIX} &>/dev/null; then
     ok "Nebula LiDAR driver installed"
 else
-    fail "Nebula LiDAR driver not installed (ros-humble-nebula-ros-1-5-0)"
+    fail "Nebula LiDAR driver not installed (ros-humble-nebula-ros-${GOLFCART_AUTOWARE_SUFFIX})"
     lidar_ok=false
 fi
 
@@ -347,14 +348,14 @@ fi
 # ── 6. System ────────────────────────────────────────────────────────────────
 section "System"
 
-if [[ -d /opt/autoware/1.5.0 ]]; then
-    ok "Autoware 1.5.0 installed at /opt/autoware/1.5.0/"
+if [[ -d ${GOLFCART_AUTOWARE_PREFIX} ]]; then
+    ok "Autoware ${GOLFCART_AUTOWARE_VERSION} installed at ${GOLFCART_AUTOWARE_PREFIX}/"
 else
-    fail "Autoware 1.5.0 not found at /opt/autoware/1.5.0/"
+    fail "Autoware ${GOLFCART_AUTOWARE_VERSION} not found at ${GOLFCART_AUTOWARE_PREFIX}/"
 fi
 
 workspace_ok=false
-if [[ -f "$repo_dir/install/setup.bash" ]]; then
+if [[ -f "${GOLFCART_INSTALL_DIR}/setup.bash" ]]; then
     ok "Workspace built (install/setup.bash exists)"
     workspace_ok=true
 else
@@ -410,7 +411,7 @@ echo -e "  GNSS:   $( $gnss_ok   && echo -e "${GREEN}yes${NC}" || echo -e "${YEL
 echo -e "  Camera: $( $camera_ok  && echo -e "${GREEN}yes${NC}" || echo -e "${YELLOW}skip${NC}" )"
 echo ""
 
-source "$repo_dir/install/setup.bash"
+source "${GOLFCART_INSTALL_DIR}/setup.bash"
 cd "$script_dir"
 ros2 launch sensors.launch.xml \
     "launch_lidar:=$lidar_ok" \

@@ -26,6 +26,7 @@
 #   TWIN_SCENARIO_DOMAIN (SSv2's, default TWIN_DOMAIN + 1), SSV2_PORT, AGENT_PORT, ISAAC_PORT
 #                 (swb's; set them when another stack on the host has the defaults)
 _twin_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
+. "${_twin_root}/scripts/autoware_version.sh"  # GOLFCART_AUTOWARE_PREFIX, GOLFCART_INSTALL_DIR
 [ -f "$_twin_root/config/twin.env" ] && set -a && source "$_twin_root/config/twin.env" && set +a
 : "${TWIN_SWB:=$HOME/repos/scenario-world-bridge}"
 : "${TWIN_DOMAIN:=1}"
@@ -42,9 +43,9 @@ while IFS= read -r -d: _d; do
 done <<< "$PATH:"
 PATH=$_twin_path
 unset VIRTUAL_ENV _twin_path _d
-source /opt/autoware/1.5.0/setup.bash
+source ${GOLFCART_AUTOWARE_PREFIX}/setup.bash
 source "$TWIN_SWB/install/setup.bash"
-source "$_twin_root/install/setup.bash"
+source "${GOLFCART_INSTALL_DIR}/setup.bash"
 export ROS_DOMAIN_ID=$TWIN_DOMAIN
 # scenario-world-bridge's stack (twin.launch.py): the cart's side on TWIN_DOMAIN, SSv2 and the
 # bridge on TWIN_SCENARIO_DOMAIN (default TWIN_DOMAIN + 1); its ports, when twin.env moves them

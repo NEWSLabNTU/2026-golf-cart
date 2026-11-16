@@ -2,7 +2,8 @@
 # Watch /control/command/control_cmd topic with auto-restart
 
 cd "$(dirname "$0")/../.."
-source install/setup.bash
+. scripts/autoware_version.sh
+source "${GOLFCART_INSTALL_DIR}/setup.bash"
 
 while true; do
     echo "Waiting for /control/command/control_cmd topic..."

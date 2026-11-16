@@ -24,7 +24,8 @@ if [ ! -d "${BAG}" ]; then
 fi
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-[ -f "${REPO_ROOT}/install/setup.bash" ] && source "${REPO_ROOT}/install/setup.bash"
+. "${REPO_ROOT}/scripts/autoware_version.sh"  # GOLFCART_AUTOWARE_PREFIX, GOLFCART_INSTALL_DIR
+[ -f "${GOLFCART_INSTALL_DIR}/setup.bash" ] && source "${GOLFCART_INSTALL_DIR}/setup.bash"
 
 echo "Replaying ${BAG}"
 echo "  the stack must already be up: ros2 launch golfcart_launch ntu_logging_sim.launch.xml"

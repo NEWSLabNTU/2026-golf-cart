@@ -68,6 +68,7 @@ esac
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd -- "${SCRIPT_DIR}/../../.." && pwd)
+. "${REPO_ROOT}/scripts/autoware_version.sh"  # GOLFCART_AUTOWARE_PREFIX, GOLFCART_INSTALL_DIR
 OUT="${2:-${REPO_ROOT}/log/link_sim/${MODE}_$(date +%Y%m%d_%H%M%S)}"
 
 STARTUP="${LINK_SIM_STARTUP:-70}"      # s: the stack coming up
@@ -129,7 +130,7 @@ set +u
 # shellcheck source=/dev/null
 . ./scripts/env.sh
 # shellcheck source=/dev/null
-[ -f install/setup.bash ] && . install/setup.bash
+[ -f "$GOLFCART_INSTALL_DIR/setup.bash" ] && . "$GOLFCART_INSTALL_DIR/setup.bash"
 set -u
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 unset ROS_DOMAIN_ID

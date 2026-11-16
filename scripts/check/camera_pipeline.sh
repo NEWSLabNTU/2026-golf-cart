@@ -17,6 +17,7 @@ set -uo pipefail
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 repo_dir=$(cd -- "$script_dir/../.." &>/dev/null && pwd)
+. "${repo_dir}/scripts/autoware_version.sh"  # GOLFCART_AUTOWARE_PREFIX, GOLFCART_INSTALL_DIR
 
 WIDTH=${WIDTH:-1920}
 HEIGHT=${HEIGHT:-1280}
@@ -147,7 +148,7 @@ hdr "Capture profiles"
 
 profile_dir=""
 for candidate in \
-    "${repo_dir}/install/golfcart_sensor_kit_launch/share/golfcart_sensor_kit_launch/config/camera_capture" \
+    "${GOLFCART_INSTALL_DIR}/golfcart_sensor_kit_launch/share/golfcart_sensor_kit_launch/config/camera_capture" \
     "${repo_dir}/src/sensor_kit/golfcart_sensor_kit_launch/golfcart_sensor_kit_launch/config/camera_capture"; do
     [[ -d $candidate ]] && { profile_dir=$candidate; break; }
 done
@@ -162,7 +163,7 @@ fi
 # report cannot claim a profile the launch would not run.
 launch_xml=""
 for candidate in \
-    "${repo_dir}/install/golfcart_sensor_kit_launch/share/golfcart_sensor_kit_launch/launch/camera.launch.xml" \
+    "${GOLFCART_INSTALL_DIR}/golfcart_sensor_kit_launch/share/golfcart_sensor_kit_launch/launch/camera.launch.xml" \
     "${repo_dir}/src/sensor_kit/golfcart_sensor_kit_launch/golfcart_sensor_kit_launch/launch/camera.launch.xml"; do
     [[ -f $candidate ]] && { launch_xml=$candidate; break; }
 done

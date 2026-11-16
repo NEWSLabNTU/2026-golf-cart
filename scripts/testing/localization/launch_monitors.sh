@@ -13,11 +13,12 @@ fi
 # Get script directory
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 WORKSPACE_DIR="$( cd "$SCRIPT_DIR/../.." && pwd )"
+. "${WORKSPACE_DIR}/scripts/autoware_version.sh"  # GOLFCART_AUTOWARE_PREFIX, GOLFCART_INSTALL_DIR
 
 echo "Creating tmux session '$SESSION' for outdoor localization testing..."
 
 # Source ROS workspace
-SOURCE_CMD="cd $WORKSPACE_DIR && source install/setup.bash"
+SOURCE_CMD="cd $WORKSPACE_DIR && source ${GOLFCART_INSTALL_DIR}/setup.bash"
 
 # Create new session with GPS monitor
 tmux new-session -d -s $SESSION -n "GPS" "$SOURCE_CMD && $SCRIPT_DIR/monitor_gps.py"

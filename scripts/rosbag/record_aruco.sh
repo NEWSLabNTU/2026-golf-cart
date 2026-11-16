@@ -24,6 +24,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+. "${REPO_ROOT}/scripts/autoware_version.sh"  # GOLFCART_AUTOWARE_PREFIX, GOLFCART_INSTALL_DIR
 OUTPUT_DIR="${REPO_ROOT}/rosbags"
 
 SCENARIO="${1:-session}"
@@ -66,7 +67,7 @@ if [[ "${AVAILABLE_MB}" -lt $((ESTIMATED_MB_PER_MIN * 10)) ]]; then
   echo >&2
 fi
 
-WORKSPACE_SETUP="${REPO_ROOT}/install/setup.bash"
+WORKSPACE_SETUP="${GOLFCART_INSTALL_DIR}/setup.bash"
 if [[ -f "${WORKSPACE_SETUP}" ]]; then
   # shellcheck disable=SC1090
   source "${WORKSPACE_SETUP}"

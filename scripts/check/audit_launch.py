@@ -70,7 +70,13 @@ _share_cache = {}
 def share_dir(pkg):
     if pkg in _share_cache:
         return _share_cache[pkg]
-    for base in (ROOT + "install", "/opt/autoware/1.5.0", "/opt/ros/humble"):
+    # The selected Autoware and its workspace (scripts/autoware_version.sh).
+    version = os.environ.get("GOLFCART_AUTOWARE_VERSION", "1.5.0")
+    install = os.environ.get("GOLFCART_INSTALL_DIR", ROOT + "install-" + version)
+    if not os.path.isdir(install) and version == "1.5.0":
+        install = ROOT + "install"
+    prefix = os.environ.get("GOLFCART_AUTOWARE_PREFIX", "/opt/autoware/" + version)
+    for base in (install, prefix, "/opt/ros/humble"):
         candidate = os.path.join(base, pkg, "share", pkg)
         if os.path.isdir(candidate):
             _share_cache[pkg] = candidate

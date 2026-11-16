@@ -3,6 +3,7 @@
 # `scripts/twin/twin.sh help` for the commands and options.
 set -eo pipefail
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
+. "${root}/scripts/autoware_version.sh"  # GOLFCART_AUTOWARE_PREFIX, GOLFCART_INSTALL_DIR
 pkg="$root/src/simulation/golfcart_twin"
 # Host settings: config/twin.env when present, else the environment (a wrapper repository's
 # .envrc, for one; config/twin.env.example lists them).
@@ -13,7 +14,7 @@ TWIN_DISPLAY=${TWIN_DISPLAY-${DISPLAY:-}}
 TWIN_GPU=${TWIN_GPU:-0}
 AUTOWARE_DATA=${AUTOWARE_DATA:-$HOME/autoware_data}
 SWB_URL=https://github.com/NEWSLabNTU/scenario-world-bridge.git
-AUTOWARE=/opt/autoware/1.5.0
+AUTOWARE=${GOLFCART_AUTOWARE_PREFIX}
 run="$root/log/twin"
 mkdir -p "$run"
 dds="file://$pkg/config/cyclonedds-unicast-lo.xml"
@@ -163,7 +164,7 @@ doctor() {
     [ -f "$TWIN_SWB/install/setup.bash" ] && [ -d "$TWIN_SWB/install/swb_launch" ] \
         && ok "scenario-world-bridge built ($TWIN_SWB)" \
         || no "scenario-world-bridge built at TWIN_SWB=$TWIN_SWB" "twin.sh setup (clones and builds it)"
-    [ -d "$root/install/golfcart_twin" ] && ok "this repository built" || no "this repository built" "just build"
+    [ -d "${GOLFCART_INSTALL_DIR}/golfcart_twin" ] && ok "this repository built" || no "this repository built" "just build"
     if [ -n "${ISAAC_ROOT:-}" ] && [ -x "$ISAAC_ROOT/venv/bin/python" ]; then ok "Isaac Sim ($ISAAC_ROOT)"
     else no "Isaac Sim 6.1 at ISAAC_ROOT=${ISAAC_ROOT:-unset}" \
         "ISAAC_ROOT=<dir> $TWIN_SWB/src/swb_isaac_world/scripts/install_isaac.sh"; fi
@@ -196,7 +197,7 @@ doctor() {
 launch() {  # launch NAME ARGS...: twin.launch.py in its own process group, waited on here
     local name=$1 pid; shift
     alive stack && die "the demo is already up (pgid $(cat "$run/stack.pgid")); twin.sh stop first"
-    [ -d "$root/install/golfcart_twin" ] || die "build first (twin.sh setup)"
+    [ -d "${GOLFCART_INSTALL_DIR}/golfcart_twin" ] || die "build first (twin.sh setup)"
     need TWIN_MAP
     rm -f "$run/stack.pgid"
     # The subshell writes its own pid, then becomes play_launch: setsid (not a group leader
@@ -295,9 +296,9 @@ world() {
 autoware() {
     need TWIN_MAP
     alive autoware && die "Autoware is already up (pgid $(cat "$run/autoware.pgid")); twin stop first"
-    [ -f "$root/install/setup.bash" ] || die "build first (just build)"
+    [ -f "${GOLFCART_INSTALL_DIR}/setup.bash" ] || die "build first (just build)"
     echo "twin: the cart's Autoware on $TWIN_MAP, domain $TWIN_DOMAIN; log $run/autoware.log"
-    ( source "$root/scripts/env.sh" > /dev/null 2>&1; source "$root/install/setup.bash"; dds_env
+    ( source "$root/scripts/env.sh" > /dev/null 2>&1; source "${GOLFCART_INSTALL_DIR}/setup.bash"; dds_env
       if [ -n "${AUTOWARE_TENSORRT_LIB:-}" ] && [ -d "$AUTOWARE_TENSORRT_LIB" ]; then
           export LD_LIBRARY_PATH="$AUTOWARE_TENSORRT_LIB:${LD_LIBRARY_PATH:-}"
       fi

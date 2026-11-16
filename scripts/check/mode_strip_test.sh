@@ -19,13 +19,14 @@ set -o pipefail
 set -m
 
 source /opt/ros/humble/setup.bash
-source /opt/autoware/1.5.0/setup.bash
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-[ -f "$REPO/install/setup.bash" ] && source "$REPO/install/setup.bash"
+. "${REPO}/scripts/autoware_version.sh"  # GOLFCART_AUTOWARE_PREFIX, GOLFCART_INSTALL_DIR
+source "${GOLFCART_AUTOWARE_PREFIX}/setup.bash"
+[ -f "${GOLFCART_INSTALL_DIR}/setup.bash" ] && source "${GOLFCART_INSTALL_DIR}/setup.bash"
 
-GRAPH=/opt/autoware/1.5.0/share/autoware_launch/config/system/diagnostics/autoware-main.yaml
-AGGP=/opt/autoware/1.5.0/share/autoware_diagnostic_graph_aggregator/config/default.param.yaml
-VEH="$REPO/install/golfcart_vehicle_description/share/golfcart_vehicle_description/config/vehicle_info.param.yaml"
+GRAPH=${GOLFCART_AUTOWARE_PREFIX}/share/autoware_launch/config/system/diagnostics/autoware-main.yaml
+AGGP=${GOLFCART_AUTOWARE_PREFIX}/share/autoware_diagnostic_graph_aggregator/config/default.param.yaml
+VEH="${GOLFCART_INSTALL_DIR}/golfcart_vehicle_description/share/golfcart_vehicle_description/config/vehicle_info.param.yaml"
 LOG=$(mktemp -d)
 
 # PGIDS, not GROUPS: GROUPS is a bash special array and assigning to it silently

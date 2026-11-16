@@ -11,7 +11,8 @@
 # No sudo. Idempotent.
 set -euo pipefail
 
-AW="${AUTOWARE_ROOT:-/opt/autoware/1.5.0}"
+. "$(dirname "${BASH_SOURCE[0]}")/../autoware_version.sh"  # GOLFCART_AUTOWARE_PREFIX
+AW="${AUTOWARE_ROOT:-${GOLFCART_AUTOWARE_PREFIX}}"
 THEME="$AW/theme"
 for f in "$THEME/qt5ct.conf" "$THEME/autoware.qss" "$THEME/autoware-rviz-icons"; do
     [[ -e "$f" ]] || { echo "install_theme: $f not found (Autoware apt install?)" >&2; exit 1; }

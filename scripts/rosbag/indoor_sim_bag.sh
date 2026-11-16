@@ -23,6 +23,7 @@
 set -eo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+. "${REPO_ROOT}/scripts/autoware_version.sh"  # GOLFCART_AUTOWARE_PREFIX, GOLFCART_INSTALL_DIR
 BAG="${GOLFCART_INDOOR_BAG:-${REPO_ROOT}/rosbags/basement/vlp32_1}"
 
 if [ ! -d "${BAG}" ]; then
@@ -32,7 +33,7 @@ if [ ! -d "${BAG}" ]; then
     exit 1
 fi
 
-[ -f "${REPO_ROOT}/install/setup.bash" ] && source "${REPO_ROOT}/install/setup.bash"
+[ -f "${GOLFCART_INSTALL_DIR}/setup.bash" ] && source "${GOLFCART_INSTALL_DIR}/setup.bash"
 
 echo "Starting ${BAG} PAUSED (clock only)."
 echo "  next: just indoor-test up      # stack, now born on bag time"

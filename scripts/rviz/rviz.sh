@@ -11,7 +11,8 @@
 # matches to close the RViz `just up` opened.
 set -euo pipefail
 CFG="${1:?usage: rviz.sh CONFIG.rviz [args]}"; shift
-AW="${AUTOWARE_ROOT:-/opt/autoware/1.5.0}"
+. "$(dirname "${BASH_SOURCE[0]}")/../autoware_version.sh"  # GOLFCART_AUTOWARE_PREFIX
+AW="${AUTOWARE_ROOT:-${GOLFCART_AUTOWARE_PREFIX}}"
 SPLASH="$AW/share/autoware_launch/rviz/image/autoware.png"
 export QT_QPA_PLATFORMTHEME=qt5ct
 [[ -f "${XDG_CONFIG_HOME:-$HOME/.config}/qt5ct/qt5ct.conf" ]] \

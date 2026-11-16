@@ -27,7 +27,13 @@ import os
 import statistics as st
 import sys
 
-AMENT_PREFIX = os.environ.get("AMENT_PREFIX", "/opt/autoware/1.5.0")
+AMENT_PREFIX = os.environ.get(
+    "AMENT_PREFIX",
+    os.environ.get(
+        "GOLFCART_AUTOWARE_PREFIX",
+        "/opt/autoware/" + os.environ.get("GOLFCART_AUTOWARE_VERSION", "1.5.0"),
+    ),
+)
 COMPONENT_INDEX = os.path.join(
     AMENT_PREFIX, "share/ament_index/resource_index/rclcpp_components"
 )
