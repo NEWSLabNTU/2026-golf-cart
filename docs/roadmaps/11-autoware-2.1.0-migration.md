@@ -281,7 +281,13 @@ Done (2026-11-16/17):
 4. The change reference, including the sensor kit and vehicle comparison.
 
 Next:
-5. **Branches** (section 4, R1-R14). No content changes.
+5. **Branches** (section 4, R1-R14): done 2026-11-17. `2026-golf`
+   fast-forwarded in individual_params and the sensor kit. CalibrationTools
+   is on `1.5.0` at bc36609; its `golfcart` commit only exposed four
+   arguments at their defaults. seyond's vendor `main` is merged into ours
+   (1d21e50, builds). The branch fields are on `main` too (0ae3bc0), and the
+   rule is in CONTRIBUTING.md. Still to do: the master's `/mnt/external`
+   bare repos need these branches before the orin can pull them.
 6. **Glue into `golfcart_launch`, behaviour-neutral on 1.5.0**, landed on
    `main` too:
    - `cuda_ndt_matcher_launch` stops including Autoware's gyro_odometer,
