@@ -65,14 +65,17 @@ checkout:
 setup:
     ./setup.sh
 
-# Build this project. Pass --clean to wipe caches first. ROS / Autoware env via .envrc.
+# Build against the selected Autoware (config/autoware-version). --clean wipes first; other flags go to colcon.
 build *FLAGS="":
     #!/usr/bin/env bash
     set -e
     source "{{justfile_directory()}}/scripts/_env_guard.sh"
-    if [[ "{{FLAGS}}" == *"--clean"* ]]; then
-        just clean --yes
-    fi
+    # --clean wipes this version's workspace first; every other flag goes to
+    # colcon (e.g. `just build --parallel-workers 4 --packages-select foo`).
+    COLCON_FLAGS=()
+    for f in {{FLAGS}}; do
+        if [[ "$f" == --clean ]]; then just clean --yes; else COLCON_FLAGS+=("$f"); fi
+    done
     # Packages a given host cannot build get skipped rather than failing the
     # whole build (scripts/colcon_ignore.sh says which, and why). One list, not
     # one per reason: colcon's --packages-ignore takes the LAST occurrence and
@@ -82,12 +85,18 @@ build *FLAGS="":
     if [[ ${#IGNORE_PKGS[@]} -gt 0 ]]; then
         IGNORE_ARGS=(--packages-ignore "${IGNORE_PKGS[@]}")
     fi
+    # One workspace per Autoware version (scripts/env.sh): build-<ver>/ and
+    # install-<ver>/. A workspace cannot serve two underlays.
+    echo "Building against Autoware ${GOLFCART_AUTOWARE_VERSION} -> ${GOLFCART_INSTALL_DIR#{{justfile_directory()}}/}"
     colcon build \
         --base-paths src \
+        --build-base "${GOLFCART_BUILD_DIR}" \
+        --install-base "${GOLFCART_INSTALL_DIR}" \
         --symlink-install \
         --cmake-args -DCMAKE_BUILD_TYPE=Release \
-        --cargo-args --release \
-        "${IGNORE_ARGS[@]}"
+        "${IGNORE_ARGS[@]}" \
+        "${COLCON_FLAGS[@]}" \
+        --cargo-args --release
 
 # With autoware-localrepo 1.5.0-3 or later this runs autoware-download-models
 # (ARGS pass through, e.g. `--only lidar_centerpoint`); older installs symlink.
@@ -107,7 +116,8 @@ build-engines:
     # No `set -u` (ROS setup.bash breaks under it) and no `set -e`: one failed
     # model must not hide the rest; the summary at the end reports what landed.
     set -o pipefail
-    for req in /opt/ros/humble/setup.bash:ros2 /opt/autoware/1.5.0/setup.bash:autoware-debian; do
+    source "{{justfile_directory()}}/scripts/_env_guard.sh"
+    for req in /opt/ros/humble/setup.bash:ros2 "${GOLFCART_AUTOWARE_PREFIX}/setup.bash":autoware-debian; do
         if [[ ! -f "${req%%:*}" ]]; then
             echo "Not installed: ${req%%:*}" >&2
             echo "Install it first:  ./setup.sh --only ${req##*:}" >&2
@@ -115,9 +125,7 @@ build-engines:
         fi
     done
     just setup-autoware-data
-    source /opt/ros/humble/setup.bash
-    source /opt/autoware/1.5.0/setup.bash
-    DATA="${GOLFCART_DATA_PATH:-{{justfile_directory()}}/data/autoware_data}"
+    DATA="${GOLFCART_DATA_PATH}"
 
     # <package> <launch file> [extra args]; build_only:=true exits once the engine is written.
     build() {
@@ -146,18 +154,29 @@ test:
     source "{{justfile_directory()}}/scripts/_env_guard.sh"
     colcon test \
         --base-paths src \
+        --build-base "${GOLFCART_BUILD_DIR}" \
+        --install-base "${GOLFCART_INSTALL_DIR}" \
         --return-code-on-test-failure; \
     TEST_EXIT_CODE=$?; \
     echo "" && \
-    colcon test-result --verbose; \
+    colcon test-result --test-result-base "${GOLFCART_BUILD_DIR}" --verbose; \
     exit $TEST_EXIT_CODE
 
-# Clean up built binaries (use --yes or --no-confirm to skip prompt)
+# Clean this Autoware version's build (--all: every version; --yes skips the prompt)
 clean *FLAGS="":
     #!/usr/bin/env bash
+    # Only the selected version's workspace (scripts/env.sh); another
+    # version's stays. --all removes every version's, and the legacy build/ install/.
+    source "{{justfile_directory()}}/scripts/_env_guard.sh" >/dev/null
     do_clean() {
-        rm -rf build install log
-        echo "Cleaned build artifacts."
+        cd "{{justfile_directory()}}"
+        if [[ "{{FLAGS}}" == *"--all"* ]]; then
+            rm -rf build install build-*/ install-*/ log
+            echo "Cleaned every version's build artifacts."
+        else
+            rm -rf "${GOLFCART_BUILD_DIR}" "${GOLFCART_INSTALL_DIR}" log
+            echo "Cleaned Autoware ${GOLFCART_AUTOWARE_VERSION}'s build artifacts."
+        fi
     }
     if [[ "{{FLAGS}}" == *"--yes"* ]] || [[ "{{FLAGS}}" == *"--no-confirm"* ]]; then
         do_clean

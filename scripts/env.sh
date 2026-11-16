@@ -480,6 +480,13 @@ golfcart_dds_profiles() {
     done
 }
 
+# ── Autoware version ─────────────────────────────────────────────────────────
+# scripts/autoware_version.sh owns the rule (env, config/autoware-version,
+# runtime.conf default) and the per-version paths it exports. Separate so
+# scripts/_env_guard.sh can ask without sourcing all of this file.
+# shellcheck source=scripts/autoware_version.sh
+. "${GOLFCART_REPO_ROOT}/scripts/autoware_version.sh"
+
 if [ "${GOLFCART_ENV_RESOLVE_ONLY:-0}" = "1" ]; then
     golfcart_resolve_dds_profile
     golfcart_resolve_rmw
@@ -487,19 +494,34 @@ if [ "${GOLFCART_ENV_RESOLVE_ONLY:-0}" = "1" ]; then
 else
 
 # ── Autoware / ROS 2 ─────────────────────────────────────────────────────────
-if [ -f /opt/autoware/1.5.0/setup.bash ]; then
-    # Source Autoware 1.5.0 environment if available
+# A shell that already sourced ANOTHER Autoware cannot be switched in place:
+# setup.bash only prepends, so both underlays would be on AMENT_PREFIX_PATH and
+# the first match wins per package. Say so rather than build a mix.
+case ":${AMENT_PREFIX_PATH:-}:" in
+    *":/opt/autoware/${GOLFCART_AUTOWARE_VERSION}:"*) ;;
+    *":/opt/autoware/"*)
+        echo "WARNING: this shell already has another Autoware on AMENT_PREFIX_PATH;" >&2
+        echo "         open a new shell to switch to ${GOLFCART_AUTOWARE_VERSION}." >&2
+        ;;
+esac
+if [ -f "${GOLFCART_AUTOWARE_PREFIX}/setup.bash" ]; then
     _golfcart_relax_shell_opts
-    source /opt/autoware/1.5.0/setup.bash
+    source "${GOLFCART_AUTOWARE_PREFIX}/setup.bash"
     _golfcart_restore_shell_opts
+    # localrepo 1.5.0-3 and 2.1.0 moved this out of setup.bash into
+    # autoware-env.bash, which must NOT be sourced here: it also exports
+    # Autoware's lo-only CYCLONEDDS_URI and would undo the master/orin split.
+    # RViz's dark theme needs only this one line of it.
+    export QT_QPA_PLATFORMTHEME="${QT_QPA_PLATFORMTHEME:-qt5ct}"
 else
-    # Fallback: Manual Autoware and ROS 2 setup
+    # Fallback: the selected Autoware is not installed
     if [ "${GOLFCART_ENV_QUIET:-0}" != "1" ]; then
-        echo "=========================================="
-        echo "INFO: /opt/autoware/autoware-env not found"
-        echo "INFO: Please source your Autoware installation manually:"
-        echo "      source \$AUTOWARE_DIR/install/setup.bash"
-        echo "=========================================="
+        echo "==========================================" >&2
+        echo "WARNING: Autoware ${GOLFCART_AUTOWARE_VERSION} is not installed" >&2
+        echo "         (no ${GOLFCART_AUTOWARE_PREFIX}/setup.bash)." >&2
+        echo "         Install it (./setup.sh --only autoware-debian), or pick" >&2
+        echo "         another version in config/autoware-version." >&2
+        echo "==========================================" >&2
     fi
 
     # RMW_IMPLEMENTATION is NOT set here. golfcart_resolve_rmw at the bottom
@@ -761,10 +783,10 @@ if [ -r /etc/nv_tegra_release ] && grep -q '^# R36' /etc/nv_tegra_release && [ -
 fi
 
 # ── Workspace overlay ────────────────────────────────────────────────────────
-# Source workspace if it has been built
-if [ -f "${GOLFCART_REPO_ROOT}/install/setup.bash" ]; then
+# Source this version's workspace if it has been built
+if [ -f "${GOLFCART_INSTALL_DIR}/setup.bash" ]; then
     _golfcart_relax_shell_opts
-    source "${GOLFCART_REPO_ROOT}/install/setup.bash"
+    source "${GOLFCART_INSTALL_DIR}/setup.bash"
     _golfcart_restore_shell_opts
 fi
 

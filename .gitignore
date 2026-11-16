@@ -10,6 +10,11 @@
 build/
 log/
 install/
+# per-version colcon workspaces (scripts/env.sh)
+build-*/
+install-*/
+# per-host Autoware version pin, like config/host
+config/autoware-version
 
 # python
 __pycache__/

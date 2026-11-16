@@ -26,11 +26,15 @@ _golfcart_env_guard() {
     # it to just /opt/ros/humble, and skipping env.sh then builds against bare
     # ROS: every package fails on a missing autoware_cmake, autoware_*_msgs or
     # cuda_blackboard, none of which says "the environment was half sourced".
+    # The version to build against (scripts/autoware_version.sh).
+    # shellcheck source=scripts/autoware_version.sh
+    GOLFCART_REPO_ROOT="${GOLFCART_REPO_ROOT:-$root}" . "${root}/scripts/autoware_version.sh"
+    local prefix="${GOLFCART_AUTOWARE_PREFIX}"
     local need_env=0
     if [ -z "${AMENT_PREFIX_PATH:-}" ]; then
         need_env=1
-    elif [ -f /opt/autoware/1.5.0/setup.bash ] \
-         && [[ ":${AMENT_PREFIX_PATH}:" != *":/opt/autoware/1.5.0:"* ]]; then
+    elif [ -f "${prefix}/setup.bash" ] \
+         && [[ ":${AMENT_PREFIX_PATH}:" != *":${prefix}:"* ]]; then
         need_env=1
     fi
     if [ "$need_env" = 1 ] && [ -f "${root}/scripts/env.sh" ]; then
@@ -44,8 +48,8 @@ _golfcart_env_guard() {
         case "$saved" in *u*) set -u ;; esac
     fi
 
-    if [ ! -f /opt/autoware/1.5.0/setup.bash ]; then
-        echo "→ Autoware not found at /opt/autoware/1.5.0/setup.bash"
+    if [ ! -f "${prefix}/setup.bash" ]; then
+        echo "→ Autoware ${GOLFCART_AUTOWARE_VERSION} not found at ${prefix}/setup.bash"
         echo "  Packages that need its messages will fail to build. Install it with:"
         echo "      ./setup.sh autoware-debian     # or ./setup.sh for the full setup"
     fi
