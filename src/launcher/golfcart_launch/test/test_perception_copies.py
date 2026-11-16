@@ -15,10 +15,11 @@
 """
 Our perception launch copies differ from upstream only where they say so.
 
-The three files under launch/components/ are copies of Autoware 1.5.0's,
-changed only to carry use_lidar_rule_detector down to the detection launch.
-Anything else that differs is drift: an upgrade that was not re-copied, or an
-edit that does not belong in a copy.
+The two files under launch/components/ are copies of Autoware 2.1.0's,
+changed only to carry use_lidar_rule_detector down to the lidar object
+recognition launch and let it leave the clustering detector out. Anything else
+that differs is drift: an upgrade that was not re-copied, or an edit that does
+not belong in a copy.
 """
 
 import difflib
@@ -30,23 +31,20 @@ import pytest
 LAUNCH = Path(__file__).parents[1] / 'launch' / 'components'
 
 COPIES = [
-    ('autoware_launch', 'launch/components/tier4_perception_component.launch.xml',
+    ('autoware_launch', 'launch/components/component_perception.launch.xml',
      LAUNCH / 'tier4_perception_component.launch.xml'),
-    ('tier4_perception_launch', 'launch/perception.launch.xml',
-     LAUNCH / 'perception' / 'perception.launch.xml'),
-    ('tier4_perception_launch',
-     'launch/object_recognition/detection/detection.launch.xml',
-     LAUNCH / 'perception' / 'detection.launch.xml'),
+    ('autoware_perception_launch',
+     'launch/object_recognition/object_recognition_lidar.launch.xml',
+     LAUNCH / 'perception' / 'object_recognition_lidar.launch.xml'),
 ]
 
-# What a changed line may say: our own package in an include, or the switch.
 OURS = re.compile(r'golfcart_launch|use_lidar_rule_detector')
-# What a removed upstream line may be: the include we redirect, or the one
-# hardcoded switch we replace.
 REPLACED = re.compile(
-    r'find-pkg-share tier4_perception_launch\)/launch/'
-    r'(perception|object_recognition/detection/detection)\.launch\.xml'
-    r'|switch/detector/lidar_rule" value="true"')
+    r'find-pkg-share autoware_perception_launch\)/launch/'
+    r'object_recognition/object_recognition_lidar\.launch\.xml'
+    r'|<group>$'
+    r'|<group if="\$\(var use_object_filter\)">'
+    r'|name="input/detection03/channel" value="lidar_clustering"/>')
 
 
 def _upstream(package, relative):
@@ -76,11 +74,20 @@ def test_copy_differs_from_upstream_only_in_marked_lines(package, relative, copy
     assert [r for r in removed if not REPLACED.search(r)] == []
 
 
-def test_lidar_mode_gates_only_the_clustering_detector():
-    text = (LAUNCH / 'perception' / 'detection.launch.xml').read_text()
-    lidar = re.search(
-        r'==&quot;lidar&quot;\'\)">(.*?)</group>', text, flags=re.DOTALL).group(1)
+def test_rule_detector_switch_gates_the_detector_filter_and_channel():
+    text = (LAUNCH / 'perception' / 'object_recognition_lidar.launch.xml').read_text()
+    assert ('<group if="$(var use_lidar_rule_detector)">\n'
+            '      <!-- Lidar rule-based detectors-->') in text
+    assert "'$(var use_lidar_rule_detector)' == 'true'" in text
+    assert ('<let name="input/detection03/channel" value="none" '
+            'unless="$(var use_lidar_rule_detector)"/>') in text
+    # The DNN detector stays unconditional.
+    dnn = text.index('lidar_dnn_detector.launch.xml')
+    assert text.rfind('<group>', 0, dnn) > text.rfind('<group if=', 0, dnn)
 
-    assert ('<let name="switch/detector/lidar_rule" '
-            'value="$(var use_lidar_rule_detector)"/>') in lidar
-    assert '<let name="switch/detector/lidar_dnn" value="true"/>' in lidar
+
+def test_component_hands_the_switch_to_our_copy():
+    text = (LAUNCH / 'tier4_perception_component.launch.xml').read_text()
+    assert ('find-pkg-share golfcart_launch)/launch/components/perception/'
+            'object_recognition_lidar.launch.xml') in text
+    assert '<arg name="use_lidar_rule_detector" value="$(var use_lidar_rule_detector)"/>' in text

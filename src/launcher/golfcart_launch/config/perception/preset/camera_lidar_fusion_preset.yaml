@@ -1,3 +1,7 @@
+# Not available on Autoware 2.1.0: its perception component is lidar only, and
+# golfcart_autoware.launch.xml stops the launch on perception_mode
+# camera_lidar_fusion, detection_by_tracker and the image segmentation filter
+# (see README.md). Kept for the 1.5.0 line.
 launch:
   # Camera-LiDAR Fusion Perception Preset
   # Uses both camera and LiDAR for enhanced perception

@@ -2,6 +2,33 @@
 
 Perception presets define the perception configuration for Golf Cart. They control which perception features are enabled and which perception mode is used.
 
+## Autoware 2.1.0 (this branch)
+
+2.1.0's perception component is lidar only; traffic lights are a component of
+their own (`component_traffic_light`, included by `golfcart_autoware.launch.xml`
+when `use_traffic_light_recognition` is true). So:
+
+- `lidar_only` and `minimal` work as before.
+- `camera_lidar_fusion` **stops the launch**: `perception_mode` other than
+  `lidar`, `use_detection_by_tracker:=true` and
+  `use_image_segmentation_based_filter:=true` each fail with an
+  `Undefined variable: 'GOLFCART_UNSUPPORTED_..._on_autoware_2_1_0'` error, because
+  2.1.0 has no such pipeline and the arguments would otherwise be dropped
+  without a word. Camera fusion on 2.1.0 needs its own composition
+  (`object_recognition_camera_lidar_radar.launch.xml`) and has not been built.
+- `traffic_light_recognition/enable_fine_detection` is passed on as 2.1.0's
+  `traffic_light_recognition/use_high_accuracy_detection`.
+- **`use_lidar_rule_detector:=false` now changes what is detected.** In 1.5.0's
+  lidar mode the tracker ignored the clustering detector, so turning it off
+  only saved its CPU. In 2.1.0 the tracker reads clustering as its own channel
+  (`lidar_clustering`, objects of class unknown), so off means no detection
+  of anything CenterPoint has no class for. `lidar_only` and `minimal` keep it
+  off, as on 1.5.0; whether the cart should turn it on is open.
+
+The two copies are `launch/components/tier4_perception_component.launch.xml`
+(of `component_perception`) and `launch/components/perception/object_recognition_lidar.launch.xml`.
+The rest of this file describes 1.5.0.
+
 ## Available Presets
 
 ### `lidar_only` (Default)
