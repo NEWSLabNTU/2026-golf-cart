@@ -310,9 +310,48 @@ Next:
    - Proof: `play_launch resolve` of `@mingda-loop`, `@ntu-r01` and the sims
      under 1.5.0, before and after, with identical node, parameter and remap
      sets.
-7. **2.1.0 launch layer**, on `autoware-2.1.0` (section 2): dead includes
-   and the Nebula 1.2 paths passed in, planning wrapper and `slow_indoor`
-   keys, perception presets redesigned, diag graph, required params.
+7. **2.1.0 launch layer**, on `autoware-2.1.0` (section 2): done
+   2026-11-17 (16d8485, 5044b65). Every entry point resolves under both
+   play_launch parsers (0.36.0 at 89b70f92, #0086 fixed) with the same node
+   sets: `@ntu-r01` 127, `@mingda-loop` 128, `pose_source:=ndt` 127,
+   `pose_source:=yabloc` 136, planning sim 98, aruco sim 103, NTU and indoor
+   logging sims 74, `sensor_only` 42, perception on (`lidar_only`,
+   `minimal`) 130. What changed:
+   - map and control through `component_map` / `component_control`; the
+     aruco path uses `use_pointcloud_map:=false`, so `golfcart_map_component`
+     is gone;
+   - localization: `autoware_localization_launch` paths and
+     `pose_initialization_requester`;
+   - planning: our component is a thin wrapper handing six `golfcart_` paths
+     to `autoware_planning_launch`; the six `slow_indoor` copies are rebased on
+     `autoware_planning_config` 2.1.0, which carries the newly required keys;
+   - perception: two 2.1.0 copies (`component_perception`,
+     `object_recognition_lidar`) carrying `use_lidar_rule_detector`; traffic
+     lights through `component_traffic_light`; `camera_lidar_fusion`,
+     `use_detection_by_tracker` and the image segmentation filter stop the
+     launch with a named error (no 2.1.0 pipeline);
+   - Nebula 1.2 paths passed from our sensing component; EKF and NDT keys;
+     the diag graph's `/autoware/debug/tools` removed; aruco sim
+     `launch_fault_injection` and `perception_simulation.launch.xml`.
+
+   Left open:
+   - **`use_lidar_rule_detector`** (decision): on 2.1.0 the tracker reads the
+     clustering detector as its own channel, so the presets' `false` now
+     loses unknown-class objects (a box, a trolley); on 1.5.0 they were
+     discarded anyway. Kept `false` to match 1.5.0.
+   - The yabloc/eagleye fallback runs on `autoware_localization_config`'s
+     parameters: `component_localization` takes no paths. A golfcart
+     localization config package would restore ours.
+   - `data_path` still defaults to 1.5.0's `./data/autoware_data`; under the
+     Python parser a perception launch stops on the missing 2.1.0 model files
+     (step 9). The Rust parser only warns and resolves on: play_launch #0089.
+   - `camera_calibration.launch.xml` needs CalibrationTools built for 2.1.0.
+   - **Before landing step 6 on `main`**: `board_detector_live.launch.xml`
+     needs `vlp32_calibration_file` set (1.5.0 path), because
+     `VLP32.param.yaml` now reads it; on this branch it carries 2.1.0's.
+   - Not run yet: anything at runtime. cuda_ndt reading the new
+     `publish_loaded_map` key, the `-no-perception` graph workaround, and
+     the planning preset shadowing upstream's are step 10 checks.
 8. **Code** (section 3):
    - `cuda_pointcloud_filters` builds on both cuda_blackboard versions.
    - `cuda_ndt_matcher` gets upstream's Hessian sign fix on `main`. The
@@ -327,6 +366,8 @@ Next:
 11. **Hosts**: master then orin, same version on both; engines rebuilt; a
     supervised indoor drive.
 
-Outside this repo: play_launch #0086 (play 118). Until it is fixed, 2.1.0
-runs with `--parser python`, and steps 7 and 10 need a way to pass it
-(`GOLFCART_PLAY_LAUNCH_PARSER` in `config/runtime.conf`).
+Outside this repo: play_launch #0086 is fixed on its main (89b70f92, not
+yet released); with it the default parser handles every 2.1.0 entry point
+above, so `GOLFCART_PLAY_LAUNCH_PARSER` is not needed once the release is
+installed. Filed from step 7: #0088 (a missing include names no file),
+#0089 (a missing param file is only a warning).
