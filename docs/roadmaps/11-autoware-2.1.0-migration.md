@@ -220,15 +220,100 @@ via ament index), tests `golfcart_launch/test/test_duplicated_node_checker.py`,
 | cuda_pointcloud_filters | small | cuda_blackboard 0.1 → 0.5: pass the stream to the subscriber (`cuda_crop_box_filter_node.cpp:77` and the random-downsample twin); the stream-less constructor is deprecated |
 | seyond_ros_driver | none | branch name `1.5.0` is convention only |
 
+## 4. Submodule versioning
+
+Decided 2026-11-17. A submodule is versioned by what its **source** has to
+follow, not by what it links. Most Autoware message types did not change
+between 1.5.0 and 2.1.0 (Part 1 of the
+[change reference](../research/system/autoware-1.5.0-to-2.1.0-changes.md)),
+so a package that only uses those shares one source and is rebuilt per
+underlay.
+
+| Class | Line | Members |
+|---|---|---|
+| Golf cart | `2026-golf`, one line for every Autoware version | golfcart_vehicle_launch, golfcart_system_monitor, autoware_individual_params, golfcart_sensor_kit_launch |
+| Autoware release | upstream version name: `1.5.0`, `2.1.0`; a golf cart patch on top is `2026-golf-<ver>` | CalibrationTools; the superproject (`main` = default version, `autoware-2.1.0`) |
+| ROS edition | `main` (or upstream's `ros2`) while one source builds on every edition in use; `humble`/`jazzy` only when code splits | seyond_ros_driver, ublox, xsens_mti_can_ros2_driver, gmslcam, zed-ros2-wrapper (upstream tag) |
+| Standalone | `main`, semver tags when a version is needed | cuda_ndt_matcher, cuda_pointcloud_filters, reflective_pose_detector, rig_localization, autoware_manual_control, gnss_locator |
+
+**`golfcart_launch` is the glue.** Everything that names an Autoware launch
+file, config package or path lives there, on the superproject's per-version
+branch. Submodules take such paths as launch arguments with 1.5.0's defaults.
+That is how the sensor kit and cuda_ndt_matcher keep one source.
+
+Old branch names stay and freeze: no new commits, never deleted.
+Superproject history pins commits reachable only from them, and the
+[submodule pointer rule](../../CLAUDE.md#submodule-pointer-rule) depends on
+that. Cleaning up stale `feat/…` and `dependabot/…` branches is a separate
+job, done only after checking that no pinned commit is reachable from them
+alone.
+
+### Renaming items
+
+Pins as of 2026-11-17. "ff" means the target branch is an ancestor of the
+pin, so it moves without rewriting anything.
+
+| # | Submodule | Pin | Tracked now | Target | Action |
+|---|---|---|---|---|---|
+| R1 | golfcart_vehicle_launch | `b0b9191` | `2026-golf` | `2026-golf` | none, already there |
+| R2 | golfcart_system_monitor | `aea966c` | `2026-golf` | `2026-golf` | none |
+| R3 | autoware_individual_params | `68f230e` | `main` | `2026-golf` | ff `2026-golf` by 7; `.gitmodules` branch → `2026-golf`; freeze `main`, `golfcart-1.5.0` |
+| R4 | golfcart_sensor_kit_launch | `3cf866f` | `main` | `2026-golf` | ff `2026-golf` by 39; `.gitmodules` → `2026-golf`; freeze `main` |
+| R5 | CalibrationTools | `35859ed` | `golfcart` | `1.5.0`, then `2.1.0` | pin is `1.5.0` + 1 commit ("Set LiDAR range in lidar-to-lidar calibrator") − 1 (`bc36609`, the `.repos` pointer). Turn the range into a launch parameter on `1.5.0`, so `golfcart` freezes; otherwise `2026-golf-1.5.0`. `2.1.0`: from `1.5.0` if it builds on 2.1.0, else from upstream `tier4/universe` (upstream has no per-release branches) |
+| R6 | seyond_ros_driver | `36cade3` | `1.5.0` | `main` | `main` is the vendor's line (3 vendor syncs, `18c5c93`); ours is `1.5.0`, 12 ahead. Merge vendor `main` into ours (a merge, no rewrite), build, then ff `main` to it; freeze `1.5.0`. Vendor syncs come in by merge from then on |
+| R7 | cuda_ndt_matcher | `7a7fb8c` | `main` | `main` | none; `main` is 3 ahead of the pin (normal lag) |
+| R8 | rig_localization | `4bd4a31` | `main` | `main` | none; `main` 2 ahead |
+| R9 | cuda_pointcloud_filters, reflective_pose_detector, autoware_manual_control, gmslcam, xsens | — | `main` | `main` | none |
+| R10 | gnss_locator | `3c46523` | none in `.gitmodules` | `main` | add `branch = main` |
+| R11 | ublox | `c56b851` | `ros2` | `ros2` | none |
+| R12 | zed-ros2-wrapper | `86171bc` | none | tag `v5.4.1` | none; note in `.gitmodules` that it is pinned to an upstream tag |
+| R13 | superproject | — | `main`, `autoware-2.1.0` | same | `.gitmodules` changes R3, R4, R10, R12 land on `main` too, since they change no content |
+| R14 | docs | — | — | — | the pointer rule in `CLAUDE.md` and `CONTRIBUTING.md` names these four classes and their lines |
+
 ## Order of work
 
+Done (2026-11-16/17):
 1. Workstation: 1.5.0-1 → 1.5.0-3, then 2.1.0-1 beside it.
-2. Smoke test play_launch on a stock 2.1.0 planning simulator launch.
-3. Version switch, per-version workspaces and data dirs (section 1).
-4. Required parameters and dead paths (section 2), then the planning wrapper,
-   perception presets and diag graph.
-5. `cuda_ndt_matcher` and `cuda_pointcloud_filters` (section 3).
-6. Planning simulator on Ming-Da and NTU maps; NTU logging replay against the
-   1.5.0 scores.
-7. Hosts: master then orin, same version on both; engines rebuilt; a
-   supervised indoor drive.
+2. Smoke test: stock 2.1.0 planning simulator, 97 entities under
+   `--parser python`. The Rust parser fails: play_launch #0086, sent to play 118.
+3. Version switch, per-version workspaces and data paths, about 20 scripts
+   (section 1); the workspace builds against 2.1.0.
+4. The change reference, including the sensor kit and vehicle comparison.
+
+Next:
+5. **Branches** (section 4, R1-R14). No content changes.
+6. **Glue into `golfcart_launch`, behaviour-neutral on 1.5.0**, landed on
+   `main` too:
+   - `cuda_ndt_matcher_launch` stops including Autoware's gyro_odometer,
+     fusion filter, error monitor and pose initializer; `golfcart_launch`
+     includes them. The matcher repo then only starts its own node, and
+     loses its golf cart references.
+   - The sensor kit takes the Nebula launch file and calibration file as
+     arguments, with 1.5.0's paths as defaults.
+   - The sensor kit gets the three new CUDA preprocessor keys (1.5.0 ignores
+     keys it does not declare).
+   - Our `vehicle.xacro` loses the `: ` in a comment, which breaks
+     `robot_description` under real `ros2 launch` and the Python parser.
+   - Proof: `play_launch resolve` of `@mingda-loop`, `@ntu-r01` and the sims
+     under 1.5.0, before and after, with identical node, parameter and remap
+     sets.
+7. **2.1.0 launch layer**, on `autoware-2.1.0` (section 2): dead includes
+   and the Nebula 1.2 paths passed in, planning wrapper and `slow_indoor`
+   keys, perception presets redesigned, diag graph, required params.
+8. **Code** (section 3):
+   - `cuda_pointcloud_filters` builds on both cuda_blackboard versions.
+   - `cuda_ndt_matcher` gets upstream's Hessian sign fix on `main`. The
+     matcher is shared, so this changes 1.5.0's NDT too: re-baseline the
+     comparison tests, and re-check the Ming-Da NVTL gate (2.1) on a replay.
+9. **Setup and units**: `install-autoware-debian.sh` per version; the
+   `autoware-data`, `tensorrt-engines` and `rviz-theme` steps;
+   `just up` carrying the version to both hosts and refusing a mismatch;
+   `args.py` passing `data_path`.
+10. **Validation**: planning simulator on the Ming-Da and NTU maps; NTU
+    logging replay against the 1.5.0 scores.
+11. **Hosts**: master then orin, same version on both; engines rebuilt; a
+    supervised indoor drive.
+
+Outside this repo: play_launch #0086 (play 118). Until it is fixed, 2.1.0
+runs with `--parser python`, and steps 7 and 10 need a way to pass it
+(`GOLFCART_PLAY_LAUNCH_PARSER` in `config/runtime.conf`).
