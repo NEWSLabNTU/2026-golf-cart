@@ -288,8 +288,15 @@ Next:
    (1d21e50, builds). The branch fields are on `main` too (0ae3bc0), and the
    rule is in CONTRIBUTING.md. Still to do: the master's `/mnt/external`
    bare repos need these branches before the orin can pull them.
-6. **Glue into `golfcart_launch`, behaviour-neutral on 1.5.0**, landed on
-   `main` too:
+6. **Glue into `golfcart_launch`, behaviour-neutral on 1.5.0**: done
+   2026-11-17 on `autoware-2.1.0`. Resolved under 1.5.0 before and after
+   (`@mingda-loop`, `@ntu-r01`, `@ntu-r01 pose_source:=ndt`): same node
+   sets. The only parameter changes are the three new CUDA keys; the
+   Velodyne calibration path is the same. The matcher's own copies of the two
+   stack files stay, for its replay harness (`run_ndt_simulation.sh`), and
+   rig_localization keeps its `autoware_localization.launch.xml` example;
+   golfcart uses neither. Landing on `main` waits for a cart check. What was
+   planned:
    - `cuda_ndt_matcher_launch` stops including Autoware's gyro_odometer,
      fusion filter, error monitor and pose initializer; `golfcart_launch`
      includes them. The matcher repo then only starts its own node, and

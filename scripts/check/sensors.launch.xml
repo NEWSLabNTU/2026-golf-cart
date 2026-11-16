@@ -1,4 +1,8 @@
 <launch>
+  <!-- Same two arguments as the sensor kit's lidar.launch.xml, same 1.5.0
+       defaults: VLP32.param.yaml reads the calibration through $(var ...). -->
+  <arg name="nebula_velodyne_launch_file" default="$(find-pkg-share nebula_ros)/launch/velodyne_launch_all_hw.xml"/>
+  <arg name="vlp32_calibration_file" default="$(find-pkg-share nebula_decoders)/calibration/velodyne/VLP32.yaml"/>
   <!-- Arguments to toggle each sensor -->
   <arg name="launch_lidar"  default="false"/>
   <arg name="launch_gnss"   default="false"/>
@@ -12,7 +16,7 @@
 
   <!-- ── Velodyne VLP-32C LiDAR ──────────────────────────────────────────── -->
   <group if="$(var launch_lidar)">
-    <include file="$(find-pkg-share nebula_ros)/launch/velodyne_launch_all_hw.xml">
+    <include file="$(var nebula_velodyne_launch_file)">
       <arg name="sensor_model" value="VLP32"/>
       <arg name="launch_hw" value="true"/>
       <arg name="config_file" value="$(find-pkg-share golfcart_sensor_kit_launch)/config/VLP32.param.yaml"/>

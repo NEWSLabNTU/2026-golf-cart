@@ -1,0 +1,131 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Moved here from cuda_ndt_matcher_launch (2026-11-17, roadmap 11 step 6).
+       This file wires Autoware's own localization nodes around the matcher,
+       and every Autoware path is release-specific, so it lives in
+       golfcart_launch, on the superproject's per-Autoware-version branch. The
+       matcher repository keeps only what is its own: cuda_ndt_scan_matcher and
+       util.launch.xml. Its copy of this file serves its replay harness. -->
+  <!-- Autoware NDT Localization Stack (Custom)
+       Mirrors cuda_localization.launch.xml but uses Autoware's NDT.
+       This allows us to control the pointcloud preprocessor config for fair comparison.
+  -->
+
+  <!-- Input pointcloud -->
+  <arg name="input_pointcloud" default="/sensing/lidar/concatenated/pointcloud"/>
+  <arg name="localization_pointcloud_container_name" default="/pointcloud_container"/>
+  <arg name="localization_pointcloud_backend" default="cpu" description="cpu or cuda: which hardware runs the NDT input preprocessing chain"/>
+
+  <!-- Config paths (default to autoware_launch config) -->
+  <arg name="localization_config_path" default="$(find-pkg-share autoware_launch)/config/localization"/>
+
+  <!-- The preprocessing chain's parameter files. Overridable so a caller whose
+       own point budget differs from this package's can keep it while still
+       choosing the backend below. Defaults preserve this package's standalone
+       behaviour. -->
+  <arg name="crop_box_filter_measurement_range_param_path"
+       default="$(find-pkg-share cuda_ndt_matcher_launch)/config/pointcloud_preprocessor/crop_box_filter_measurement_range.param.yaml"/>
+  <arg name="voxel_grid_downsample_filter_param_path"
+       default="$(find-pkg-share cuda_ndt_matcher_launch)/config/pointcloud_preprocessor/voxel_grid_filter.param.yaml"/>
+  <arg name="random_downsample_filter_param_path"
+       default="$(find-pkg-share cuda_ndt_matcher_launch)/config/pointcloud_preprocessor/random_downsample_filter.param.yaml"/>
+
+  <!-- Pose initializer options -->
+  <arg name="user_defined_initial_pose_enable" default="false"/>
+  <arg name="user_defined_initial_pose" default="[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]"/>
+  <arg name="gnss_enabled" default="true"/>
+  <!--
+    NDT regularization source. Indoors this must be repointed at a marker- or
+    tag-derived pose before regularization is enabled, and it must be tag-only:
+    feeding the merged EKF input back into NDT closes a loop through the EKF.
+    Inert while regularization.enable is false.
+  -->
+  <arg name="regularization_pose_topic" default="/sensing/gnss/pose_with_covariance"
+       description="Pose source for NDT regularization; must be tag-only indoors"/>
+  <!-- Which node publishes /localization/twist_estimator/twist_with_covariance,
+       the EKF's twist input. gyro_odom starts gyro_odometer here; any other
+       value starts none, and the caller launches its own estimator on that
+       topic (golfcart_launch: twist_source:=rigloc). -->
+  <arg name="twist_source" default="gyro_odom" description="gyro_odom, or another value to start no twist estimator here"/>
+  <!-- The EKF's parameters. Default: the one in localization_config_path, as before. -->
+  <arg name="ekf_localizer_param_path" default="$(var localization_config_path)/ekf_localizer.param.yaml"/>
+  <arg name="ndt_enabled" default="true"/>
+  <arg name="ekf_enabled" default="true"/>
+  <arg name="stop_check_enabled" default="false"/>
+
+  <!-- Localization module -->
+  <group>
+    <push-ros-namespace namespace="localization"/>
+
+    <!-- Twist estimator: Gyro odometer, unless twist_source names another -->
+    <group if="$(eval '\'$(var twist_source)\' == \'gyro_odom\'')">
+      <push-ros-namespace namespace="twist_estimator"/>
+      <include file="$(find-pkg-share tier4_localization_launch)/launch/pose_twist_estimator/gyro_odometer.launch.xml"/>
+    </group>
+
+    <!-- Pose estimator: Autoware NDT -->
+    <group>
+      <push-ros-namespace namespace="pose_estimator"/>
+      <include file="$(find-pkg-share autoware_ndt_scan_matcher)/launch/ndt_scan_matcher.launch.xml">
+        <arg name="input_pointcloud" value="/localization/util/downsample/pointcloud"/>
+        <arg name="input_initial_pose_topic" value="/localization/pose_twist_fusion_filter/biased_pose_with_covariance"/>
+        <arg name="input_regularization_pose_topic" value="$(var regularization_pose_topic)"/>
+        <arg name="input_service_trigger_node" value="trigger_node"/>
+        <arg name="output_pose_topic" value="pose"/>
+        <arg name="output_pose_with_covariance_topic" value="pose_with_covariance"/>
+        <arg name="client_map_loader" value="/map/get_differential_pointcloud_map"/>
+        <arg name="param_file" value="$(var localization_config_path)/ndt_scan_matcher/ndt_scan_matcher.param.yaml"/>
+      </include>
+    </group>
+
+    <!-- Util: Pose initializer and pointcloud preprocessing -->
+    <group>
+      <push-ros-namespace namespace="util"/>
+
+      <!-- Pose initializer -->
+      <include file="$(find-pkg-share autoware_pose_initializer)/launch/pose_initializer.launch.xml">
+        <arg name="user_defined_initial_pose/enable" value="$(var user_defined_initial_pose_enable)"/>
+        <arg name="user_defined_initial_pose/pose" value="$(var user_defined_initial_pose)"/>
+        <arg name="ndt_enabled" value="$(var ndt_enabled)"/>
+        <arg name="yabloc_enabled" value="false"/>
+        <arg name="gnss_enabled" value="$(var gnss_enabled)"/>
+        <arg name="ekf_enabled" value="$(var ekf_enabled)"/>
+        <arg name="stop_check_enabled" value="$(var stop_check_enabled)"/>
+        <arg name="config_file" value="$(var localization_config_path)/pose_initializer.param.yaml"/>
+        <arg name="sub_gnss_pose_cov" value="/sensing/gnss/pose_with_covariance"/>
+      </include>
+
+      <!-- Pointcloud downsampling for NDT -->
+      <!-- Use local copy with renamed voxel_grid to avoid name collision in shared container -->
+      <include file="$(find-pkg-share cuda_ndt_matcher_launch)/launch/util/util.launch.xml">
+        <arg name="localization_pointcloud_backend" value="$(var localization_pointcloud_backend)"/>
+        <arg name="localization_pointcloud_container_name" value="$(var localization_pointcloud_container_name)"/>
+        <arg name="input_pointcloud" value="$(var input_pointcloud)"/>
+        <arg name="ndt_scan_matcher/pointcloud_preprocessor/crop_box_filter_measurement_range_param_path" value="$(var crop_box_filter_measurement_range_param_path)"/>
+        <arg name="ndt_scan_matcher/pointcloud_preprocessor/voxel_grid_downsample_filter_param_path" value="$(var voxel_grid_downsample_filter_param_path)"/>
+        <arg name="ndt_scan_matcher/pointcloud_preprocessor/random_downsample_filter_param_path" value="$(var random_downsample_filter_param_path)"/>
+      </include>
+
+      <!-- Automatic pose initializer (only when GNSS enabled) -->
+      <group if="$(var gnss_enabled)">
+        <include file="$(find-pkg-share autoware_automatic_pose_initializer)/launch/automatic_pose_initializer.launch.xml"/>
+      </group>
+    </group>
+
+    <!-- EKF localizer (pose_twist_fusion_filter) -->
+    <group>
+      <push-ros-namespace namespace="pose_twist_fusion_filter"/>
+      <include file="$(find-pkg-share tier4_localization_launch)/launch/pose_twist_fusion_filter/pose_twist_fusion_filter.launch.xml">
+        <arg name="ekf_localizer_param_path" value="$(var ekf_localizer_param_path)"/>
+        <arg name="stop_filter_param_path" value="$(var localization_config_path)/stop_filter.param.yaml"/>
+        <arg name="twist2accel_param_path" value="$(var localization_config_path)/twist2accel.param.yaml"/>
+        <arg name="pose_instability_detector_param_path" value="$(var localization_config_path)/pose_instability_detector.param.yaml"/>
+      </include>
+    </group>
+
+    <!-- Localization error monitor -->
+    <include file="$(find-pkg-share tier4_localization_launch)/launch/localization_error_monitor/localization_error_monitor.launch.xml">
+      <arg name="localization_error_monitor_param_path" value="$(var localization_config_path)/localization_error_monitor.param.yaml"/>
+    </include>
+  </group>
+</launch>

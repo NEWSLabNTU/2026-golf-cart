@@ -89,7 +89,7 @@
 
   <!-- CUDA NDT localization stack -->
   <group if="$(eval &quot;'$(var pose_source)' == 'cuda_ndt'&quot;)">
-    <include file="$(find-pkg-share cuda_ndt_matcher_launch)/launch/cuda_localization.launch.xml">
+    <include file="$(find-pkg-share golfcart_launch)/launch/localization/cuda_ndt_localization.launch.xml">
       <arg name="localization_pointcloud_backend" value="$(var localization_pointcloud_backend)"/>
       <arg name="input_pointcloud" value="$(var input_pointcloud)"/>
       <arg name="localization_pointcloud_container_name" value="$(var localization_pointcloud_container_name)"/>
@@ -122,7 +122,7 @@
        changes which launch file runs and nothing else — in particular the point
        budget stays this repo's, not the drop-in package's. -->
   <group if="$(eval '\'$(var pose_source)\' == \'ndt\'')">
-    <include file="$(find-pkg-share cuda_ndt_matcher_launch)/launch/autoware_localization.launch.xml">
+    <include file="$(find-pkg-share golfcart_launch)/launch/localization/autoware_ndt_localization.launch.xml">
       <arg name="input_pointcloud" value="$(var input_pointcloud)"/>
       <arg name="localization_pointcloud_container_name" value="$(var localization_pointcloud_container_name)"/>
       <arg name="localization_pointcloud_backend" value="$(var localization_pointcloud_backend)"/>

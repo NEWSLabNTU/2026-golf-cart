@@ -23,10 +23,12 @@
 #   GOLFCART_INSTALL_DIR       <repo>/install-<ver>
 #   GOLFCART_DATA_PATH         <repo>/data/autoware_data-<ver> (kept if set)
 #
-# Legacy layout: until a host builds 1.5.0 under the new names, an existing
-# build/ and install/ (and data/autoware_data) are used for 1.5.0 only, so a
-# checkout that pulls this keeps working before its first `just build`. Never
-# for another version: an install/ built against 1.5.0 cannot serve 2.1.0.
+# The old single build/ and install/ are never used: a host that pulls this
+# runs `just build` once (sourcing the old install/ as an overlay while
+# building into the new one would mix two workspaces). `just clean --all`
+# removes the old directories. Only the model data falls back:
+# data/autoware_data serves 1.5.0 until data/autoware_data-1.5.0 exists, since
+# it holds downloaded models and TensorRT engines, not build output.
 golfcart_resolve_autoware_version() {
     local root="${GOLFCART_REPO_ROOT}" v=""
     if [ -z "${GOLFCART_AUTOWARE_VERSION:-}" ] && [ -f "${root}/config/autoware-version" ]; then
@@ -48,10 +50,6 @@ golfcart_resolve_autoware_version() {
     GOLFCART_AUTOWARE_SUFFIX="${ver//./-}"
     GOLFCART_BUILD_DIR="${root}/build-${ver}"
     GOLFCART_INSTALL_DIR="${root}/install-${ver}"
-    if [ "${ver}" = 1.5.0 ] && [ ! -d "${GOLFCART_INSTALL_DIR}" ] && [ -d "${root}/install" ]; then
-        GOLFCART_BUILD_DIR="${root}/build"
-        GOLFCART_INSTALL_DIR="${root}/install"
-    fi
     if [ -z "${GOLFCART_DATA_PATH:-}" ]; then
         GOLFCART_DATA_PATH="${root}/data/autoware_data-${ver}"
         if [ "${ver}" = 1.5.0 ] && [ ! -d "${GOLFCART_DATA_PATH}" ] && [ -d "${root}/data/autoware_data" ]; then

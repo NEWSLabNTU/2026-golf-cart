@@ -175,7 +175,7 @@ play_launch 0.20.0, headless, four minutes:
 | Commands | `just build`, `just up @…`, `just run`, … | **unchanged**. *Pending:* `just up` passing the version to both hosts' units. |
 | Choosing the version | none (1.5.0 only) | `config/autoware-version` on each host, one line (`2.1.0`); gitignored, like `config/host`. One-off: `GOLFCART_AUTOWARE_VERSION=2.1.0 just …`. Default stays 1.5.0. |
 | Both hosts | same commit | same commit **and** same Autoware version (`DiagNodeStatus` crosses the link) |
-| Workspace | `build/`, `install/` | `build-<ver>/`, `install-<ver>/`; each version builds once. 1.5.0 keeps using an existing `build/` and `install/` until its first new-layout build. |
+| Workspace | `build/`, `install/` | `build-<ver>/`, `install-<ver>/`; each version builds once. A host that pulls this runs `just build` once; the old `build/` and `install/` are not used (`just clean --all` removes them). |
 | Models | `data/autoware_data/` | `data/autoware_data-<ver>/` (1.5.0 falls back to the old directory) |
 | `just clean` | removes everything | removes the selected version's workspace; `--all` removes every version's |
 | `just build FLAGS` | only `--clean` | `--clean`, plus any colcon flag (`--parallel-workers 4`, `--packages-select …`) |
