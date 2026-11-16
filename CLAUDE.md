@@ -347,8 +347,11 @@ after merging — routine hygiene that silently invalidates history.
 
 Order of operations:
 
-1. Push the submodule commit to its fork, on a long-lived branch
-   (`main`, `2026-golf`, `2026-golfcart`, … — whichever that repo actually uses).
+1. Push the submodule commit to its fork, on its long-lived line: `2026-golf`
+   (golf cart repos), the Autoware version (`1.5.0`, `2.1.0`, for repos whose
+   source follows a release), or `main`/`ros2` (drivers and standalone
+   libraries). [CONTRIBUTING.md](CONTRIBUTING.md#submodule-repositories-one-line-per-what-the-source-follows)
+   has the table; `.gitmodules` records each repo's line.
 2. Then commit and push the parent's pointer update.
 
 Audit every pointer before pushing the parent:
