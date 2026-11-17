@@ -393,8 +393,15 @@ Next:
 11. **Hosts**: master then orin, same version on both; engines rebuilt; a
     supervised indoor drive.
 
-Outside this repo: play_launch #0086 is fixed on its main (89b70f92, not
-yet released); with it the default parser handles every 2.1.0 entry point
-above, so `GOLFCART_PLAY_LAUNCH_PARSER` is not needed once the release is
-installed. Filed from step 7: #0088 (a missing include names no file),
-#0089 (a missing param file is only a warning).
+Outside this repo: play_launch 0.37.0 (PyPI, installed on the workstation
+2026-11-17; setup's floor is now 0.37.0) fixes #0085-#0089. Re-checked with
+it under 2.1.0, both parsers, same node sets: `@ntu-r01` 127,
+`@mingda-loop` 128, `pose_source:=ndt` 127, `pose_source:=yabloc` 136,
+planning sim 98 (NTU and Ming-Da), aruco sim 103, NTU and indoor logging sims
+73, `sensor_only` 41, `board_detector_live` 3, `bag_replay` 2, `sim_smoke` 8
+(the counts one below step 7's are RViz, off here). `GOLFCART_PLAY_LAUNCH_PARSER`
+is not needed. Perception on, and `logging_simulation.launch.yaml`, now stop
+under both parsers on `./data/autoware_data/lidar_centerpoint/tiny/ml_package.param.yaml`:
+a composable node's missing parameter file is an error, as in `ros2 launch`
+(#0089). That is the step 9 `data_path` item, no longer hidden by a warning.
+`camera_lidar_fusion` stops on its named refusal, as intended.
