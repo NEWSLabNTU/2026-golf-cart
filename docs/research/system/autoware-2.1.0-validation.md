@@ -1,6 +1,6 @@
 # Autoware 2.1.0 validation on the workstation (phase 11, step 10)
 
-**Date**: 2026-11-17. **Branch**: `autoware-2.1.0` (4cf62ee and the commit
+**Date**: 2026-11-17. **Branch**: `autoware-2.1.0` (9b7755f and the commit
 that adds this file). **Where**: the shared development workstation
 (x86_64, RTX 5090), not a cart host. **Roadmap**:
 [11-autoware-2.1.0-migration.md](../../roadmaps/11-autoware-2.1.0-migration.md),
@@ -35,7 +35,7 @@ bag rate; the section says where.
 | `slow_indoor` takes effect over upstream's | Yes. The running values are the preset's on both versions and identical between them |
 | `-no-perception` graph on 2.1.0 | Works. The aggregator stays up, the perception subtree is removed, nothing in it gates autonomous, and the MRM is NORMAL |
 | cuda_ndt with `publish_loaded_map` | Starts and tracks. cuda_ndt never declares the key, so it is ignored without a word |
-| Perception on, 2.1.0, Python parser | CenterPoint and the clustering detector both publish, and the tracker merges them into `/perception/object_recognition/objects`. Found and fixed: the logging sims ran the base CenterPoint model, not tiny (4cf62ee) |
+| Perception on, 2.1.0, Python parser | CenterPoint and the clustering detector both publish, and the tracker merges them into `/perception/object_recognition/objects`. Found and fixed: the logging sims ran the base CenterPoint model, not tiny (9b7755f) |
 | NTU replay against the 1.5.0 scores | Not possible: the NTU bags are not on this machine |
 | Ming-Da replay, 1.5.0 against 2.1.0 (substitute) | Same: pose difference 0.09 cm p95, 0.88 cm max, and the same NVTL distribution |
 | 1.5.0 before and after step 9 | Same node, parameter and remap sets for `@mingda-loop` and `@ntu-r01`. The only difference is the link bridge's config path, and `data_path` reaches no node with perception off |
@@ -264,7 +264,7 @@ Both detectors publish, and the tracker merges them into
 `/perception/object_recognition/objects`. The clustering detector is the
 tracker's only source of unknown-class objects, as decided in step 7.
 
-**Found and fixed (4cf62ee).** The first run built the *base* CenterPoint,
+**Found and fixed (9b7755f).** The first run built the *base* CenterPoint,
 writing `lidar_centerpoint/base/pts_voxel_encoder.engine`, and then
 started the traffic-light pipeline as well. `golfcart_autoware.launch.xml`
 defaulted `lidar_detection_model` to a bare `centerpoint`. 1.5.0's

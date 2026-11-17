@@ -446,7 +446,7 @@ Next:
       the key).
     - Perception on (Python parser): CenterPoint tiny and the clustering
       detector both publish, and the tracker merges them. Fixed: the logging
-      sims ran the base CenterPoint on 2.1.0 (4cf62ee).
+      sims ran the base CenterPoint on 2.1.0 (9b7755f).
     - NTU replay: the bags are not on the workstation, so not run. The
       Ming-Da VLP-32C replay substitutes: pose difference 1.5.0 against
       2.1.0 0.09 cm p95, the same NVTL distribution (bag at half rate; the
