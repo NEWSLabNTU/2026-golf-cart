@@ -429,8 +429,37 @@ Next:
    via the launch defaults. Hosts: 1.5.0-1 → 1.5.0-3 needs
    `install-autoware-debian.sh 1.5.0 --reinstall` (sudo) on both, then
    2.1.0, then `setup_autoware_data.sh` and `just build` per version.
-10. **Validation**: planning simulator on the Ming-Da and NTU maps; NTU
-    logging replay against the 1.5.0 scores.
+10. **Validation**: done 2026-11-17 on the workstation, 2.1.0 against 1.5.0
+    (`main`'s launch layer). Numbers and logs:
+    [autoware-2.1.0-validation.md](../research/system/autoware-2.1.0-validation.md).
+    - Planning simulator: on NTU r01 (263 m route) the two versions are
+      identical to 0.1 s, under the stock preset and `slow_indoor`. On the
+      Ming-Da loop the same legs arrive in the same times. The loop goal
+      file's south-east corner goal is refused by both ("Goal's footprint
+      exceeds lane!"). The east-to-start leg sometimes stalls on
+      `path_optimizer` at the same spot on both (1.5.0 2 of 4, 2.1.0 1 of 4).
+    - Step 7's runtime checks: `slow_indoor`'s values are the running ones
+      on 2.1.0 (`max_vel` 2.5, stop margins 3.5/1.5/1.5, the backward and
+      freespace modules off), identical to 1.5.0. The `-no-perception`
+      graph works on 2.1.0 and is still needed. cuda_ndt runs with
+      `publish_loaded_map` in its file and ignores it (it never declares
+      the key).
+    - Perception on (Python parser): CenterPoint tiny and the clustering
+      detector both publish, and the tracker merges them. Fixed: the logging
+      sims ran the base CenterPoint on 2.1.0 (4cf62ee).
+    - NTU replay: the bags are not on the workstation, so not run. The
+      Ming-Da VLP-32C replay substitutes: pose difference 1.5.0 against
+      2.1.0 0.09 cm p95, the same NVTL distribution (bag at half rate; the
+      shared host was too loaded for full rate).
+    - 1.5.0 before and after step 9: node, parameter and remap sets
+      identical for `@mingda-loop` and `@ntu-r01`; `data_path` reaches no
+      node with perception off.
+
+    Left for step 11: the NTU scores on the master; engines that load
+    without a rebuild (this workstation's mixed TensorRT forced one);
+    `just sim mrm-check` on 2.1.0; replace the refused Ming-Da loop goal;
+    the upstream aggregator mapping `/autoware/modes/autonomous/available`,
+    which no graph has (harmless today).
 11. **Hosts**: master then orin, same version on both; engines rebuilt; a
     supervised indoor drive.
 
