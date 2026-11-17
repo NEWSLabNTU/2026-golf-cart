@@ -19,8 +19,8 @@
        description="The twin's map directory (default $TWIN_MAP): lanelet2_map.osm, pointcloud_map/ with pointcloud_map_metadata.yaml, map_projector_info.yaml (MGRS 51RUH)."/>
   <arg name="imu_source" default="xsens"
        description="xsens: the sim publishes /sensing/imu/xsens/imu_raw in imu_link. It has no ZED IMU and no zed_imu_link frame, so zed does not work here."/>
-  <arg name="data_path" default="$(env AUTOWARE_DATA ./data/autoware_data)"
-       description="Autoware's model directory, writable (TensorRT caches engines there). Defaults to $AUTOWARE_DATA, else ./data/autoware_data from the repository root. Without it CenterPoint does not load."/>
+  <arg name="data_path" default="$(env GOLFCART_DATA_PATH ./data/autoware_data)"
+       description="Autoware's model directory, writable (TensorRT caches engines there). twin.sh passes AUTOWARE_DATA, by default the selected version's data/autoware_data-ver; otherwise GOLFCART_DATA_PATH (scripts/env.sh), else ./data/autoware_data from the repository root. Without it CenterPoint does not load."/>
   <arg name="speed_limit" default="2.5"
        description="Planning speed default in m/s (golfcart_launch's planning_speed_limit.py, latched). 2.5 is the demo cap; empty keeps Autoware's max_vel."/>
   <arg name="camera_model" default="none"

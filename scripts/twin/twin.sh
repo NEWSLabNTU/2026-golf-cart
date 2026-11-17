@@ -12,7 +12,7 @@ TWIN_SWB=${TWIN_SWB:-$HOME/repos/scenario-world-bridge}
 TWIN_DOMAIN=${TWIN_DOMAIN:-1}
 TWIN_DISPLAY=${TWIN_DISPLAY-${DISPLAY:-}}
 TWIN_GPU=${TWIN_GPU:-0}
-AUTOWARE_DATA=${AUTOWARE_DATA:-$HOME/autoware_data}
+AUTOWARE_DATA=${AUTOWARE_DATA:-$GOLFCART_DATA_PATH}  # data/autoware_data-<ver>
 SWB_URL=https://github.com/NEWSLabNTU/scenario-world-bridge.git
 AUTOWARE=${GOLFCART_AUTOWARE_PREFIX}
 run="$root/log/twin"
@@ -128,7 +128,7 @@ run_() {
 setup() {
     # Idempotent: each step is skipped when already done. What it cannot do for you (Isaac
     # Sim, the map, the assets) `doctor` names at the end.
-    [ -f "$AUTOWARE/setup.bash" ] || die "Autoware 1.5.0 is not at $AUTOWARE: install it first (just setup)"
+    [ -f "$AUTOWARE/setup.bash" ] || die "Autoware $GOLFCART_AUTOWARE_VERSION is not at $AUTOWARE: install it first (just setup)"
     if [ ! -f "$root/config/twin.env" ] && [ -z "${TWIN_MAP:-}" ]; then
         cp "$root/config/twin.env.example" "$root/config/twin.env"
         die "wrote config/twin.env from the example: fill in this host's paths, then run setup again"
@@ -158,7 +158,7 @@ doctor() {
     if [ -f "$root/config/twin.env" ]; then ok "config/twin.env"
     elif [ -n "${TWIN_MAP:-}" ]; then ok "host settings from the environment"
     else no "host settings" "cp config/twin.env.example config/twin.env and fill it in, or export them"; fi
-    [ -f "$AUTOWARE/setup.bash" ] && ok "Autoware 1.5.0" || no "Autoware 1.5.0 at $AUTOWARE" "just setup"
+    [ -f "$AUTOWARE/setup.bash" ] && ok "Autoware $GOLFCART_AUTOWARE_VERSION" || no "Autoware $GOLFCART_AUTOWARE_VERSION at $AUTOWARE" "just setup"
     if command -v play_launch > /dev/null; then ok "$(play_launch --version 2>&1 | head -1)"
     else no "play_launch" "pip install --user play_launch"; fi
     [ -f "$TWIN_SWB/install/setup.bash" ] && [ -d "$TWIN_SWB/install/swb_launch" ] \
@@ -176,7 +176,9 @@ doctor() {
     [ -n "${SWB_VEHICLE_USD:-}" ] && [ -d "$SWB_VEHICLE_USD/walkers" ] && ok "NPC assets ($SWB_VEHICLE_USD)" \
         || no "NPC assets at SWB_VEHICLE_USD=${SWB_VEHICLE_USD:-unset} (vehicles and walkers)" \
               "swb's Isaac asset set, carla-usd/vehicles (swb docs/design/isaac-assets.md)"
-    compgen -G "$AUTOWARE_DATA/lidar_centerpoint/pts_backbone_neck_head_centerpoint_tiny.onnx" > /dev/null \
+    # 1.5.0's layout, then 2.1.0's (lidar_centerpoint/<model>/pts_backbone_neck_head.onnx)
+    { [ -e "$AUTOWARE_DATA/lidar_centerpoint/pts_backbone_neck_head_centerpoint_tiny.onnx" ] \
+      || [ -e "$AUTOWARE_DATA/lidar_centerpoint/tiny/pts_backbone_neck_head.onnx" ]; } \
         && ok "CenterPoint tiny ($AUTOWARE_DATA)" \
         || no "CenterPoint tiny in AUTOWARE_DATA=$AUTOWARE_DATA" "Autoware's model download (just setup), or point AUTOWARE_DATA at a copy"
     [ -n "${AUTOWARE_TENSORRT_LIB:-}" ] && [ -d "$AUTOWARE_TENSORRT_LIB" ] && ok "TensorRT 10.8 ($AUTOWARE_TENSORRT_LIB)" \

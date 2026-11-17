@@ -8,11 +8,29 @@ rays and a 1 deg grid over +-60 deg across, -14 to +11 deg up (the seyond frame'
 each to 0.5 m. A hit inside a lidar's near range blocks the ray in Isaac's RTX lidar: no point.
 Needs usd-core, numpy, PyYAML and Autoware's nebula_decoders (for the VLP-32C's elevations).
 """
-import math, sys
+import math, os, sys
 import numpy as np, yaml
 from pxr import Usd, UsdGeom
 sys.path.insert(0, sys.argv[2])
 import make_body as mb
+
+
+def nebula_vlp32():
+    """Nebula's VLP-32C calibration in the selected Autoware (any if unset).
+
+    Nebula 1.2 (Autoware 2.1.0) moved it from nebula_decoders/calibration/velodyne/
+    to nebula_velodyne_decoders/calibration/; the file itself did not change.
+    """
+    import glob
+    prefixes = [os.environ.get("GOLFCART_AUTOWARE_PREFIX", "")]
+    prefixes += sorted(glob.glob("/opt/autoware/*"), reverse=True)
+    for prefix in filter(None, prefixes):
+        for rel in ("share/nebula_velodyne_decoders/calibration/VLP32.yaml",
+                    "share/nebula_decoders/calibration/velodyne/VLP32.yaml"):
+            path = os.path.join(prefix, rel)
+            if os.path.isfile(path):
+                return path
+    raise FileNotFoundError("Nebula's VLP32.yaml: no Autoware under /opt/autoware")
 st = Usd.Stage.Open(sys.argv[1] + "/vehicle.newslab.golfcart/vehicle.newslab.golfcart.usda")
 cache = UsdGeom.XformCache()
 tris, names = [], []
@@ -58,7 +76,7 @@ def report(name, hits, nrays, near):
 
 
 vo, vR = mb.sensor_pose("vlp32c")
-els = sorted(l["vert_correction"] for l in yaml.safe_load(open("/opt/autoware/1.5.0/share/nebula_decoders/calibration/velodyne/VLP32.yaml"))["lasers"])
+els = sorted(l["vert_correction"] for l in yaml.safe_load(open(nebula_vlp32()))["lasers"])
 D = [vR @ [math.cos(e) * math.cos(math.radians(a)), math.cos(e) * math.sin(math.radians(a)), math.sin(e)] for e in els for a in range(360)]
 report("VLP-32C", cast(vo + shift, np.array(D), 0.5), len(D), 0.3)
 fo, fR = mb.sensor_pose("falcon")

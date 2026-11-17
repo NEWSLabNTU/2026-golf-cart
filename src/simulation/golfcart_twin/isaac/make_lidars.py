@@ -35,7 +35,23 @@ import os
 import yaml
 from pxr import Sdf, Usd
 
-NEBULA_VLP32 = "/opt/autoware/1.5.0/share/nebula_decoders/calibration/velodyne/VLP32.yaml"
+def nebula_vlp32():
+    """Nebula's VLP-32C calibration in the selected Autoware (any if unset).
+
+    Nebula 1.2 (Autoware 2.1.0) moved it from nebula_decoders/calibration/velodyne/
+    to nebula_velodyne_decoders/calibration/; the file itself did not change.
+    """
+    import glob
+    prefixes = [os.environ.get("GOLFCART_AUTOWARE_PREFIX", "")]
+    prefixes += sorted(glob.glob("/opt/autoware/*"), reverse=True)
+    for prefix in filter(None, prefixes):
+        for rel in ("share/nebula_velodyne_decoders/calibration/VLP32.yaml",
+                    "share/nebula_decoders/calibration/velodyne/VLP32.yaml"):
+            path = os.path.join(prefix, rel)
+            if os.path.isfile(path):
+                return path
+    raise FileNotFoundError("Nebula's VLP32.yaml: no Autoware under /opt/autoware")
+
 
 COMMON = {
     "omni:sensor:Core:accumulateOutputs": (Sdf.ValueTypeNames.Bool, True),
@@ -169,8 +185,10 @@ def falcon(path, rate_hz=10):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("out_dir")
-    ap.add_argument("--vlp32-calibration", default=NEBULA_VLP32)
+    ap.add_argument("--vlp32-calibration", default=None,
+                    help="Nebula VLP32.yaml (default: the selected Autoware's)")
     a = ap.parse_args()
+    a.vlp32_calibration = a.vlp32_calibration or nebula_vlp32()
     os.makedirs(a.out_dir, exist_ok=True)
     for name, make in (("VLP32C.usda", lambda p: vlp32c(p, a.vlp32_calibration)),
                        ("Falcon.usda", falcon)):

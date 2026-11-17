@@ -55,7 +55,7 @@ for _v in SSV2_PORT AGENT_PORT ISAAC_PORT SWB_LOG_ROOT SWB_VEHICLE_USD; do [ -n 
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 # The twin's loopback-unicast profile: needs no multicast on lo (which the cart's loopback.xml does)
 export CYCLONEDDS_URI="file://$(ros2 pkg prefix golfcart_twin)/share/golfcart_twin/config/cyclonedds-unicast-lo.xml"
-# Autoware 1.5.0's TensorRT engines are 10.8's (swb's AUTOWARE_TENSORRT_LIB)
+# Autoware 1.5.0's x86 TensorRT engines are 10.8's (swb's AUTOWARE_TENSORRT_LIB; 2.1.0 not checked)
 if [ -n "${AUTOWARE_TENSORRT_LIB:-}" ] && [ -d "$AUTOWARE_TENSORRT_LIB" ]; then
     export LD_LIBRARY_PATH="$AUTOWARE_TENSORRT_LIB:$LD_LIBRARY_PATH"
 fi
