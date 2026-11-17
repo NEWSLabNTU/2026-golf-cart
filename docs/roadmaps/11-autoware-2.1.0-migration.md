@@ -475,3 +475,11 @@ under both parsers on `./data/autoware_data/lidar_centerpoint/tiny/ml_package.pa
 a composable node's missing parameter file is an error, as in `ros2 launch`
 (#0089). That is the step 9 `data_path` item, no longer hidden by a warning.
 `camera_lidar_fusion` stops on its named refusal, as intended.
+
+play_launch 0.39.0 (PyPI, installed 2026-11-18; setup's floor is now 0.39.0)
+fixes #0095: the Rust parser runs `<autoware_node>`, so both parsers agree
+everywhere under 2.1.0, perception on 136, `minimal` 135, logging sim 125.
+The rest of the matrix is unchanged. 1.5.0 with `main`'s launch layer
+resolves as in step 10 (`@ntu-r01` 146, `@mingda-loop` 147). A tag that is
+not a ROS 2 launch action is now an error rather than a skipped warning;
+nothing in either layer hits it.

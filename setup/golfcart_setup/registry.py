@@ -241,15 +241,16 @@ STEPS: list[Step] = [
         label="Python dependencies (play_launch)",
         why="play_launch is how the stack is launched and how its logs are kept.",
         group="Toolchain",
-        # 0.37.0 is the floor, not a preference. Before it the default (Rust)
-        # parser stopped on Autoware 2.1.0's mock substitutions (play_launch
-        # #0086), and a composable node's missing parameter file was only a
-        # warning (#0089), so a launch with the wrong data_path resolved clean
-        # and died at LoadNode. The older floor, 0.10.0, was for 0.8.2
+        # 0.39.0 is the floor, not a preference. Before it the default (Rust)
+        # parser dropped Autoware 2.1.0's <autoware_node> action (play_launch
+        # #0095), losing three perception nodes; before 0.37.0 it stopped on
+        # 2.1.0's mock substitutions (#0086), and a composable node's missing
+        # parameter file was only a warning (#0089), so a launch with the
+        # wrong data_path resolved clean and died at LoadNode. The older floor, 0.10.0, was for 0.8.2
         # rendering the pose initializer's array parameters as strings, which
         # killed autoware_pose_initializer_node at startup. No upper bound, so
         # a fix released tomorrow installs without editing this line.
-        run=["pip3", "install", "--user", "play_launch>=0.37.0"],
+        run=["pip3", "install", "--user", "play_launch>=0.39.0"],
         profiles=_on(*EVERY),
     ),
     Step(
