@@ -458,6 +458,22 @@ golfcart_daemon_rmw() {
     return 0
 }
 
+# The Autoware versions running ros2 daemons were started under, one per line
+# (from /opt/autoware/<ver> on their AMENT_PREFIX_PATH; "none" for a daemon
+# with no Autoware). A daemon started under the other version loads that
+# version's message type support for every graph query, so its answers about
+# a type that changed (DiagNodeStatus) are the other version's.
+golfcart_daemon_autoware() {
+    local pid ver
+    for pid in $(pgrep -f 'ros2cli\.daemon|_ros2_daemon' 2>/dev/null); do
+        ver=$(tr '\0' '\n' < "/proc/${pid}/environ" 2>/dev/null \
+              | sed -n 's/^AMENT_PREFIX_PATH=//p' | tr ':' '\n' \
+              | sed -n 's|^/opt/autoware/\([0-9][0-9.]*\)$|\1|p' | head -1)
+        printf '%s\n' "${ver:-none}"
+    done | sort -u
+    return 0
+}
+
 # ── Sourcing third-party setup files safely ──────────────────────────────────
 # direnv evaluates .envrc under `set -euo pipefail`, and ROS/colcon setup files
 # are not written for that (e.g. /opt/ros/humble/setup.bash reads

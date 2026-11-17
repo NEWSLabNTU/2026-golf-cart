@@ -93,6 +93,14 @@ if [ "${STATUS_ONLY}" = "1" ]; then
     else
         printf 'ros2 daemon        running, %s -- MISMATCH, graph queries will be empty\n' "${HAVE_RMW}"
     fi
+    printf 'Autoware           %s\n' "${GOLFCART_AUTOWARE_VERSION:-?}"
+    daemon_aw="$(golfcart_daemon_autoware | tr '\n' ' ')"
+    if [ -n "${daemon_aw}" ]; then
+        case " ${daemon_aw}" in
+            *" ${GOLFCART_AUTOWARE_VERSION:-?} "*) printf 'daemon Autoware    %s\n' "${daemon_aw% }" ;;
+            *) printf 'daemon Autoware    %s-- MISMATCH, it answers from another version\n' "${daemon_aw}" ;;
+        esac
+    fi
     exit 0
 fi
 
@@ -113,6 +121,22 @@ if [ -n "${HAVE_RMW}" ] && [ "${HAVE_RMW}" != "${WANT_RMW}" ]; then
         pkill -f 'ros2cli\.daemon' 2>/dev/null || true
         sleep 0.5
     fi
+fi
+
+# ── Daemon started under another Autoware version ───────────────────────────
+# Same symptom family, other cause: a daemon keeps the AMENT_PREFIX_PATH it
+# started with, so after switching GOLFCART_AUTOWARE_VERSION it still answers
+# from the other version's packages and message types. Stop it; the next CLI
+# call respawns one from this shell.
+if declare -F golfcart_daemon_autoware >/dev/null 2>&1 && [ -n "${GOLFCART_AUTOWARE_VERSION:-}" ]; then
+    for have_aw in $(golfcart_daemon_autoware); do
+        [ "${have_aw}" = none ] && continue
+        [ "${have_aw}" = "${GOLFCART_AUTOWARE_VERSION}" ] && continue
+        echo "ros2 daemon was started under Autoware ${have_aw}; this host runs ${GOLFCART_AUTOWARE_VERSION}." >&2
+        echo "Stopping it; the CLI will respawn one under ${GOLFCART_AUTOWARE_VERSION}." >&2
+        ros2 daemon stop >/dev/null 2>&1 || true
+        break
+    done
 fi
 
 # ── Transport-specific preconditions ─────────────────────────────────────────

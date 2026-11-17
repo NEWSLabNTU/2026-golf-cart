@@ -50,6 +50,7 @@ MARKER="${REPO_ROOT}/config/host"
 MARKER_REL="${MARKER#${REPO_ROOT}/}"
 inherited_uri="${CYCLONEDDS_URI:-}"
 
+_GOLFCART_DOCTOR_AW_ENV="${GOLFCART_AUTOWARE_VERSION:-}"
 if [ -f "${REPO_ROOT}/scripts/env.sh" ]; then
     # Resolve exactly the way a shell would, but quietly: this script reports
     # the outcome itself rather than echoing env.sh's banners.
@@ -113,6 +114,23 @@ fi
 # GOLFCART_RMW=zenoh an unset CYCLONEDDS_URI is correct, not a fault, and the
 # reverse holds for the ZENOH_* variables.
 ok "middleware: ${GOLFCART_RMW:-cyclonedds}  (config/runtime.conf)"
+
+# The Autoware version: both hosts must run the same one (DiagNodeStatus crosses
+# the link and changed between 1.5.0 and 2.1.0). Where it came from, and whether
+# this host can run it.
+if [ -n "${GOLFCART_AUTOWARE_VERSION:-}" ]; then
+    aw_src="config/runtime.conf default"
+    if [ -n "${_GOLFCART_DOCTOR_AW_ENV:-}" ]; then aw_src="\$GOLFCART_AUTOWARE_VERSION"
+    elif [ -f "${REPO_ROOT}/config/autoware-version" ]; then aw_src="config/autoware-version"; fi
+    if [ -f "${GOLFCART_AUTOWARE_PREFIX}/setup.bash" ] && [ -f "${GOLFCART_INSTALL_DIR}/local_setup.bash" ]; then
+        ok "Autoware ${GOLFCART_AUTOWARE_VERSION}  (${aw_src}; ${GOLFCART_INSTALL_DIR#${REPO_ROOT}/}/ built)"
+    else
+        fail "Autoware ${GOLFCART_AUTOWARE_VERSION} (${aw_src}) cannot run here:"
+        "${REPO_ROOT}/scripts/multi_machine/version_check.sh" "${GOLFCART_AUTOWARE_VERSION}" 2>&1 \
+            | sed 's/^/           /'
+    fi
+    info "model data: ${GOLFCART_DATA_PATH#${REPO_ROOT}/}"
+fi
 
 if [ "${GOLFCART_RMW:-cyclonedds}" = "zenoh" ]; then
     if [ "${RMW_IMPLEMENTATION:-}" != "rmw_zenoh_cpp" ]; then
@@ -242,6 +260,10 @@ case "$daemon_running" in
             info "every graph query (topic list, node list, topic hz) will report an"
             info "EMPTY graph while the stack runs perfectly. Fix it with:"
             info "    just rmw daemon-stop"
+        elif [ -n "$(golfcart_daemon_autoware 2>/dev/null | grep -vx -e none -e "${GOLFCART_AUTOWARE_VERSION:-}")" ]; then
+            fail "a ros2 daemon is running under Autoware $(golfcart_daemon_autoware | tr '\n' ' ')- this host runs ${GOLFCART_AUTOWARE_VERSION:-?}"
+            info "it answers graph queries from the other version's packages. Fix it with:"
+            info "    ros2 daemon stop"
         else
             warn "a ros2 daemon is running${daemon_rmw:+ (${daemon_rmw})}"
             info "its transport context was fixed when it started, so it may still be"

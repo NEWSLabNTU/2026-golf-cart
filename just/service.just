@@ -65,6 +65,13 @@ host-status:
         bash -c 'source {{justfile_directory()}}/scripts/env.sh; printf "%s" "${GOLFCART_RMW}"'
     ) || RMW="?"
     printf '%s: %-18s %s\n' "$(hostname)" "middleware" "${RMW}"
+    # Which Autoware: the version this host selects, and the one its launch unit
+    # was last started with (.golfcart-launch.env, written by `just up`). Both
+    # hosts must agree.
+    AW=$(bash -c '. "$1/scripts/autoware_version.sh" >/dev/null && printf %s "$GOLFCART_AUTOWARE_VERSION"' \
+        _ "{{justfile_directory()}}") || AW="?"
+    UNIT_AW=$(sed -n 's/^GOLFCART_AUTOWARE_VERSION=//p' "{{justfile_directory()}}/.golfcart-launch.env" 2>/dev/null | tail -1)
+    printf '%s: %-18s %s%s\n' "$(hostname)" "autoware" "${AW}" "${UNIT_AW:+ (unit last started with ${UNIT_AW})}"
 
 # ── Both hosts, driven from the master ──────────────────────────────────────
 
