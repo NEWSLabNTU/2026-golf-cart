@@ -353,9 +353,37 @@ Next:
      the planning preset shadowing upstream's are step 10 checks.
 8. **Code** (section 3):
    - `cuda_pointcloud_filters` builds on both cuda_blackboard versions.
-   - `cuda_ndt_matcher` gets upstream's Hessian sign fix on `main`. The
-     matcher is shared, so this changes 1.5.0's NDT too: re-baseline the
-     comparison tests, and re-check the Ming-Da NVTL gate (2.1) on a replay.
+   - `cuda_ndt_matcher` gets upstream's Hessian sign fix on `main`: done
+     2026-11-17 (b0bc3c6). Upstream's change (autoware_core #1217, in core
+     1.10.0) is `h_ang_.row(6)` = d1, ∂²(R·x)/∂pitch² for x, z coefficient
+     `sy` → `-sy`; our `h_ang` has the same row layout. Only the CPU copy
+     (`derivatives/angular.rs`) had the bug. The CUDA kernels
+     (`persistent_ndt_device.cuh`) already had `-sp`, so the default GPU
+     path, the one the cart runs, does not change. The CPU path does
+     (`NDT_USE_GPU=0`, GNSS regularization, the batch-align fallback).
+     Two new tests fail before the fix and pass after it, at
+     (0.05, -0.04, 3.06): a finite-difference check of every `h_ang` row,
+     and CPU against GPU Hessian (1.35e-4 relative before, 3e-7 after).
+     No other unit-test number moved. The comparison fork
+     (`tests/comparison/autoware_core`) is on 1.10.0, branch
+     `cuda_ndt-1.10.0`, which builds only against 2.1.0.
+     **Gate check** under 1.5.0 (`main`'s launch layer), on the 2026-09-24
+     clockwise Ming-Da bag. It is the only Ming-Da lap on the workstation
+     and has only the VLP-32C, with no IMU or velocity, so the EKF has no
+     twist. Board init, dense map. GPU path, before → after: about 1300
+     poses each, NVTL median 2.456 → 2.455, p5 2.312 → 2.312, p95
+     2.521 → 2.520, minimum 2.251 → 2.248, minimum 10-scan median 2.265 →
+     2.265. Pose difference: 0.14 cm p95, 1.2 cm max, the same as between
+     two runs of the fixed build. Offline (`offline_bench`, the same 1303
+     scans and priors for each build): the GPU arm is identical, and on the
+     CPU arm 6 frames moved by more than 1 mm (5.0 cm max) with an unchanged
+     NVTL distribution. Pitch stays near zero indoors, so the term barely
+     matters here. The 2.1 gate stays: a healthy lock never drops below a
+     2.265 window median, and the CPU live runs, which started from a wrong
+     board alignment, sat at 1.42 to 1.76, the "wrong pose" band the gate
+     was set for. Not yet done: re-check the gate on a cart session with
+     IMU and velocity (`master_20261028_192241`, whose healthy median was
+     2.53), and regenerate the comparison ground truth under 2.1.0.
 9. **Setup and units**: `install-autoware-debian.sh` per version; the
    `autoware-data`, `tensorrt-engines` and `rviz-theme` steps;
    `just up` carrying the version to both hosts and refusing a mismatch;
