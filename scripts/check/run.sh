@@ -355,8 +355,8 @@ else
 fi
 
 workspace_ok=false
-if [[ -f "${GOLFCART_INSTALL_DIR}/setup.bash" ]]; then
-    ok "Workspace built (install/setup.bash exists)"
+if [[ -f "${GOLFCART_INSTALL_DIR}/local_setup.bash" ]]; then
+    ok "Workspace built (local_setup.bash exists)"
     workspace_ok=true
 else
     warn "Workspace not built — run: just build"
@@ -411,7 +411,7 @@ echo -e "  GNSS:   $( $gnss_ok   && echo -e "${GREEN}yes${NC}" || echo -e "${YEL
 echo -e "  Camera: $( $camera_ok  && echo -e "${GREEN}yes${NC}" || echo -e "${YELLOW}skip${NC}" )"
 echo ""
 
-source "${GOLFCART_INSTALL_DIR}/setup.bash"
+source "${GOLFCART_INSTALL_DIR}/local_setup.bash"
 cd "$script_dir"
 ros2 launch sensors.launch.xml \
     "launch_lidar:=$lidar_ok" \

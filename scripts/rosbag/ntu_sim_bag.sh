@@ -38,7 +38,7 @@ fi
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 . "${REPO_ROOT}/scripts/autoware_version.sh"  # GOLFCART_AUTOWARE_PREFIX, GOLFCART_INSTALL_DIR
-[ -f "${GOLFCART_INSTALL_DIR}/setup.bash" ] && source "${GOLFCART_INSTALL_DIR}/setup.bash"
+[ -f "${GOLFCART_INSTALL_DIR}/local_setup.bash" ] && source "${GOLFCART_INSTALL_DIR}/local_setup.bash"
 
 echo "Starting ${BAG} PAUSED (clock only)."
 echo "  next: just ntu-test up      # stack, now born on bag time"

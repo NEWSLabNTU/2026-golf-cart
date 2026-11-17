@@ -33,7 +33,7 @@ if [ ! -d "${BAG}" ]; then
     exit 1
 fi
 
-[ -f "${GOLFCART_INSTALL_DIR}/setup.bash" ] && source "${GOLFCART_INSTALL_DIR}/setup.bash"
+[ -f "${GOLFCART_INSTALL_DIR}/local_setup.bash" ] && source "${GOLFCART_INSTALL_DIR}/local_setup.bash"
 
 echo "Starting ${BAG} PAUSED (clock only)."
 echo "  next: just indoor-test up      # stack, now born on bag time"

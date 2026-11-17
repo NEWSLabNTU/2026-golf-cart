@@ -29,7 +29,7 @@ source /opt/ros/humble/setup.bash
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 . "${REPO}/scripts/autoware_version.sh"  # GOLFCART_AUTOWARE_PREFIX, GOLFCART_INSTALL_DIR
 source "${GOLFCART_AUTOWARE_PREFIX}/setup.bash"
-[ -f "${GOLFCART_INSTALL_DIR}/setup.bash" ] && source "${GOLFCART_INSTALL_DIR}/setup.bash"
+[ -f "${GOLFCART_INSTALL_DIR}/local_setup.bash" ] && source "${GOLFCART_INSTALL_DIR}/local_setup.bash"
 
 GRAPH=${GOLFCART_AUTOWARE_PREFIX}/share/autoware_launch/config/system/diagnostics/autoware-main.yaml
 AGGP=${GOLFCART_AUTOWARE_PREFIX}/share/autoware_diagnostic_graph_aggregator/config/default.param.yaml

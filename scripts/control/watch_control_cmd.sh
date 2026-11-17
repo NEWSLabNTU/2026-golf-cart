@@ -3,7 +3,7 @@
 
 cd "$(dirname "$0")/../.."
 . scripts/autoware_version.sh
-source "${GOLFCART_INSTALL_DIR}/setup.bash"
+source "${GOLFCART_INSTALL_DIR}/local_setup.bash"
 
 while true; do
     echo "Waiting for /control/command/control_cmd topic..."

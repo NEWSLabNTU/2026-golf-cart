@@ -67,7 +67,7 @@ if [[ "${AVAILABLE_MB}" -lt $((ESTIMATED_MB_PER_MIN * 10)) ]]; then
   echo >&2
 fi
 
-WORKSPACE_SETUP="${GOLFCART_INSTALL_DIR}/setup.bash"
+WORKSPACE_SETUP="${GOLFCART_INSTALL_DIR}/local_setup.bash"
 if [[ -f "${WORKSPACE_SETUP}" ]]; then
   # shellcheck disable=SC1090
   source "${WORKSPACE_SETUP}"

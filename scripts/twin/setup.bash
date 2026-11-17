@@ -45,7 +45,7 @@ PATH=$_twin_path
 unset VIRTUAL_ENV _twin_path _d
 source ${GOLFCART_AUTOWARE_PREFIX}/setup.bash
 source "$TWIN_SWB/install/setup.bash"
-source "${GOLFCART_INSTALL_DIR}/setup.bash"
+source "${GOLFCART_INSTALL_DIR}/local_setup.bash"
 export ROS_DOMAIN_ID=$TWIN_DOMAIN
 # scenario-world-bridge's stack (twin.launch.py): the cart's side on TWIN_DOMAIN, SSv2 and the
 # bridge on TWIN_SCENARIO_DOMAIN (default TWIN_DOMAIN + 1); its ports, when twin.env moves them

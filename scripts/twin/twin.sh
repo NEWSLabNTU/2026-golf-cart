@@ -296,9 +296,9 @@ world() {
 autoware() {
     need TWIN_MAP
     alive autoware && die "Autoware is already up (pgid $(cat "$run/autoware.pgid")); twin stop first"
-    [ -f "${GOLFCART_INSTALL_DIR}/setup.bash" ] || die "build first (just build)"
+    [ -f "${GOLFCART_INSTALL_DIR}/local_setup.bash" ] || die "build first (just build)"
     echo "twin: the cart's Autoware on $TWIN_MAP, domain $TWIN_DOMAIN; log $run/autoware.log"
-    ( source "$root/scripts/env.sh" > /dev/null 2>&1; source "${GOLFCART_INSTALL_DIR}/setup.bash"; dds_env
+    ( source "$root/scripts/env.sh" > /dev/null 2>&1; source "${GOLFCART_INSTALL_DIR}/local_setup.bash"; dds_env
       if [ -n "${AUTOWARE_TENSORRT_LIB:-}" ] && [ -d "$AUTOWARE_TENSORRT_LIB" ]; then
           export LD_LIBRARY_PATH="$AUTOWARE_TENSORRT_LIB:${LD_LIBRARY_PATH:-}"
       fi

@@ -783,10 +783,16 @@ if [ -r /etc/nv_tegra_release ] && grep -q '^# R36' /etc/nv_tegra_release && [ -
 fi
 
 # ── Workspace overlay ────────────────────────────────────────────────────────
-# Source this version's workspace if it has been built
-if [ -f "${GOLFCART_INSTALL_DIR}/setup.bash" ]; then
+# Source this version's workspace if it has been built. local_setup.bash, not
+# setup.bash: setup.bash first replays every underlay that was on
+# COLCON_PREFIX_PATH when colcon last wrote it, and the underlay is chosen
+# above. A workspace once built from a shell holding another Autoware, AutoSDV
+# or the pre-split install/ kept them in that chain, and since a build reads the
+# chain from the environment this file made, every later build wrote them back.
+# install-2.1.0 then loaded 1.5.0's libcuda_blackboard (seen 2026-11-17).
+if [ -f "${GOLFCART_INSTALL_DIR}/local_setup.bash" ]; then
     _golfcart_relax_shell_opts
-    source "${GOLFCART_INSTALL_DIR}/setup.bash"
+    source "${GOLFCART_INSTALL_DIR}/local_setup.bash"
     _golfcart_restore_shell_opts
 fi
 
