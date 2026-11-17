@@ -1,38 +1,168 @@
 #!/usr/bin/env bash
-set -e
+# install-autoware-debian.sh - install one Autoware release from the localrepo.
+#
+#   install-autoware-debian.sh [VERSION] [--dry-run] [--force] [--reinstall]
+#
+# VERSION is X.Y.Z (default: the selected one, scripts/autoware_version.sh).
+# The release, deb name and sha256 come from the catalogue, versions.yaml, via
+# setup/golfcart_setup/autoware.py; nothing about a release is written here.
+#
+#   --dry-run    print what would be downloaded and installed; no sudo, no
+#                download, no apt beyond a simulation
+#   --force      run every stage even when this release is already installed
+#   --reinstall  allow replacing an OLDER revision of the same version (e.g.
+#                1.5.0-1 -> 1.5.0-3). That removes the version's packages with
+#                its own uninstall-autoware.sh and installs them again, because
+#                the packages keep their version numbers between revisions and
+#                apt would otherwise keep the old ones.
+#
+# Several versions live side by side: every localrepo package is suffixed per
+# version (autoware-full-2-1-0, /opt/autoware/2.1.0, ...), and from 1.5.0-3 on
+# no file is shared between versions. Installing one never removes another:
+# the apt plan is simulated first and refused if it would remove a package of
+# another Autoware version.
+set -euo pipefail
 
-echo "→ Installing Autoware Localrepo 1.5.0-1..."
+SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
-REPO_URL_BASE="https://github.com/NEWSLabNTU/autoware-localrepo/releases/download/1.5.0-1"
-DEB_FILE=""
-SHA256SUM=""
+VERSION=""
+DRY_RUN=0
+FORCE=0
+REINSTALL=0
+for arg in "$@"; do
+    case "$arg" in
+        --dry-run) DRY_RUN=1 ;;
+        --force) FORCE=1 ;;
+        --reinstall) REINSTALL=1 ;;
+        -h|--help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -*) echo "unknown option: $arg" >&2; exit 2 ;;
+        *)
+            [ -z "$VERSION" ] || { echo "one VERSION only (got $VERSION and $arg)" >&2; exit 2; }
+            VERSION="$arg" ;;
+    esac
+done
 
-# Checksums
-SHA256SUM_UBUNTU2204="9f433f7ae4642c9501b9b1f53853a3d724627cc2e85088ac6a2e2e21775898ea"
-SHA256SUM_JETPACK62="5c50148e9d9ad5426e92fdee68d2ab22ca23f37d9de83fe9e7fd06db330f0ae0"
+CATALOGUE_OUT=$(python3 "${REPO_ROOT}/setup/golfcart_setup/autoware.py" shell ${VERSION:+"$VERSION"}) \
+    || exit 2
+# AW_VERSION AW_RELEASE AW_SUFFIX AW_PLATFORM AW_DEB AW_SHA256 AW_URL
+# AW_LOCALREPO_PACKAGE AW_LOCALREPO_VERSION, all shell-quoted by autoware.py.
+eval "${CATALOGUE_OUT}"
 
-ARCH=$(uname -m)
+PREFIX="/opt/autoware/${AW_VERSION}"
+SHARE="/usr/share/autoware/${AW_VERSION}"
+FULL_PACKAGE="autoware-full-${AW_SUFFIX}"
 
-if [[ "$ARCH" == "x86_64" ]]; then
-    echo "  Detected architecture: amd64 (x86_64)"
-    DEB_FILE="autoware-localrepo-1-5-0_1.5.0-1ubuntu2204_all.deb"
-    SHA256SUM="${SHA256SUM_UBUNTU2204}"
-elif [[ "$ARCH" == "aarch64" ]]; then
-    echo "  Detected architecture: arm64 (aarch64) - JetPack 6.2 target (Advantech Orin)"
-    DEB_FILE="autoware-localrepo-1-5-0_1.5.0-1jetpack62_all.deb"
-    SHA256SUM="${SHA256SUM_JETPACK62}"
-else
-    echo "Error: Unsupported architecture: $ARCH"
+echo "→ Autoware ${AW_VERSION}: localrepo ${AW_RELEASE} (${AW_PLATFORM})"
+
+DATA_DIR="${DATA_DIR:-${REPO_ROOT}/data}"
+DEB_DOWNLOAD_DIR="${DATA_DIR}/autoware-debian"
+TEMP_DEB="${DEB_DOWNLOAD_DIR}/${AW_DEB}"
+
+pkg_version() {  # installed version of $1, empty when not installed
+    { dpkg-query -W -f='${db:Status-Abbrev} ${Version}\n' "$1" 2>/dev/null || true; } \
+        | awk '$1 ~ /^ii/ { print $2 }'
+}
+
+INSTALLED_LOCALREPO=$(pkg_version "${AW_LOCALREPO_PACKAGE}")
+INSTALLED_FULL=$(pkg_version "${FULL_PACKAGE}")
+
+# What is there now, compared on the whole Debian version: the revision is
+# what tells 1.5.0-1 from 1.5.0-3, whose packages are otherwise identical in
+# name and version.
+# The deb's Version is <release><platform> (1.5.0-3ubuntu2204): compare the
+# release part, and say so when the platform part differs.
+LOCALREPO_STATE=absent
+if [ -n "${INSTALLED_LOCALREPO}" ]; then
+    INSTALLED_RELEASE=$(sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+-[0-9]+).*/\1/' <<<"${INSTALLED_LOCALREPO}")
+    if dpkg --compare-versions "${INSTALLED_RELEASE}" eq "${AW_RELEASE}"; then
+        LOCALREPO_STATE=current
+    elif dpkg --compare-versions "${INSTALLED_RELEASE}" gt "${AW_RELEASE}"; then
+        LOCALREPO_STATE=newer
+    else
+        LOCALREPO_STATE=older
+    fi
+    if [ "${INSTALLED_LOCALREPO}" != "${INSTALLED_RELEASE}${AW_PLATFORM}" ]; then
+        echo "  WARNING: installed ${INSTALLED_LOCALREPO} is not the ${AW_PLATFORM} build" >&2
+    fi
+fi
+
+echo "  installed: ${AW_LOCALREPO_PACKAGE} ${INSTALLED_LOCALREPO:-none} (${LOCALREPO_STATE}),"\
+     "${FULL_PACKAGE} ${INSTALLED_FULL:-none}"
+
+OTHERS=()
+for d in /opt/autoware/*/; do
+    v=$(basename "$d")
+    [ "$v" != "${AW_VERSION}" ] && [ -f "${d}setup.bash" ] && OTHERS+=("$v")
+done
+[ "${#OTHERS[@]}" -eq 0 ] || echo "  other versions installed (kept): ${OTHERS[*]}"
+
+if [ "${LOCALREPO_STATE}" = older ] && [ "${REINSTALL}" -ne 1 ]; then
+    cat >&2 <<EOF
+  ${AW_LOCALREPO_PACKAGE} ${INSTALLED_LOCALREPO} is older than the catalogue's
+  ${AW_LOCALREPO_VERSION}. Its packages keep their version numbers between
+  revisions, so upgrading the repository alone changes nothing: the version's
+  packages have to be removed and installed again. Other Autoware versions are
+  not touched, and neither are downloaded models. Re-run with --reinstall:
+
+      ${SCRIPT_DIR}/install-autoware-debian.sh ${AW_VERSION} --reinstall
+
+EOF
+    [ "${DRY_RUN}" -eq 1 ] && exit 0
     exit 1
 fi
 
-SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
-DATA_DIR="${DATA_DIR:-${SCRIPT_DIR}/../../data}"
-DEB_DOWNLOAD_DIR="${DATA_DIR}/autoware-debian"
-mkdir -p "${DEB_DOWNLOAD_DIR}"
+if [ "${LOCALREPO_STATE}" != older ] && [ "${LOCALREPO_STATE}" != absent ] \
+   && [ -n "${INSTALLED_FULL}" ] && [ -f "${PREFIX}/setup.bash" ] && [ "${FORCE}" -ne 1 ]; then
+    echo "✓ Autoware ${AW_VERSION} (${INSTALLED_LOCALREPO}) is already installed; nothing to do."
+    echo "  (--force runs every stage again.)"
+    exit 0
+fi
 
-DOWNLOAD_URL="${REPO_URL_BASE}/${DEB_FILE}"
-TEMP_DEB="${DEB_DOWNLOAD_DIR}/${DEB_FILE}"
+# Refuse a plan that would remove another version's packages. Needs the
+# localrepo to be registered already, so it runs after the deb on a first
+# install and here, in advance, when the repository is already there.
+check_apt_plan() {
+    local plan removed
+    plan=$(apt-get -s install "${FULL_PACKAGE}" 2>/dev/null || true)
+    removed=$(printf '%s\n' "$plan" | awk '/^Remv / { print $2 }' \
+        | grep -E '^(ros-humble|autoware)-.*-[0-9]+-[0-9]+-[0-9]+$' \
+        | grep -v -- "-${AW_SUFFIX}\$" || true)
+    if [ -n "$removed" ]; then
+        echo "  ERROR: installing ${FULL_PACKAGE} would remove packages of another Autoware version:" >&2
+        printf '    %s\n' $removed >&2
+        echo "  Refusing. The versions are meant to coexist; this is a packaging bug." >&2
+        return 1
+    fi
+    return 0
+}
+
+if [ "${DRY_RUN}" -eq 1 ]; then
+    echo "  dry run, nothing changed. Would:"
+    if [ "${LOCALREPO_STATE}" = current ] || [ "${LOCALREPO_STATE}" = newer ]; then
+        echo "    download nothing: ${AW_LOCALREPO_PACKAGE} ${INSTALLED_LOCALREPO} is installed"
+    elif [ -f "${TEMP_DEB}" ] && [ ! -f "${TEMP_DEB}.aria2" ]; then
+        echo "    use ${TEMP_DEB} (sha256 checked against ${AW_SHA256})"
+    else
+        echo "    download ${AW_URL}"
+        echo "          to ${TEMP_DEB}, sha256 ${AW_SHA256}"
+    fi
+    if [ "${LOCALREPO_STATE}" = older ]; then
+        echo "    sudo ${SHARE}/uninstall-autoware.sh -y   (after the new localrepo deb; keeps the repository)"
+    fi
+    case "${LOCALREPO_STATE}" in
+        current|newer) echo "    keep ${AW_LOCALREPO_PACKAGE} ${INSTALLED_LOCALREPO}" ;;
+        *)             echo "    sudo apt install ${TEMP_DEB}" ;;
+    esac
+    echo "    sudo ${SHARE}/setup-prerequisites.sh --no-ros --non-interactive (+ the NVIDIA flags for ${AW_PLATFORM})"
+    echo "    sudo apt install ${FULL_PACKAGE}"
+    if [ "${LOCALREPO_STATE}" != absent ]; then
+        check_apt_plan && echo "    apt simulation: removes no other Autoware version"
+    fi
+    exit 0
+fi
+
+mkdir -p "${DEB_DOWNLOAD_DIR}"
 
 # Download helper: prefer aria2c (parallel download + inline checksum), then
 # fall back to wget, then curl. aria2c is only a speed optimisation, so its
@@ -82,31 +212,29 @@ download_deb() {
     fi
 
     # aria2c checks the hash during transfer; the wget/curl path verifies after.
-    if [[ -n "$sha" ]]; then
-        echo "  Verifying checksum..."
-        local actual
-        actual=$(sha256sum "$dest" | awk '{print $1}')
-        if [[ "$actual" != "$sha" ]]; then
-            echo "  ERROR: checksum mismatch for ${dest}"
-            echo "  Expected: ${sha}"
-            echo "  Actual:   ${actual}"
-            rm -f "$dest"
-            return 1
-        fi
-        echo "  Checksum matches."
+    echo "  Verifying checksum..."
+    local actual
+    actual=$(sha256sum "$dest" | awk '{print $1}')
+    if [[ "$actual" != "$sha" ]]; then
+        echo "  ERROR: checksum mismatch for ${dest}"
+        echo "  Expected: ${sha}"
+        echo "  Actual:   ${actual}"
+        rm -f "$dest"
+        return 1
     fi
+    echo "  Checksum matches."
 }
 
-echo "  Downloading ${DOWNLOAD_URL} to ${DEB_DOWNLOAD_DIR}..."
-
 DOWNLOAD_REQUIRED=false
-if [[ -f "${TEMP_DEB}.aria2" ]]; then
+if [[ "${LOCALREPO_STATE}" = current || "${LOCALREPO_STATE}" = newer ]]; then
+    echo "  ${AW_LOCALREPO_PACKAGE} ${INSTALLED_LOCALREPO} is installed; no download."
+elif [[ -f "${TEMP_DEB}.aria2" ]]; then
     # aria2c deletes its control file when a download completes, so its presence
     # means the last run was interrupted. aria2c preallocates the full size and
     # fills segments in parallel, so such a file has the right length and a
     # valid .deb header while holes remain mid-file: it fails the checksum and
     # used to be refused below as a "possibly custom" build. It is neither.
-    echo "  ${DEB_FILE} is an interrupted download (found ${DEB_FILE}.aria2)."
+    echo "  ${AW_DEB} is an interrupted download (found ${AW_DEB}.aria2)."
     if command -v aria2c &> /dev/null; then
         echo "  Resuming it..."
     else
@@ -117,161 +245,103 @@ if [[ -f "${TEMP_DEB}.aria2" ]]; then
     fi
     DOWNLOAD_REQUIRED=true
 elif [[ -f "$TEMP_DEB" ]]; then
-    echo "  File ${DEB_FILE} already exists. Verifying checksum..."
-    if [[ -n "$SHA256SUM" ]]; then
-        ACTUAL_SHA256SUM=$(sha256sum "$TEMP_DEB" | awk '{print $1}')
-        if [[ "$ACTUAL_SHA256SUM" == "$SHA256SUM" ]]; then
-            echo "  Checksum matches. Skipping download."
-        else
-            echo "--------------------------------------------------------------------------------"
-            echo "  ERROR: Checksum mismatch for existing file: ${TEMP_DEB}"
-            echo "  Expected SHA256: ${SHA256SUM}"
-            echo "  Actual SHA256:   ${ACTUAL_SHA256SUM}"
-            echo "  The expected value is the one GitHub publishes for the release asset:"
-            echo "    gh api repos/NEWSLabNTU/autoware-localrepo/releases/tags/1.5.0-1 \\"
-            echo "      --jq '.assets[] | {name, digest}'"
-            echo "  If it matches, this file is damaged. Delete it and re-run:"
-            echo "    rm '${TEMP_DEB}'"
-            echo "  Do not edit the checksum to match the file; that disables the check."
-            echo "  Not deleted automatically, in case it is a deliberate local build."
-            echo "--------------------------------------------------------------------------------"
-            exit 1 # Exit with an error
-        fi
+    echo "  File ${AW_DEB} already exists. Verifying checksum..."
+    ACTUAL_SHA256SUM=$(sha256sum "$TEMP_DEB" | awk '{print $1}')
+    if [[ "$ACTUAL_SHA256SUM" == "$AW_SHA256" ]]; then
+        echo "  Checksum matches. Skipping download."
     else
-        echo "  No checksum provided for verification. Skipping download assuming integrity."
+        echo "--------------------------------------------------------------------------------"
+        echo "  ERROR: Checksum mismatch for existing file: ${TEMP_DEB}"
+        echo "  Expected SHA256: ${AW_SHA256} (versions.yaml)"
+        echo "  Actual SHA256:   ${ACTUAL_SHA256SUM}"
+        echo "  The expected value is the one GitHub publishes for the release asset:"
+        echo "    gh release view ${AW_RELEASE} -R NEWSLabNTU/autoware-localrepo \\"
+        echo "      --json assets --jq '.assets[] | \"\\(.name) \\(.digest)\"'"
+        echo "  If it matches, this file is damaged. Delete it and re-run:"
+        echo "    rm '${TEMP_DEB}'"
+        echo "  Do not edit the checksum to match the file; that disables the check."
+        echo "  Not deleted automatically, in case it is a deliberate local build."
+        echo "--------------------------------------------------------------------------------"
+        exit 1
     fi
 else
-    echo "  File ${DEB_FILE} not found. Downloading..."
+    echo "  ${AW_DEB} not found. Downloading ${AW_URL}..."
     DOWNLOAD_REQUIRED=true
 fi
 
 if [[ "$DOWNLOAD_REQUIRED" == "true" ]]; then
-    download_deb "${DOWNLOAD_URL}" "${DEB_DOWNLOAD_DIR}" "${DEB_FILE}" "${SHA256SUM}"
-else
-    echo "  Using existing file: ${TEMP_DEB}"
+    download_deb "${AW_URL}" "${DEB_DOWNLOAD_DIR}" "${AW_DEB}" "${AW_SHA256}"
 fi
 
-echo "  Installing Autoware localrepo..."
-sudo apt update
-LOCALREPO_PACKAGE="autoware-localrepo-1-5-0"
-LOCALREPO_VERSION=$(dpkg-deb -f "$TEMP_DEB" Version)
-INSTALLED_LOCALREPO_VERSION=$(dpkg-query -W -f='${Version}' \
-    "$LOCALREPO_PACKAGE" 2>/dev/null || true)
+# 1.5.0-1's newslab-ros-config overwrite (--force-overwrite for
+# 10-cyclone-max.conf and multicast-lo.service) is gone: those two files were
+# unsuffixed only in 1.5.0-1, which the catalogue no longer installs. From
+# 1.5.0-2 on they are 10-cyclone-max-<suffix>.conf and
+# multicast-lo-<suffix>.service and collide with nothing. A file conflict now
+# is an error worth stopping for.
 
-# newslab-ros-config (the lab's machine-image package) and autoware-config-1-5-0
-# both ship /etc/sysctl.d/10-cyclone-max.conf and
-# /etc/systemd/system/multicast-lo.service. dpkg refuses the second owner, so on
-# a lab machine the whole install stops at
-#
-#     trying to overwrite '/etc/sysctl.d/10-cyclone-max.conf', which is also in
-#     package newslab-ros-config 1.0.0-1
-#
-# with every other package unpacked and unconfigured. The two copies set the
-# same three sysctls and run the same `ip route add` on lo, so letting Autoware's
-# copy win changes nothing that matters. Localrepo 1.5.0-2 renamed both files
-# (`-1-5-0` suffix) and would not collide; this script installs 1.5.0-1.
-#
-# The override is scoped to that one known collision: on any other machine a
-# file conflict is still an error worth stopping for.
-APT_OVERWRITE=()
-if dpkg-query -W -f='${Status}' newslab-ros-config 2>/dev/null | grep -q 'ok installed'; then
-    echo "  newslab-ros-config is installed; letting autoware-config-1-5-0 overwrite"
-    echo "  its 10-cyclone-max.conf and multicast-lo.service (same settings)."
-    APT_OVERWRITE=(-o Dpkg::Options::=--force-overwrite)
-fi
-
-# A run that died at that collision leaves ~450 packages unpacked but not
-# configured, and from then on EVERY apt install on the machine -- including
-# the `apt-get install curl ...` at the top of setup-prerequisites.sh, before
-# this script reaches its own -- first tries to finish the broken set and hits
-# the same conflict again. So re-running the step could never get past it.
-# Finish the interrupted install here, with the same override, before anything
-# else calls apt.
+# A run that died mid-install leaves packages unpacked but not configured, and
+# from then on EVERY apt install on the machine -- including the one at the top
+# of setup-prerequisites.sh -- first tries to finish the broken set. Finish it
+# here, before anything else calls apt, so the failure shows as itself.
 if [ -n "$(sudo dpkg --audit 2>/dev/null)" ]; then
     echo "  dpkg reports an interrupted install; completing it first..."
-    sudo apt-get install -f -y "${APT_OVERWRITE[@]}"
+    sudo apt-get install -f -y
 fi
 
-# A newer localrepo can already be installed on a machine provisioned from a
-# newer release. Apt refuses to downgrade it when -y is used, and there is no
-# reason to replace a newer repository package with this older asset.
-if [[ -n "$INSTALLED_LOCALREPO_VERSION" ]] \
-   && dpkg --compare-versions "$INSTALLED_LOCALREPO_VERSION" ge "$LOCALREPO_VERSION"; then
-    echo "  Localrepo ${INSTALLED_LOCALREPO_VERSION} is already installed; skipping ${LOCALREPO_VERSION}."
-else
-    sudo apt install -y "$TEMP_DEB"
+echo "  Installing the Autoware ${AW_VERSION} localrepo..."
+case "${LOCALREPO_STATE}" in
+    current|newer)
+        # A newer localrepo can be installed on a machine provisioned from a
+        # newer release; there is no reason to downgrade it to this asset.
+        echo "  Keeping ${AW_LOCALREPO_PACKAGE} ${INSTALLED_LOCALREPO}." ;;
+    *)
+        sudo apt install -y "$TEMP_DEB" ;;
+esac
+sudo apt update
+
+if [ "${LOCALREPO_STATE}" = older ]; then
+    # Same package names and versions as the old revision's: remove them so the
+    # install below takes this revision's. Only this version is touched, and
+    # without --purge the repository just installed stays.
+    echo "  Removing the ${INSTALLED_LOCALREPO} packages before reinstalling from ${AW_RELEASE}..."
+    sudo "${SHARE}/uninstall-autoware.sh" -y
 fi
 
-# Run setup-prerequisites.sh
+# Run setup-prerequisites.sh, this version's copy.
 #
-# Left to itself this script asks its own questions partway through ours, which
-# is a second interactive session arriving after the user thought they had
-# answered everything. What it will and will not accept as flags decides how
-# much of that can be avoided, and the answer is narrower than it looks. What
-# follows is the amd64 (ubuntu2204) script; the arm64 one is a different script
-# with different flags, handled in its own branch below.
+# --non-interactive (1.5.0-3 and 2.1.0, both platforms) answers every question
+# it is not given a flag for with "no" and skips the final "Proceed?" prompt,
+# so the flags below are the whole answer. They differ by platform:
 #
-#   --no-ros / --install-ros    answer the ROS question. Fine.
-#   --all-nvidia / --no-nvidia  answer the NVIDIA question AND set
-#                               NVIDIA_PROMPTED, so the menu does not open.
-#   --cuda --cudnn --tensorrt   set the variables but NOT NVIDIA_PROMPTED, so
-#                               the four-item menu opens anyway.
-#   --no-spconv                 DOES NOT EXIST. Passing it is a hard error:
-#                               "[ERROR] Unknown option: --no-spconv", and the
-#                               step dies there. This script used to pass it.
+#   amd64 (ubuntu2204)  --all-nvidia / --no-nvidia: CUDA, cuDNN, TensorRT and
+#                       SpConv together. Decided from what the machine has:
+#                       already present -> --no-nvidia (nothing to install, no
+#                       SpConv built for another CUDA); missing -> --all-nvidia.
+#                       Override with AUTOWARE_PREREQ_NVIDIA=y|n.
+#   arm64 (jetpack62)   JetPack provides CUDA, cuDNN and TensorRT, so there is
+#                       no NVIDIA question; --spconv / --no-spconv only, and
+#                       --all-nvidia would be "Unknown option". SpConv is not
+#                       optional: autoware_tensorrt_plugins links libspconv.so.
+#                       Override with AUTOWARE_PREREQ_SPCONV=n.
 #
-# So there is no flag that installs CUDA, cuDNN and TensorRT while declining
-# SpConv. The choice is between everything and nothing, and it is made here from
-# what the machine already has rather than from a menu answer:
-#
-#   NVIDIA stack already present -> --no-nvidia. Nothing to install, no menu,
-#                                   and no SpConv tarball built for CUDA 12.8
-#                                   landing on a box running something else.
-#   not present                  -> --all-nvidia, which is the nested script's
-#                                   own default selection. SpConv comes with it;
-#                                   it is dead weight for this stack (BEVFusion
-#                                   and friends), not a hazard.
-#
-# Override either way with AUTOWARE_PREREQ_NVIDIA=y|n.
-#
-# ROS 2 stays as it was: the ros2 step installs it before this one, so --no-ros,
-# and the guard below keeps that promise honest.
-#
-# The final "Proceed with installation?" prompt is unconditional -- even -y does
-# not skip it -- so it is answered on stdin. That is the one question this
-# wrapper cannot remove with a flag.
-if [ -f /usr/share/autoware/setup-prerequisites.sh ]; then
-    PREREQ_ARGS=()
+# ROS 2: the ros2 step installs it before this one, so --no-ros, and the guard
+# keeps that promise honest. AUTOWARE_PREREQ_ROS=y lets this script install it.
+PREREQ="${SHARE}/setup-prerequisites.sh"
+if [ -f "${PREREQ}" ]; then
+    PREREQ_ARGS=(--non-interactive)
     if [ "${AUTOWARE_PREREQ_ROS:-n}" = "y" ]; then
         PREREQ_ARGS+=(--install-ros)
     else
-        # --no-ros is a promise that ROS is already there. Break that promise
-        # and the failure surfaces later as a wall of unmet apt dependencies
-        # from autoware-full-1-5-0, naming ros-humble packages rather than the
-        # step that installs them.
         if [ ! -f /opt/ros/humble/setup.bash ]; then
             echo "ROS 2 Humble is not installed, and this step is configured not to" >&2
             echo "install it (AUTOWARE_PREREQ_ROS is not 'y')." >&2
             echo "Run the ros2 step first:  ./setup.sh --only ros2" >&2
-            echo "Or set AUTOWARE_PREREQ_ROS=y to let Autoware's own prerequisite" >&2
-            echo "script install it." >&2
             exit 1
         fi
         PREREQ_ARGS+=(--no-ros)
     fi
-    if [[ "$ARCH" == "aarch64" ]]; then
-        # The jetpack62 localrepo ships a DIFFERENT setup-prerequisites.sh. It
-        # assumes JetPack already provides CUDA, cuDNN and TensorRT, so it has
-        # no NVIDIA question at all, and its flags are the inverse of the amd64
-        # script's: --spconv / --no-spconv exist, --all-nvidia / --no-nvidia do
-        # not, and passing either is "[ERROR] Unknown option" -- the step died
-        # there on every arm64 machine, the Orin included.
-        #
-        # SpConv is not optional here: autoware_tensorrt_plugins links
-        # libspconv.so, and autoware-full pulls that package in. The Jetson
-        # build it installs carries sm_80 kernels as well as sm_87, so it also
-        # serves an SBSA arm64 server (A100). Override with
-        # AUTOWARE_PREREQ_SPCONV=n.
+    if [[ "${AW_PLATFORM}" == jetpack* ]]; then
         if [ "${AUTOWARE_PREREQ_SPCONV:-y}" = "y" ]; then
             PREREQ_ARGS+=(--spconv)
         else
@@ -288,33 +358,36 @@ if [ -f /usr/share/autoware/setup-prerequisites.sh ]; then
             echo "  CUDA or TensorRT missing; installing the full NVIDIA set."
             nvidia_wanted=y
         fi
-
         if [ "$nvidia_wanted" = "y" ]; then
             PREREQ_ARGS+=(--all-nvidia)
         else
             PREREQ_ARGS+=(--no-nvidia)
         fi
     fi
-
-    echo "  Running /usr/share/autoware/setup-prerequisites.sh ${PREREQ_ARGS[*]}..."
-    # `yes` rather than a single y: the prompt loop re-asks on anything it does
-    # not recognise, and a closed stdin would spin it.
-    yes | sudo /usr/share/autoware/setup-prerequisites.sh "${PREREQ_ARGS[@]}"
+    echo "  Running ${PREREQ} ${PREREQ_ARGS[*]}..."
+    sudo "${PREREQ}" "${PREREQ_ARGS[@]}"
 else
-    echo "  Warning: /usr/share/autoware/setup-prerequisites.sh not found. Skipping."
+    echo "  ERROR: ${PREREQ} not found; the localrepo deb did not install it." >&2
+    exit 1
 fi
 
-echo "  Updating apt cache after localrepo installation..."
+echo "  Updating apt cache after the prerequisites..."
 sudo apt update
 
-# Fix: If time-daemon is not provided by any package, install chrony.
-# This is to satisfy the time-daemon dependency of autoware-full-1-5-0.
+# If time-daemon is not provided by any package, install chrony: autoware-full
+# depends on it.
 if ! apt-cache search --names-only '^time-daemon$' | grep -q 'time-daemon'; then
     echo "  'time-daemon' not found in any package. Installing 'chrony' as a replacement."
     sudo apt install -y chrony
 fi
 
-echo "  Installing autoware-full-1-5-0..."
-sudo apt install -y "${APT_OVERWRITE[@]}" autoware-full-1-5-0
+check_apt_plan || exit 1
+echo "  Installing ${FULL_PACKAGE}..."
+sudo apt install -y "${FULL_PACKAGE}"
 
-echo "✓ Autoware Localrepo 1.5.0-1 and Autoware Full 1.5.0 installed successfully."
+for v in "${OTHERS[@]}"; do
+    [ -f "/opt/autoware/${v}/setup.bash" ] \
+        || echo "  WARNING: Autoware ${v} lost /opt/autoware/${v}/setup.bash during this install." >&2
+done
+
+echo "✓ Autoware ${AW_VERSION} (localrepo ${AW_RELEASE}) installed."

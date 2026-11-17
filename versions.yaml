@@ -1,22 +1,67 @@
-# versions.yaml - Single source of truth for all Golf Cart versions
-# This file is read by setup scripts, CI, and documentation generators.
+# versions.yaml - the versions this project is built on, and the catalogue of
+# Autoware releases it supports.
+#
+# Readers:
+#   setup/golfcart_setup/autoware.py   the catalogue (stdlib parser: keep this
+#                                      file to nested mappings of scalars,
+#                                      two-space indent, no lists or anchors)
+#   setup/scripts/install-autoware-debian.sh, through autoware.py
+#   scripts/version/get-version.sh     any scalar by dotted key
+#
+# Which Autoware a host runs is NOT decided here. scripts/autoware_version.sh
+# resolves it: GOLFCART_AUTOWARE_VERSION, then config/autoware-version
+# (gitignored, per host), then the default in config/runtime.conf. This file
+# only says what each supported version is and where its packages come from.
 
-# =============================================================================
-# Golf Cart Project Version
-# =============================================================================
 golfcart:
   version: "0.1.0-dev"
 
-# =============================================================================
-# Autoware Base
-# =============================================================================
-autoware:
-  version: "1.5.0"
-
-# =============================================================================
-# ROS 2
-# =============================================================================
 ros:
   distro: "humble"
   installation_type: "desktop"  # desktop, ros-base
   rmw_implementation: "rmw_cyclonedds_cpp"
+
+# One entry per supported Autoware version, keyed X.Y.Z.
+#
+#   release   the NEWSLabNTU/autoware-localrepo GitHub release tag, which is
+#             also the localrepo deb's Debian revision (<release><platform>)
+#   suffix    the apt package suffix: autoware-full-<suffix>,
+#             autoware-localrepo-<suffix>, /usr/bin/*-<suffix>
+#   platforms one deb per platform this project installs on:
+#               ubuntu2204  x86_64 workstations and laptops (CUDA)
+#               jetpack62   both AGX Orins (JetPack 6.2, L4T r36.4)
+#             sha256 is GitHub's digest for the release asset:
+#               gh release view <release> -R NEWSLabNTU/autoware-localrepo \
+#                 --json assets --jq '.assets[] | "\(.name) \(.digest)"'
+#
+# Both hosts of the cart must run the same version: DiagNodeStatus, which
+# crosses the master/orin link, changed between 1.5.0 and 2.1.0.
+#
+# 1.5.0-1 is not listed and not supported: it installs unsuffixed files
+# (/usr/bin/apply-autoware-theme, 10-cyclone-max.conf, multicast-lo.service)
+# that collide with any second version. 1.5.0-3 and later suffix them.
+# 2.1.0's Jazzy release (2.1.0-jazzy-1) is not for this project, which stays
+# on Humble.
+autoware:
+  "1.5.0":
+    release: "1.5.0-3"
+    suffix: "1-5-0"
+    universe: "0.48.0"
+    platforms:
+      ubuntu2204:
+        deb: "autoware-localrepo-1-5-0_1.5.0-3ubuntu2204_all.deb"
+        sha256: "e2c951d6dfe1a84622c5c909ec4693f4af9f41422b61cba28e244f0d03c872cb"
+      jetpack62:
+        deb: "autoware-localrepo-1-5-0_1.5.0-3jetpack62_all.deb"
+        sha256: "342668ee21cfb1bc9751ecd1faf3504e6614fc31d67a2c62df0dabcfacf10951"
+  "2.1.0":
+    release: "2.1.0-1"
+    suffix: "2-1-0"
+    universe: "0.53.2"
+    platforms:
+      ubuntu2204:
+        deb: "autoware-localrepo-2-1-0_2.1.0-1ubuntu2204_all.deb"
+        sha256: "55db8d65917f6adc726a22f05c6f29f96c42030da00bbfd2e1d7e2e5ef7624b0"
+      jetpack62:
+        deb: "autoware-localrepo-2-1-0_2.1.0-1jetpack62_all.deb"
+        sha256: "ff095309e3662016d206d11cf90526e51fabc6ca68dc48c79842813a3ef2f902"

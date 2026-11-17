@@ -6,8 +6,7 @@
 #
 # Examples:
 #   get-version.sh golfcart.version          # Returns "1.0.0-dev"
-#   get-version.sh nvidia_amd64.cuda         # Returns "12.3"
-#   get-version.sh autoware.version          # Returns "1.5.0"
+#   get-version.sh ros.distro                # Returns "humble"
 #   get-version.sh missing.key "default"     # Returns "default"
 #
 # This used to prefer `yq` and fall back to Python. It did not work: two
@@ -31,7 +30,7 @@ DEFAULT="${2:-}"
 
 if [[ -z "$KEY" ]]; then
     echo "Usage: get-version.sh <key> [default]" >&2
-    echo "Example: get-version.sh autoware.version" >&2
+    echo "Example: get-version.sh ros.distro" >&2
     exit 1
 fi
 

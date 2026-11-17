@@ -36,8 +36,8 @@ Dropped from the previous system, by decision on 2026-09-02:
   dependency belongs, and stayed there when gscam itself was replaced by the
   in-tree `gmslcam` (2026-09-21). Nebula is the one that cannot work this way
   -- there is no rosdep rule for `nebula_ros`, and apt carries only the versioned
-  `ros-humble-nebula-ros-1-5-0` from the Autoware localrepo -- but it needs
-  none: `autoware-full-1-5-0` pulls it through `autoware-ros-packages-1-5-0`,
+  `ros-humble-nebula-ros-<suffix>` from the Autoware localrepo -- but it needs
+  none: `autoware-full-<suffix>` pulls it through `autoware-ros-packages-<suffix>`,
   which is why all eight nebula packages are already marked auto-installed.
 * `tier4-camera` (2026-11-09) -- `ros-humble-usb-cam`, `v4l-utils` and
   `99-tier4-camera.rules` for TIER IV's GMSL2-to-USB converter kit. The cart's
@@ -56,9 +56,21 @@ the rest of the repo does, so it becomes an ordinary step.
 
 from __future__ import annotations
 
+from .autoware import selected_version
 from .model import (
     DECLARED, HARDWARE_DIR, HOST_DIR, REPO_ROOT, SCRIPTS_DIR, Requires, Step,
 )
+
+# The Autoware version the version-bound steps install and prepare, as
+# scripts/autoware_version.sh resolves it (GOLFCART_AUTOWARE_VERSION, then
+# config/autoware-version, then config/runtime.conf). It is part of each such
+# step's argv, so it is in the step's digest: selecting another version shows
+# them as stale, which is right -- that version's packages, models and engines
+# are separate. Pick one for a run with
+#     GOLFCART_AUTOWARE_VERSION=2.1.0 ./setup.sh ...
+AUTOWARE_VERSION = selected_version()
+AUTOWARE_PREFIX = f"/opt/autoware/{AUTOWARE_VERSION}"
+_AW_ENV = ["env", f"GOLFCART_AUTOWARE_VERSION={AUTOWARE_VERSION}"]
 
 _S = lambda name: str(SCRIPTS_DIR / name)          # noqa: E731
 _BASH = lambda body: ["bash", "-euc", body]        # noqa: E731
@@ -93,9 +105,10 @@ if [[ ! -f /opt/ros/humble/setup.sh ]]; then
 fi
 """
 
-_REQUIRE_AUTOWARE = """
-if [[ ! -f /opt/autoware/1.5.0/setup.bash ]]; then
-    echo "Autoware 1.5.0 is not installed: /opt/autoware/1.5.0/setup.bash is missing." >&2
+_REQUIRE_AUTOWARE = f"""
+export GOLFCART_AUTOWARE_VERSION={AUTOWARE_VERSION}
+if [[ ! -f {AUTOWARE_PREFIX}/setup.bash ]]; then
+    echo "Autoware {AUTOWARE_VERSION} is not installed: {AUTOWARE_PREFIX}/setup.bash is missing." >&2
     echo "Run the autoware-debian step first, or let a full setup run reach it:" >&2
     echo "    ./setup.sh --only autoware-debian autoware-data" >&2
     exit 1
@@ -257,23 +270,26 @@ STEPS: list[Step] = [
     # ---- Autoware --------------------------------------------------------
     Step(
         id="autoware-debian",
-        label="Autoware Debian packages",
-        why="~2-3 GB. Skip only to build Autoware from source instead.",
+        label=f"Autoware {AUTOWARE_VERSION} Debian packages",
+        why="~2-3 GB, the localrepo release versions.yaml lists for this "
+            "version. Other installed versions are kept. Skip only to build "
+            "Autoware from source instead.",
         group="Autoware",
-        run=[_S("install-autoware-debian.sh")],
+        run=[_S("install-autoware-debian.sh"), AUTOWARE_VERSION],
+        inputs=(str(REPO_ROOT / "versions.yaml"),),
         requires=Requires(sudo=True),
         after=("ros2",),
         profiles=_on(*DEV),
     ),
     Step(
         id="autoware-data",
-        label="Writable Autoware data directory",
-        why="Downloads ~2.4 GB of models with autoware-localrepo 1.5.0-3 or "
-            "later; seconds on older installs, which only symlink the root-owned "
-            "/opt/autoware data. TensorRT writes each .engine beside its .onnx, "
-            "so the models must sit in a tree this user owns.",
+        label=f"Writable Autoware {AUTOWARE_VERSION} data directory",
+        why=f"Downloads ~2.4 GB of models into data/autoware_data-{AUTOWARE_VERSION} "
+            "with that version's autoware-download-models. TensorRT writes each "
+            ".engine beside its .onnx, so the models must sit in a tree this "
+            "user owns.",
         group="Autoware",
-        run=[str(REPO_ROOT / "scripts" / "setup_autoware_data.sh")],
+        run=[*_AW_ENV, str(REPO_ROOT / "scripts" / "setup_autoware_data.sh")],
         after=("autoware-debian",),
         profiles=_on(*DEV),
     ),
@@ -291,7 +307,7 @@ STEPS: list[Step] = [
     ),
     Step(
         id="tensorrt-engines",
-        label="TensorRT engines: install the cached pack, build the rest",
+        label=f"TensorRT engines for Autoware {AUTOWARE_VERSION}: install the cached pack, build the rest",
         why="Copies this host's engine pack from data/engines/<key> (key = "
             "Autoware + TensorRT + board; `just engines key`) wherever the ONNX "
             "matches, then compiles whatever is still missing: ~11 min on an "
@@ -381,12 +397,12 @@ STEPS: list[Step] = [
     ),
     Step(
         id="rviz-theme",
-        label="Autoware's RViz theme for this user (qt5ct)",
+        label=f"Autoware {AUTOWARE_VERSION}'s RViz theme for this user (qt5ct)",
         why="The Autoware apt install ships the theme in /opt/autoware/<ver>/theme "
             "but not the per-user qt5ct config, so RViz drew stock Qt and the "
             "stock splash. Writes ~/.config/qt5ct/ (stylesheet + conf); no sudo.",
         group="Kernel and network",
-        run=[str(REPO_ROOT / "scripts" / "rviz" / "install_theme.sh")],
+        run=[*_AW_ENV, str(REPO_ROOT / "scripts" / "rviz" / "install_theme.sh")],
         profiles=_on(*DEV),
         inputs=(str(REPO_ROOT / "scripts" / "rviz" / "install_theme.sh"),),
     ),

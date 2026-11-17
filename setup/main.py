@@ -21,7 +21,7 @@ from golfcart_setup.model import (  # noqa: E402
     OS_ERROR, OS_WARN, PROFILE_HELP, PROFILES, RETIRED_PROFILES, ROLE_PROFILE,
     ROLES, STATE_WORDS, Machine, RoleConflict, check_role, write_host_role,
 )
-from golfcart_setup.registry import BY_ID, STEPS, ordered  # noqa: E402
+from golfcart_setup.registry import AUTOWARE_VERSION, BY_ID, STEPS, ordered  # noqa: E402
 from golfcart_setup.runner import Runner, apply_role  # noqa: E402
 from golfcart_setup.state import State  # noqa: E402
 
@@ -279,7 +279,7 @@ def cmd_run(args) -> int:
     profile = "--only" if args.only else ("all" if args.all
                                           else _profile(args, machine))
     print(f"Profile: {profile}   role: {_role_words(machine, args)}   "
-          f"{len(steps)} step(s) to run\n")
+          f"Autoware: {AUTOWARE_VERSION}   {len(steps)} step(s) to run\n")
     for step in steps:
         ok, reason = machine.applicable(step)
         flag = "" if ok else f"   ({reason} -- selected anyway)"
