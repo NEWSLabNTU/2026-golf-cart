@@ -38,8 +38,31 @@ HOST="${GOLFCART_HOST:-master}"
 # variables (AMENT_TRACE_SETUP_FILES and friends) and would abort the unit.
 export GOLFCART_ENV_ROLE="${HOST}"
 export GOLFCART_ENV_QUIET=1
+
+# The Autoware version, BEFORE env.sh: it decides which /opt/autoware/<ver>
+# and install-<ver>/ env.sh sources. `just up` writes it into
+# .golfcart-launch.env on both hosts on every start (the master's selection,
+# so the two cannot differ). Only the known key is taken, and only as X.Y.Z;
+# the file is never sourced. Without the file (a unit started by hand) env.sh
+# resolves this host's own selection.
+if [ -f "${WORKSPACE}/.golfcart-launch.env" ]; then
+    _aw_ver=$(sed -n 's/^GOLFCART_AUTOWARE_VERSION=\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)[[:space:]]*$/\1/p' \
+        "${WORKSPACE}/.golfcart-launch.env" | tail -1)
+    if [ -n "${_aw_ver}" ]; then
+        export GOLFCART_AUTOWARE_VERSION="${_aw_ver}"
+    else
+        echo "launch_unit_exec: .golfcart-launch.env has no valid GOLFCART_AUTOWARE_VERSION; ignoring it" >&2
+    fi
+    unset _aw_ver
+fi
 # shellcheck source=/dev/null
 source "${WORKSPACE}/scripts/env.sh"
+echo "launch_unit_exec: ${HOST}, Autoware ${GOLFCART_AUTOWARE_VERSION} (${GOLFCART_INSTALL_DIR})"
+if [ ! -f "${GOLFCART_AUTOWARE_PREFIX}/setup.bash" ] || [ ! -f "${GOLFCART_INSTALL_DIR}/local_setup.bash" ]; then
+    echo "launch_unit_exec: Autoware ${GOLFCART_AUTOWARE_VERSION} or its workspace is missing:" >&2
+    "${WORKSPACE}/scripts/multi_machine/version_check.sh" "${GOLFCART_AUTOWARE_VERSION}" >&2 || true
+    exit 1
+fi
 
 # Fail loudly rather than start with the wrong transport profile. env.sh falls
 # back to loopback on an unknown name, which for a unit means a stack that runs

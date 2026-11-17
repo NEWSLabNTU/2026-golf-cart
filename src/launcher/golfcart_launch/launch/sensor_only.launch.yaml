@@ -116,9 +116,14 @@ launch:
 # that is root-owned, and TensorRT writes each .engine next to its .onnx, so a
 # read-only tree makes every model fail to cache and rebuild on every launch.
 # `just setup-autoware-data` creates this; `just build-engines` fills it.
+# scripts/launch/args.py passes data_path:= for the selected Autoware version
+# (data/autoware_data-<ver>, GOLFCART_DATA_PATH), so every just recipe and unit
+# sets it; this default only serves a launch that bypasses args.py. It takes
+# GOLFCART_DATA_PATH from a shell that sourced scripts/env.sh, else 1.5.0's
+# ./data/autoware_data (a symlink to data/autoware_data-1.5.0 once migrated).
 - arg:
     name: data_path
-    default: "./data/autoware_data"
+    default: "$(env GOLFCART_DATA_PATH ./data/autoware_data)"
     description: "Autoware model/artifact directory. Must be WRITABLE: TensorRT caches .engine files here."
 
 - include:

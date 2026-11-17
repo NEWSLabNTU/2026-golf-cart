@@ -7,6 +7,7 @@ changing a value here changes it for every consumer on both hosts.
 | File | Format | What it decides |
 |---|---|---|
 | `host` | one word (`master` or `orin`) | which machine this checkout is on. Selects the DDS profile. **Gitignored** — it is a property of the machine, not the branch |
+| `autoware-version` | one word (`X.Y.Z`) | which Autoware this host builds and runs, overriding `runtime.conf`'s default; `GOLFCART_AUTOWARE_VERSION` overrides both. **Gitignored**, per host like `host`. The version picks `/opt/autoware/<ver>`, `build-<ver>/`, `install-<ver>/` and `data/autoware_data-<ver>/` (scripts/autoware_version.sh); `../versions.yaml` lists the supported ones. `just up` hands the master's version to both units, through `.golfcart-launch.env` |
 | `multi_machine.conf` | shell assignments | the other host's `user@addr`, its repo path, the ssh key, the master's IP |
 | `ntrip_credentials.txt` | plain text | the NTRIP caster account, kept to paste from. **Gitignored**, it is a secret. The launch reads the account from the sensor kit's own gitignored `config/ntrip_client.param.yaml`, not from here |
 | `runtime.conf` | shell assignments | how play_launch runs composable nodes (`GOLFCART_CONTAINER_MODE`), which middleware this host uses (`GOLFCART_RMW`), and the three ROS domain ids: master stack 50, orin stack 60, wire 10 |

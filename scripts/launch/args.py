@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Resolve the launch argument list every launcher passes to play_launch.
 
-    scripts/launch/args.py [--host ROLE|auto] [--no-rviz] [--require KEY]
-                           [--from FILE] [--write FILE] [--label TEXT] [--quiet]
-                           [TOKEN...]
+    scripts/launch/args.py [--host ROLE|auto] [--no-rviz] [--no-data-path]
+                           [--require KEY] [--from FILE] [--write FILE]
+                           [--label TEXT] [--quiet] [TOKEN...]
 
-One place for the two things every launcher used to do for itself, slightly
+One place for the things every launcher used to do for itself, slightly
 differently each time:
 
 1. Arg files. A TOKEN of the form ``@name`` is replaced, in place, by the
@@ -19,6 +19,14 @@ differently each time:
    and, for master and orin, ``master_ip:=`` from config/multi_machine.conf and
    ``link_topics:=`` the repo's config/link/topics.yaml. These are launch
    arguments, not environment: the launch files take no env fallback for them.
+
+3. Model data. ``data_path:=`` is prepended with ``$GOLFCART_DATA_PATH`` as
+   scripts/autoware_version.sh resolves it (data/autoware_data-<ver> for the
+   selected Autoware), unless the caller passed ``data_path:=`` or
+   ``--no-data-path``. The launch files' own defaults are only for a launch
+   that bypasses this script. ``just up`` expands with ``--no-data-path``:
+   its list goes to the orin as well, whose checkout has its own path, and
+   each host's unit adds its own when it runs this script again.
 
 Later arguments win. The list is de-duplicated by key, keeping the LAST value
 at the position of the first occurrence, so ``@mingda-loop
@@ -127,6 +135,21 @@ def configured_host():
     return res.stdout.strip() if res.returncode == 0 else ""
 
 
+def data_path():
+    """GOLFCART_DATA_PATH for the selected Autoware version.
+
+    Asked of scripts/autoware_version.sh, which keeps a value set by hand and
+    re-derives one made for another version; the environment alone could be
+    a shell's stale copy.
+    """
+    path = shell_value('. "$1" >/dev/null && printf "%s" "${GOLFCART_DATA_PATH:-}"',
+                       str(REPO / "scripts" / "autoware_version.sh"))
+    if not path:
+        raise ArgError("scripts/autoware_version.sh gave no GOLFCART_DATA_PATH; "
+                       "pass data_path:= explicitly")
+    return path
+
+
 def master_ip():
     if not MULTI_MACHINE_CONF.is_file():
         raise ArgError(f"no {MULTI_MACHINE_CONF.relative_to(REPO)}: cannot derive master_ip:=")
@@ -152,6 +175,8 @@ def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--host", help="master | orin | all | auto: prepend host-derived args")
     p.add_argument("--no-rviz", action="store_true", help="prepend rviz:=false")
+    p.add_argument("--no-data-path", action="store_true",
+                   help="do not prepend data_path:=$GOLFCART_DATA_PATH")
     p.add_argument("--require", action="append", default=[], metavar="KEY",
                    help="fail unless KEY:= is in the final list")
     p.add_argument("--from", dest="from_file", metavar="FILE",
@@ -168,6 +193,8 @@ def main():
             tokens = Path(opts.from_file).read_text().splitlines() + tokens
         user = expand(tokens)
         prefix = host_args(opts.host, user) if opts.host else []
+        if not opts.no_data_path and not any(key_of(a) == "data_path" for a in user):
+            prefix.append(f"data_path:={data_path()}")
         if opts.no_rviz:
             prefix.append("rviz:=false")
         final = dedupe(prefix + user)

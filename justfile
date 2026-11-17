@@ -219,10 +219,33 @@ clean *FLAGS="":
 up *ARGS:
     #!/usr/bin/env bash
     set -uo pipefail
-    {{justfile_directory()}}/scripts/rmw/ensure.sh || exit 2
+    REPO={{justfile_directory()}}
+    "${REPO}/scripts/rmw/ensure.sh" || exit 2
+    # One Autoware version for both hosts: this host's selection
+    # (GOLFCART_AUTOWARE_VERSION, config/autoware-version, runtime.conf), handed
+    # to each unit through .golfcart-launch.env. DiagNodeStatus crosses the link
+    # and changed between versions, so a host that cannot run it stops the start
+    # here, before either unit is touched.
+    AW_VER=$(bash -c '. "$1/scripts/autoware_version.sh" >/dev/null && printf %s "$GOLFCART_AUTOWARE_VERSION"' _ "${REPO}") \
+        || { echo "up: cannot resolve the Autoware version" >&2; exit 2; }
+    echo "up: Autoware ${AW_VER}"
+    "${REPO}/scripts/multi_machine/version_check.sh" "${AW_VER}" >/dev/null || exit 2
+    # GOLFCART_ON_ORIN replaces on_orin.sh for a test with a fake orin.
+    ON_ORIN="${GOLFCART_ON_ORIN:-${REPO}/scripts/multi_machine/on_orin.sh}"
+    if [[ "${GOLFCART_USE_ORIN:-1}" == "1" ]]; then
+        "${ON_ORIN}" ./scripts/multi_machine/version_check.sh "${AW_VER}"
+        case $? in
+            0) ;;
+            255) echo "up: the orin did not answer; starting this host only (see below)" >&2 ;;
+            127) echo "up: the orin's checkout has no version_check.sh: pull it first, then just up" >&2; exit 2 ;;
+            *) echo "up: refusing: the orin cannot run Autoware ${AW_VER} (fixes above); nothing was started" >&2; exit 2 ;;
+        esac
+    fi
     # Expand once, here, so both hosts get the same list even if the orin's
     # checkout has different arg files; the orin's _up-local sees no @ left.
-    OUT=$(python3 {{justfile_directory()}}/scripts/launch/args.py --label "up args" "$@") || exit 2
+    # No data_path here: it is a path in each host's own checkout, which each
+    # unit's args.py adds for itself.
+    OUT=$(python3 "${REPO}/scripts/launch/args.py" --no-data-path --label "up args" "$@") || exit 2
     EXPANDED=()
     [ -n "${OUT}" ] && mapfile -t EXPANDED <<< "${OUT}"
     # rviz:= is decided here, not by the units: they have no display and always
@@ -239,10 +262,10 @@ up *ARGS:
         esac
     done
     EXPANDED=("${UNIT_ARGS[@]}")
-    just _up-local "${EXPANDED[@]}" || exit 1
+    GOLFCART_AUTOWARE_VERSION="${AW_VER}" just _up-local "${EXPANDED[@]}" || exit 1
     # A missing orin does not fail the master, but the vehicle interface lives there.
     if [[ "${GOLFCART_USE_ORIN:-1}" == "1" ]]; then
-        ./scripts/multi_machine/on_orin.sh just _up-local "${EXPANDED[@]}" \
+        "${ON_ORIN}" env GOLFCART_AUTOWARE_VERSION="${AW_VER}" just _up-local "${EXPANDED[@]}" \
             || echo "WARNING: could not start the orin - continuing without it; no vehicle interface, the cart cannot be driven" >&2
     fi
     if [[ "${RVIZ}" == "1" ]]; then
@@ -287,7 +310,10 @@ _rviz-desktop:
 # This host's unit only; `up` runs it here and, over ssh, on the orin. ARGS
 # reach the unit through .golfcart-launch.args (gitignored), rewritten on EVERY
 # start (empty when there are none), so no flag outlives the start that asked
-# for it. launch_unit_exec.sh reads it and adds the host-derived args.
+# for it. launch_unit_exec.sh reads it and adds the host-derived args. The
+# Autoware version reaches it the same way, in .golfcart-launch.env, which
+# launch_unit_exec.sh reads before scripts/env.sh: `up` passes it as
+# GOLFCART_AUTOWARE_VERSION, and without one this host's own selection is used.
 [private]
 [positional-arguments]
 _up-local *ARGS:
@@ -295,7 +321,13 @@ _up-local *ARGS:
     set -uo pipefail
     REPO={{justfile_directory()}}
     "${REPO}/scripts/rmw/ensure.sh" || exit 2
-    python3 "${REPO}/scripts/launch/args.py" --quiet --write "${REPO}/.golfcart-launch.args" "$@" || exit 2
+    AW_VER=$(bash -c '. "$1/scripts/autoware_version.sh" >/dev/null && printf %s "$GOLFCART_AUTOWARE_VERSION"' _ "${REPO}") || exit 2
+    "${REPO}/scripts/multi_machine/version_check.sh" "${AW_VER}" || exit 2
+    export GOLFCART_AUTOWARE_VERSION="${AW_VER}"
+    ENV_FILE="${REPO}/.golfcart-launch.env"
+    printf '# written by just _up-local on every start; read by launch_unit_exec.sh\nGOLFCART_AUTOWARE_VERSION=%s\n' \
+        "${AW_VER}" > "${ENV_FILE}.tmp" && mv "${ENV_FILE}.tmp" "${ENV_FILE}" || exit 2
+    python3 "${REPO}/scripts/launch/args.py" --quiet --no-data-path --write "${REPO}/.golfcart-launch.args" "$@" || exit 2
     # Show what the unit will run: the same call launch_unit_exec.sh makes, with
     # the role the installer's drop-in gives the unit.
     ROLE=$(systemctl --user show -p Environment --value golfcart-launch.service 2>/dev/null \
@@ -312,7 +344,7 @@ _up-local *ARGS:
         echo "Not installed yet?  just service install <role>" >&2
         exit 1
     fi
-    echo "$(hostname): launch $(systemctl --user is-active golfcart-launch.service)"
+    echo "$(hostname): launch $(systemctl --user is-active golfcart-launch.service) (Autoware ${AW_VER})"
 
 # This host's unit only; `down` runs it here and on the orin.
 [private]

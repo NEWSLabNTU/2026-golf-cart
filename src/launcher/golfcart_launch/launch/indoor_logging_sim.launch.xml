@@ -93,7 +93,10 @@
 
   <!-- Writable model directory, for the same reason ntu_logging_sim gives:
        launch_perception is off here but the argument exists to be flipped. -->
-  <arg name="data_path" default="./data/autoware_data"
+  <!-- scripts/launch/args.py passes data_path for the selected Autoware
+       version (data/autoware_data-ver, GOLFCART_DATA_PATH); this default only
+       serves a launch that bypasses it. -->
+  <arg name="data_path" default="$(env GOLFCART_DATA_PATH ./data/autoware_data)"
        description="Autoware model/artifact directory. Must be WRITABLE."/>
 
   <include file="$(find-pkg-share golfcart_launch)/launch/golfcart_autoware.launch.xml">

@@ -106,8 +106,23 @@ no arguments, so a flag never outlives the start that asked for it (the old
 `GOLFCART_LAUNCH_ARGS` in the user manager's environment did, until something
 cleared it). `launch_unit_exec.sh` reads the file and adds `host:=`,
 `master_ip:=` and `link_topics:=` through `scripts/launch/args.py`, which logs
-the final list to the journal. A hand-run `systemctl --user restart` reuses the
+the final list to the journal, together with `data_path:=` for that host's
+own `data/autoware_data-<ver>` (the shared list carries none: the two checkouts
+are at different paths). A hand-run `systemctl --user restart` reuses the
 last file.
+
+**Both hosts run one Autoware version**, the master's selection
+(`GOLFCART_AUTOWARE_VERSION`, else `config/autoware-version`, else
+`config/runtime.conf`): `DiagNodeStatus` crosses the link and changed between
+1.5.0 and 2.1.0. Before starting either unit, `just up` runs
+`scripts/multi_machine/version_check.sh <ver>` here and, over `on_orin.sh`, on
+the orin, and refuses if either lacks `/opt/autoware/<ver>/setup.bash` or
+`install-<ver>/` (an orin that does not answer is still only a warning, as
+before). `_up-local` then writes the version into `.golfcart-launch.env`
+(gitignored, rewritten on every start), which `launch_unit_exec.sh` reads
+before `scripts/env.sh`, so the unit sources that version's underlay and
+workspace. `just service host-status` prints each host's selection and the
+version its unit last started with.
 
 `just down` deliberately leaves recording alone — that is `just record stop`.
 
@@ -509,7 +524,8 @@ Most of these now have a home in a file, and the variable is only an override.
 | `GOLFCART_ORIN_WAIT` | `60` | seconds to wait for the orin before giving up |
 | `GOLFCART_MASTER_IP` | `config/multi_machine.conf` | what the orin's watchdog pings |
 | `GOLFCART_BAG_DIR` | `/mnt/external/rosbags` if mounted, else `~/rosbags` | where bags from before sessions are; new recordings go to `recordings/` |
-| `GOLFCART_ON_ORIN` | `scripts/multi_machine/on_orin.sh` | the record recipes' way to the orin (tests point it at a stub) |
+| `GOLFCART_ON_ORIN` | `scripts/multi_machine/on_orin.sh` | the record recipes' and `up`'s way to the orin (tests point it at a stub) |
+| `GOLFCART_AUTOWARE_VERSION` | `config/autoware-version`, else `config/runtime.conf` | which Autoware to build and run; `just up` passes the master's to both units |
 | `GOLFCART_WORKSPACE` | `~/2026-golf-cart` | workspace the units launch from; set by the installer's drop-in |
 
 ## A bag with an empty metadata.yaml

@@ -70,7 +70,10 @@
        every launch. `just setup-autoware-data` creates it; `just build-engines`
        fills it. Matters here even though launch_perception defaults to false,
        because flipping that argument is the whole point of it existing. -->
-  <arg name="data_path" default="./data/autoware_data"
+  <!-- scripts/launch/args.py passes data_path for the selected Autoware
+       version (data/autoware_data-ver, GOLFCART_DATA_PATH); this default only
+       serves a launch that bypasses it. -->
+  <arg name="data_path" default="$(env GOLFCART_DATA_PATH ./data/autoware_data)"
        description="Autoware model/artifact directory. Must be WRITABLE."/>
 
   <include file="$(find-pkg-share golfcart_launch)/launch/golfcart_autoware.launch.xml">
