@@ -1156,7 +1156,7 @@ not preprocessed, see GPU section):
 ### First Run Behavior
 On first launch, TensorRT will compile ONNX models to optimized CUDA engines:
 - This process can take 10-30 minutes depending on hardware
-- Compiled engines are written beside the ONNX in `data/autoware_data/` (gitignored)
+- Compiled engines are written beside the ONNX in `data/autoware_data-<ver>/` (gitignored, one per Autoware version)
 - Key models:
   - `lidar_centerpoint/pts_voxel_encoder_centerpoint_tiny.engine`
   - `lidar_centerpoint/pts_backbone_neck_head_centerpoint_tiny.engine`

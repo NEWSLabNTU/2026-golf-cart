@@ -50,7 +50,7 @@ minutes per model on the Orin. Engines are cached in git, one pack per key:
 
 ```bash
 just engines key       # aw1.5.0-trt10.3.0.30-agx-orin-64gb on both hosts today
-just engines install   # data/engines/<key>/ -> data/autoware_data/, ONNX sha256 checked
+just engines install   # data/engines/<key>/ -> data/autoware_data-<ver>/, ONNX sha256 checked
 just engines verify    # installed engines against the pack
 just build-engines     # builds what is still missing; loads, not rebuilds, the rest
 just engines save      # after a build that produced new or changed engines

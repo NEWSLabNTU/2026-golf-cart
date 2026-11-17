@@ -14,6 +14,7 @@
 
 """A second `ros2 bag record` must not block autonomous mode."""
 
+import os
 from pathlib import Path
 
 import yaml
@@ -23,9 +24,12 @@ PARAM = (
     PKG / 'config' / 'system' / 'duplicated_node_checker'
     / 'duplicated_node_checker.param.yaml'
 )
+# The selected Autoware's copy (scripts/env.sh exports the prefix); the path
+# under autoware_launch is the same in 1.5.0 and 2.1.0.
 UPSTREAM = Path(
-    '/opt/autoware/1.5.0/share/autoware_launch/config/system/'
-    'duplicated_node_checker/duplicated_node_checker.param.yaml'
+    os.environ.get('GOLFCART_AUTOWARE_PREFIX', '/opt/autoware/1.5.0'),
+    'share/autoware_launch/config/system/'
+    'duplicated_node_checker/duplicated_node_checker.param.yaml',
 )
 
 

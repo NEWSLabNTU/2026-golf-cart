@@ -1,13 +1,13 @@
 # TensorRT engine packs, cached in plain git and keyed by host compatibility.
 #
 #   just engines key        # this machine's key: aw<autoware>-trt<tensorrt>-<board>
-#   just engines save       # data/autoware_data/**/*.engine -> data/engines/<key>/
-#   just engines install    # data/engines/<key>/ -> data/autoware_data/, where the ONNX matches
+#   just engines save       # data/autoware_data-<ver>/**/*.engine -> data/engines/<key>/
+#   just engines install    # data/engines/<key>/ -> data/autoware_data-<ver>/, where the ONNX matches
 #   just engines list       # packs in the repo; which one is this host's
 #   just engines verify     # installed engines against this host's pack
 #
-# Every recipe accepts `--data-dir DIR` (default $GOLFCART_DATA_PATH, else
-# data/autoware_data), e.g. `just engines install --data-dir /tmp/x`.
+# Every recipe accepts `--data-dir DIR` (default: the selected Autoware's
+# data/autoware_data-<ver>), e.g. `just engines install --data-dir /tmp/x`.
 #
 # An engine is installed only when the ONNX beside its target hashes to the one
 # the pack was built from; anything skipped is built on first launch, as
@@ -29,11 +29,11 @@ default:
 key *ARGS:
     @python3 scripts/engines/engines.py {{ARGS}} key
 
-# Copy the engines in data/autoware_data into this key's pack, update its manifest
+# Copy the engines in data/autoware_data-<ver> into this key's pack, update its manifest
 save *ARGS:
     @python3 scripts/engines/engines.py {{ARGS}} save
 
-# Install this key's engines into data/autoware_data where the ONNX matches (--force replaces local ones)
+# Install this key's engines into data/autoware_data-<ver> where the ONNX matches (--force replaces local ones)
 install *ARGS:
     #!/usr/bin/env bash
     # --force belongs to the subcommand, --data-dir to the tool; split them.

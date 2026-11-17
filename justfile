@@ -100,13 +100,18 @@ build *FLAGS="":
 
 # With autoware-localrepo 1.5.0-3 or later this runs autoware-download-models
 # (ARGS pass through, e.g. `--only lidar_centerpoint`); older installs symlink.
-# Download or link Autoware models into data/autoware_data (writable, for TensorRT)
+# Download or link the selected Autoware's models into data/autoware_data-<ver> (writable, for TensorRT)
 setup-autoware-data *ARGS:
     ./scripts/setup_autoware_data.sh {{ARGS}}
 
 # Engines are specific to the TensorRT version and the GPU: run on the target
-# board, and again after an Autoware or JetPack upgrade. The model set is what
-# perception_preset:=camera_lidar_fusion resolves to; re-derive it with
+# board, and again after an Autoware or JetPack upgrade, for each Autoware
+# version the host runs (GOLFCART_AUTOWARE_VERSION=2.1.0 just build-engines);
+# each version has its own data/autoware_data-<ver> and engines. The model set is
+# what perception_preset:=camera_lidar_fusion resolves to under 1.5.0; under
+# 2.1.0 that preset refuses to start, and lidar_only / minimal run CenterPoint
+# tiny alone, with the traffic-light models for use_traffic_light_recognition.
+# Re-derive it with
 #     play_launch resolve golfcart_launch golfcart.launch.yaml \
 #       launch_perception:=true perception_preset:=camera_lidar_fusion -o /tmp/m.yaml
 # shape_estimation has no build_only argument, so it still builds on first use.
@@ -139,7 +144,16 @@ build-engines:
         echo "    (${pkg}: $((SECONDS - start))s)"
     }
 
-    build autoware_lidar_centerpoint lidar_centerpoint.launch.xml model_name:=centerpoint_tiny
+    # CenterPoint tiny: the model the lidar_only and minimal presets run. The
+    # layout changed in 2.1.0: 1.5.0 selects it by model_name
+    # (lidar_centerpoint/pts_*_centerpoint_tiny.onnx), 2.1.0 by its directory
+    # (lidar_centerpoint/tiny/pts_*.onnx, ml_package.param.yaml beside them; the
+    # launch file has no model_name). The traffic-light launch files take only
+    # data_path in both, with the same file names under it.
+    case "${GOLFCART_AUTOWARE_VERSION}" in
+        1.*) build autoware_lidar_centerpoint lidar_centerpoint.launch.xml model_name:=centerpoint_tiny ;;
+        *)   build autoware_lidar_centerpoint lidar_centerpoint.launch.xml model_path:="${DATA}/lidar_centerpoint/tiny" ;;
+    esac
     build autoware_traffic_light_classifier car_traffic_light_classifier.launch.xml
     build autoware_traffic_light_classifier pedestrian_traffic_light_classifier.launch.xml
     build autoware_traffic_light_fine_detector traffic_light_fine_detector.launch.xml

@@ -87,21 +87,19 @@ def _read(path: str) -> str | None:
 
 
 def autoware_release() -> str | None:
-    """The release under /opt/autoware; with several, the one env.sh sources."""
-    try:
-        versions = sorted(
-            d.name for d in AUTOWARE_ROOT.iterdir()
-            if d.is_dir() and re.fullmatch(r"\d+\.\d+(\.\d+)*", d.name)
-        )
-    except OSError:
+    """The selected Autoware version, if it is installed under /opt/autoware.
+
+    scripts/autoware_version.sh owns the rule (GOLFCART_AUTOWARE_VERSION, then
+    config/autoware-version, then config/runtime.conf); asked in a subshell so
+    a pack is keyed by the version the stack would run, not by whichever
+    version happens to be installed.
+    """
+    out = _run(["bash", "-c",
+                '. "$1" >/dev/null && printf %s "$GOLFCART_AUTOWARE_VERSION"',
+                "_", str(REPO_ROOT / "scripts" / "autoware_version.sh")])
+    if not out or not re.fullmatch(r"\d+\.\d+\.\d+", out):
         return None
-    if len(versions) == 1:
-        return versions[0]
-    env = _read(str(REPO_ROOT / "scripts" / "env.sh")) or ""
-    m = re.search(r"source\s+/opt/autoware/([0-9.]+)/setup\.bash", env)
-    if m and m.group(1) in versions:
-        return m.group(1)
-    return None
+    return out if (AUTOWARE_ROOT / out / "setup.bash").is_file() else None
 
 
 def tensorrt_package() -> str | None:
@@ -497,11 +495,16 @@ def cmd_verify(args, info) -> int:
 
 
 def main(argv=None) -> int:
-    default_data = Path(os.environ.get("GOLFCART_DATA_PATH")
+    # The selected version's data/autoware_data-<ver>, as autoware_version.sh
+    # resolves it (a GOLFCART_DATA_PATH set by hand wins there too).
+    resolved = _run(["bash", "-c", '. "$1" >/dev/null && printf %s "$GOLFCART_DATA_PATH"',
+                     "_", str(REPO_ROOT / "scripts" / "autoware_version.sh")])
+    default_data = Path(resolved or os.environ.get("GOLFCART_DATA_PATH")
                         or REPO_ROOT / "data" / "autoware_data")
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--data-dir", type=Path, default=default_data,
-                    help="Autoware data_path (default: $GOLFCART_DATA_PATH or data/autoware_data)")
+                    help="Autoware data_path (default: the selected version's, "
+                         "data/autoware_data-<ver>)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     for name in ("key", "save", "list", "verify"):
         sub.add_parser(name)
