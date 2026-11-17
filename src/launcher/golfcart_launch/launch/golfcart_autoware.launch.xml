@@ -64,7 +64,11 @@
   <arg name="use_detection_by_tracker" default="false"/>
   <arg name="use_image_segmentation_based_filter" default="false"/>
   <arg name="use_pointcloud_map" default="true"/>
-  <arg name="lidar_detection_model" default="centerpoint" description="type/name, e.g. centerpoint/centerpoint_tiny; a bare type takes perception.launch.xml's default name"/>
+  <!-- centerpoint_tiny spelled out: a bare "centerpoint" meant centerpoint_tiny
+       on 1.5.0 but means the base model on 2.1.0 (lidar_dnn_detector maps it to
+       lidar_centerpoint/base). The logging sims include this file without a
+       perception preset, so this default is what they run. -->
+  <arg name="lidar_detection_model" default="centerpoint/centerpoint_tiny" description="type/name, e.g. centerpoint/centerpoint_tiny; a bare type takes the detector's default name, which is the base model on 2.1.0"/>
   <arg name="use_lidar_rule_detector" default="true" description="lidar mode: also run the clustering detector"/>
   <arg name="use_perception_analytics_publisher" default="true"/>
   <!-- Sensor kit choices, passed by name to our tier4_sensing_component copy.
