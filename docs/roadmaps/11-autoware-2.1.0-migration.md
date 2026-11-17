@@ -384,10 +384,51 @@ Next:
      was set for. Not yet done: re-check the gate on a cart session with
      IMU and velocity (`master_20261028_192241`, whose healthy median was
      2.53), and regenerate the comparison ground truth under 2.1.0.
-9. **Setup and units**: `install-autoware-debian.sh` per version; the
-   `autoware-data`, `tensorrt-engines` and `rviz-theme` steps;
-   `just up` carrying the version to both hosts and refusing a mismatch;
-   `args.py` passing `data_path`.
+9. **Setup and units**: done 2026-11-17 on `autoware-2.1.0`.
+   - `versions.yaml` is the catalogue (release, suffix, deb and GitHub
+     sha256 for ubuntu2204 and jetpack62): 1.5.0 → 1.5.0-3, 2.1.0 → 2.1.0-1.
+     `setup/golfcart_setup/autoware.py` reads it with a stdlib parser.
+     `export-versions.sh` is gone.
+   - `install-autoware-debian.sh [VER] [--dry-run] [--force] [--reinstall]`
+     installs that release, compares the installed localrepo on its
+     revision (1.5.0-1 is "older": it needs `--reinstall`, which runs the
+     version's own `uninstall-autoware.sh -y` after the new localrepo deb),
+     runs `/usr/share/autoware/<ver>/setup-prerequisites.sh
+     --non-interactive`, and refuses an apt plan that removes another
+     version's packages. The newslab-ros-config overwrite is dropped.
+   - The `autoware-debian`, `autoware-data`, `tensorrt-engines` and
+     `rviz-theme` steps carry the version in their argv (digests follow it);
+     `GOLFCART_AUTOWARE_VERSION=2.1.0 ./setup.sh ...` selects it.
+   - Data: `data/autoware_data-<ver>`, filled by that version's downloader.
+     The old `data/autoware_data` is renamed to `-1.5.0` and left as a
+     relative symlink (done on the workstation). `args.py` prepends
+     `data_path:=` unless given one; the launch defaults read
+     `GOLFCART_DATA_PATH`. 2.1.0's 2.4 GB of models are on the workstation.
+   - Engines: `engines.py` keys on the selected version; `build-engines`
+     uses `lidar_centerpoint/tiny/` under 2.1.0 (CenterPoint tiny built on
+     the workstation in 46 s; traffic-light models not built).
+   - `just up` checks both hosts with `version_check.sh` and refuses before
+     starting anything; the version reaches each unit in
+     `.golfcart-launch.env`. `host-status` and `doctor` print it;
+     `ensure.sh` stops a ros2 daemon from another version. RViz theme: one
+     stylesheet per version.
+   - Resolve, play_launch 0.37.0, 2.1.0, both parsers: perception on now
+     resolves (`lidar_only` and `minimal`), and so does
+     `logging_simulation.launch.yaml`. Rust drops three nodes there: it does
+     not know 2.1.0's `<autoware_node>` action (`Unsupported action type`),
+     so the crop box, ground filter and detection downsample filter are
+     missing (Rust 133 / Python 136, `minimal` 133 / 135, logging sim
+     122 / 125). That is a play_launch issue to file.
+
+   Left: `cuda_ndt_matcher` (`justfile`, `.envrc`, `activate_autoware.sh`)
+   and `rig_localization` (`test_launch.py`, `test_replay_launch.py`) still
+   name 1.5.0; they are submodules and change on their own branches. The
+   launch paths that bypass `args.py` (`indoor_sim_up.sh`,
+   `ntu_sim_run.sh`, `ntu-test up`, `link_sim`, `board_check.sh`,
+   `bag_replay`, `tool board`) get `data_path` from `GOLFCART_DATA_PATH`
+   via the launch defaults. Hosts: 1.5.0-1 → 1.5.0-3 needs
+   `install-autoware-debian.sh 1.5.0 --reinstall` (sudo) on both, then
+   2.1.0, then `setup_autoware_data.sh` and `just build` per version.
 10. **Validation**: planning simulator on the Ming-Da and NTU maps; NTU
     logging replay against the 1.5.0 scores.
 11. **Hosts**: master then orin, same version on both; engines rebuilt; a
