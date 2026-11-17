@@ -31,7 +31,7 @@ same() {   # same FILE.pcd.zst FILE.pcd -> 0 if the .zst decompresses to the .pc
 
 human() { numfmt --to=iec --suffix=B "$1" 2>/dev/null || echo "${1}B"; }
 
-all_zst() { find data -name '*.pcd.zst' -not -path 'data/autoware_data/*' | sort; }
+all_zst() { find data -name '*.pcd.zst' -not -path 'data/autoware_data/*' -not -path 'data/autoware_data-*/*' | sort; }
 
 cmd_unpack() {
     need_zstd

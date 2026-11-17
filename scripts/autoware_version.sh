@@ -21,7 +21,8 @@
 #   GOLFCART_AUTOWARE_SUFFIX   the apt package suffix, e.g. 2-1-0
 #   GOLFCART_BUILD_DIR         <repo>/build-<ver>
 #   GOLFCART_INSTALL_DIR       <repo>/install-<ver>
-#   GOLFCART_DATA_PATH         <repo>/data/autoware_data-<ver> (kept if set)
+#   GOLFCART_DATA_PATH         <repo>/data/autoware_data-<ver> (kept if set by
+#                              hand; re-derived if derived for another version)
 #
 # The old single build/ and install/ are never used: a host that pulls this
 # runs `just build` once (sourcing the old install/ as an overlay while
@@ -29,6 +30,8 @@
 # removes the old directories. Only the model data falls back:
 # data/autoware_data serves 1.5.0 until data/autoware_data-1.5.0 exists, since
 # it holds downloaded models and TensorRT engines, not build output.
+# scripts/setup_autoware_data.sh (setup step autoware-data) moves it to
+# data/autoware_data-1.5.0 and leaves data/autoware_data as a symlink to it.
 golfcart_resolve_autoware_version() {
     local root="${GOLFCART_REPO_ROOT}" v=""
     if [ -z "${GOLFCART_AUTOWARE_VERSION:-}" ] && [ -f "${root}/config/autoware-version" ]; then
@@ -50,11 +53,20 @@ golfcart_resolve_autoware_version() {
     GOLFCART_AUTOWARE_SUFFIX="${ver//./-}"
     GOLFCART_BUILD_DIR="${root}/build-${ver}"
     GOLFCART_INSTALL_DIR="${root}/install-${ver}"
+    # A GOLFCART_DATA_PATH this function derived carries GOLFCART_DATA_PATH_FOR,
+    # the version it was derived for, so a shell that re-resolves under another
+    # version re-derives it instead of keeping the other version's models. One
+    # set by hand (no _FOR) is kept whatever the version.
+    if [ -n "${GOLFCART_DATA_PATH_FOR:-}" ] && [ "${GOLFCART_DATA_PATH_FOR}" != "${ver}" ]; then
+        unset GOLFCART_DATA_PATH
+    fi
     if [ -z "${GOLFCART_DATA_PATH:-}" ]; then
         GOLFCART_DATA_PATH="${root}/data/autoware_data-${ver}"
         if [ "${ver}" = 1.5.0 ] && [ ! -d "${GOLFCART_DATA_PATH}" ] && [ -d "${root}/data/autoware_data" ]; then
             GOLFCART_DATA_PATH="${root}/data/autoware_data"
         fi
+        GOLFCART_DATA_PATH_FOR="${ver}"
+        export GOLFCART_DATA_PATH_FOR
     fi
     export GOLFCART_AUTOWARE_VERSION GOLFCART_AUTOWARE_PREFIX GOLFCART_AUTOWARE_SUFFIX \
            GOLFCART_BUILD_DIR GOLFCART_INSTALL_DIR GOLFCART_DATA_PATH
