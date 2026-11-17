@@ -15,8 +15,16 @@ CFG="${1:?usage: rviz.sh CONFIG.rviz [args]}"; shift
 AW="${AUTOWARE_ROOT:-${GOLFCART_AUTOWARE_PREFIX}}"
 SPLASH="$AW/share/autoware_launch/rviz/image/autoware.png"
 export QT_QPA_PLATFORMTHEME=qt5ct
-[[ -f "${XDG_CONFIG_HOME:-$HOME/.config}/qt5ct/qt5ct.conf" ]] \
-    || echo "rviz.sh: no ~/.config/qt5ct/qt5ct.conf; for the Autoware theme run scripts/rviz/install_theme.sh" >&2
+QT5CT_CONF="${XDG_CONFIG_HOME:-$HOME/.config}/qt5ct/qt5ct.conf"
+if [[ ! -f "$QT5CT_CONF" ]]; then
+    echo "rviz.sh: no ~/.config/qt5ct/qt5ct.conf; for the Autoware theme run scripts/rviz/install_theme.sh" >&2
+elif grep -q '/qt5ct/qss/autoware' "$QT5CT_CONF" \
+     && ! grep -q "/qt5ct/qss/autoware-${GOLFCART_AUTOWARE_VERSION}.qss" "$QT5CT_CONF"; then
+    # Ours, written for another Autoware version: switch it to this one's
+    # stylesheet (its icons live under this version's prefix).
+    "$(dirname "${BASH_SOURCE[0]}")/install_theme.sh" >/dev/null \
+        || echo "rviz.sh: could not switch the theme to Autoware ${GOLFCART_AUTOWARE_VERSION}" >&2
+fi
 if [[ -f "$SPLASH" ]]; then
     exec rviz2 -d "$CFG" -s "$SPLASH" "$@"
 fi
