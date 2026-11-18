@@ -23,8 +23,10 @@ ros:
 
 # One entry per supported Autoware version, keyed X.Y.Z.
 #
-#   release   the NEWSLabNTU/autoware-localrepo GitHub release tag, which is
-#             also the localrepo deb's Debian revision (<release><platform>)
+#   release   the NEWSLabNTU/autoware-localrepo GitHub release tag. From
+#             1.5.0-humble-4 the tag names the ROS distro and the deb's
+#             Debian version leaves it out (1.5.0-4ubuntu2204); older tags
+#             (2.1.0-1) are the revision as they stand
 #   suffix    the apt package suffix: autoware-full-<suffix>,
 #             autoware-localrepo-<suffix>, /usr/bin/*-<suffix>
 #   platforms one deb per platform this project installs on:
@@ -40,20 +42,22 @@ ros:
 # 1.5.0-1 is not listed and not supported: it installs unsuffixed files
 # (/usr/bin/apply-autoware-theme, 10-cyclone-max.conf, multicast-lo.service)
 # that collide with any second version. 1.5.0-3 and later suffix them.
+# 1.5.0-3 is broken (diagnostic_updater links missing, CUDA runtime not
+# installed); 1.5.0-humble-4 fixes both.
 # 2.1.0's Jazzy release (2.1.0-jazzy-1) is not for this project, which stays
 # on Humble.
 autoware:
   "1.5.0":
-    release: "1.5.0-3"
+    release: "1.5.0-humble-4"
     suffix: "1-5-0"
     universe: "0.48.0"
     platforms:
       ubuntu2204:
-        deb: "autoware-localrepo-1-5-0_1.5.0-3ubuntu2204_all.deb"
-        sha256: "e2c951d6dfe1a84622c5c909ec4693f4af9f41422b61cba28e244f0d03c872cb"
+        deb: "autoware-localrepo-1-5-0_1.5.0-4ubuntu2204_all.deb"
+        sha256: "a6ad95d19f6a886cef8405911ef6d63ccf58245b3b53b9931312c925504253eb"
       jetpack62:
-        deb: "autoware-localrepo-1-5-0_1.5.0-3jetpack62_all.deb"
-        sha256: "342668ee21cfb1bc9751ecd1faf3504e6614fc31d67a2c62df0dabcfacf10951"
+        deb: "autoware-localrepo-1-5-0_1.5.0-4jetpack62_all.deb"
+        sha256: "ecfe50370a7612322e9f3f617617d6cf2d8826fa4a9e660f0ecf285ef8838fe4"
   "2.1.0":
     release: "2.1.0-1"
     suffix: "2-1-0"

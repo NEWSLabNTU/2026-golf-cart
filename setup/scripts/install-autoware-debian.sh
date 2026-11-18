@@ -45,7 +45,7 @@ done
 
 CATALOGUE_OUT=$(python3 "${REPO_ROOT}/setup/golfcart_setup/autoware.py" shell ${VERSION:+"$VERSION"}) \
     || exit 2
-# AW_VERSION AW_RELEASE AW_SUFFIX AW_PLATFORM AW_DEB AW_SHA256 AW_URL
+# AW_VERSION AW_RELEASE AW_DEB_RELEASE AW_SUFFIX AW_PLATFORM AW_DEB AW_SHA256 AW_URL
 # AW_LOCALREPO_PACKAGE AW_LOCALREPO_VERSION, all shell-quoted by autoware.py.
 eval "${CATALOGUE_OUT}"
 
@@ -70,14 +70,15 @@ INSTALLED_FULL=$(pkg_version "${FULL_PACKAGE}")
 # What is there now, compared on the whole Debian version: the revision is
 # what tells 1.5.0-1 from 1.5.0-3, whose packages are otherwise identical in
 # name and version.
-# The deb's Version is <release><platform> (1.5.0-3ubuntu2204): compare the
-# release part, and say so when the platform part differs.
+# The deb's Version is <deb release><platform> (1.5.0-4ubuntu2204, from the
+# tag 1.5.0-humble-4): compare the release part, and say so when the platform
+# part differs. AW_RELEASE is the tag, which names the ROS distro.
 LOCALREPO_STATE=absent
 if [ -n "${INSTALLED_LOCALREPO}" ]; then
     INSTALLED_RELEASE=$(sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+-[0-9]+).*/\1/' <<<"${INSTALLED_LOCALREPO}")
-    if dpkg --compare-versions "${INSTALLED_RELEASE}" eq "${AW_RELEASE}"; then
+    if dpkg --compare-versions "${INSTALLED_RELEASE}" eq "${AW_DEB_RELEASE}"; then
         LOCALREPO_STATE=current
-    elif dpkg --compare-versions "${INSTALLED_RELEASE}" gt "${AW_RELEASE}"; then
+    elif dpkg --compare-versions "${INSTALLED_RELEASE}" gt "${AW_DEB_RELEASE}"; then
         LOCALREPO_STATE=newer
     else
         LOCALREPO_STATE=older

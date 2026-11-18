@@ -106,7 +106,7 @@ def parse(text: str, name: str = "versions.yaml") -> dict:
 @dataclass(frozen=True)
 class Release:
     version: str        # 2.1.0
-    release: str        # 2.1.0-1, the GitHub tag and the deb's revision
+    release: str        # 1.5.0-humble-4 or 2.1.0-1, the GitHub tag
     suffix: str         # 2-1-0
     platform: str       # ubuntu2204 | jetpack62
     deb: str
@@ -121,13 +121,24 @@ class Release:
         return f"autoware-localrepo-{self.suffix}"
 
     @property
+    def deb_release(self) -> str:
+        """The deb's <version>-<revision>: the tag without its ROS distro.
+
+        Tags name the distro from 1.5.0-humble-4 on; the Debian revision does
+        not (1.5.0-humble-4 ships 1.5.0-4ubuntu2204). Older tags (2.1.0-1) are
+        already the revision.
+        """
+        return re.sub(r"-(humble|jazzy)-(?=[0-9]+$)", "-", self.release)
+
+    @property
     def localrepo_deb_version(self) -> str:
-        """The Version: field of the localrepo deb, e.g. 2.1.0-1jetpack62."""
-        return f"{self.release}{self.platform}"
+        """The Version: field of the localrepo deb, e.g. 1.5.0-4jetpack62."""
+        return f"{self.deb_release}{self.platform}"
 
     def shell(self) -> str:
         pairs = {
             "AW_VERSION": self.version, "AW_RELEASE": self.release,
+            "AW_DEB_RELEASE": self.deb_release,
             "AW_SUFFIX": self.suffix, "AW_PLATFORM": self.platform,
             "AW_DEB": self.deb, "AW_SHA256": self.sha256, "AW_URL": self.url,
             "AW_LOCALREPO_PACKAGE": self.localrepo_package,

@@ -66,13 +66,13 @@ class CatalogueTest(unittest.TestCase):
                 r = autoware.release(ver, plat)
                 self.assertEqual(r.suffix, ver.replace(".", "-"))
                 self.assertTrue(r.release.startswith(ver + "-"))
-                self.assertEqual(r.deb, f"autoware-localrepo-{r.suffix}_{r.release}{plat}_all.deb")
+                self.assertEqual(r.deb, f"autoware-localrepo-{r.suffix}_{r.deb_release}{plat}_all.deb")
                 self.assertRegex(r.sha256, r"^[0-9a-f]{64}$")
                 self.assertTrue(r.url.endswith(f"/{r.release}/{r.deb}"))
 
     def test_releases_are_the_supported_ones(self) -> None:
         # 1.5.0-1 collides with any second version; 2.1.0 is Humble, not Jazzy.
-        self.assertEqual(autoware.release("1.5.0", "ubuntu2204").release, "1.5.0-3")
+        self.assertEqual(autoware.release("1.5.0", "ubuntu2204").release, "1.5.0-humble-4")
         self.assertEqual(autoware.release("2.1.0", "jetpack62").release, "2.1.0-1")
 
     def test_unknown_version_and_platform(self) -> None:
@@ -96,6 +96,16 @@ class CatalogueTest(unittest.TestCase):
         ver, url = env.split("|")
         self.assertEqual(ver, "2.1.0-1jetpack62")
         self.assertIn("/releases/download/2.1.0-1/", url)
+
+    def test_distro_tag_is_not_the_deb_revision(self) -> None:
+        r = autoware.release("1.5.0", "jetpack62")
+        self.assertEqual(r.release, "1.5.0-humble-4")
+        self.assertEqual(r.deb_release, "1.5.0-4")
+        self.assertEqual(r.localrepo_deb_version, "1.5.0-4jetpack62")
+        self.assertIn("/releases/download/1.5.0-humble-4/", r.url)
+        env = subprocess.run(["bash", "-c", r.shell() + 'printf "%s" "$AW_DEB_RELEASE"'],
+                             capture_output=True, text=True, check=True).stdout
+        self.assertEqual(env, "1.5.0-4")
 
 
 class SelectedVersionTest(unittest.TestCase):
@@ -167,7 +177,7 @@ class InstallScriptDryRunTest(unittest.TestCase):
         self.assertEqual(res.returncode, 0, res.stderr)
         self.assertIn("Autoware 2.1.0: localrepo 2.1.0-1", res.stdout)
         res = self.run_script("--dry-run", version="1.5.0")
-        self.assertIn("Autoware 1.5.0: localrepo 1.5.0-3", res.stdout)
+        self.assertIn("Autoware 1.5.0: localrepo 1.5.0-humble-4", res.stdout)
 
     def test_older_revision_is_seen_and_needs_reinstall(self) -> None:
         pkgs = "autoware-localrepo-1-5-0=1.5.0-1ubuntu2204 autoware-full-1-5-0=1.5.0-1"
