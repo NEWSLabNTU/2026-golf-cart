@@ -43,21 +43,22 @@ ros:
 # (/usr/bin/apply-autoware-theme, 10-cyclone-max.conf, multicast-lo.service)
 # that collide with any second version. 1.5.0-3 and later suffix them.
 # 1.5.0-3 is broken (diagnostic_updater links missing, CUDA runtime not
-# installed); 1.5.0-humble-4 fixes both.
+# installed); 1.5.0-humble-4 fixes both, and 1.5.0-humble-5 versions its ROS
+# packages 0.48.0-5jammy so apt upgrade replaces 1.5.0-3's.
 # 2.1.0's Jazzy release (2.1.0-jazzy-1) is not for this project, which stays
 # on Humble.
 autoware:
   "1.5.0":
-    release: "1.5.0-humble-4"
+    release: "1.5.0-humble-5"
     suffix: "1-5-0"
     universe: "0.48.0"
     platforms:
       ubuntu2204:
-        deb: "autoware-localrepo-1-5-0_1.5.0-4ubuntu2204_all.deb"
-        sha256: "a6ad95d19f6a886cef8405911ef6d63ccf58245b3b53b9931312c925504253eb"
+        deb: "autoware-localrepo-1-5-0_1.5.0-5ubuntu2204_all.deb"
+        sha256: "600edc3de55d143dd1e258554e3a8734b657b36b349e458b3511e3642c17fdad"
       jetpack62:
-        deb: "autoware-localrepo-1-5-0_1.5.0-4jetpack62_all.deb"
-        sha256: "ecfe50370a7612322e9f3f617617d6cf2d8826fa4a9e660f0ecf285ef8838fe4"
+        deb: "autoware-localrepo-1-5-0_1.5.0-5jetpack62_all.deb"
+        sha256: "3d6a6cfc5bad73409c2914474e75fdf270e45db76518ea2cd2eb8c0b510032a8"
   "2.1.0":
     release: "2.1.0-1"
     suffix: "2-1-0"
