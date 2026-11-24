@@ -483,3 +483,28 @@ The rest of the matrix is unchanged. 1.5.0 with `main`'s launch layer
 resolves as in step 10 (`@ntu-r01` 146, `@mingda-loop` 147). A tag that is
 not a ROS 2 launch action is now an error rather than a skipped warning;
 nothing in either layer hits it.
+
+## Planned 2.1.0 features (deferred)
+
+New in 2.1.0 and worth adopting later, after the hosts run 2.1.0 (step 11).
+Not started.
+
+### CUDA ground segmentation
+
+- **What:** `autoware_ground_segmentation_cuda`, the scan ground filter on
+  the GPU. Upstream selects it with `use_cuda_ground_segmentation:=true` in
+  `component_perception.launch.xml` (default `false`), which sets
+  `ground_segmentation_backend` to `rule_based_cuda` and includes
+  `autoware_perception_launch/launch/obstacle_segmentation/ground_segmentation_rule_based_cuda.launch.xml`.
+  Parameters: `autoware_ground_segmentation_cuda/config/cuda_scan_ground_segmentation_filter.param.yaml`.
+- **Why:** it moves the last CPU-heavy stage between our CUDA
+  preprocessing/concatenation and the detectors onto the GPU. The Orins are
+  short on CPU, not GPU.
+- **Why deferred:** it matters only with perception on, and the cart drives
+  with `launch_perception:=false`. It waits for real perception on the cart.
+- **To do:** pass the argument through our `component_perception` copy
+  (likely from the perception presets, `lidar_only` and `minimal`); check
+  whether the CUDA filter takes the concatenated cloud over
+  `cuda_blackboard` from our `pointcloud_backend:=cuda` chain or needs a
+  host copy; compare against the CPU filter on the Ming-Da replay (obstacle
+  cloud, CPU per core, latency) before making it a default.
