@@ -1,8 +1,9 @@
 /**:
   ros__parameters:
-    input_frame: "base_link"
-    output_frame: "base_link"
-    # +-60 m, the Autoware default, restored after measuring against +-20 m.
+    input_frame: base_link
+    output_frame: base_link
+
+    # +-60 m, the Autoware default, kept after measuring against +-20 m.
     #
     # The +-20 m inherited from AutoSDV threw away most of the geometry NDT had
     # to work with: our VLP-32C returns reach ~29 m, so the box was clipping real
@@ -16,13 +17,12 @@
     # p95 falls by 72%: the worst-fitting points are the ones that gain most,
     # which is what more distant structure is for.
     min_x: -60.0
-    max_x: 60.0
     min_y: -60.0
+    # Golf cart: z cut from the LiDAR mount height. A negative value keeps
+    # ground points; a positive one drops the ground for vertical structure.
+    min_z: -1.0 # {OVERRIDE: golf cart LiDAR mount height}
+    max_x: 60.0
     max_y: 60.0
-    # Golf Cart: Z-axis filtering based on LiDAR mount height
-    # Negative values include ground points
-    # Positive values filter ground, focusing on vertical structures
-    min_z: -1.0
     max_z: 50.0
-    negative: False
+    negative: false
     processing_time_threshold_sec: 0.01

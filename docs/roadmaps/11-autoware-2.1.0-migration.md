@@ -339,8 +339,14 @@ Next:
      `minimal`. On 2.1.0 the tracker reads the clustering detector as its own
      channel, the only source of unknown-class objects (a box, a trolley).
    - The yabloc/eagleye fallback runs on `autoware_localization_config`'s
-     parameters: `component_localization` takes no paths. A golfcart
-     localization config package would restore ours.
+     parameters: `component_localization` takes no paths. **Done
+     2026-11-24:** `golfcart_localization_config` is a whole copy of
+     `autoware_localization_config` 2.1.0 with our four NDT changes marked
+     `{OVERRIDE}`, passed as `localization_config_pkg`; our cuda_ndt, ndt
+     and aruco paths read the same files. The other 17 files we carried
+     held upstream's values already, so yabloc and eagleye resolve to the
+     same parameters as before; the gap was in where the files came from,
+     not in a value. `test_matches_upstream.py` pins it to upstream.
    - `data_path` still defaults to 1.5.0's `./data/autoware_data`; under the
      Python parser a perception launch stops on the missing 2.1.0 model files
      (step 9). The Rust parser only warns and resolves on: play_launch #0089.

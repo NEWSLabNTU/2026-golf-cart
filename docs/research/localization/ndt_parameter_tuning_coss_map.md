@@ -536,7 +536,9 @@ The key insights were:
 
 ---
 
-**Files Modified:**
+**Files Modified** (since 2026-11-24 in
+`src/launcher/golfcart_localization_config/config/ndt_scan_matcher/`, the same
+file names):
 - `src/launcher/golfcart_launch/config/localization/ndt_scan_matcher/ndt_scan_matcher.param.yaml`
 - `src/launcher/golfcart_launch/config/localization/ndt_scan_matcher/pointcloud_preprocessor/voxel_grid_filter.param.yaml`
 - `src/launcher/golfcart_launch/config/localization/ndt_scan_matcher/pointcloud_preprocessor/random_downsample_filter.param.yaml`

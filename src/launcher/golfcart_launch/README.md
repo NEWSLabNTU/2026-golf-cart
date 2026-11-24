@@ -13,7 +13,7 @@ golfcart_launch/
 │   ├── planning.launch.xml          # Path and motion planning
 │   └── ...
 ├── config/             # Autoware configuration files
-│   ├── localization/   # NDT, EKF parameters
+│   ├── localization/   # ArUco, reflective board, rigloc, presets
 │   ├── system/         # Diagnostics, MRM configuration
 │   ├── planning/       # Planning parameters
 │   ├── perception/     # Perception parameters
@@ -32,29 +32,17 @@ Date copied: 2025-12-28
 
 All configuration files are in the `config/` directory. Below are Golf Cart-specific modifications from the Autoware defaults.
 
-### Localization (config/localization/)
+### Localization
 
-- **ekf_localizer.param.yaml**: Tuned for AR Tag + Isaac VSLAM sensor fusion
-  - Custom process noise parameters for better fusion
-  - Pose smoothing for AR tag corrections
-  - Optimized for indoor/GPS-denied environments
-  - Last modified: 2025-12-25
+Autoware's localization parameters (EKF, NDT and its preprocessing, pose
+initializer, yabloc, eagleye, ...) are not here: they are the
+[golfcart_localization_config](../golfcart_localization_config/README.md)
+package, a whole copy of Autoware 2.1.0's `autoware_localization_config` with
+our changes marked, passed to upstream as `localization_config_pkg`.
 
-- **ndt_scan_matcher/ndt_scan_matcher.param.yaml**: Tuned for low-mounted LiDAR (30cm height)
-  - Ground removal enabled (`no_ground_points.enable: true`)
-  - Z-margin set to 0.2m for balanced ground filtering (empirically tuned)
-  - Finer resolution (1.5m vs 2.0m default) for better yaw estimation
-  - Increased max iterations (50 vs 30) for convergence
-  - Lowered score threshold (1.8 vs 2.3) to allow more poses through
-  - **Tuning history**: 0.4m (too permissive) → 0.0m (too aggressive, 2.5k pts) → 0.2m (balanced)
-  - Last modified: 2025-12-28
-
-- **ndt_scan_matcher/pointcloud_preprocessor/crop_box_filter_measurement_range.param.yaml**: Tuned for low-mounted LiDAR
-  - Balanced Z-range filtering (min: -0.25m, max: 10.0m)
-  - Ground points at ~-0.3m, keeping points above -0.25m ensures sufficient points
-  - **Tuning history**: -0.5m (too permissive) → -0.1m (too aggressive) → -0.25m (balanced)
-  - Target: >5000 points/scan for reliable NDT convergence
-  - Last modified: 2025-12-28
+`config/localization/` keeps only what is ours alone: the ArUco detector and
+localizer, the reflective board (`reflective_pose/`), rig_localization
+(`rigloc/`) and the localization presets (`preset/`).
 
 ### System Diagnostics & MRM (config/system/)
 

@@ -1,7 +1,12 @@
 <?xml version="1.0"?>
 <launch>
-  <!-- Golf Cart: Use golfcart_launch config instead of autoware_launch -->
-  <arg name="loc_config_path" default="$(find-pkg-share golfcart_launch)/config/localization"/>
+  <!-- Our localization parameters: golfcart_localization_config, a whole copy
+       of autoware_localization_config with marked overrides. Upstream's
+       component reads it by package name (localization_config_pkg); our own
+       cuda_ndt, ndt and aruco paths read the same files by directory
+       (loc_config_path). Keep the two pointing at the same package. -->
+  <arg name="localization_config_pkg" default="golfcart_localization_config"/>
+  <arg name="loc_config_path" default="$(find-pkg-share $(var localization_config_pkg))/config"/>
   <arg name="pose_source" default="ndt" description="select pose_estimator: aruco, ndt, cuda_ndt, yabloc, eagleye"/>
   <arg name="aruco_tag_map_path" default="" description="hand-surveyed board map; required when pose_source:=aruco"/>
   <arg name="twist_source" default="gyro_odom" description="select twist_estimator: gyro_odom, eagleye, rigloc"/>
@@ -139,15 +144,11 @@
   <!-- Standard Autoware localization stack (yabloc, eagleye)
 
        2.1.0's component_localization takes no parameter paths: every unit
-       launcher reads its files from localization_config_pkg's config/ tree.
-       loc_config_path is a directory of our own files, not a package with that
-       layout, so on this path the stack runs on autoware_localization_config's
-       parameters (EKF, pose initializer, yabloc, eagleye included). The
-       cuda_ndt and ndt paths above pass ours explicitly and are unaffected.
-       Roadmap 11 lists this as an open item: a golfcart localization config
-       package would bring our files back here. -->
+       launcher reads its files from localization_config_pkg's config/ tree,
+       which is why our parameters are a package with that layout. -->
   <group if="$(eval '\'$(var pose_source)\' not in [\'cuda_ndt\', \'aruco\', \'ndt\']')">
     <include file="$(find-pkg-share autoware_launch)/launch/components/component_localization.launch.xml">
+      <arg name="localization_config_pkg" value="$(var localization_config_pkg)"/>
       <arg name="pose_source" value="$(var pose_source)"/>
       <arg name="twist_source" value="$(var twist_source)"/>
       <arg name="gnss_enabled" value="$(var gnss_enabled)"/>

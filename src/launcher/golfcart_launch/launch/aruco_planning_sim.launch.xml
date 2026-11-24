@@ -32,7 +32,7 @@
        default="$(find-pkg-share aruco_sim_detector)/config/sample_map_tag_map.yaml"
        description="must match the map: the boards are placed along its lanes"/>
   <arg name="loc_config_path"
-       default="$(find-pkg-share golfcart_launch)/config/localization"/>
+       default="$(find-pkg-share golfcart_localization_config)/config"/>
   <arg name="corner_sigma_px" default="0.3"/>
   <arg name="rviz" default="false"/>
 

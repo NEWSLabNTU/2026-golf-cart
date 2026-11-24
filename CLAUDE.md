@@ -164,6 +164,9 @@ colcon build --base-paths src --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=
 - **src/launcher/golfcart_launch/** - Main launch configurations
   - Main launch file: `golfcart.launch.yaml`; per-site arg files in `config/launch/`
   - play_launch's web UI is at http://<host>:8081 under `just run`/`just up`
+- **src/launcher/golfcart_localization_config/** - Autoware's whole localization config
+  tree (2.1.0) with our changes marked `{OVERRIDE}`; passed as `localization_config_pkg`
+  and pinned to upstream by its test. Edit localization parameters there, not in golfcart_launch
 - **src/param/autoware_individual_params/** - Parameter configurations for different sensor kits
 - **src/sensor_kit/golfcart_sensor_kit_launch/** - Sensor integration and launch files
 - **src/vehicle/golfcart_vehicle_launch/** - Vehicle interface and description

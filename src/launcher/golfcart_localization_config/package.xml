@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>golfcart_localization_config</name>
+  <version>0.0.0</version>
+  <description>
+    The golf cart's localization parameters, as a whole copy of Autoware 2.1.0's
+    autoware_localization_config tree. Passed as localization_config_pkg, it
+    replaces every localization parameter file at once.
+  </description>
+  <maintainer email="jerry73204@gmail.com">aeon</maintainer>
+  <license>Apache License 2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>ament_index_python</test_depend>
+  <test_depend>autoware_localization_config</test_depend>
+  <test_depend>python3-pytest</test_depend>
+  <test_depend>python3-yaml</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

@@ -72,7 +72,7 @@ IMU and the vehicle interface, so no image crosses the link. Only its twist does
 - No twist for the first ~10-25 s while the localizer initialises: the EKF reports ERROR until
   the first one.
 
-**EKF**: the shared `config/localization/ekf_localizer.param.yaml`, as every other preset.
+**EKF**: the shared `ekf_localizer.param.yaml` in golfcart_localization_config, as every other preset.
 rig_localization publishes one twist per IMU sample (100 Hz, `fast_twist`, on by default since
 rig_localization f171586), so the EKF needs no tuning of its own; the 10 Hz keyframe twist, 0.27 s
 late, used to need lower process noise.

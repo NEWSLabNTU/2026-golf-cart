@@ -8,6 +8,10 @@
 -->
 <launch>
   <arg name="loc_config_path"/>
+  <!-- Ours alone, not part of Autoware's localization tree, so it stays in
+       golfcart_launch rather than in loc_config_path. -->
+  <arg name="aruco_localizer_param_file"
+       default="$(find-pkg-share golfcart_launch)/config/localization/aruco_localizer.param.yaml"/>
   <arg name="aruco_tag_map_path"/>
   <arg name="twist_source" default="gyro_odom"/>
   <!-- The camera set is fixed here by the three remaps below and by
@@ -108,7 +112,7 @@
 
       <node pkg="golfcart_aruco_localizer" exec="aruco_localizer_node"
             name="aruco_localizer" output="screen">
-        <param from="$(var loc_config_path)/aruco_localizer.param.yaml"/>
+        <param from="$(var aruco_localizer_param_file)"/>
         <param name="tag_map_path" value="$(var aruco_tag_map_path)"/>
 
         <remap from="~/input/detections/left"
