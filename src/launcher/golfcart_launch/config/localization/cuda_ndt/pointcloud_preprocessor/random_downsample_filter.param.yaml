@@ -1,0 +1,11 @@
+# Golf cart, pose_source:=cuda_ndt only: the NDT input chain's point budget.
+# cuda_ndt_matcher_launch ships Autoware's defaults (1500 points, 3.0 m
+# voxels); these are the values the cart has run cuda_ndt with, kept here when
+# the package moved to stock (2026-11-27). pose_source:=ndt reads the
+# different budget in golfcart_localization_config (2000 points, z from -1.0).
+# The Ming-Da divergence gate (ndt_divergence_nvtl_median_gate 2.1) was
+# derived on this input: NVTL is a mean per-point likelihood and moves with
+# the sampling, so re-derive it if these change.
+/**:
+  ros__parameters:
+    sample_num: 5000

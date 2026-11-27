@@ -24,10 +24,19 @@
   <arg name="localization_pointcloud_backend" default="cpu" description="cpu or cuda: which hardware runs the NDT input preprocessing chain"/>
 
   <!-- Config paths (default to autoware_launch config) -->
-  <arg name="localization_config_path" default="$(find-pkg-share autoware_localization_config)/config"/>
+  <arg name="localization_config_path" default="$(find-pkg-share golfcart_localization_config)/config"/>
 
-  <!-- NDT parameters -->
-  <arg name="ndt_param_file" default="$(find-pkg-share cuda_ndt_matcher_launch)/config/cuda_scan_matcher.param.yaml"/>
+  <!-- NDT parameters: ours, in Autoware's layout (cuda_ndt reads the same keys).
+       cuda_ndt_matcher_launch's own file carries Autoware's defaults only. -->
+  <arg name="ndt_param_file" default="$(var localization_config_path)/ndt_scan_matcher/ndt_scan_matcher.param.yaml"/>
+  <!-- The input chain's point budget for cuda_ndt: the values the cart has
+       run it with, in golfcart_launch (see the files' header). -->
+  <arg name="cuda_ndt_crop_box_filter_measurement_range_param_path"
+       default="$(find-pkg-share golfcart_launch)/config/localization/cuda_ndt/pointcloud_preprocessor/crop_box_filter_measurement_range.param.yaml"/>
+  <arg name="cuda_ndt_voxel_grid_downsample_filter_param_path"
+       default="$(find-pkg-share golfcart_launch)/config/localization/cuda_ndt/pointcloud_preprocessor/voxel_grid_filter.param.yaml"/>
+  <arg name="cuda_ndt_random_downsample_filter_param_path"
+       default="$(find-pkg-share golfcart_launch)/config/localization/cuda_ndt/pointcloud_preprocessor/random_downsample_filter.param.yaml"/>
   <!-- The EKF's parameters. Default: the one in localization_config_path, as before; a caller
        with another twist estimator may need another tuning (golf-cart: twist_source:=rigloc). -->
   <arg name="ekf_localizer_param_path" default="$(var localization_config_path)/ekf_localizer.param.yaml"/>
@@ -109,9 +118,9 @@
         <arg name="localization_pointcloud_backend" value="$(var localization_pointcloud_backend)"/>
         <arg name="localization_pointcloud_container_name" value="$(var localization_pointcloud_container_name)"/>
         <arg name="input_pointcloud" value="$(var input_pointcloud)"/>
-        <arg name="ndt_scan_matcher/pointcloud_preprocessor/crop_box_filter_measurement_range_param_path" value="$(find-pkg-share cuda_ndt_matcher_launch)/config/pointcloud_preprocessor/crop_box_filter_measurement_range.param.yaml"/>
-        <arg name="ndt_scan_matcher/pointcloud_preprocessor/voxel_grid_downsample_filter_param_path" value="$(find-pkg-share cuda_ndt_matcher_launch)/config/pointcloud_preprocessor/voxel_grid_filter.param.yaml"/>
-        <arg name="ndt_scan_matcher/pointcloud_preprocessor/random_downsample_filter_param_path" value="$(find-pkg-share cuda_ndt_matcher_launch)/config/pointcloud_preprocessor/random_downsample_filter.param.yaml"/>
+        <arg name="ndt_scan_matcher/pointcloud_preprocessor/crop_box_filter_measurement_range_param_path" value="$(var cuda_ndt_crop_box_filter_measurement_range_param_path)"/>
+        <arg name="ndt_scan_matcher/pointcloud_preprocessor/voxel_grid_downsample_filter_param_path" value="$(var cuda_ndt_voxel_grid_downsample_filter_param_path)"/>
+        <arg name="ndt_scan_matcher/pointcloud_preprocessor/random_downsample_filter_param_path" value="$(var cuda_ndt_random_downsample_filter_param_path)"/>
       </include>
 
       <!-- Automatic pose initializer (only when GNSS enabled) -->

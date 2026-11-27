@@ -514,3 +514,32 @@ Not started.
   `cuda_blackboard` from our `pointcloud_backend:=cuda` chain or needs a
   host copy; compare against the CPU filter on the Ming-Da replay (obstacle
   cloud, CPU per core, latency) before making it a default.
+
+## cuda_ndt carries Autoware's defaults (2026-11-27)
+
+`cuda_ndt_matcher_launch` (submodule, `main`) now ships Autoware's values for
+every key it shares with `ndt_scan_matcher` and the NDT input chain: the
+NVTL gate 2.3 (was 2.0), 1500 points (was 5000), 3.0 m voxels (was 0.5).
+Its compiled-in defaults already matched. `test_stock_defaults.py` there pins
+both against the installed Autoware (1.5.0 or 2.1.0; the values are the same).
+`cuda_localization.launch.xml` takes the three input-chain files as arguments,
+as `autoware_localization.launch.xml` already did.
+
+The cart's tuning moved to the golf cart side, so nothing changes at runtime:
+
+- the matcher reads `golfcart_localization_config`'s
+  `ndt_scan_matcher.param.yaml` (as before);
+- its input chain reads `golfcart_launch/config/localization/cuda_ndt/`
+  (5000 points, 0.5 m voxels, z from -30 m), the values the cart has run
+  cuda_ndt with. `pose_source:=ndt` keeps its own budget in
+  `golfcart_localization_config` (2000 points, z from -1.0). Whether the two
+  matchers should share one budget is open: the Ming-Da gate 2.1 was derived
+  on cuda_ndt's input, so unifying needs the gate re-derived.
+
+**`main` (1.5.0) must not bump the cuda_ndt_matcher pointer as it is.**
+Its launch layer starts cuda_ndt through the submodule's
+`cuda_localization.launch.xml` without passing input files, so a bump would
+switch the live cart to 1500 points and 3.0 m voxels. With the bump, `main`
+passes `crop_box_filter_measurement_range_param_path`,
+`voxel_grid_downsample_filter_param_path` and
+`random_downsample_filter_param_path` from a copy of the files above.
